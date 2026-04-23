@@ -663,6 +663,10 @@ async function claudeStreamAsOpenAI(opts: CallLLMOptions, model: string): Promis
               if (block.type === "text") {
                 blocks.set(evt.index, { type: "text" });
               } else if (block.type === "tool_use") {
+                if (!block.id || !block.name) {
+                  blocks.set(evt.index, { type: "tool_use" });
+                  break;
+                }
                 const tcIdx = toolCallCounter++;
                 blocks.set(evt.index, { type: "tool_use", toolCallIndex: tcIdx, toolId: block.id, toolName: block.name, argumentsBuffer: "" });
                 controller.enqueue(emit({

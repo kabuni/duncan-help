@@ -159,6 +159,8 @@ function ExternalSignalColumn({
     ? "Connector"
     : credentialSource === "stored_token"
     ? "Stored token"
+    : credentialSource === "env_secret"
+    ? "Env secret"
     : "No credential";
   const hubspotSignal = title === "HubSpot" ? (signal as HubspotSignal | null | undefined) : null;
   const activeDeals = Array.isArray(hubspotSignal?.active_deals) ? hubspotSignal.active_deals : [];

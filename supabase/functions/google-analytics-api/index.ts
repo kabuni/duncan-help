@@ -242,7 +242,7 @@ serve(async (req) => {
       .single();
 
     if (tokenError || !tokenData) {
-      return new Response(JSON.stringify({ connected: false, code: "NOT_CONNECTED" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ connected: false, code: "NOT_CONNECTED" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     let accessToken = tokenData.access_token;

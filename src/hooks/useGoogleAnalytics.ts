@@ -55,7 +55,7 @@ export function useGoogleAnalytics() {
       });
 
       const data = await response.json().catch(() => ({}));
-      if (data.code === "NOT_CONNECTED") return null;
+      if (data.code === "NOT_CONNECTED" || data.connected === false) return null;
       if (!response.ok) throw new Error(data.error || "Failed to load Google Analytics");
       return data as AnalyticsDashboard;
     },

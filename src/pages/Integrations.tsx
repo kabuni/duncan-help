@@ -663,16 +663,17 @@ const IntegrationDetail = ({
   const s = statusConfig[resolvedStatus];
 
   const handleConnect = async () => {
-    if (!apiKey.trim()) {
+    const trimmedApiKey = apiKey.trim();
+    if (!trimmedApiKey) {
       toast.error(isSlack ? "Please enter a password" : "Please enter an API key");
       return;
     }
     try {
       if (isCompany) {
-        await companyMutation.mutateAsync({ integrationId: integration.id, apiKey });
+        await companyMutation.mutateAsync({ integrationId: integration.id, apiKey: trimmedApiKey });
         await fetchRuntimeStatus();
       } else {
-        await connectMutation.mutateAsync({ integrationId: integration.id, apiKey });
+        await connectMutation.mutateAsync({ integrationId: integration.id, apiKey: trimmedApiKey });
       }
       toast.success(`${integration.name} connected successfully!`);
       onClose();

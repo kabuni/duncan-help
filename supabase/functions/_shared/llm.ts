@@ -523,8 +523,8 @@ export async function callLLMWithFallback(opts: CallLLMOptions): Promise<Normali
 export async function streamLLM(opts: CallLLMOptions): Promise<ReadableStream<Uint8Array>> {
   const route = WORKFLOW_ROUTING[opts.workflow] ?? WORKFLOW_ROUTING.generic;
   const isNormanChat = opts.workflow === "norman-chat";
-  const primary = isNormanChat ? "openai" : opts.force_provider ?? route.primary;
-  const fallback: Provider = isNormanChat ? "openai" : route.fallback;
+  const primary = opts.force_provider ?? (isNormanChat ? "openai" : route.primary);
+  const fallback: Provider = primary === "openai" ? "openai" : route.fallback;
 
   const tryProvider = async (provider: Provider, attempt: number): Promise<ReadableStream<Uint8Array>> => {
     const start = Date.now();

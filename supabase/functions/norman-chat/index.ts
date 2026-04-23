@@ -3681,7 +3681,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     const SIMPLE_INPUT_PATTERNS = [/^hi[!.?\s]*$/i, /^hello[!.?\s]*$/i, /^how are you[?.!\s]*$/i];
     const MAX_TOOL_ROUNDS = 3;
-    const MAX_EXECUTION_TIME_MS = 20_000;
+    const MAX_EXECUTION_TIME_MS = 45_000;
 
     function extractPlainText(content: unknown): string {
       if (typeof content === "string") return content;
@@ -3855,6 +3855,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       normalizedArguments: string;
       rawArguments: string;
       missingRequired: string[];
+      likelyIncomplete: boolean;
       parseError?: string;
       repaired: boolean;
     } {
@@ -3867,6 +3868,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
         : rawValue == null
           ? ""
           : JSON.stringify(rawValue);
+      const trimmedArguments = rawArguments.trim();
 
       let parsed: any = {};
       let parseError: string | undefined;
@@ -3896,12 +3898,26 @@ Format as a natural, readable summary with clear sections. If a section has no d
         return value === undefined || value === null || (typeof value === "string" && value.trim().length === 0);
       });
 
+      const openCurly = (trimmedArguments.match(/\{/g) ?? []).length;
+      const closeCurly = (trimmedArguments.match(/\}/g) ?? []).length;
+      const openSquare = (trimmedArguments.match(/\[/g) ?? []).length;
+      const closeSquare = (trimmedArguments.match(/\]/g) ?? []).length;
+      const endsMidStructure = /[\[{:,]\s*$/.test(trimmedArguments);
+      const hasUnbalancedDelimiters = openCurly !== closeCurly || openSquare !== closeSquare;
+      const likelyIncomplete = trimmedArguments.length > 0 && (
+        !!parseError
+        || endsMidStructure
+        || hasUnbalancedDelimiters
+        || (repaired && missingRequired.length > 0)
+      );
+
       return {
         args: objectArgs,
         valid: !parseError && missingRequired.length === 0,
         normalizedArguments: JSON.stringify(objectArgs),
         rawArguments,
         missingRequired,
+        likelyIncomplete,
         parseError,
         repaired,
       };

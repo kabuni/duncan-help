@@ -3976,12 +3976,17 @@ Format as a natural, readable summary with clear sections. If a section has no d
       let sawContentDelta = false;
       let sawToolDelta = false;
 
-      const hasToolName = (toolCall: any) => {
+       const hasToolName = (toolCall: any) => {
         const name = toolCall?.function?.name;
         return typeof name === "string" && name.trim().length > 0;
       };
 
-      const hasIncompleteToolCall = () => hasToolCallStarted && toolCalls.some((toolCall) => toolCall && !hasToolName(toolCall));
+       const hasIncompleteToolCall = () => hasToolCallStarted && toolCalls.some((toolCall) => {
+         if (!toolCall) return false;
+         if (!hasToolName(toolCall)) return true;
+         const parsed = parseToolArguments(toolCall);
+         return parsed.likelyIncomplete;
+       });
 
       try {
         while (true) {
@@ -4081,7 +4086,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
              .map((toolCall) => {
                 const parsedArguments = parseToolArguments(toolCall);
 
-               return {
+                return {
                  id: typeof toolCall?.id === "string" && toolCall.id.trim().length > 0
                    ? toolCall.id
                    : `streamed_tool_${Math.random().toString(36).slice(2, 10)}`,
@@ -4094,6 +4099,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
                     rawArgumentsLength: parsedArguments.rawArguments.length,
                     argumentsParseable: parsedArguments.valid,
                     repaired: parsedArguments.repaired,
+                     likelyIncomplete: parsedArguments.likelyIncomplete,
                     missingRequired: parsedArguments.missingRequired,
                     parseError: parsedArguments.parseError,
                  },
@@ -4127,6 +4133,52 @@ Format as a natural, readable summary with clear sections. If a section has no d
     }
 
     const TOOL_EXECUTION_TIMEOUT_MS = 20_000;
+
+    function createStructuredToolResult(toolName: string, result: any, status: "success" | "no_data" | "partial" | "hard_error" = "success") {
+      return {
+        tool: toolName,
+        status,
+        ...((result && typeof result === "object" && !Array.isArray(result)) ? result : { data: result }),
+      };
+    }
+
+    function classifyToolOutcome(toolName: string, result: any): { status: "success" | "no_data" | "partial" | "hard_error"; payload: any } {
+      if (result == null) {
+        return { status: "no_data", payload: createStructuredToolResult(toolName, { reason: "empty result" }, "no_data") };
+      }
+
+      if (typeof result === "object" && !Array.isArray(result)) {
+        const errorMessage = typeof result.error === "string" ? result.error.toLowerCase() : "";
+        if (errorMessage.includes("timed out")) {
+          return {
+            status: "partial",
+            payload: createStructuredToolResult(toolName, {
+              error: result.error,
+              fallback_message: "This source took too long, so continue without blocking on it.",
+            }, "partial"),
+          };
+        }
+
+        const likelyNoData = errorMessage.includes("no meetings")
+          || errorMessage.includes("no data")
+          || errorMessage.includes("not found")
+          || errorMessage.includes("no results")
+          || result.skipped === true
+          || result.empty === true;
+
+        if (likelyNoData) {
+          return { status: "no_data", payload: createStructuredToolResult(toolName, result, "no_data") };
+        }
+
+        return { status: "success", payload: createStructuredToolResult(toolName, result, "success") };
+      }
+
+      if (typeof result === "string" && result.trim().length === 0) {
+        return { status: "no_data", payload: createStructuredToolResult(toolName, { reason: "blank string result" }, "no_data") };
+      }
+
+      return { status: "success", payload: createStructuredToolResult(toolName, result, "success") };
+    }
 
     async function withToolTimeout<T>(toolName: string, work: Promise<T>): Promise<T> {
       return await Promise.race([

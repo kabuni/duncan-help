@@ -4631,7 +4631,17 @@ Format as a natural, readable summary with clear sections. If a section has no d
             const toolResultsString = JSON.stringify(toolResults);
             const allToolResultsNoData = toolResults.length > 0 && toolResults.every((message: any) => {
               const content = message?.content;
-              const normalized = typeof content === "string" ? JSON.parse(content) : Array.isArray(content) ? null : content;
+              let normalized: any = null;
+              if (typeof content === "string") {
+                try {
+                  normalized = JSON.parse(content);
+                } catch {
+                  normalized = null;
+                }
+              } else if (!Array.isArray(content)) {
+                normalized = content;
+              }
+
               const status = normalized?.status;
               return status === "no_data" || status === "partial";
             });

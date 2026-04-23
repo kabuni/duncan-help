@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   GitBranch, AlertTriangle,
   Clock, RefreshCw, Loader2, Activity, Search, X,
+  BarChart3, Globe2, Users, MousePointerClick, PlugZap, Send,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { fastApi, withFastApi } from "@/lib/fastApiClient";
+import { useGoogleAnalytics } from "@/hooks/useGoogleAnalytics";
 import { toast } from "sonner";
 
 function useWorkItems() {
@@ -55,7 +57,10 @@ const stateColors: Record<string, string> = {
 const Operations = () => {
   const { data: workItems = [], isLoading: wiLoading } = useWorkItems();
   const { data: syncLogs = [], isLoading: slLoading } = useSyncLogs();
+  const analytics = useGoogleAnalytics();
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [analyticsQuestion, setAnalyticsQuestion] = useState("Where do we have the most website reach?");
+  const [analyticsAnswer, setAnalyticsAnswer] = useState<string | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -130,6 +135,16 @@ const Operations = () => {
     }
   };
 
+  const handleAskAnalytics = async () => {
+    if (!analyticsQuestion.trim()) return;
+    try {
+      const answer = await analytics.askQuestion(analyticsQuestion.trim());
+      setAnalyticsAnswer(answer);
+    } catch (err: any) {
+      toast.error(err.message || "Duncan could not answer that analytics question");
+    }
+  };
+
   // Stats
   const activeItems = workItems.filter((w: any) => w.state === "Active" || w.state === "New").length;
   const blockedItems = workItems.filter((w: any) => w.tags?.toLowerCase().includes("blocked")).length;
@@ -184,6 +199,9 @@ const Operations = () => {
             <TabsList className="bg-card border border-border">
               <TabsTrigger value="work-items" className="gap-1.5">
                 <GitBranch className="h-3.5 w-3.5" /> Work Items
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="gap-1.5">
+                <BarChart3 className="h-3.5 w-3.5" /> Website Analytics
               </TabsTrigger>
               <TabsTrigger value="sync-logs" className="gap-1.5">
                 <Clock className="h-3.5 w-3.5" /> Sync Logs
@@ -293,6 +311,100 @@ const Operations = () => {
                   )}
                 </>
               )}
+            </TabsContent>
+
+            <TabsContent value="analytics" className="space-y-4">
+              {analytics.isLoading ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+              ) : !analytics.isConnected ? (
+                <div className="rounded-xl border border-border bg-card p-8 text-center">
+                  <PlugZap className="h-9 w-9 mx-auto mb-3 text-primary" />
+                  <h3 className="text-lg font-semibold text-foreground">Connect Google Analytics</h3>
+                  <p className="text-sm text-muted-foreground mt-2 max-w-xl mx-auto">
+                    Connect GA4 so Duncan can report traffic, reach, demographics, and answer questions about website performance.
+                  </p>
+                  <button
+                    onClick={() => analytics.initiateOAuth().catch((err: any) => toast.error(err.message || "Connection failed"))}
+                    disabled={analytics.isConnecting}
+                    className="mt-5 inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+                  >
+                    {analytics.isConnecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
+                    Connect Google Analytics
+                  </button>
+                </div>
+              ) : analytics.dashboard ? (
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[
+                      { label: "Active users", value: analytics.dashboard.summary.activeUsers.toLocaleString(), icon: Users },
+                      { label: "Sessions", value: analytics.dashboard.summary.sessions.toLocaleString(), icon: Activity },
+                      { label: "Page views", value: analytics.dashboard.summary.pageViews.toLocaleString(), icon: MousePointerClick },
+                      { label: "Engagement", value: `${Math.round(analytics.dashboard.summary.engagementRate * 100)}%`, icon: BarChart3 },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-xl border border-border bg-card p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <item.icon className="h-4 w-4 text-primary" />
+                          <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{item.label}</span>
+                        </div>
+                        <p className="text-2xl font-bold text-foreground">{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid lg:grid-cols-2 gap-4">
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex items-center gap-2 mb-4"><Globe2 className="h-4 w-4 text-primary" /><h3 className="font-semibold text-foreground">Highest reach</h3></div>
+                      <div className="space-y-2">
+                        {analytics.dashboard.reach.countries.map((country) => (
+                          <div key={country.label} className="flex items-center justify-between text-sm">
+                            <span className="text-foreground">{country.label}</span>
+                            <span className="font-mono text-muted-foreground">{country.users.toLocaleString()} users</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex items-center gap-2 mb-4"><MousePointerClick className="h-4 w-4 text-primary" /><h3 className="font-semibold text-foreground">Top pages</h3></div>
+                      <div className="space-y-2">
+                        {analytics.dashboard.topPages.map((page) => (
+                          <div key={page.page} className="flex items-center justify-between gap-4 text-sm">
+                            <span className="text-foreground truncate">{page.page}</span>
+                            <span className="font-mono text-muted-foreground shrink-0">{page.views.toLocaleString()} views</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid lg:grid-cols-3 gap-4">
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <h3 className="font-semibold text-foreground mb-4">Cities</h3>
+                      <div className="space-y-2">{analytics.dashboard.reach.cities.slice(0, 6).map((city) => <div key={city.label} className="flex justify-between text-sm"><span>{city.label}</span><span className="font-mono text-muted-foreground">{city.users}</span></div>)}</div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <h3 className="font-semibold text-foreground mb-4">Devices</h3>
+                      <div className="space-y-2">{analytics.dashboard.devices.map((device) => <div key={device.label} className="flex justify-between text-sm"><span className="capitalize">{device.label}</span><span className="font-mono text-muted-foreground">{device.users}</span></div>)}</div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <h3 className="font-semibold text-foreground mb-4">Demographics</h3>
+                      {analytics.dashboard.demographics.available ? (
+                        <div className="space-y-2">{analytics.dashboard.demographics.rows.slice(0, 6).map((row) => <div key={`${row.age}-${row.gender}`} className="flex justify-between text-sm"><span>{row.age} · {row.gender}</span><span className="font-mono text-muted-foreground">{row.users}</span></div>)}</div>
+                      ) : <p className="text-sm text-muted-foreground">Demographics are not available for this GA4 property yet.</p>}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-card p-4">
+                    <h3 className="font-semibold text-foreground mb-3">Ask Duncan about website reach</h3>
+                    <div className="flex gap-2">
+                      <Input value={analyticsQuestion} onChange={(e) => setAnalyticsQuestion(e.target.value)} placeholder="Where do we have the most reach?" />
+                      <button onClick={handleAskAnalytics} disabled={analytics.isAsking} className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors disabled:opacity-50">
+                        {analytics.isAsking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {analyticsAnswer && <div className="mt-4 rounded-lg bg-secondary/40 p-4 text-sm text-foreground whitespace-pre-wrap">{analyticsAnswer}</div>}
+                  </div>
+                </>
+              ) : null}
             </TabsContent>
 
             {/* Sync Logs */}

@@ -3681,7 +3681,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     const SIMPLE_INPUT_PATTERNS = [/^hi[!.?\s]*$/i, /^hello[!.?\s]*$/i, /^how are you[?.!\s]*$/i];
     const MAX_TOOL_ROUNDS = 3;
-    const MAX_EXECUTION_TIME_MS = 20_000;
+    const MAX_EXECUTION_TIME_MS = 45_000;
 
     function extractPlainText(content: unknown): string {
       if (typeof content === "string") return content;
@@ -3855,6 +3855,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       normalizedArguments: string;
       rawArguments: string;
       missingRequired: string[];
+      likelyIncomplete: boolean;
       parseError?: string;
       repaired: boolean;
     } {
@@ -3867,6 +3868,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
         : rawValue == null
           ? ""
           : JSON.stringify(rawValue);
+      const trimmedArguments = rawArguments.trim();
 
       let parsed: any = {};
       let parseError: string | undefined;
@@ -3896,12 +3898,26 @@ Format as a natural, readable summary with clear sections. If a section has no d
         return value === undefined || value === null || (typeof value === "string" && value.trim().length === 0);
       });
 
+      const openCurly = (trimmedArguments.match(/\{/g) ?? []).length;
+      const closeCurly = (trimmedArguments.match(/\}/g) ?? []).length;
+      const openSquare = (trimmedArguments.match(/\[/g) ?? []).length;
+      const closeSquare = (trimmedArguments.match(/\]/g) ?? []).length;
+      const endsMidStructure = /[\[{:,]\s*$/.test(trimmedArguments);
+      const hasUnbalancedDelimiters = openCurly !== closeCurly || openSquare !== closeSquare;
+      const likelyIncomplete = trimmedArguments.length > 0 && (
+        !!parseError
+        || endsMidStructure
+        || hasUnbalancedDelimiters
+        || (repaired && missingRequired.length > 0)
+      );
+
       return {
         args: objectArgs,
         valid: !parseError && missingRequired.length === 0,
         normalizedArguments: JSON.stringify(objectArgs),
         rawArguments,
         missingRequired,
+        likelyIncomplete,
         parseError,
         repaired,
       };
@@ -3960,12 +3976,21 @@ Format as a natural, readable summary with clear sections. If a section has no d
       let sawContentDelta = false;
       let sawToolDelta = false;
 
-      const hasToolName = (toolCall: any) => {
+       const hasToolName = (toolCall: any) => {
         const name = toolCall?.function?.name;
         return typeof name === "string" && name.trim().length > 0;
       };
 
-      const hasIncompleteToolCall = () => hasToolCallStarted && toolCalls.some((toolCall) => toolCall && !hasToolName(toolCall));
+       const hasIncompleteToolCall = () => hasToolCallStarted && toolCalls.some((toolCall) => {
+         if (!toolCall) return false;
+         if (!hasToolName(toolCall)) {
+           const hasId = typeof toolCall?.id === "string" && toolCall.id.trim().length > 0;
+           const argText = typeof toolCall?.function?.arguments === "string" ? toolCall.function.arguments.trim() : "";
+           return hasId || argText.length > 0;
+         }
+         const parsed = parseToolArguments(toolCall);
+         return parsed.likelyIncomplete;
+       });
 
       try {
         while (true) {
@@ -4028,6 +4053,10 @@ Format as a natural, readable summary with clear sections. If a section has no d
                 for (const tc of delta.tool_calls) {
                   const index = tc.index;
                   if (!toolCalls[index]) {
+                    const hasIdentity = !!tc.id || !!tc.function?.name;
+                    if (!hasIdentity) {
+                      continue;
+                    }
                     toolCalls[index] = { id: tc.id, type: "function", function: { name: "", arguments: "" } };
                   }
                   if (tc.id) {
@@ -4065,7 +4094,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
              .map((toolCall) => {
                 const parsedArguments = parseToolArguments(toolCall);
 
-               return {
+                return {
                  id: typeof toolCall?.id === "string" && toolCall.id.trim().length > 0
                    ? toolCall.id
                    : `streamed_tool_${Math.random().toString(36).slice(2, 10)}`,
@@ -4078,6 +4107,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
                     rawArgumentsLength: parsedArguments.rawArguments.length,
                     argumentsParseable: parsedArguments.valid,
                     repaired: parsedArguments.repaired,
+                     likelyIncomplete: parsedArguments.likelyIncomplete,
                     missingRequired: parsedArguments.missingRequired,
                     parseError: parsedArguments.parseError,
                  },
@@ -4111,6 +4141,52 @@ Format as a natural, readable summary with clear sections. If a section has no d
     }
 
     const TOOL_EXECUTION_TIMEOUT_MS = 20_000;
+
+    function createStructuredToolResult(toolName: string, result: any, status: "success" | "no_data" | "partial" | "hard_error" = "success") {
+      return {
+        tool: toolName,
+        status,
+        ...((result && typeof result === "object" && !Array.isArray(result)) ? result : { data: result }),
+      };
+    }
+
+    function classifyToolOutcome(toolName: string, result: any): { status: "success" | "no_data" | "partial" | "hard_error"; payload: any } {
+      if (result == null) {
+        return { status: "no_data", payload: createStructuredToolResult(toolName, { reason: "empty result" }, "no_data") };
+      }
+
+      if (typeof result === "object" && !Array.isArray(result)) {
+        const errorMessage = typeof result.error === "string" ? result.error.toLowerCase() : "";
+        if (errorMessage.includes("timed out")) {
+          return {
+            status: "partial",
+            payload: createStructuredToolResult(toolName, {
+              error: result.error,
+              fallback_message: "This source took too long, so continue without blocking on it.",
+            }, "partial"),
+          };
+        }
+
+        const likelyNoData = errorMessage.includes("no meetings")
+          || errorMessage.includes("no data")
+          || errorMessage.includes("not found")
+          || errorMessage.includes("no results")
+          || result.skipped === true
+          || result.empty === true;
+
+        if (likelyNoData) {
+          return { status: "no_data", payload: createStructuredToolResult(toolName, result, "no_data") };
+        }
+
+        return { status: "success", payload: createStructuredToolResult(toolName, result, "success") };
+      }
+
+      if (typeof result === "string" && result.trim().length === 0) {
+        return { status: "no_data", payload: createStructuredToolResult(toolName, { reason: "blank string result" }, "no_data") };
+      }
+
+      return { status: "success", payload: createStructuredToolResult(toolName, result, "success") };
+    }
 
     async function withToolTimeout<T>(toolName: string, work: Promise<T>): Promise<T> {
       return await Promise.race([
@@ -4170,6 +4246,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
             rawArguments,
             parsedArgs: args,
             repairedArguments: parsedArguments.repaired,
+            likelyIncomplete: parsedArguments.likelyIncomplete,
             missingRequired: parsedArguments.missingRequired,
             parseError: parsedArguments.parseError,
           });
@@ -4236,14 +4313,18 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = { error: `Unknown tool: ${tc.function.name}` };
           }
           
+          const toolName = tc?.function?.name ?? "unknown_tool";
+          const toolOutcome = classifyToolOutcome(toolName, result);
+
           console.log("TOOL RESULT RAW:", result);
           console.log("TOOL RESULT TYPE:", typeof result);
+          console.log("TOOL RESULT STATUS:", toolOutcome.status);
 
-          const toolName = tc?.function?.name ?? "unknown_tool";
           const finalContent = (() => {
-            if (result == null) return "{}";
-            if (typeof result === "string") return result.length > 0 ? result : "{}";
-            const stringified = JSON.stringify(result);
+            const normalizedResult = toolOutcome.payload;
+            if (normalizedResult == null) return "{}";
+            if (typeof normalizedResult === "string") return normalizedResult.length > 0 ? normalizedResult : "{}";
+            const stringified = JSON.stringify(normalizedResult);
             return stringified.length > 0 ? stringified : "{}";
           })();
 
@@ -4280,7 +4361,14 @@ Format as a natural, readable summary with clear sections. If a section has no d
         } catch (error) {
           const toolError = error instanceof Error ? error : new Error(String(error));
           console.error(`Tool ${tc.function.name} threw error:`, toolError.message, toolError.stack);
-          const errorResult = { error: toolError.message };
+          const toolName = tc?.function?.name ?? "unknown_tool";
+          const isTimeout = toolError.message.toLowerCase().includes("timed out");
+          const errorResult = isTimeout
+            ? createStructuredToolResult(toolName, {
+                error: toolError.message,
+                fallback_message: "Continue with the rest of the context and treat this source as temporarily unavailable.",
+              }, "partial")
+            : createStructuredToolResult(toolName, { error: toolError.message }, "hard_error");
           const finalContent = JSON.stringify(errorResult) || "{}";
 
           console.log("TOOL RESULT RAW:", errorResult);
@@ -4549,6 +4637,22 @@ Format as a natural, readable summary with clear sections. If a section has no d
             });
             const toolResults = await executeToolCalls(toolCalls, provider);
             const toolResultsString = JSON.stringify(toolResults);
+            const allToolResultsNoData = toolResults.length > 0 && toolResults.every((message: any) => {
+              const content = message?.content;
+              let normalized: any = null;
+              if (typeof content === "string") {
+                try {
+                  normalized = JSON.parse(content);
+                } catch {
+                  normalized = null;
+                }
+              } else if (!Array.isArray(content)) {
+                normalized = content;
+              }
+
+              const status = normalized?.status;
+              return status === "no_data" || status === "partial";
+            });
 
             if (!toolResultsString || toolResultsString.length < 10) {
               console.warn("EMPTY OR USELESS TOOL RESULT — stopping loop");
@@ -4566,6 +4670,10 @@ Format as a natural, readable summary with clear sections. If a section has no d
             if (Date.now() - executionStart >= MAX_EXECUTION_TIME_MS) {
               console.log(`Stopping before follow-up LLM call due to hard execution limit`);
               break;
+            }
+
+            if (allToolResultsNoData) {
+              console.log("ALL TOOL RESULTS WERE NO_DATA/PARTIAL — requesting graceful synthesis instead of more tool churn");
             }
             console.log("FINAL LLM INPUT (last 3 messages):");
             console.log(JSON.stringify(conversationMessages.slice(-3), null, 2));

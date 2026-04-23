@@ -619,8 +619,8 @@ async function claudeStreamAsOpenAI(opts: CallLLMOptions, model: string): Promis
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
 
-  // Track active content blocks: index → { type, toolCallIndex?, toolId?, toolName? }
-  const blocks = new Map<number, { type: "text" | "tool_use"; toolCallIndex?: number; toolId?: string; toolName?: string }>();
+  // Track active content blocks: index → { type, toolCallIndex?, toolId?, toolName?, argumentsBuffer? }
+  const blocks = new Map<number, { type: "text" | "tool_use"; toolCallIndex?: number; toolId?: string; toolName?: string; argumentsBuffer?: string }>();
   let toolCallCounter = 0;
 
   function emit(delta: any): Uint8Array {
@@ -663,8 +663,12 @@ async function claudeStreamAsOpenAI(opts: CallLLMOptions, model: string): Promis
               if (block.type === "text") {
                 blocks.set(evt.index, { type: "text" });
               } else if (block.type === "tool_use") {
+                if (!block.id || !block.name) {
+                  blocks.set(evt.index, { type: "tool_use" });
+                  break;
+                }
                 const tcIdx = toolCallCounter++;
-                blocks.set(evt.index, { type: "tool_use", toolCallIndex: tcIdx, toolId: block.id, toolName: block.name });
+                blocks.set(evt.index, { type: "tool_use", toolCallIndex: tcIdx, toolId: block.id, toolName: block.name, argumentsBuffer: "" });
                 controller.enqueue(emit({
                   tool_calls: [{
                     index: tcIdx,
@@ -683,12 +687,21 @@ async function claudeStreamAsOpenAI(opts: CallLLMOptions, model: string): Promis
               if (d.type === "text_delta" && b.type === "text") {
                 controller.enqueue(emit({ content: d.text }));
               } else if (d.type === "input_json_delta" && b.type === "tool_use") {
+                b.argumentsBuffer = `${b.argumentsBuffer ?? ""}${d.partial_json ?? ""}`;
+                if (!b.toolName || typeof b.toolCallIndex !== "number") break;
                 controller.enqueue(emit({
                   tool_calls: [{
                     index: b.toolCallIndex,
                     function: { arguments: d.partial_json ?? "" },
                   }],
                 }));
+              }
+              break;
+            }
+            case "content_block_stop": {
+              const b = blocks.get(evt.index);
+              if (b?.type === "tool_use" && (!b.toolName || typeof b.toolCallIndex !== "number")) {
+                blocks.delete(evt.index);
               }
               break;
             }

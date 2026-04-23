@@ -261,8 +261,22 @@ serve(async (req) => {
       });
     }
 
-    const verify = await verifyCredential(integration_id, api_key);
-    const encryptedKey = btoa(api_key);
+    const normalizedApiKey = api_key.trim();
+    if (!normalizedApiKey) {
+      return new Response(JSON.stringify({ error: "api_key is required for connecting" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log("[manage-company-integration] normalized token", {
+      integrationId: integration_id,
+      token_length: normalizedApiKey.length,
+      token_prefix: normalizedApiKey.slice(0, 10),
+    });
+
+    const verify = await verifyCredential(integration_id, normalizedApiKey);
+    const encryptedKey = btoa(normalizedApiKey);
     const now = new Date().toISOString();
     const status = verify.status;
 

@@ -1247,7 +1247,7 @@ Deno.serve(async (req) => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
           },
-          body: JSON.stringify({ action: "briefing_summary" }),
+          body: JSON.stringify({ action: "team_briefing_summary" }),
         }).catch((e) => { console.warn("hubspot-api fetch failed:", e); hubspot_signal_error = `fetch failed: ${e?.message || e}`; return null; }),
         fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/github-api`, {
           method: "POST",
@@ -1327,8 +1327,10 @@ Deno.serve(async (req) => {
         stale_deals: 0,
         at_risk_accounts: 0,
         customer_escalations: 0,
+        active_deals_count: 0,
+        at_risk_accounts_count: 0,
       },
-      (source) => `${Number(source?.stale_deals ?? 0)} stale deals · ${Number(source?.at_risk_accounts ?? 0)} at-risk accounts across ${Number(source?.accounts_scanned ?? 0)} accounts`,
+      (source) => `${Number(source?.active_deals_count ?? 0)} active deals · ${Number(source?.at_risk_accounts_count ?? source?.at_risk_accounts ?? 0)} at-risk accounts · ${Array.isArray(source?.key_contacts) ? source.key_contacts.length : 0} key contacts`,
     );
     const normalizedGithubSignal = normalizeExternalSignal(
       github_signal,

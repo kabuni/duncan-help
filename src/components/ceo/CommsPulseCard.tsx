@@ -60,6 +60,33 @@ interface Props {
     accounts_scanned?: number;
     stale_deals?: number;
     at_risk_accounts?: number;
+    active_deals_count?: number;
+    active_deals?: Array<{
+      id?: string;
+      name?: string;
+      stage?: string;
+      amount?: number;
+      owner_label?: string;
+      close_date?: string | null;
+      company_name?: string;
+    }>;
+    at_risk_accounts_count?: number;
+    at_risk_accounts_details?: Array<{
+      account_name?: string;
+      risk_reasons?: string[];
+      deal_name?: string;
+      stage?: string;
+      owner_label?: string;
+    }>;
+    key_contacts?: Array<{
+      id?: string;
+      name?: string;
+      email?: string | null;
+      company?: string | null;
+      lifecycle_stage?: string | null;
+      owner_label?: string;
+      associated_deal_name?: string | null;
+    }>;
     customer_escalations?: number;
     summary?: string | null;
     degraded_reason?: string | null;
@@ -83,6 +110,11 @@ interface Props {
     degraded_reason?: string | null;
   } | null;
 }
+
+type HubspotSignal = NonNullable<Props["hubspotSignal"]>;
+type HubspotActiveDeal = NonNullable<HubspotSignal["active_deals"]>[number];
+type HubspotAtRiskAccount = NonNullable<HubspotSignal["at_risk_accounts_details"]>[number];
+type HubspotKeyContact = NonNullable<HubspotSignal["key_contacts"]>[number];
 
 function ExternalSignalColumn({
   title,
@@ -182,6 +214,123 @@ function MetricLabel({ label, tooltip }: { label: string; tooltip: string }) {
         {tooltip}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+function formatCompactDate(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
+}
+
+function formatCompactCurrency(value?: number) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return null;
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function HubspotDetailSection({ hubspotSignal }: { hubspotSignal: HubspotSignal }) {
+  const activeDeals = Array.isArray(hubspotSignal.active_deals) ? hubspotSignal.active_deals : [];
+  const atRiskAccounts = Array.isArray(hubspotSignal.at_risk_accounts_details) ? hubspotSignal.at_risk_accounts_details : [];
+  const keyContacts = Array.isArray(hubspotSignal.key_contacts) ? hubspotSignal.key_contacts : [];
+  const status = hubspotSignal.status ?? "not_configured";
+  const isBlindSpot = status === "not_configured";
+  const isDegraded = status === "degraded";
+  const emptyTone = isBlindSpot
+    ? "HubSpot is not connected, so Team Briefing has no CRM signal here."
+    : isDegraded
+    ? hubspotSignal.degraded_reason || "HubSpot returned partial CRM data for this run."
+    : "No material CRM items surfaced for this run.";
+
+  const sections = [
+    {
+      title: "Active deals",
+      count: Number(hubspotSignal.active_deals_count ?? activeDeals.length),
+      items: activeDeals,
+      render: (deal: HubspotActiveDeal, idx: number) => (
+        <div key={`${deal?.id || deal?.name || "deal"}-${idx}`} className="rounded border border-border bg-background/60 p-2.5 space-y-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-foreground truncate">{deal?.name || "Unnamed deal"}</div>
+              <div className="text-[10px] text-muted-foreground truncate">{deal?.company_name || "Unlinked account"}</div>
+            </div>
+            {deal?.stage ? <Badge variant="outline" className="text-[10px] font-mono shrink-0">{deal.stage}</Badge> : null}
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+            {formatCompactCurrency(deal?.amount) ? <span>{formatCompactCurrency(deal?.amount)}</span> : null}
+            {deal?.owner_label ? <span>{deal.owner_label}</span> : null}
+            {formatCompactDate(deal?.close_date) ? <span>Closes {formatCompactDate(deal?.close_date)}</span> : null}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "At-risk accounts",
+      count: Number(hubspotSignal.at_risk_accounts_count ?? hubspotSignal.at_risk_accounts ?? atRiskAccounts.length),
+      items: atRiskAccounts,
+      render: (account: HubspotAtRiskAccount, idx: number) => (
+        <div key={`${account?.account_name || "account"}-${idx}`} className="rounded border border-border bg-background/60 p-2.5 space-y-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-xs font-medium text-foreground truncate">{account?.account_name || "Unknown account"}</div>
+            {account?.stage ? <Badge variant="outline" className="text-[10px] font-mono shrink-0">{account.stage}</Badge> : null}
+          </div>
+          <div className="text-[10px] text-muted-foreground">
+            {(account?.risk_reasons || []).join(" · ") || "Risk signal not specified"}
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+            {account?.deal_name ? <span>{account.deal_name}</span> : null}
+            {account?.owner_label ? <span>{account.owner_label}</span> : null}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "Key contacts",
+      count: keyContacts.length,
+      items: keyContacts,
+      render: (contact: HubspotKeyContact, idx: number) => (
+        <div key={`${contact?.id || contact?.email || contact?.name || "contact"}-${idx}`} className="rounded border border-border bg-background/60 p-2.5 space-y-1">
+          <div className="text-xs font-medium text-foreground truncate">{contact?.name || "Unnamed contact"}</div>
+          <div className="text-[10px] text-muted-foreground truncate">
+            {[contact?.company, contact?.email].filter(Boolean).join(" · ") || "No company or email provided"}
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+            {contact?.lifecycle_stage ? <span>{contact.lifecycle_stage}</span> : null}
+            {contact?.owner_label ? <span>{contact.owner_label}</span> : null}
+            {contact?.associated_deal_name ? <span>{contact.associated_deal_name}</span> : null}
+          </div>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="md:col-span-2 rounded border border-border bg-card p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Database className="h-3.5 w-3.5 text-primary" />
+        <span className="text-[11px] font-mono uppercase tracking-wider text-foreground">HubSpot CRM detail</span>
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+        {sections.map((section) => (
+          <div key={section.title} className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{section.title}</div>
+              <Badge variant="outline" className="text-[10px] font-mono">{section.count}</Badge>
+            </div>
+            {section.items.length > 0 ? (
+              <div className="space-y-2">{section.items.slice(0, 5).map(section.render as any)}</div>
+            ) : (
+              <div className="rounded border border-dashed border-border bg-muted/20 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
+                {emptyTone}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -601,6 +750,7 @@ export default function CommsPulseCard({ emailPulse, slackPulse, hubspotSignal, 
               secondaryMetric={{ label: "Open / Blocked", value: `${Number(githubSignal?.open_prs || 0)} / ${Number(githubSignal?.blocked_prs || 0)}` }}
             />
           )}
+          {hubspotSignal && <HubspotDetailSection hubspotSignal={hubspotSignal} />}
         </div>
 
         {(silent.length > 0 || optedOutLeaders.length > 0 || notConnected.length > 0 || errored.length > 0 || legacySilent.length > 0) && (

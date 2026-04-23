@@ -1,98 +1,80 @@
 
-Goal: add HubSpot CRM coverage to Team Briefing without changing CEO Briefing behavior or the existing `briefing_summary` action.
+Goal: keep HubSpot in one unified Team Briefing card and fix the `team_briefing_summary` 401 without touching CEO Briefing’s existing HubSpot summary path.
 
-1. Extend `hubspot-api` with a new additive action
-- Add a new `action: "team_briefing_summary"` branch in `supabase/functions/hubspot-api/index.ts`.
-- Reuse the existing auth flow exactly as-is:
-  - connector gateway first when available
-  - stored company token fallback from `company_integrations`
-- Keep `status` and `briefing_summary` untouched.
-- For the new action only, fetch:
-  - contacts: key fields like name, email, company, lifecycle/owner, last activity
-  - deals: name, stage, amount, owner, close date, last modified
-  - companies when needed for account risk context
-- Return a richer payload shaped for Team Briefing UI:
-  - `active_deals_count`
-  - `active_deals[]`
-  - `at_risk_accounts_count`
-  - `at_risk_accounts[]`
-  - `key_contacts[]`
-  - existing status metadata (`status`, `connected`, `credential_source`, `error_code`, `error_message`, `metrics_summary`, etc.)
-
-2. Define deterministic CRM signal rules for the new action
-- Keep the logic server-side and explicit.
-- Suggested rules:
-  - Active deals = open deals not in closed won/lost stages.
-  - At-risk accounts = accounts tied to stale open deals, overdue/no recent activity, or low health/score signals when available.
-  - Key contacts = most relevant contacts attached to open deals / priority accounts, ranked by recency + ownership + associated revenue impact.
-- Make the action degrade gracefully:
-  - if one dataset is empty, continue
-  - if contacts are missing, still return deals/accounts
-  - if HubSpot is unavailable, return degraded metadata with empty arrays, not a hard failure
-
-3. Wire the new action into the Team Briefing backend only
-- Update `supabase/functions/ceo-briefing/index.ts` only where the Team Briefing payload is assembled.
-- Replace the Team Briefing HubSpot fetch call from `action: "briefing_summary"` to `action: "team_briefing_summary"` for this backend path only.
-- Preserve the existing normalization/fallback pattern already used for external signals.
-- Do not alter CEO scoring logic, briefing generation flow, or any existing `briefing_summary` consumers.
-
-4. Add the richer HubSpot payload into the Team Briefing response
-- Continue populating `parsed.payload.hubspot_signal`.
-- Extend that payload with the new arrays/counts:
-  - `active_deals`
-  - `active_deals_count`
-  - `at_risk_accounts`
-  - `at_risk_accounts_count`
-  - `key_contacts`
-- Keep backward-compatible fields like `accounts_scanned`, `stale_deals`, `at_risk_accounts`, `summary`, and `metrics_summary` so existing UI sections do not break.
-
-5. Update Team Briefing UI to surface CRM details
-- Keep the existing Comms/Signals summary intact.
-- Add a dedicated HubSpot detail section in Team Briefing UI, likely within `src/components/ceo/CommsPulseCard.tsx` or as a small new Team Briefing subcomponent if cleaner.
-- Show three compact blocks:
+1. Unify the UI into the existing HubSpot card
+- Remove the extra `HubspotDetailSection` render from `src/components/ceo/CommsPulseCard.tsx`.
+- Keep the existing `ExternalSignalColumn` for HubSpot as the single card.
+- Extend that existing HubSpot card to render three additional detail blocks underneath its current metrics:
   - Active deals
   - At-risk accounts
   - Key contacts
-- Each block should have:
-  - count in header
-  - concise rows/cards
-  - empty-state text when connected but no records
-  - degraded/not-configured state messaging aligned with current Team Briefing UX
+- Keep the current top summary exactly as-is:
+  - Accounts
+  - Stale / Risk
+  - existing source / last sync / summary text
+- Add the CRM detail lists inline inside the same HubSpot card, not as a sibling card and not as a new component.
 
-6. Use the provided token through the existing company integration pattern
-- Do not hardcode the token in frontend code or in the function file.
-- Store it using the existing company integration mechanism for HubSpot so `hubspot-api` can keep using its current stored-token fallback path.
-- This keeps the implementation aligned with the current architecture and avoids touching working CEO logic.
+2. Diagnose and fix the 401 in the new action only
+Current likely cause from the code:
+- `hubspot-api` always tries connector-gateway first when connector secrets exist.
+- In `team_briefing_summary`, that means the new action is currently calling the connector route, not the stored company token route.
+- The user-provided private app token lives in `company_integrations`, and the requested behavior is to send it directly as `Authorization: Bearer <token>` to `https://api.hubapi.com`.
+- So the 401 is most likely happening because the new action is using the wrong credential path for this Team Briefing fetch, even though the stored-token direct path already exists in the function.
 
-7. Validation after implementation
-- Verify `hubspot-api` returns:
-  - unchanged results for `status`
-  - unchanged results for `briefing_summary`
-  - new structured data for `team_briefing_summary`
-- Verify Team Briefing still loads when:
-  - HubSpot is connected with data
-  - HubSpot is connected but has sparse/no contact data
-  - HubSpot is unavailable or invalid
-- Confirm the UI shows:
+Implementation approach:
+- In `supabase/functions/hubspot-api/index.ts`, keep `status` and existing `briefing_summary` behavior untouched.
+- For `action === "team_briefing_summary"` only:
+  - read the stored token from `company_integrations`
+  - decode it the same way the function already does
+  - trim/sanitize the token before request assembly
+  - call `https://api.hubapi.com/...` through the existing `hubspotApi()` helper
+  - send `Authorization: Bearer <token>` explicitly
+- Preserve existing gateway verification / auth behavior for the old actions.
+- Do not change the existing auth flow for other actions.
+
+3. Keep Team Briefing backend wiring but ensure the richer fields survive normalization
+- In `supabase/functions/ceo-briefing/index.ts`, keep the Team Briefing call to `action: "team_briefing_summary"`.
+- Ensure normalization preserves and forwards all new CRM arrays/counts into `parsed.payload.hubspot_signal`, including:
+  - `active_deals`
+  - `active_deals_count`
+  - `at_risk_accounts_details`
+  - `at_risk_accounts_count`
+  - `key_contacts`
+- Keep backward-compatible summary fields already used by the existing HubSpot card:
+  - `accounts_scanned`
+  - `stale_deals`
+  - `at_risk_accounts`
+  - `metrics_summary`
+  - `summary`
+  - `degraded_reason`
+
+4. Render the new CRM detail blocks inside the existing HubSpot card
+- Update the HubSpot rendering branch in `CommsPulseCard.tsx` so the one HubSpot card includes:
+  - existing header/status/metrics
+  - existing narrative summary
+  - inline CRM detail section below that content
+- Use compact internal subsections rather than a second bordered wrapper.
+- Keep empty-state handling inside the same card:
+  - not connected → blind spot message
+  - degraded → partial data message
+  - connected but empty → “no material CRM items surfaced”
+- Do not create a new card, wrapper, or separate component.
+
+5. Verify the fix after implementation
+- Confirm only one HubSpot card appears in Team Briefing.
+- Confirm that card now contains:
+  - top summary metrics
   - active deals
   - at-risk accounts
   - key contacts
-  without affecting the rest of Team Briefing.
+- Confirm `team_briefing_summary` no longer 401s when a stored company token exists.
+- Confirm `status` and existing `briefing_summary` responses remain unchanged.
 
 Technical details
 - Files to update:
+  - `src/components/ceo/CommsPulseCard.tsx`
   - `supabase/functions/hubspot-api/index.ts`
   - `supabase/functions/ceo-briefing/index.ts`
-  - `src/components/ceo/CommsPulseCard.tsx` and/or a new small Team Briefing HubSpot component
-  - optionally `src/pages/CEOBriefing.tsx` only if a new section component needs mounting
-- No database schema changes should be required.
-- No changes to:
-  - CEO Briefing access rules
-  - existing `briefing_summary`
-  - existing `status`
-- HubSpot endpoints likely used:
-  - `/crm/v3/objects/contacts`
-  - `/crm/v3/objects/deals`
-  - optionally `/crm/v3/objects/companies`
-  - optionally associations if needed for linking contacts to deals/accounts
-- The safest implementation is additive: new action + new Team Briefing payload fields + new UI rendering only.
+- No database migration needed.
+- No changes to CEO Briefing’s existing `briefing_summary` action.
+- No new component/card should be introduced.

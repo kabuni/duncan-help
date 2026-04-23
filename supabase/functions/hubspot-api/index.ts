@@ -307,8 +307,8 @@ async function hubspotGateway(path: string, lovableKey: string, hubspotKey: stri
   return data;
 }
 
-async function hubspotApi(path: string, token: string, stage: RequestStage = "summary") {
-  logHubspot("verification endpoint", { source: "stored_token", path, stage, ...tokenFingerprint(token) });
+async function hubspotApi(path: string, token: string, stage: RequestStage = "summary", source: CredentialSource = "stored_token") {
+  logHubspot("verification endpoint", { source, path, stage, auth_header_format: "Bearer <token>", ...tokenFingerprint(token) });
   const res = await fetch(`${HUBSPOT_API}${path}`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -316,12 +316,12 @@ async function hubspotApi(path: string, token: string, stage: RequestStage = "su
     },
   });
   const data = await res.json().catch(() => ({}));
-  logHubspot("provider response", { source: "stored_token", stage, path, status: res.status, snippet: safeSnippet(data) });
+  logHubspot("provider response", { source, stage, path, status: res.status, snippet: safeSnippet(data) });
   if (!res.ok) {
     throw new ProviderRequestError("HubSpot API failed", {
       status: res.status,
       body: data,
-      source: "stored_token",
+      source,
       stage,
       path,
     });
@@ -613,11 +613,11 @@ Deno.serve(async (req) => {
         });
       }
 
-      await hubspotApi("/crm/v3/objects/companies?limit=1&properties=name", resolved.token, "verify");
+      await hubspotApi("/crm/v3/objects/companies?limit=1&properties=name", resolved.token, "verify", resolved.source);
       const [companies, deals, contacts] = await Promise.all([
-        hubspotApi("/crm/v3/objects/companies?limit=50&properties=name,hs_lastmodifieddate,hubspotscore,notes_last_updated", resolved.token),
-        hubspotApi("/crm/v3/objects/deals?limit=50&associations=companies,contacts&properties=dealname,dealstage,hs_lastmodifieddate,amount,closedate,hubspot_owner_id", resolved.token),
-        hubspotApi("/crm/v3/objects/contacts?limit=50&properties=firstname,lastname,email,company,lifecyclestage,hubspot_owner_id,lastmodifieddate,notes_last_updated", resolved.token),
+        hubspotApi("/crm/v3/objects/companies?limit=50&properties=name,hs_lastmodifieddate,hubspotscore,notes_last_updated", resolved.token, "summary", resolved.source),
+        hubspotApi("/crm/v3/objects/deals?limit=50&associations=companies,contacts&properties=dealname,dealstage,hs_lastmodifieddate,amount,closedate,hubspot_owner_id", resolved.token, "summary", resolved.source),
+        hubspotApi("/crm/v3/objects/contacts?limit=50&properties=firstname,lastname,email,company,lifecyclestage,hubspot_owner_id,lastmodifieddate,notes_last_updated", resolved.token, "summary", resolved.source),
       ]);
 
       return json({

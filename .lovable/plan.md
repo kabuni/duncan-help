@@ -1,78 +1,82 @@
 
-Goal: eliminate the HubSpot `team_briefing_summary` 401 by fixing the actual credential path and internal auth path, while adding the requested token diagnostics and preserving the existing working HubSpot flows.
+Goal: fix the HubSpot 401 and preserve the unified HubSpot card in Team Briefing without changing any other Team Briefing behavior.
 
-1. Fix the real 401 cause first: internal auth mismatch on the Team Briefing call
-- Update `supabase/functions/hubspot-api/index.ts` so the function can accept the Team Briefing backend invocation without failing before token lookup.
-- Current issue: `ceo-briefing` calls `hubspot-api` with `Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, but `hubspot-api` currently runs `auth.getUser()` on that header and rejects it as unauthorized because it is not a user JWT.
-- Keep the normal end-user auth behavior intact.
-- Add a narrow internal-call path for trusted backend invocations so `team_briefing_summary` can run when called from the Team Briefing backend.
-- Do not change the existing connector/stored-token behavior for `status` or `briefing_summary`.
+1. Isolate the fix to the HubSpot path only
+- Keep Email, Slack, GitHub, scoring, briefing generation, and all non-HubSpot Team Briefing sections unchanged.
+- Touch only the HubSpot edge function path, the HubSpot payload pass-through in Team Briefing backend, and the existing HubSpot rendering inside `src/components/ceo/CommsPulseCard.tsx`.
 
-2. Add explicit token diagnostics inside `team_briefing_summary`
-- In `supabase/functions/hubspot-api/index.ts`, only inside `action === "team_briefing_summary"`:
-  - log whether a `company_integrations` row was found for `integration_id = "hubspot"`
-  - log whether `encrypted_api_key` is null, empty, or present
-  - log token length and a safe prefix for the encoded value only
-  - decode with `atob()`
-  - log whether decode succeeded
-  - log the first 10 characters of the decoded token only after trimming
-  - log final token length after trim
-- If decode fails, log that branch clearly and return a degraded/not-configured response instead of silently continuing.
+2. Harden `team_briefing_summary` auth in `supabase/functions/hubspot-api/index.ts`
+- Preserve existing auth for `status` and `briefing_summary`.
+- Keep the narrow internal-call bypass only for `action === "team_briefing_summary"` when invoked by the Team Briefing backend with the service-role header.
+- Do not alter the standard end-user JWT flow for all other HubSpot actions.
 
-3. Add fallback to backend secret when stored token is absent or undecodable
-- Still in `team_briefing_summary` only:
-  - try stored token from `company_integrations` first
-  - if missing or decode fails, fall back to `HUBSPOT_API_KEY`
-  - log which source was actually selected: `stored_token` or `env_secret`
-- Preserve the old behavior for the existing `status` and `briefing_summary` paths unless absolutely necessary.
+3. Fix the token resolution path for `team_briefing_summary` only
+- Keep Team Briefing on the direct HubSpot API route, not the connector-gateway route.
+- In `team_briefing_summary`, resolve credentials in this exact order:
+  1. stored token from `company_integrations`
+  2. fallback backend secret `HUBSPOT_API_KEY`
+- Keep existing connector behavior untouched for other actions.
 
-4. Guarantee the Authorization header is assembled exactly once and correctly
-- Centralize the final token normalization before requests:
-  - trim whitespace
-  - reject empty string after trim
-- Ensure the outbound request uses exactly:
+4. Add explicit diagnostics so the failure mode is visible
+- Log whether the `company_integrations` row exists for `integration_id = 'hubspot'`.
+- Log whether `encrypted_api_key` is null, empty, or present.
+- Log encoded token length and a safe prefix only.
+- Decode with `atob()` and log whether decode succeeded.
+- Trim the decoded token and log the first 10 characters plus final length only.
+- Log which credential source was selected: `stored_token` or `env_secret`.
+- Log the outbound auth mode as `Bearer` plus safe token length/prefix only.
+
+5. Guarantee outbound HubSpot auth formatting
+- Normalize the selected token once with trim/sanitize logic.
+- Reject empty strings after trim.
+- Ensure all Team Briefing HubSpot requests use exactly:
   - `Authorization: Bearer <decoded_token>`
-- Add a debug log that confirms the header mode is `Bearer` and the token length/prefix being used, without logging the full secret.
+- Return a degraded response with explicit error metadata if no usable token exists instead of failing in a way that breaks the rest of Team Briefing.
 
-5. Keep Team Briefing on direct HubSpot API for this action
-- For `team_briefing_summary`, continue bypassing the connector route and call `https://api.hubapi.com` directly.
-- Reuse the existing `hubspotApi()` helper, but ensure the token passed into it is the decoded+trimmed token selected from stored token or env fallback.
-- Keep connector-gateway logic untouched for the other actions.
+6. Preserve the one-card UI
+- Keep the existing unified HubSpot section in `src/components/ceo/CommsPulseCard.tsx`.
+- Do not add a second HubSpot card or a new wrapper component.
+- Keep the current top summary intact:
+  - Accounts
+  - Stale / Risk
+  - source / last sync / reason
+  - narrative summary
+- Keep the CRM detail blocks inline underneath:
+  - Active deals
+  - At-risk accounts
+  - Key contacts
 
-6. Verify how the Integrations page stores the token
-- Inspect and, if needed, adjust the company integration save path:
-  - `src/pages/Integrations.tsx`
-  - `src/hooks/useCompanyIntegrations.ts`
-  - `supabase/functions/manage-company-integration/index.ts`
-- Current code already sends the token through `manage-company-integration`, which base64-encodes it and upserts into `company_integrations` by `integration_id`.
-- Important: the current schema does not have a `company_id` column on `company_integrations`, so there is no “right company_id” to save. The correct validation target is:
-  - `integration_id = 'hubspot'`
-  - `encrypted_api_key` present
-  - `status`
-  - `updated_by`
-  - `last_sync`
-- If needed, tighten the connect flow so the saved token is trimmed before verification/upsert to avoid accidental whitespace problems.
+7. Fix the payload pass-through so UI gets the new fields
+- In `supabase/functions/ceo-briefing/index.ts`, keep the Team Briefing call to `action: "team_briefing_summary"`.
+- Preserve the existing normalization logic.
+- Extend the final `parsed.payload.hubspot_signal` assignment so it includes:
+  - `active_deals_count`
+  - `active_deals`
+  - `at_risk_accounts_count`
+  - `at_risk_accounts_details`
+  - `key_contacts`
+- This is required so the existing unified HubSpot card can actually render the CRM details returned by the edge function.
 
-7. Keep Team Briefing payload behavior unchanged except for auth reliability
-- No UI restructuring needed for this fix if the unified card is already correct.
-- Keep `ceo-briefing` calling `action: "team_briefing_summary"`.
-- If internal auth support is added in `hubspot-api`, `ceo-briefing` can stay as-is unless a safer internal header pattern is needed.
+8. Keep the Integrations save path stable, only tighten token hygiene
+- Do not redesign the Integrations page flow.
+- Keep saving via `manage-company-integration`.
+- Retain trimming before verify/upsert.
+- No `company_id` change is needed because the current `company_integrations` design is keyed by `integration_id`, not `company_id`.
 
-8. Validation after implementation
-- Confirm `team_briefing_summary` no longer returns 401 when invoked by Team Briefing.
-- Confirm logs show one of these branches clearly:
-  - stored token found and decoded
-  - stored token missing, env fallback used
-  - stored token decode failed, env fallback used
-- Confirm outbound HubSpot requests are using direct API calls with Bearer auth.
-- Confirm `status` and existing `briefing_summary` responses still behave exactly as before.
-- Confirm the Integrations page still saves/replaces the HubSpot token into `company_integrations` successfully.
+9. Validation after implementation
+- Confirm Team Briefing still loads when HubSpot is disconnected, degraded, or sparse.
+- Confirm only one HubSpot card is shown.
+- Confirm that one card contains both:
+  - existing summary metrics
+  - active deals / at-risk accounts / key contacts
+- Confirm `team_briefing_summary` no longer returns 401 when a stored token exists.
+- Confirm `status` and existing `briefing_summary` behavior remain unchanged.
 
 Technical details
 - Files to update:
   - `supabase/functions/hubspot-api/index.ts`
-  - possibly `supabase/functions/ceo-briefing/index.ts` only if internal-call auth needs a matching trusted header convention
-  - `supabase/functions/manage-company-integration/index.ts` only if token trimming/logging on save is needed
+  - `supabase/functions/ceo-briefing/index.ts`
+  - `src/components/ceo/CommsPulseCard.tsx` only if any defensive rendering tweak is needed
 - No database migration required.
-- No `company_id` change required because `company_integrations` currently has no company scoping column.
-- The most likely root cause is not the token value itself; it is that `hubspot-api` is rejecting the Team Briefing backend request before the stored token path is fully used.
+- No auth model change for the rest of Team Briefing.
+- No change to non-HubSpot Team Briefing functionality.

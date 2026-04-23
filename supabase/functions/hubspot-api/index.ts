@@ -517,6 +517,50 @@ Deno.serve(async (req) => {
   const verifiedAt = new Date().toISOString();
 
   try {
+    if (action === "team_briefing_summary") {
+      logHubspot("credential source", { source: "stored_token_preferred_for_team_briefing", connector_available: !!(LOVABLE_API_KEY && HUBSPOT_API_KEY) });
+      const stored = await getStoredToken();
+      if (!stored) {
+        logHubspot("missing token branch", { branch: "stored_token_missing", action });
+        return responseWithLogging({
+          status: "not_configured",
+          credential_source: "none",
+          verification_path: null,
+          last_verified_at: null,
+          last_sync_at: null,
+          error_code: "hubspot_not_configured",
+          error_message: "No stored company token found for Team Briefing HubSpot access",
+        });
+      }
+
+      const sanitizedToken = stored.token?.trim() ?? null;
+      if (!sanitizedToken) {
+        logHubspot("decode failure branch", { branch: "stored_token_decode_failed", stored_status: stored.storedStatus, action });
+        return responseWithLogging({
+          status: "degraded",
+          credential_source: "stored_token",
+          verification_path: "/crm/v3/objects/companies",
+          last_verified_at: stored.lastSync ?? verifiedAt,
+          last_sync_at: stored.lastSync ?? verifiedAt,
+          error_code: "stored_token_decode_failed",
+          error_message: "Stored HubSpot token could not be decoded",
+        });
+      }
+
+      await hubspotApi("/crm/v3/objects/companies?limit=1&properties=name", sanitizedToken, "verify");
+      const [companies, deals, contacts] = await Promise.all([
+        hubspotApi("/crm/v3/objects/companies?limit=50&properties=name,hs_lastmodifieddate,hubspotscore,notes_last_updated", sanitizedToken),
+        hubspotApi("/crm/v3/objects/deals?limit=50&associations=companies,contacts&properties=dealname,dealstage,hs_lastmodifieddate,amount,closedate,hubspot_owner_id", sanitizedToken),
+        hubspotApi("/crm/v3/objects/contacts?limit=50&properties=firstname,lastname,email,company,lifecyclestage,hubspot_owner_id,lastmodifieddate,notes_last_updated", sanitizedToken),
+      ]);
+
+      return json({
+        ...buildTeamBriefingSummary(companies, deals, contacts, stored.lastSync ?? verifiedAt),
+        credential_source: "stored_token",
+        verification_path: "/crm/v3/objects/companies",
+      });
+    }
+
     if (LOVABLE_API_KEY && HUBSPOT_API_KEY) {
       logHubspot("credential source", { source: "connector_gateway" });
       await verifyGatewayCredentials(LOVABLE_API_KEY, HUBSPOT_API_KEY);
@@ -529,19 +573,6 @@ Deno.serve(async (req) => {
           verification_path: "/api/v1/verify_credentials",
           last_verified_at: verifiedAt,
           last_sync_at: verifiedAt,
-        });
-      }
-
-      if (action === "team_briefing_summary") {
-        const [companies, deals, contacts] = await Promise.all([
-          hubspotGateway("/crm/v3/objects/companies?limit=50&properties=name,hs_lastmodifieddate,hubspotscore,notes_last_updated", LOVABLE_API_KEY, HUBSPOT_API_KEY),
-          hubspotGateway("/crm/v3/objects/deals?limit=50&associations=companies,contacts&properties=dealname,dealstage,hs_lastmodifieddate,amount,closedate,hubspot_owner_id", LOVABLE_API_KEY, HUBSPOT_API_KEY),
-          hubspotGateway("/crm/v3/objects/contacts?limit=50&properties=firstname,lastname,email,company,lifecyclestage,hubspot_owner_id,lastmodifieddate,notes_last_updated", LOVABLE_API_KEY, HUBSPOT_API_KEY),
-        ]);
-        return json({
-          ...buildTeamBriefingSummary(companies, deals, contacts, verifiedAt),
-          credential_source: "connector_gateway",
-          verification_path: "/api/v1/verify_credentials",
         });
       }
 
@@ -593,20 +624,6 @@ Deno.serve(async (req) => {
         verification_path: "/crm/v3/objects/companies",
         last_verified_at: verifiedAt,
         last_sync_at: stored.lastSync ?? verifiedAt,
-      });
-    }
-
-    if (action === "team_briefing_summary") {
-      const [companies, deals, contacts] = await Promise.all([
-        hubspotApi("/crm/v3/objects/companies?limit=50&properties=name,hs_lastmodifieddate,hubspotscore,notes_last_updated", stored.token),
-        hubspotApi("/crm/v3/objects/deals?limit=50&associations=companies,contacts&properties=dealname,dealstage,hs_lastmodifieddate,amount,closedate,hubspot_owner_id", stored.token),
-        hubspotApi("/crm/v3/objects/contacts?limit=50&properties=firstname,lastname,email,company,lifecyclestage,hubspot_owner_id,lastmodifieddate,notes_last_updated", stored.token),
-      ]);
-
-      return json({
-        ...buildTeamBriefingSummary(companies, deals, contacts, stored.lastSync ?? verifiedAt),
-        credential_source: "stored_token",
-        verification_path: "/crm/v3/objects/companies",
       });
     }
 

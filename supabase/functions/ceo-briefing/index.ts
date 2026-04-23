@@ -1329,6 +1329,9 @@ Deno.serve(async (req) => {
         customer_escalations: 0,
         active_deals_count: 0,
         at_risk_accounts_count: 0,
+        active_deals: [],
+        at_risk_accounts_details: [],
+        key_contacts: [],
       },
       (source) => `${Number(source?.active_deals_count ?? 0)} active deals · ${Number(source?.at_risk_accounts_count ?? source?.at_risk_accounts ?? 0)} at-risk accounts · ${Array.isArray(source?.key_contacts) ? source.key_contacts.length : 0} key contacts`,
     );

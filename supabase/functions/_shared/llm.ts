@@ -29,7 +29,7 @@ export type WorkflowName =
 
 export const WORKFLOW_ROUTING: Record<WorkflowName, { primary: Provider; fallback: Provider }> = {
   // Claude primary (reasoning, synthesis, writing)
-  "norman-chat":               { primary: "claude", fallback: "openai" },
+  "norman-chat":               { primary: "openai", fallback: "claude" },
   "ceo-briefing":              { primary: "claude", fallback: "openai" },
   "ceo-email-pulse":           { primary: "claude", fallback: "openai" },
   "analyze-meeting":           { primary: "claude", fallback: "openai" },

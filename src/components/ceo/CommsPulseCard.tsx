@@ -750,6 +750,7 @@ export default function CommsPulseCard({ emailPulse, slackPulse, hubspotSignal, 
               secondaryMetric={{ label: "Open / Blocked", value: `${Number(githubSignal?.open_prs || 0)} / ${Number(githubSignal?.blocked_prs || 0)}` }}
             />
           )}
+          {hubspotSignal && <HubspotDetailSection hubspotSignal={hubspotSignal} />}
         </div>
 
         {(silent.length > 0 || optedOutLeaders.length > 0 || notConnected.length > 0 || errored.length > 0 || legacySilent.length > 0) && (

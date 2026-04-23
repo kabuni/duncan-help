@@ -4238,6 +4238,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
             rawArguments,
             parsedArgs: args,
             repairedArguments: parsedArguments.repaired,
+            likelyIncomplete: parsedArguments.likelyIncomplete,
             missingRequired: parsedArguments.missingRequired,
             parseError: parsedArguments.parseError,
           });
@@ -4304,14 +4305,18 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = { error: `Unknown tool: ${tc.function.name}` };
           }
           
+          const toolName = tc?.function?.name ?? "unknown_tool";
+          const toolOutcome = classifyToolOutcome(toolName, result);
+
           console.log("TOOL RESULT RAW:", result);
           console.log("TOOL RESULT TYPE:", typeof result);
+          console.log("TOOL RESULT STATUS:", toolOutcome.status);
 
-          const toolName = tc?.function?.name ?? "unknown_tool";
           const finalContent = (() => {
-            if (result == null) return "{}";
-            if (typeof result === "string") return result.length > 0 ? result : "{}";
-            const stringified = JSON.stringify(result);
+            const normalizedResult = toolOutcome.payload;
+            if (normalizedResult == null) return "{}";
+            if (typeof normalizedResult === "string") return normalizedResult.length > 0 ? normalizedResult : "{}";
+            const stringified = JSON.stringify(normalizedResult);
             return stringified.length > 0 ? stringified : "{}";
           })();
 
@@ -4348,7 +4353,14 @@ Format as a natural, readable summary with clear sections. If a section has no d
         } catch (error) {
           const toolError = error instanceof Error ? error : new Error(String(error));
           console.error(`Tool ${tc.function.name} threw error:`, toolError.message, toolError.stack);
-          const errorResult = { error: toolError.message };
+          const toolName = tc?.function?.name ?? "unknown_tool";
+          const isTimeout = toolError.message.toLowerCase().includes("timed out");
+          const errorResult = isTimeout
+            ? createStructuredToolResult(toolName, {
+                error: toolError.message,
+                fallback_message: "Continue with the rest of the context and treat this source as temporarily unavailable.",
+              }, "partial")
+            : createStructuredToolResult(toolName, { error: toolError.message }, "hard_error");
           const finalContent = JSON.stringify(errorResult) || "{}";
 
           console.log("TOOL RESULT RAW:", errorResult);
@@ -4617,6 +4629,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
             });
             const toolResults = await executeToolCalls(toolCalls, provider);
             const toolResultsString = JSON.stringify(toolResults);
+            const allToolResultsNoData = toolResults.length > 0 && toolResults.every((message: any) => {
+              const content = message?.content;
+              const normalized = typeof content === "string" ? JSON.parse(content) : Array.isArray(content) ? null : content;
+              const status = normalized?.status;
+              return status === "no_data" || status === "partial";
+            });
 
             if (!toolResultsString || toolResultsString.length < 10) {
               console.warn("EMPTY OR USELESS TOOL RESULT — stopping loop");
@@ -4634,6 +4652,10 @@ Format as a natural, readable summary with clear sections. If a section has no d
             if (Date.now() - executionStart >= MAX_EXECUTION_TIME_MS) {
               console.log(`Stopping before follow-up LLM call due to hard execution limit`);
               break;
+            }
+
+            if (allToolResultsNoData) {
+              console.log("ALL TOOL RESULTS WERE NO_DATA/PARTIAL — requesting graceful synthesis instead of more tool churn");
             }
             console.log("FINAL LLM INPUT (last 3 messages):");
             console.log(JSON.stringify(conversationMessages.slice(-3), null, 2));

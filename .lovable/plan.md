@@ -1,48 +1,98 @@
 
-Root cause: the selected-role CV fetch is still rejecting valid CV emails unless the message text explicitly mentions the role title. In `supabase/functions/fetch-gmail-cvs/index.ts`, once a role is selected, `classifyAttachmentBatch()` hard-requires a `roleSignal`, so emails like “Harry Freeman CV” are skipped even if they are clearly CV submissions. The current role fetch also only pulls the first 100 Gmail search results and does not paginate, so “all CVs for a role” is not guaranteed.
+Goal: add HubSpot CRM coverage to Team Briefing without changing CEO Briefing behavior or the existing `briefing_summary` action.
 
-## What I’ll change
+1. Extend `hubspot-api` with a new additive action
+- Add a new `action: "team_briefing_summary"` branch in `supabase/functions/hubspot-api/index.ts`.
+- Reuse the existing auth flow exactly as-is:
+  - connector gateway first when available
+  - stored company token fallback from `company_integrations`
+- Keep `status` and `briefing_summary` untouched.
+- For the new action only, fetch:
+  - contacts: key fields like name, email, company, lifecycle/owner, last activity
+  - deals: name, stage, amount, owner, close date, last modified
+  - companies when needed for account risk context
+- Return a richer payload shaped for Team Briefing UI:
+  - `active_deals_count`
+  - `active_deals[]`
+  - `at_risk_accounts_count`
+  - `at_risk_accounts[]`
+  - `key_contacts[]`
+  - existing status metadata (`status`, `connected`, `credential_source`, `error_code`, `error_message`, `metrics_summary`, etc.)
 
-1. Make selected-role fetch trust the selected role
-- When the user clicks `Fetch CVs` for `Operations Manager`, treat that chosen role as the assignment target.
-- Stop requiring the email subject/snippet/filename to contain `Operations Manager`, `Ops Manager`, etc. for acceptance.
-- Keep CV/recruitment heuristics, but use role-term matching as a relevance signal, not a hard rejection gate, when a role is already selected.
+2. Define deterministic CRM signal rules for the new action
+- Keep the logic server-side and explicit.
+- Suggested rules:
+  - Active deals = open deals not in closed won/lost stages.
+  - At-risk accounts = accounts tied to stale open deals, overdue/no recent activity, or low health/score signals when available.
+  - Key contacts = most relevant contacts attached to open deals / priority accounts, ranked by recency + ownership + associated revenue impact.
+- Make the action degrade gracefully:
+  - if one dataset is empty, continue
+  - if contacts are missing, still return deals/accounts
+  - if HubSpot is unavailable, return degraded metadata with empty arrays, not a hard failure
 
-2. Preserve non-CV protection
-- Keep excluding obvious business/legal/operations documents such as agreements, trackers, invoices, tickets, and strategy docs.
-- For selected-role mode, accept CV-like emails even when they only say things like:
-  - `Harry Freeman CV`
-  - `Resume attached`
-  - `Application`
-  - a personal intro plus attached CV
-- Ensure the system still rejects clear non-recruitment attachments.
+3. Wire the new action into the Team Briefing backend only
+- Update `supabase/functions/ceo-briefing/index.ts` only where the Team Briefing payload is assembled.
+- Replace the Team Briefing HubSpot fetch call from `action: "briefing_summary"` to `action: "team_briefing_summary"` for this backend path only.
+- Preserve the existing normalization/fallback pattern already used for external signals.
+- Do not alter CEO scoring logic, briefing generation flow, or any existing `briefing_summary` consumers.
 
-3. Assign the selected role directly during selected-role fetch
-- If a role is explicitly selected, use that role ID for inserted candidates instead of depending on subject-based role matching.
-- Keep the existing subject-based matching for non-selected/general ingestion flows.
+4. Add the richer HubSpot payload into the Team Briefing response
+- Continue populating `parsed.payload.hubspot_signal`.
+- Extend that payload with the new arrays/counts:
+  - `active_deals`
+  - `active_deals_count`
+  - `at_risk_accounts`
+  - `at_risk_accounts_count`
+  - `key_contacts`
+- Keep backward-compatible fields like `accounts_scanned`, `stale_deals`, `at_risk_accounts`, `summary`, and `metrics_summary` so existing UI sections do not break.
 
-4. Paginate Gmail search results for role fetches
-- Replace the single `maxResults=100` request with pagination using `nextPageToken`.
-- Continue fetching additional pages for role-specific runs up to a safe cap, so recent/valid CVs are not missed because of the first page cutoff.
-- Include totals in logs/response so it’s clear how many Gmail messages were examined.
+5. Update Team Briefing UI to surface CRM details
+- Keep the existing Comms/Signals summary intact.
+- Add a dedicated HubSpot detail section in Team Briefing UI, likely within `src/components/ceo/CommsPulseCard.tsx` or as a small new Team Briefing subcomponent if cleaner.
+- Show three compact blocks:
+  - Active deals
+  - At-risk accounts
+  - Key contacts
+- Each block should have:
+  - count in header
+  - concise rows/cards
+  - empty-state text when connected but no records
+  - degraded/not-configured state messaging aligned with current Team Briefing UX
 
-5. Improve diagnostics for skipped role fetches
-- Add explicit logging for selected-role runs showing whether a message was skipped because it looked non-CV versus previously missing a role title.
-- This will make it easy to verify Harry Freeman emails are being seen and whether they are accepted or filtered.
+6. Use the provided token through the existing company integration pattern
+- Do not hardcode the token in frontend code or in the function file.
+- Store it using the existing company integration mechanism for HubSpot so `hubspot-api` can keep using its current stored-token fallback path.
+- This keeps the implementation aligned with the current architecture and avoids touching working CEO logic.
 
-## Expected outcome
-After this change, when you fetch CVs for `Operations Manager`:
-- emails like `Harry Freeman CV` should be ingested even if they do not mention `Operations Manager`
-- both manually sent Operations Manager CV emails should be assignable to that role through the selected-role flow
-- the system should still avoid pulling obvious non-CV attachments
-- the fetch should cover more than the first 100 matching emails
+7. Validation after implementation
+- Verify `hubspot-api` returns:
+  - unchanged results for `status`
+  - unchanged results for `briefing_summary`
+  - new structured data for `team_briefing_summary`
+- Verify Team Briefing still loads when:
+  - HubSpot is connected with data
+  - HubSpot is connected but has sparse/no contact data
+  - HubSpot is unavailable or invalid
+- Confirm the UI shows:
+  - active deals
+  - at-risk accounts
+  - key contacts
+  without affecting the rest of Team Briefing.
 
-## Files to update
-- `supabase/functions/fetch-gmail-cvs/index.ts`
-
-## Technical details
-- Relax `classifyAttachmentBatch()` for selected-role mode so `roleSignal` is optional
-- Use `selectedRole.id` as the authoritative `job_role_id` during selected-role fetches
-- Keep `matchRoleToSubject()` for broad/general mode only
-- Add Gmail pagination via `nextPageToken`
-- Keep duplicate detection, storage upload, orphan relinking, and parse trigger behavior unchanged
+Technical details
+- Files to update:
+  - `supabase/functions/hubspot-api/index.ts`
+  - `supabase/functions/ceo-briefing/index.ts`
+  - `src/components/ceo/CommsPulseCard.tsx` and/or a new small Team Briefing HubSpot component
+  - optionally `src/pages/CEOBriefing.tsx` only if a new section component needs mounting
+- No database schema changes should be required.
+- No changes to:
+  - CEO Briefing access rules
+  - existing `briefing_summary`
+  - existing `status`
+- HubSpot endpoints likely used:
+  - `/crm/v3/objects/contacts`
+  - `/crm/v3/objects/deals`
+  - optionally `/crm/v3/objects/companies`
+  - optionally associations if needed for linking contacts to deals/accounts
+- The safest implementation is additive: new action + new Team Briefing payload fields + new UI rendering only.

@@ -3983,7 +3983,11 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
        const hasIncompleteToolCall = () => hasToolCallStarted && toolCalls.some((toolCall) => {
          if (!toolCall) return false;
-         if (!hasToolName(toolCall)) return true;
+         if (!hasToolName(toolCall)) {
+           const hasId = typeof toolCall?.id === "string" && toolCall.id.trim().length > 0;
+           const argText = typeof toolCall?.function?.arguments === "string" ? toolCall.function.arguments.trim() : "";
+           return hasId || argText.length > 0;
+         }
          const parsed = parseToolArguments(toolCall);
          return parsed.likelyIncomplete;
        });

@@ -13,7 +13,7 @@ const VERIFY_URL = "https://connector-gateway.lovable.dev/api/v1/verify_credenti
 const HUBSPOT_API = "https://api.hubapi.com";
 
 type Status = "connected" | "not_configured" | "degraded";
-type CredentialSource = "connector_gateway" | "stored_token" | "none";
+type CredentialSource = "connector_gateway" | "stored_token" | "env_secret" | "none";
 type RequestStage = "verify" | "summary" | "repo_scan";
 
 type HubspotSummary = {
@@ -111,6 +111,8 @@ function providerName(source: CredentialSource) {
     ? "HubSpot connector"
     : source === "stored_token"
     ? "HubSpot token"
+    : source === "env_secret"
+    ? "HubSpot env secret"
     : "HubSpot credential";
 }
 
@@ -165,19 +167,25 @@ async function getStoredToken() {
     .eq("integration_id", "hubspot")
     .maybeSingle();
 
-  if (!data?.encrypted_api_key) return null;
+  const encodedToken = typeof data?.encrypted_api_key === "string" ? data.encrypted_api_key : null;
 
   try {
     return {
-      token: atob(data.encrypted_api_key),
-      lastSync: data.last_sync ?? null,
-      storedStatus: data.status ?? null,
+      rowFound: !!data,
+      encodedToken,
+      token: encodedToken ? atob(encodedToken) : null,
+      decodeOk: !!encodedToken,
+      lastSync: data?.last_sync ?? null,
+      storedStatus: data?.status ?? null,
     };
   } catch {
     return {
+      rowFound: !!data,
+      encodedToken,
       token: null,
-      lastSync: data.last_sync ?? null,
-      storedStatus: data.status ?? null,
+      decodeOk: false,
+      lastSync: data?.last_sync ?? null,
+      storedStatus: data?.status ?? null,
     };
   }
 }

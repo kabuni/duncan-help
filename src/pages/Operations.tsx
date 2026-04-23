@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   GitBranch, AlertTriangle,
   Clock, RefreshCw, Loader2, Activity, Search, X,
+  BarChart3, Globe2, Users, MousePointerClick, PlugZap, Send,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { fastApi, withFastApi } from "@/lib/fastApiClient";
+import { useGoogleAnalytics } from "@/hooks/useGoogleAnalytics";
 import { toast } from "sonner";
 
 function useWorkItems() {
@@ -55,7 +57,10 @@ const stateColors: Record<string, string> = {
 const Operations = () => {
   const { data: workItems = [], isLoading: wiLoading } = useWorkItems();
   const { data: syncLogs = [], isLoading: slLoading } = useSyncLogs();
+  const analytics = useGoogleAnalytics();
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [analyticsQuestion, setAnalyticsQuestion] = useState("Where do we have the most website reach?");
+  const [analyticsAnswer, setAnalyticsAnswer] = useState<string | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -127,6 +132,16 @@ const Operations = () => {
       toast.error(err.message || "Sync failed");
     } finally {
       setSyncing(null);
+    }
+  };
+
+  const handleAskAnalytics = async () => {
+    if (!analyticsQuestion.trim()) return;
+    try {
+      const answer = await analytics.askQuestion(analyticsQuestion.trim());
+      setAnalyticsAnswer(answer);
+    } catch (err: any) {
+      toast.error(err.message || "Duncan could not answer that analytics question");
     }
   };
 

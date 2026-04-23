@@ -22,7 +22,7 @@ async function fetchFirstProperty(accessToken: string) {
 
   return {
     account_id: firstAccount.name.replace("accounts/", ""),
-    property_id: firstProperty?.name?.replace("properties/", null),
+    property_id: firstProperty?.name?.replace("properties/", "") ?? null,
     property_name: firstProperty?.displayName ?? null,
   };
 }

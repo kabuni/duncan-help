@@ -329,6 +329,69 @@ async function hubspotApi(path: string, token: string, stage: RequestStage = "su
   return data;
 }
 
+function normalizeBearerToken(token: string | null | undefined) {
+  const trimmed = token?.trim() ?? "";
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+async function resolveTeamBriefingToken(envToken?: string | null) {
+  const stored = await getStoredToken();
+  const encodedToken = stored?.encodedToken ?? null;
+  logHubspot("team_briefing_summary token lookup", {
+    row_found: stored?.rowFound ?? false,
+    encrypted_api_key_state: encodedToken === null ? "null" : encodedToken.length === 0 ? "empty" : "present",
+    encoded_length: encodedToken?.length ?? 0,
+    encoded_prefix: encodedToken ? encodedToken.slice(0, 10) : null,
+    decode_ok: stored?.decodeOk ?? false,
+    decoded_prefix: stored?.token ? stored.token.trim().slice(0, 10) : null,
+    decoded_length: stored?.token ? stored.token.trim().length : 0,
+    stored_status: stored?.storedStatus ?? null,
+  });
+
+  const storedToken = normalizeBearerToken(stored?.token);
+  if (stored?.encodedToken && !stored?.decodeOk) {
+    logHubspot("team_briefing_summary token source", { selected_source: "decode_failed_no_fallback_yet" });
+  }
+
+  if (storedToken) {
+    logHubspot("team_briefing_summary token source", {
+      selected_source: "stored_token",
+      header_mode: "Bearer",
+      token_prefix: storedToken.slice(0, 10),
+      token_length: storedToken.length,
+    });
+    return {
+      token: storedToken,
+      source: "stored_token" as CredentialSource,
+      lastSync: stored?.lastSync ?? null,
+      stored,
+    };
+  }
+
+  const fallbackToken = normalizeBearerToken(envToken);
+  if (fallbackToken) {
+    logHubspot("team_briefing_summary token source", {
+      selected_source: "env_secret",
+      header_mode: "Bearer",
+      token_prefix: fallbackToken.slice(0, 10),
+      token_length: fallbackToken.length,
+    });
+    return {
+      token: fallbackToken,
+      source: "env_secret" as CredentialSource,
+      lastSync: stored?.lastSync ?? null,
+      stored,
+    };
+  }
+
+  return {
+    token: null,
+    source: "none" as CredentialSource,
+    lastSync: stored?.lastSync ?? null,
+    stored,
+  };
+}
+
 function summarise(companies: any, deals: any, lastVerifiedAt: string, degradedReason: string | null = null, errorCode: string | null = null) {
   const companyResults = Array.isArray(companies?.results) ? companies.results : [];
   const dealResults = Array.isArray(deals?.results) ? deals.results : [];
@@ -516,55 +579,50 @@ function buildTeamBriefingSummary(companiesPayload: any, dealsPayload: any, cont
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const user = await getUser(req);
-  if (!user) return json({ error: "Unauthorized" }, 401);
-
   const { action } = await req.json().catch(() => ({ action: "status" }));
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   const HUBSPOT_API_KEY = Deno.env.get("HUBSPOT_API_KEY");
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const verifiedAt = new Date().toISOString();
+  const authHeader = req.headers.get("Authorization");
+  const isTrustedInternalCall = !!authHeader && !!SUPABASE_SERVICE_ROLE_KEY && authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`;
+
+  if (!(action === "team_briefing_summary" && isTrustedInternalCall)) {
+    const user = await getUser(req);
+    if (!user) return json({ error: "Unauthorized" }, 401);
+  } else {
+    logHubspot("trusted internal auth accepted", { action, mode: "service_role_bypass" });
+  }
 
   try {
     if (action === "team_briefing_summary") {
-      logHubspot("credential source", { source: "stored_token_preferred_for_team_briefing", connector_available: !!(LOVABLE_API_KEY && HUBSPOT_API_KEY) });
-      const stored = await getStoredToken();
-      if (!stored) {
+      logHubspot("credential source", { source: "stored_token_preferred_for_team_briefing", connector_available: !!(LOVABLE_API_KEY && HUBSPOT_API_KEY), env_fallback_available: !!HUBSPOT_API_KEY });
+      const resolved = await resolveTeamBriefingToken(HUBSPOT_API_KEY);
+      if (!resolved.token) {
         logHubspot("missing token branch", { branch: "stored_token_missing", action });
         return responseWithLogging({
-          status: "not_configured",
-          credential_source: "none",
+          status: resolved.stored?.encodedToken && resolved.stored.decodeOk === false ? "degraded" : "not_configured",
+          credential_source: resolved.source,
           verification_path: null,
           last_verified_at: null,
-          last_sync_at: null,
-          error_code: "hubspot_not_configured",
-          error_message: "No stored company token found for Team Briefing HubSpot access",
+          last_sync_at: resolved.lastSync,
+          error_code: resolved.stored?.encodedToken && resolved.stored.decodeOk === false ? "stored_token_decode_failed" : "hubspot_not_configured",
+          error_message: resolved.stored?.encodedToken && resolved.stored.decodeOk === false
+            ? "Stored HubSpot token could not be decoded and no fallback secret is configured"
+            : "No stored company token found for Team Briefing HubSpot access and no fallback secret is configured",
         });
       }
 
-      const sanitizedToken = stored.token?.trim() ?? null;
-      if (!sanitizedToken) {
-        logHubspot("decode failure branch", { branch: "stored_token_decode_failed", stored_status: stored.storedStatus, action });
-        return responseWithLogging({
-          status: "degraded",
-          credential_source: "stored_token",
-          verification_path: "/crm/v3/objects/companies",
-          last_verified_at: stored.lastSync ?? verifiedAt,
-          last_sync_at: stored.lastSync ?? verifiedAt,
-          error_code: "stored_token_decode_failed",
-          error_message: "Stored HubSpot token could not be decoded",
-        });
-      }
-
-      await hubspotApi("/crm/v3/objects/companies?limit=1&properties=name", sanitizedToken, "verify");
+      await hubspotApi("/crm/v3/objects/companies?limit=1&properties=name", resolved.token, "verify");
       const [companies, deals, contacts] = await Promise.all([
-        hubspotApi("/crm/v3/objects/companies?limit=50&properties=name,hs_lastmodifieddate,hubspotscore,notes_last_updated", sanitizedToken),
-        hubspotApi("/crm/v3/objects/deals?limit=50&associations=companies,contacts&properties=dealname,dealstage,hs_lastmodifieddate,amount,closedate,hubspot_owner_id", sanitizedToken),
-        hubspotApi("/crm/v3/objects/contacts?limit=50&properties=firstname,lastname,email,company,lifecyclestage,hubspot_owner_id,lastmodifieddate,notes_last_updated", sanitizedToken),
+        hubspotApi("/crm/v3/objects/companies?limit=50&properties=name,hs_lastmodifieddate,hubspotscore,notes_last_updated", resolved.token),
+        hubspotApi("/crm/v3/objects/deals?limit=50&associations=companies,contacts&properties=dealname,dealstage,hs_lastmodifieddate,amount,closedate,hubspot_owner_id", resolved.token),
+        hubspotApi("/crm/v3/objects/contacts?limit=50&properties=firstname,lastname,email,company,lifecyclestage,hubspot_owner_id,lastmodifieddate,notes_last_updated", resolved.token),
       ]);
 
       return json({
-        ...buildTeamBriefingSummary(companies, deals, contacts, stored.lastSync ?? verifiedAt),
-        credential_source: "stored_token",
+        ...buildTeamBriefingSummary(companies, deals, contacts, resolved.lastSync ?? verifiedAt),
+        credential_source: resolved.source,
         verification_path: "/crm/v3/objects/companies",
       });
     }

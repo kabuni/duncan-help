@@ -29,7 +29,7 @@ export type WorkflowName =
 
 export const WORKFLOW_ROUTING: Record<WorkflowName, { primary: Provider; fallback: Provider }> = {
   // Claude primary (reasoning, synthesis, writing)
-  "norman-chat":               { primary: "claude", fallback: "openai" },
+  "norman-chat":               { primary: "openai", fallback: "openai" },
   "ceo-briefing":              { primary: "claude", fallback: "openai" },
   "ceo-email-pulse":           { primary: "claude", fallback: "openai" },
   "analyze-meeting":           { primary: "claude", fallback: "openai" },
@@ -522,8 +522,9 @@ export async function callLLMWithFallback(opts: CallLLMOptions): Promise<Normali
  */
 export async function streamLLM(opts: CallLLMOptions): Promise<ReadableStream<Uint8Array>> {
   const route = WORKFLOW_ROUTING[opts.workflow] ?? WORKFLOW_ROUTING.generic;
-  const primary = opts.force_provider ?? route.primary;
-  const fallback: Provider = primary === "claude" ? "openai" : "claude";
+  const isNormanChat = opts.workflow === "norman-chat";
+  const primary = isNormanChat ? "openai" : opts.force_provider ?? route.primary;
+  const fallback: Provider = isNormanChat ? "openai" : route.fallback;
 
   const tryProvider = async (provider: Provider, attempt: number): Promise<ReadableStream<Uint8Array>> => {
     const start = Date.now();
@@ -540,7 +541,7 @@ export async function streamLLM(opts: CallLLMOptions): Promise<ReadableStream<Ui
   try {
     return await tryProvider(primary, 1);
   } catch (err: any) {
-    if (opts.force_provider || !isRetryable(err?.status)) {
+    if (opts.force_provider || primary === fallback || !isRetryable(err?.status)) {
       log(opts.workflow, primary, 1, "fail", 0, `status=${err?.status}`);
       throw err;
     }

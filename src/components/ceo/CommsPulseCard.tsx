@@ -111,6 +111,11 @@ interface Props {
   } | null;
 }
 
+type HubspotSignal = NonNullable<Props["hubspotSignal"]>;
+type HubspotActiveDeal = NonNullable<HubspotSignal["active_deals"]>[number];
+type HubspotAtRiskAccount = NonNullable<HubspotSignal["at_risk_accounts_details"]>[number];
+type HubspotKeyContact = NonNullable<HubspotSignal["key_contacts"]>[number];
+
 function ExternalSignalColumn({
   title,
   icon: Icon,
@@ -227,7 +232,7 @@ function formatCompactCurrency(value?: number) {
   }).format(value);
 }
 
-function HubspotDetailSection({ hubspotSignal }: { hubspotSignal: NonNullable<Props["hubspotSignal"]> }) {
+function HubspotDetailSection({ hubspotSignal }: { hubspotSignal: HubspotSignal }) {
   const activeDeals = Array.isArray(hubspotSignal.active_deals) ? hubspotSignal.active_deals : [];
   const atRiskAccounts = Array.isArray(hubspotSignal.at_risk_accounts_details) ? hubspotSignal.at_risk_accounts_details : [];
   const keyContacts = Array.isArray(hubspotSignal.key_contacts) ? hubspotSignal.key_contacts : [];
@@ -245,7 +250,7 @@ function HubspotDetailSection({ hubspotSignal }: { hubspotSignal: NonNullable<Pr
       title: "Active deals",
       count: Number(hubspotSignal.active_deals_count ?? activeDeals.length),
       items: activeDeals,
-      render: (deal: NonNullable<Props["hubspotSignal"]>["active_deals"][number], idx: number) => (
+      render: (deal: HubspotActiveDeal, idx: number) => (
         <div key={`${deal?.id || deal?.name || "deal"}-${idx}`} className="rounded border border-border bg-background/60 p-2.5 space-y-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -266,7 +271,7 @@ function HubspotDetailSection({ hubspotSignal }: { hubspotSignal: NonNullable<Pr
       title: "At-risk accounts",
       count: Number(hubspotSignal.at_risk_accounts_count ?? hubspotSignal.at_risk_accounts ?? atRiskAccounts.length),
       items: atRiskAccounts,
-      render: (account: NonNullable<Props["hubspotSignal"]>["at_risk_accounts_details"][number], idx: number) => (
+      render: (account: HubspotAtRiskAccount, idx: number) => (
         <div key={`${account?.account_name || "account"}-${idx}`} className="rounded border border-border bg-background/60 p-2.5 space-y-1">
           <div className="flex items-start justify-between gap-2">
             <div className="text-xs font-medium text-foreground truncate">{account?.account_name || "Unknown account"}</div>
@@ -286,7 +291,7 @@ function HubspotDetailSection({ hubspotSignal }: { hubspotSignal: NonNullable<Pr
       title: "Key contacts",
       count: keyContacts.length,
       items: keyContacts,
-      render: (contact: NonNullable<Props["hubspotSignal"]>["key_contacts"][number], idx: number) => (
+      render: (contact: HubspotKeyContact, idx: number) => (
         <div key={`${contact?.id || contact?.email || contact?.name || "contact"}-${idx}`} className="rounded border border-border bg-background/60 p-2.5 space-y-1">
           <div className="text-xs font-medium text-foreground truncate">{contact?.name || "Unnamed contact"}</div>
           <div className="text-[10px] text-muted-foreground truncate">

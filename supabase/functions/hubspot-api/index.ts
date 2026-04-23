@@ -34,6 +34,30 @@ type HubspotSummary = {
   customer_escalations: number;
   signals: Array<Record<string, unknown>>;
   summary: string | null;
+  active_deals_count?: number;
+  active_deals?: Array<Record<string, unknown>>;
+  at_risk_accounts_count?: number;
+  at_risk_accounts_details?: Array<Record<string, unknown>>;
+  key_contacts?: Array<Record<string, unknown>>;
+};
+
+type HubspotDeal = {
+  id: string;
+  properties?: Record<string, any>;
+  associations?: {
+    companies?: { results?: Array<{ id: string }> };
+    contacts?: { results?: Array<{ id: string }> };
+  };
+};
+
+type HubspotCompany = {
+  id: string;
+  properties?: Record<string, any>;
+};
+
+type HubspotContact = {
+  id: string;
+  properties?: Record<string, any>;
 };
 
 class ProviderRequestError extends Error {
@@ -331,6 +355,156 @@ function summarise(companies: any, deals: any, lastVerifiedAt: string, degradedR
   });
 }
 
+function extractResults<T>(payload: any): T[] {
+  return Array.isArray(payload?.results) ? payload.results : [];
+}
+
+function parseTimestamp(value: unknown) {
+  if (typeof value !== "string" || !value) return null;
+  const ts = Date.parse(value);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function formatPersonName(first?: string | null, last?: string | null) {
+  const full = [first, last].filter(Boolean).join(" ").trim();
+  return full || null;
+}
+
+function normalizeDealStage(stage?: string | null) {
+  return (stage ?? "").toLowerCase().replace(/[\s_-]+/g, " ").trim();
+}
+
+function isClosedDeal(stage?: string | null) {
+  const normalized = normalizeDealStage(stage);
+  return normalized.includes("closed won") || normalized.includes("closed lost") || normalized === "closedwon" || normalized === "closedlost";
+}
+
+function buildTeamBriefingSummary(companiesPayload: any, dealsPayload: any, contactsPayload: any, lastVerifiedAt: string, degradedReason: string | null = null, errorCode: string | null = null) {
+  const companies = extractResults<HubspotCompany>(companiesPayload);
+  const deals = extractResults<HubspotDeal>(dealsPayload);
+  const contacts = extractResults<HubspotContact>(contactsPayload);
+
+  const companyMap = new Map(companies.map((company) => [company.id, company]));
+  const contactMap = new Map(contacts.map((contact) => [contact.id, contact]));
+  const now = Date.now();
+  const staleThreshold = now - 21 * 24 * 60 * 60 * 1000;
+
+  const activeDeals = deals
+    .filter((deal) => !isClosedDeal(deal.properties?.dealstage))
+    .map((deal) => {
+      const companyId = deal.associations?.companies?.results?.[0]?.id ?? null;
+      const ownerId = deal.properties?.hubspot_owner_id ?? null;
+      const closeDate = deal.properties?.closedate ?? null;
+      const lastModified = deal.properties?.hs_lastmodifieddate ?? null;
+      return {
+        id: deal.id,
+        name: deal.properties?.dealname || "Unnamed deal",
+        stage: deal.properties?.dealstage || "Unknown stage",
+        amount: Number(deal.properties?.amount || 0),
+        owner_id: ownerId,
+        owner_label: ownerId ? `Owner ${ownerId}` : "Unassigned",
+        close_date: closeDate,
+        last_modified: lastModified,
+        company_id: companyId,
+        company_name: companyId ? companyMap.get(companyId)?.properties?.name ?? "Unknown account" : "Unlinked account",
+      };
+    })
+    .sort((a, b) => (b.amount || 0) - (a.amount || 0));
+
+  const atRiskAccounts = activeDeals
+    .map((deal) => {
+      const company = deal.company_id ? companyMap.get(deal.company_id) : null;
+      const companyScore = Number(company?.properties?.hubspotscore || 0);
+      const companyLastActivity = parseTimestamp(company?.properties?.notes_last_updated ?? company?.properties?.hs_lastmodifieddate);
+      const dealLastModified = parseTimestamp(deal.last_modified);
+      const dealCloseDate = parseTimestamp(deal.close_date);
+      const stale = !!dealLastModified && dealLastModified < staleThreshold;
+      const overdue = !!dealCloseDate && dealCloseDate < now;
+      const lowScore = Number.isFinite(companyScore) && companyScore > 0 && companyScore < 20;
+      const inactiveAccount = !!companyLastActivity && companyLastActivity < staleThreshold;
+      const reasons = [
+        stale ? "deal stale >21d" : null,
+        overdue ? "close date passed" : null,
+        lowScore ? `health score ${companyScore}` : null,
+        inactiveAccount ? "account inactive >21d" : null,
+      ].filter(Boolean) as string[];
+
+      if (reasons.length === 0) return null;
+
+      return {
+        account_id: deal.company_id,
+        account_name: deal.company_name,
+        risk_reasons: reasons,
+        stage: deal.stage,
+        deal_name: deal.name,
+        amount: deal.amount,
+        owner_label: deal.owner_label,
+        last_activity_at: company?.properties?.notes_last_updated ?? deal.last_modified ?? null,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 6) as Array<Record<string, unknown>>;
+
+  const contactPriority = contacts
+    .map((contact) => {
+      const companyName = contact.properties?.company || null;
+      const lastActivity = parseTimestamp(contact.properties?.lastmodifieddate ?? contact.properties?.notes_last_updated);
+      const associatedDeal = activeDeals.find((deal) => deal.company_name && companyName && deal.company_name === companyName);
+      return {
+        id: contact.id,
+        name: formatPersonName(contact.properties?.firstname, contact.properties?.lastname) || contact.properties?.email || "Unnamed contact",
+        email: contact.properties?.email || null,
+        company: companyName,
+        lifecycle_stage: contact.properties?.lifecyclestage || null,
+        owner_id: contact.properties?.hubspot_owner_id || null,
+        owner_label: contact.properties?.hubspot_owner_id ? `Owner ${contact.properties?.hubspot_owner_id}` : "Unassigned",
+        last_activity_at: contact.properties?.lastmodifieddate ?? contact.properties?.notes_last_updated ?? null,
+        associated_deal_name: associatedDeal?.name ?? null,
+        associated_deal_amount: associatedDeal?.amount ?? 0,
+        priority_score: (associatedDeal?.amount ?? 0) + (lastActivity ? Math.max(0, 1_000_000_000_000 - lastActivity) / 1_000_000_000 : 0),
+      };
+    })
+    .sort((a, b) => b.priority_score - a.priority_score)
+    .slice(0, 6)
+    .map(({ priority_score, ...contact }) => contact);
+
+  const staleDeals = activeDeals.filter((deal) => {
+    const ts = parseTimestamp(deal.last_modified);
+    return !!ts && ts < staleThreshold;
+  });
+
+  const signals = [
+    ...staleDeals.slice(0, 3).map((deal) => ({ type: "stale_deal", label: deal.name, stage: deal.stage, company: deal.company_name })),
+    ...atRiskAccounts.slice(0, 3).map((account: any) => ({ type: "at_risk_account", label: account.account_name, reasons: account.risk_reasons })),
+  ];
+
+  const summary = activeDeals.length === 0 && contactPriority.length === 0
+    ? "HubSpot connected but returned no active pipeline or contact signal for Team Briefing."
+    : `${activeDeals.length} active deals, ${atRiskAccounts.length} at-risk accounts, and ${contactPriority.length} priority contacts surfaced from CRM.`;
+
+  return buildResponse({
+    connected: true,
+    status: degradedReason ? "degraded" : "connected",
+    last_verified_at: lastVerifiedAt,
+    last_sync_at: lastVerifiedAt,
+    degraded_reason: degradedReason,
+    error_code: errorCode,
+    error_message: degradedReason,
+    accounts_scanned: companies.length,
+    stale_deals: staleDeals.length,
+    at_risk_accounts: atRiskAccounts.length,
+    at_risk_accounts_count: atRiskAccounts.length,
+    at_risk_accounts_details: atRiskAccounts,
+    active_deals_count: activeDeals.length,
+    active_deals: activeDeals.slice(0, 6),
+    key_contacts: contactPriority,
+    customer_escalations: 0,
+    signals,
+    summary,
+    metrics_summary: summary,
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -355,6 +529,19 @@ Deno.serve(async (req) => {
           verification_path: "/api/v1/verify_credentials",
           last_verified_at: verifiedAt,
           last_sync_at: verifiedAt,
+        });
+      }
+
+      if (action === "team_briefing_summary") {
+        const [companies, deals, contacts] = await Promise.all([
+          hubspotGateway("/crm/v3/objects/companies?limit=50&properties=name,hs_lastmodifieddate,hubspotscore,notes_last_updated", LOVABLE_API_KEY, HUBSPOT_API_KEY),
+          hubspotGateway("/crm/v3/objects/deals?limit=50&associations=companies,contacts&properties=dealname,dealstage,hs_lastmodifieddate,amount,closedate,hubspot_owner_id", LOVABLE_API_KEY, HUBSPOT_API_KEY),
+          hubspotGateway("/crm/v3/objects/contacts?limit=50&properties=firstname,lastname,email,company,lifecyclestage,hubspot_owner_id,lastmodifieddate,notes_last_updated", LOVABLE_API_KEY, HUBSPOT_API_KEY),
+        ]);
+        return json({
+          ...buildTeamBriefingSummary(companies, deals, contacts, verifiedAt),
+          credential_source: "connector_gateway",
+          verification_path: "/api/v1/verify_credentials",
         });
       }
 
@@ -406,6 +593,20 @@ Deno.serve(async (req) => {
         verification_path: "/crm/v3/objects/companies",
         last_verified_at: verifiedAt,
         last_sync_at: stored.lastSync ?? verifiedAt,
+      });
+    }
+
+    if (action === "team_briefing_summary") {
+      const [companies, deals, contacts] = await Promise.all([
+        hubspotApi("/crm/v3/objects/companies?limit=50&properties=name,hs_lastmodifieddate,hubspotscore,notes_last_updated", stored.token),
+        hubspotApi("/crm/v3/objects/deals?limit=50&associations=companies,contacts&properties=dealname,dealstage,hs_lastmodifieddate,amount,closedate,hubspot_owner_id", stored.token),
+        hubspotApi("/crm/v3/objects/contacts?limit=50&properties=firstname,lastname,email,company,lifecyclestage,hubspot_owner_id,lastmodifieddate,notes_last_updated", stored.token),
+      ]);
+
+      return json({
+        ...buildTeamBriefingSummary(companies, deals, contacts, stored.lastSync ?? verifiedAt),
+        credential_source: "stored_token",
+        verification_path: "/crm/v3/objects/companies",
       });
     }
 

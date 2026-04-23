@@ -4053,6 +4053,10 @@ Format as a natural, readable summary with clear sections. If a section has no d
                 for (const tc of delta.tool_calls) {
                   const index = tc.index;
                   if (!toolCalls[index]) {
+                    const hasIdentity = !!tc.id || !!tc.function?.name;
+                    if (!hasIdentity) {
+                      continue;
+                    }
                     toolCalls[index] = { id: tc.id, type: "function", function: { name: "", arguments: "" } };
                   }
                   if (tc.id) {

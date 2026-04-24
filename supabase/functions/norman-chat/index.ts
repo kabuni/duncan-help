@@ -4347,6 +4347,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const xeroToolNames = ["list_xero_invoices", "get_xero_invoice", "approve_xero_invoice_payment", "search_xero_contacts", "create_xero_invoice", "list_xero_bank_accounts", "create_xero_expense"];
       const gmailToolNames = ["list_gmail_emails", "search_gmail", "read_gmail_email", "send_gmail_email", "read_gmail_thread", "draft_gmail_reply", "draft_gmail_email"];
       const driveToolNames = ["drive_list_files", "drive_search", "drive_get_content"];
+      const slackToolNames = ["list_slack_channels", "read_slack_channel_messages", "send_slack_message"];
       const analyticsToolNames = ["get_workstream_analytics", "get_recruitment_analytics", "get_team_activity_analytics", "get_operational_summary"];
       const workstreamMgmtToolNames = ["list_team_members", "create_workstream_card", "add_tasks_to_card", "update_workstream_card", "check_team_availability"];
       const execSummaryToolNames = ["generate_exec_summary_document"];
@@ -4418,6 +4419,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = await withToolTimeout(tc.function.name, executeGmailTool(tc.function.name, args, supabaseUrl, authHeader || ""));
            } else if (driveToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeDriveTool(tc.function.name, args, supabaseUrl, authHeader || ""));
+            } else if (slackToolNames.includes(tc.function.name)) {
+              if (!slackConnection) {
+                result = { error: "Slack is not connected. Please connect it via the Integrations page." };
+              } else {
+                result = await withToolTimeout(tc.function.name, executeSlackTool(tc.function.name, args, slackConnection.accessToken));
+              }
            } else if (analyticsToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeAnalyticsTool(tc.function.name, args, supabaseAdmin));
           } else if (workstreamMgmtToolNames.includes(tc.function.name)) {

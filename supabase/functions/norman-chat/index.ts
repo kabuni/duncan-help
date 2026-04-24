@@ -47,6 +47,7 @@ Your capabilities:
 - **Executive Summary Documents**: When the user asks you to generate/create a document or downloadable version of an executive summary, use generate_exec_summary_document AFTER you have fetched and synthesized all the report content. Pass the full synthesized summary as markdown in the 'content' field. The tool generates a professional styled HTML document, uploads it to storage, and returns a download link. Always share the download_url with the user using markdown link syntax: [Download Executive Summary](download_url_here). If the user asks for "a document" or "generate a report" about the weekly summary, first fetch the data from Drive, synthesize it, then call this tool to produce the downloadable document.
 - **File Analysis**: Users can attach files (images, documents, spreadsheets) directly in the chat. When files are attached, analyze their content thoroughly — describe images, extract text from documents, summarize data from spreadsheets, and answer questions about the content. Always acknowledge what files were received and provide detailed analysis.
 - **App Analytics**: You have access to internal app analytics — workstream cards, tasks, recruitment pipeline, purchase orders, meetings, issues, and team activity. Use the analytics tools when users ask about team performance, workload distribution, project health, pipeline status, overdue items, or any operational metrics. Present data with clear tables, counts, and summaries. Use the RYG (Red/Yellow/Green) framework for status reporting.
+- **Google Analytics**: You can retrieve the user's connected GA4 website analytics, including active users, sessions, page views, engagement rate, top pages, countries, cities, devices, demographics when available, and traffic sources. Use this when users ask about website traffic, audience, acquisition, reach, engagement, or Google Analytics data.
 - **Workstream Management (Agentic)**: You can CREATE, UPDATE, and manage workstream cards and tasks directly. When a user describes a workflow, project plan, or set of tasks, proactively break it down into workstream cards with tasks. IMPORTANT: When creating cards, they are ALWAYS auto-assigned to the creator only. Do NOT try to assign cards to others during creation. If the user wants to assign cards to other team members, use update_workstream_card AFTER creation. Use list_team_members to resolve names to user IDs. When assigning tasks to people, use check_team_availability first to look at their calendars and find suitable time slots. Suggest specific times based on their availability. Available project tags: 'Lightning Strike Event', 'Website', 'K10 App', 'School Integrations'. Default status is 'amber' (Yellow) for new cards. When the user says "create", "set up", or "build the workflow", execute directly. Otherwise, present the plan first and ask for confirmation before creating. DEDUPLICATION: The create_workstream_card tool automatically prevents duplicates — if a card with the same title and project_tag already exists for the user, it returns the existing card instead of creating a new one. NEVER call create_workstream_card more than once for the same card title in a single conversation. After creating cards, do NOT repeat the creation calls — proceed directly to adding tasks.
 - **Google Forms**: You can fill and submit pre-configured Google Forms on behalf of the user. You can also parse a Google Form URL to automatically extract its fields and save it as a new pre-configured form. When a user asks to fill a form, first list available forms, then ask each required field ONE AT A TIME as a conversational question. Wait for the user to answer each question before asking the next. After collecting all answers, confirm the details and submit. When a user provides a Google Form URL, use parse_google_form to extract the fields, show the parsed result to the user for confirmation, then save it with save_parsed_google_form.
 
@@ -1280,12 +1281,22 @@ const ANALYTICS_TOOLS = [
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "get_google_analytics_dashboard",
+      description: "Get connected GA4 website analytics for the current user. Returns summary metrics, top pages, geography, devices, demographics availability, and traffic sources. Use when users ask about Google Analytics, website traffic, users, sessions, engagement, top pages, audience, acquisition, countries, cities, devices, or sources.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
 ];
 
 async function executeAnalyticsTool(
   toolName: string,
   args: any,
-  supabaseAdmin: any
+  supabaseAdmin: any,
+  supabaseUrl?: string,
+  authHeader?: string
 ): Promise<any> {
   switch (toolName) {
     case "get_workstream_analytics": {

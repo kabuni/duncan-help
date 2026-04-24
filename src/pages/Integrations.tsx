@@ -590,6 +590,7 @@ const IntegrationDetail = ({
   slackWorkspaceName,
   isAzureDevOpsConnected,
   isGoogleDriveConnected,
+  googleDriveStatus,
   onClose,
 }: {
   integration: Integration;
@@ -604,6 +605,7 @@ const IntegrationDetail = ({
   slackWorkspaceName: string | null;
   isAzureDevOpsConnected: boolean | null;
   isGoogleDriveConnected: boolean | null;
+  googleDriveStatus: GoogleDriveStatusDetail | null;
   onClose: () => void;
 }) => {
   const isGoogleCalendar = integration.id === "google-calendar";

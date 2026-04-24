@@ -3460,14 +3460,15 @@ async function getSlackConnection(userId: string, supabaseAdmin: any): Promise<{
   if (!clientSecret) return null;
   const { data, error } = await supabaseAdmin
     .from("slack_connections")
-    .select("access_token, team_name, scope")
+    .select("access_token, user_access_token, team_name, scope, user_scope")
     .eq("user_id", userId)
     .maybeSingle();
-  if (error || !data?.access_token) return null;
+  if (error || (!data?.access_token && !data?.user_access_token)) return null;
+  const encryptedToken = data.user_access_token || data.access_token;
   return {
-    accessToken: await decryptSlackToken(data.access_token, clientSecret),
+    accessToken: await decryptSlackToken(encryptedToken, clientSecret),
     teamName: data.team_name ?? null,
-    scope: data.scope ?? null,
+    scope: data.user_scope ?? data.scope ?? null,
   };
 }
 

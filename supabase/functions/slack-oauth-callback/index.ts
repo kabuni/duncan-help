@@ -121,18 +121,24 @@ serve(async (req) => {
     }
 
     const encryptedToken = await encryptToken(tokenData.access_token, clientSecret);
+    const encryptedUserToken = tokenData.authed_user?.access_token
+      ? await encryptToken(tokenData.authed_user.access_token, clientSecret)
+      : null;
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     const { data, error: upsertError } = await supabaseAdmin
       .from("slack_connections")
       .upsert({
         user_id: user.id,
         access_token: encryptedToken,
+        user_access_token: encryptedUserToken,
         team_id: tokenData.team?.id,
         team_name: tokenData.team?.name ?? null,
         authed_user_id: tokenData.authed_user?.id ?? null,
+        user_scope: tokenData.authed_user?.scope ?? null,
+        user_token_type: tokenData.authed_user?.token_type ?? null,
         scope: tokenData.scope ?? null,
       }, { onConflict: "user_id" })
-      .select("id, user_id, team_id, team_name, authed_user_id, scope, created_at, updated_at")
+      .select("id, user_id, team_id, team_name, authed_user_id, scope, user_scope, user_token_type, created_at, updated_at")
       .single();
 
     if (upsertError) throw upsertError;

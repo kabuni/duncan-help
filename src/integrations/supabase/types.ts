@@ -1513,7 +1513,10 @@ export type Database = {
           team_id: string
           team_name: string | null
           updated_at: string
+          user_access_token: string | null
           user_id: string
+          user_scope: string | null
+          user_token_type: string | null
         }
         Insert: {
           access_token: string
@@ -1524,7 +1527,10 @@ export type Database = {
           team_id: string
           team_name?: string | null
           updated_at?: string
+          user_access_token?: string | null
           user_id: string
+          user_scope?: string | null
+          user_token_type?: string | null
         }
         Update: {
           access_token?: string
@@ -1535,7 +1541,10 @@ export type Database = {
           team_id?: string
           team_name?: string | null
           updated_at?: string
+          user_access_token?: string | null
           user_id?: string
+          user_scope?: string | null
+          user_token_type?: string | null
         }
         Relationships: []
       }

@@ -10,6 +10,8 @@ export interface SlackConnection {
   team_name: string | null;
   authed_user_id: string | null;
   scope: string | null;
+  user_scope: string | null;
+  user_token_type: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -29,7 +31,7 @@ export function useSlackConnection() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("slack_connections")
-        .select("id, user_id, team_id, team_name, authed_user_id, scope, created_at, updated_at")
+        .select("id, user_id, team_id, team_name, authed_user_id, scope, user_scope, user_token_type, created_at, updated_at")
         .maybeSingle();
 
       if (error) throw error;

@@ -10,6 +10,7 @@ import { useSearchParams } from "react-router-dom";
 import AppLayout from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { invokeEdge } from "@/lib/edgeApi";
 import { fastApi, withFastApi } from "@/lib/fastApiClient";
@@ -631,6 +632,9 @@ const IntegrationDetail = ({
   const [gmailLoading, setGmailLoading] = useState(false);
   const [azureDevOpsLoading, setAzureDevOpsLoading] = useState(false);
   const [googleDriveLoading, setGoogleDriveLoading] = useState(false);
+  const [slackChannelId, setSlackChannelId] = useState("");
+  const [slackMessage, setSlackMessage] = useState("");
+  const [slackSending, setSlackSending] = useState(false);
 
   const fetchRuntimeStatus = async () => {
     if (!isRuntimeStatusIntegration) {
@@ -833,6 +837,31 @@ const IntegrationDetail = ({
       setGoogleDriveLoading(false);
       setGoogleDriveLoading(false);
       toast.error(err.message || "Failed to start OAuth flow");
+    }
+  };
+
+  const handleSlackSendMessage = async () => {
+    const channelId = slackChannelId.trim();
+    const text = slackMessage.trim();
+    if (!channelId || !text) {
+      toast.error("Add a channel ID and message first");
+      return;
+    }
+
+    try {
+      setSlackSending(true);
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data, error } = await supabase.functions.invoke("slack-send-message", {
+        body: { channel_id: channelId, text },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(`Message posted as you in ${channelId}`);
+      setSlackMessage("");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to send Slack message");
+    } finally {
+      setSlackSending(false);
     }
   };
 
@@ -1087,6 +1116,42 @@ const IntegrationDetail = ({
                   {!isSlack && statusDetail?.verification_path ? (
                     <p className="text-xs text-muted-foreground">Verification path: {statusDetail.verification_path}</p>
                   ) : null}
+                </div>
+              )}
+              {isSlack && (
+                <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
+                  <div>
+                    <h3 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Send to Slack</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">Posts with your Slack identity after reconnecting with user permissions.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="slack-channel-id" className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Channel ID</Label>
+                    <Input
+                      id="slack-channel-id"
+                      placeholder="C0123456789"
+                      value={slackChannelId}
+                      onChange={(e) => setSlackChannelId(e.target.value)}
+                      className="bg-background border-border"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="slack-message" className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Message</Label>
+                    <Textarea
+                      id="slack-message"
+                      placeholder="Type a message..."
+                      value={slackMessage}
+                      onChange={(e) => setSlackMessage(e.target.value)}
+                      className="bg-background border-border"
+                    />
+                  </div>
+                  <button
+                    onClick={handleSlackSendMessage}
+                    disabled={slackSending || !slackMessage.trim() || !slackChannelId.trim()}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:bg-primary/90 transition-all disabled:opacity-50"
+                  >
+                    {slackSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
+                    {slackSending ? "Sending..." : "Send as me"}
+                  </button>
                 </div>
               )}
               {isBasecamp && (

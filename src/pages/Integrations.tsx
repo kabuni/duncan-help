@@ -1068,7 +1068,9 @@ const IntegrationDetail = ({
               <div className="flex items-center justify-between rounded-xl border border-norman-success/20 bg-norman-success/5 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-norman-success" />
-                  <span className="text-sm font-medium text-norman-success">Connected & syncing</span>
+                  <span className="text-sm font-medium text-norman-success">
+                    {isSlack ? `Slack connected${slackWorkspaceName ? ` · ${slackWorkspaceName}` : ""}` : "Connected & syncing"}
+                  </span>
                 </div>
                 {(statusDetail?.last_verified_at || integrationData?.last_sync) && (
                   <span className="text-[10px] font-mono text-muted-foreground">{new Date(statusDetail?.last_verified_at || integrationData?.last_sync).toLocaleDateString()}</span>
@@ -1076,10 +1078,10 @@ const IntegrationDetail = ({
               </div>
               {(isRuntimeStatusIntegration || isSlack) && (
                 <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-2">
-                  <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Used by Team Briefing</div>
+                  <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{isSlack ? "Workspace" : "Used by Team Briefing"}</div>
                   <p className="text-sm text-foreground/80">
                     {isSlack
-                      ? "Only channels Duncan can access are scanned. Private or unjoined channels are now surfaced as reduced visibility."
+                      ? slackWorkspaceName || "Slack workspace connected."
                       : runtimeStatusLabel || statusDetail?.degraded_reason || "This integration is available to the Team Briefing pipeline."}
                   </p>
                   {!isSlack && statusDetail?.verification_path ? (

@@ -4385,7 +4385,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const gmailToolNames = ["list_gmail_emails", "search_gmail", "read_gmail_email", "send_gmail_email", "read_gmail_thread", "draft_gmail_reply", "draft_gmail_email"];
       const driveToolNames = ["drive_list_files", "drive_search", "drive_get_content"];
       const slackToolNames = ["list_slack_channels", "read_slack_channel_messages", "send_slack_message"];
-      const analyticsToolNames = ["get_workstream_analytics", "get_recruitment_analytics", "get_team_activity_analytics", "get_operational_summary"];
+      const analyticsToolNames = ["get_workstream_analytics", "get_recruitment_analytics", "get_team_activity_analytics", "get_operational_summary", "get_google_analytics_dashboard"];
       const workstreamMgmtToolNames = ["list_team_members", "create_workstream_card", "add_tasks_to_card", "update_workstream_card", "check_team_availability"];
       const execSummaryToolNames = ["generate_exec_summary_document"];
       const releaseToolNames = ["log_release_change"];
@@ -4463,7 +4463,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
                 result = await withToolTimeout(tc.function.name, executeSlackTool(tc.function.name, args, slackConnection.accessToken));
               }
            } else if (analyticsToolNames.includes(tc.function.name)) {
-              result = await withToolTimeout(tc.function.name, executeAnalyticsTool(tc.function.name, args, supabaseAdmin));
+              result = await withToolTimeout(tc.function.name, executeAnalyticsTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));
           } else if (workstreamMgmtToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeWorkstreamTool(tc.function.name, args, supabaseAdmin, userId || ""));
           } else if (execSummaryToolNames.includes(tc.function.name)) {

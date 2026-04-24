@@ -9,6 +9,7 @@ const corsHeaders = {
 const SLACK_AUTHORIZE_URL = "https://slack.com/oauth/v2/authorize";
 const SLACK_SCOPES = [
   "channels:read",
+  "channels:join",
   "channels:history",
   "groups:read",
   "groups:history",

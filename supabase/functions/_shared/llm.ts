@@ -73,6 +73,8 @@ const WORKFLOW_PRIMARY_MODEL: Partial<Record<WorkflowName, { openai?: string; cl
   "extract-file-text":     { openai: "gpt-5-mini" },
   "extract-chat-file":     { openai: "gpt-5-mini" },
   "google-analytics":      { openai: "gpt-5-mini" },
+  "score-cv-values":       { claude: "claude-haiku-4-5" },
+  "score-cv-competencies": { claude: "claude-haiku-4-5" },
 };
 
 // Sonnet stays primary on synchronous workflows: Opus 4.5 averages 150-180s on

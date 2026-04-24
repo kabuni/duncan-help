@@ -25,6 +25,8 @@ export type WorkflowName =
   | "hireflix-sync-interviews"
   | "hireflix-retry-processor"
   | "create-hireflix-position"
+  | "google-analytics"
+  | "claude-test"
   | "generic";
 
 // `locked: true` means cross-provider fallback is forbidden for this workflow.
@@ -38,7 +40,7 @@ export const WORKFLOW_ROUTING: Record<WorkflowName, { primary: Provider; fallbac
   "gmail-auto-draft":          { primary: "claude", fallback: "claude", locked: true },
   "gmail-train-style":         { primary: "claude", fallback: "claude", locked: true },
 
-  // Claude primary (long-form synthesis, executive writing)
+  // Claude primary (long-form synthesis, executive writing, scoring)
   "ceo-briefing":              { primary: "claude", fallback: "openai" },
   "ceo-email-pulse":           { primary: "claude", fallback: "openai" },
   "analyze-meeting":           { primary: "claude", fallback: "openai" },
@@ -47,17 +49,30 @@ export const WORKFLOW_ROUTING: Record<WorkflowName, { primary: Provider; fallbac
   "hireflix-sync-interviews":  { primary: "claude", fallback: "openai" },
   "hireflix-retry-processor":  { primary: "claude", fallback: "openai" },
   "create-hireflix-position":  { primary: "claude", fallback: "openai" },
+  "score-cv-values":           { primary: "claude", fallback: "openai" },
+  "score-cv-competencies":     { primary: "claude", fallback: "openai" },
+  "claude-test":               { primary: "claude", fallback: "openai" },
 
   // OpenAI primary (structured JSON / tool calling / file extraction)
-  "score-cv-values":           { primary: "openai", fallback: "claude" },
-  "score-cv-competencies":     { primary: "openai", fallback: "claude" },
   "generate-jd":               { primary: "openai", fallback: "claude" },
   "parse-jd-competencies":     { primary: "openai", fallback: "claude" },
   "extract-chat-file":         { primary: "openai", fallback: "claude" },
   "extract-file-text":         { primary: "openai", fallback: "claude" },
   "parse-cv":                  { primary: "openai", fallback: "claude" },
+  "google-analytics":          { primary: "openai", fallback: "claude" },
 
   generic:                     { primary: "openai", fallback: "claude" },
+};
+
+// Per-workflow primary-model overrides. When set, this model is used as the
+// primary attempt instead of the provider default. Degrade still falls to the
+// provider's degrade model.
+const WORKFLOW_PRIMARY_MODEL: Partial<Record<WorkflowName, { openai?: string; claude?: string }>> = {
+  "parse-cv":              { openai: "gpt-5-mini" },
+  "parse-jd-competencies": { openai: "gpt-5-mini" },
+  "extract-file-text":     { openai: "gpt-5-mini" },
+  "extract-chat-file":     { openai: "gpt-5-mini" },
+  "google-analytics":      { openai: "gpt-5-mini" },
 };
 
 // Sonnet stays primary on synchronous workflows: Opus 4.5 averages 150-180s on
@@ -449,6 +464,10 @@ async function callClaude(opts: CallLLMOptions, model: string): Promise<Normalis
 
 function pickModel(provider: Provider, opts: CallLLMOptions, degrade = false): string {
   if (opts.model_override?.[provider]) return opts.model_override[provider]!;
+  if (!degrade) {
+    const wf = WORKFLOW_PRIMARY_MODEL[opts.workflow]?.[provider];
+    if (wf) return wf;
+  }
   if (provider === "claude") return degrade ? CLAUDE_MODEL_DEGRADE : CLAUDE_MODEL_PRIMARY;
   return degrade ? OPENAI_MODEL_DEGRADE : OPENAI_MODEL_PRIMARY;
 }

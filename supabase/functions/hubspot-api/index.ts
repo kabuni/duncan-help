@@ -726,18 +726,36 @@ Deno.serve(async (req) => {
     if (action === "team_briefing_summary") {
       logHubspot("credential source", { source: "stored_token_preferred_for_team_briefing", connector_available: !!(LOVABLE_API_KEY && HUBSPOT_API_KEY), env_fallback_available: !!HUBSPOT_API_KEY });
       const resolved = await resolveTeamBriefingToken(HUBSPOT_API_KEY);
+      logHubspot("team_briefing_summary credential decision", {
+        stored_token_state: resolved.stored?.state ?? null,
+        env_fallback_available: !!normalizeBearerToken(HUBSPOT_API_KEY),
+        selected_source: resolved.source,
+      });
       if (!resolved.token) {
-        logHubspot("missing token branch", { branch: "stored_token_missing", action });
+        const state = resolved.stored?.state ?? "integration_not_configured";
+        const errorCode = state === "token_decode_failed"
+          ? "stored_token_decode_failed"
+          : state === "no_token_stored"
+          ? "no_token_stored"
+          : state === "query_error"
+          ? "company_integration_lookup_failed"
+          : "integration_not_configured";
+        logHubspot("missing token branch", { branch: errorCode, action, stored_token_state: state });
         return responseWithLogging({
-          status: resolved.stored?.encodedToken && resolved.stored.decodeOk === false ? "degraded" : "not_configured",
+          status: state === "token_decode_failed" || state === "query_error" ? "degraded" : "not_configured",
           credential_source: resolved.source,
           verification_path: null,
           last_verified_at: null,
           last_sync_at: resolved.lastSync,
-          error_code: resolved.stored?.encodedToken && resolved.stored.decodeOk === false ? "stored_token_decode_failed" : "hubspot_not_configured",
-          error_message: resolved.stored?.encodedToken && resolved.stored.decodeOk === false
+          error_code: errorCode,
+          error_message: errorCode === "stored_token_decode_failed"
             ? "Stored HubSpot token could not be decoded and no fallback secret is configured"
-            : "No stored company token found for Team Briefing HubSpot access and no fallback secret is configured",
+            : errorCode === "no_token_stored"
+            ? "HubSpot company integration row exists but encrypted_api_key is empty or null and no fallback secret is configured"
+            : errorCode === "company_integration_lookup_failed"
+            ? "HubSpot company integration lookup failed and no fallback secret is configured"
+            : "HubSpot company integration row does not exist and no fallback secret is configured",
+          credential_diagnostics: resolved.diagnostics,
         });
       }
 
@@ -752,6 +770,7 @@ Deno.serve(async (req) => {
         ...buildTeamBriefingSummary(companies, deals, contacts, resolved.lastSync ?? verifiedAt),
         credential_source: resolved.source,
         verification_path: "/crm/v3/objects/companies",
+        credential_diagnostics: resolved.diagnostics,
       });
     }
 

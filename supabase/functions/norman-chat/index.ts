@@ -1539,6 +1539,31 @@ async function executeAnalyticsTool(
       };
     }
 
+    case "get_google_analytics_dashboard": {
+      if (!supabaseUrl || !authHeader) {
+        return { connected: false, error: "Google Analytics requires an authenticated chat session." };
+      }
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/google-analytics-api`, {
+        method: "POST",
+        headers: {
+          Authorization: authHeader,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "dashboard" }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (data?.code === "NOT_CONNECTED" || data?.connected === false) {
+        return { connected: false, error: "Google Analytics is not connected. Please connect it via the Integrations page." };
+      }
+      if (!response.ok) {
+        return { connected: false, error: data?.error || `Google Analytics request failed (${response.status})` };
+      }
+
+      return data;
+    }
+
     default:
       throw new Error(`Unknown analytics tool: ${toolName}`);
   }

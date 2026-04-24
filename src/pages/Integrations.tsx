@@ -347,6 +347,13 @@ const Integrations = () => {
       };
       toast.error(errorMessages[gmailError || "unknown"] || `Gmail connection failed: ${gmailError}`);
       setSearchParams({});
+    } else if (searchParams.get("slack_connected") === "true") {
+      toast.success("Slack connected successfully!");
+      slackConnection.refetch();
+      setSearchParams({});
+    } else if (searchParams.get("slack_error")) {
+      toast.error("Slack connection failed");
+      setSearchParams({});
     } else if (error) {
       const errorMessages: Record<string, string> = {
         missing_params: "OAuth flow was incomplete",
@@ -361,7 +368,7 @@ const Integrations = () => {
       toast.error(errorMessages[error] || `Connection failed: ${error}`);
       setSearchParams({});
     }
-  }, [searchParams, setSearchParams, checkCalendarConnection]);
+  }, [searchParams, setSearchParams, checkCalendarConnection, slackConnection]);
 
   // Check OAuth connections on mount
   useEffect(() => {
@@ -373,11 +380,12 @@ const Integrations = () => {
     checkGoogleDriveConnection();
   }, [checkCalendarConnection]);
 
-  const isLoading = userLoading || companyLoading;
+  const isLoading = userLoading || companyLoading || slackConnection.isLoading;
 
   const getRealtimeStatus = (integration: Integration): IntegrationStatus => {
     const oauthMap: Record<string, boolean | null> = {
       "gmail": isGmailConnected,
+      "slack": slackConnection.isConnected,
       "google-calendar": isCalendarConnected,
       "azure-blob": isAzureBlobConnected,
       "basecamp": isBasecampConnected,

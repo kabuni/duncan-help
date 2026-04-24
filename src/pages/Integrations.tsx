@@ -361,7 +361,7 @@ const Integrations = () => {
       setSearchParams({});
     } else if (searchParams.get("drive_error")) {
       const driveError = searchParams.get("drive_error");
-      toast.error(`Google Drive connection failed: ${driveError}`);
+      toast.error(driveErrorMessages[driveError || "unknown"] || `Google Drive connection failed: ${driveError}`);
       setSearchParams({});
     } else if (searchParams.get("gmail_connected") === "true") {
       toast.success("Gmail connected successfully!");
@@ -563,6 +563,7 @@ const Integrations = () => {
               slackWorkspaceName={slackConnection.workspaceName}
               isAzureDevOpsConnected={isAzureDevOpsConnected}
               isGoogleDriveConnected={isGoogleDriveConnected}
+              googleDriveStatus={googleDriveStatus}
               onClose={() => {
                 setSelectedIntegration(null);
                 checkGmailConnection();

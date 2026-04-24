@@ -123,6 +123,13 @@ async function getUser(req: Request) {
   return data.user ?? null;
 }
 
+function isServiceRoleRequest(req: Request) {
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  return !!token && !!serviceRoleKey && token === serviceRoleKey;
+}
+
 async function getStoredToken() {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data } = await supabase
@@ -199,8 +206,11 @@ function classifyError(error: unknown) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const user = await getUser(req);
-  if (!user) return json({ error: "Unauthorized" }, 401);
+  const isInternal = isServiceRoleRequest(req);
+  if (!isInternal) {
+    const user = await getUser(req);
+    if (!user) return json({ error: "Unauthorized" }, 401);
+  }
 
   const { action } = await req.json().catch(() => ({ action: "status" }));
   const stored = await getStoredToken();

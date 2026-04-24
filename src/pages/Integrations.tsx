@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { invokeEdge } from "@/lib/edgeApi";
 import { fastApi, withFastApi } from "@/lib/fastApiClient";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
+import { useSlackConnection } from "@/hooks/useSlackConnection";
 import { useAzureBlobStorage } from "@/hooks/useAzureBlobStorage";
 import BasecampBrowser from "@/components/BasecampBrowser";
 import {
@@ -87,10 +88,9 @@ const integrations: Integration[] = [
     services: ["Channels", "Direct Messages", "Threads", "Reactions"],
     type: "user",
     setupSteps: [
-      "Connect Slack from Connectors so Duncan can read workspace activity",
-      "Public channels are visible by default through the connector",
-      "Private channels still require Duncan to be invited before Team Briefing can see them",
-      "If coverage is partial, Duncan will now show the exact visibility limitation in Team Briefing",
+      "Click Connect Slack below",
+      "Approve the requested Slack permissions in the Slack consent screen",
+      "You'll be redirected back to Duncan when the connection is saved",
     ],
   },
   {
@@ -241,6 +241,7 @@ const Integrations = () => {
   const { data: companyIntegrations = [], isLoading: companyLoading } = useCompanyIntegrations();
   const { isAdmin } = useIsAdmin();
   const { isConnected: isCalendarConnected, checkConnection: checkCalendarConnection } = useGoogleCalendar();
+  const slackConnection = useSlackConnection();
   const [isAzureBlobConnected, setIsAzureBlobConnected] = useState<boolean | null>(null);
   const [isBasecampConnected, setIsBasecampConnected] = useState<boolean | null>(null);
   const [isGmailConnected, setIsGmailConnected] = useState<boolean | null>(null);
@@ -346,6 +347,13 @@ const Integrations = () => {
       };
       toast.error(errorMessages[gmailError || "unknown"] || `Gmail connection failed: ${gmailError}`);
       setSearchParams({});
+    } else if (searchParams.get("slack_connected") === "true") {
+      toast.success("Slack connected successfully!");
+      slackConnection.refetch();
+      setSearchParams({});
+    } else if (searchParams.get("slack_error")) {
+      toast.error("Slack connection failed");
+      setSearchParams({});
     } else if (error) {
       const errorMessages: Record<string, string> = {
         missing_params: "OAuth flow was incomplete",
@@ -360,7 +368,7 @@ const Integrations = () => {
       toast.error(errorMessages[error] || `Connection failed: ${error}`);
       setSearchParams({});
     }
-  }, [searchParams, setSearchParams, checkCalendarConnection]);
+  }, [searchParams, setSearchParams, checkCalendarConnection, slackConnection]);
 
   // Check OAuth connections on mount
   useEffect(() => {
@@ -372,11 +380,12 @@ const Integrations = () => {
     checkGoogleDriveConnection();
   }, [checkCalendarConnection]);
 
-  const isLoading = userLoading || companyLoading;
+  const isLoading = userLoading || companyLoading || slackConnection.isLoading;
 
   const getRealtimeStatus = (integration: Integration): IntegrationStatus => {
     const oauthMap: Record<string, boolean | null> = {
       "gmail": isGmailConnected,
+      "slack": slackConnection.isConnected,
       "google-calendar": isCalendarConnected,
       "azure-blob": isAzureBlobConnected,
       "basecamp": isBasecampConnected,
@@ -520,6 +529,8 @@ const Integrations = () => {
               isAzureBlobConnected={isAzureBlobConnected}
               isBasecampConnected={isBasecampConnected}
               isGmailConnected={isGmailConnected}
+              isSlackConnected={slackConnection.isConnected}
+              slackWorkspaceName={slackConnection.workspaceName}
               isAzureDevOpsConnected={isAzureDevOpsConnected}
               isGoogleDriveConnected={isGoogleDriveConnected}
               onClose={() => {
@@ -544,6 +555,8 @@ const IntegrationDetail = ({
   isAzureBlobConnected,
   isBasecampConnected,
   isGmailConnected,
+  isSlackConnected,
+  slackWorkspaceName,
   isAzureDevOpsConnected,
   isGoogleDriveConnected,
   onClose,
@@ -556,6 +569,8 @@ const IntegrationDetail = ({
   isAzureBlobConnected: boolean | null;
   isBasecampConnected: boolean | null;
   isGmailConnected: boolean | null;
+  isSlackConnected: boolean | null;
+  slackWorkspaceName: string | null;
   isAzureDevOpsConnected: boolean | null;
   isGoogleDriveConnected: boolean | null;
   onClose: () => void;
@@ -566,11 +581,12 @@ const IntegrationDetail = ({
   const isGmail = integration.id === "gmail";
   const isAzureDevOps = integration.id === "azure-devops";
   const isGoogleDrive = integration.id === "google-drive";
+  const isSlack = integration.id === "slack";
   const isHubSpot = integration.id === "hubspot";
   const isGitHub = integration.id === "github";
   const isRuntimeStatusIntegration = isHubSpot || isGitHub;
   const isGoogleOAuth = isGoogleCalendar;
-  const isOAuthFlow = isGoogleOAuth || isBasecamp || isGmail || isAzureDevOps || isGoogleDrive;
+  const isOAuthFlow = isGoogleOAuth || isBasecamp || isGmail || isSlack || isAzureDevOps || isGoogleDrive;
   
   // Determine status based on integration type
   let status: IntegrationStatus;
@@ -582,6 +598,8 @@ const IntegrationDetail = ({
     status = isBasecampConnected ? "connected" : "disconnected";
   } else if (isGmail) {
     status = isGmailConnected ? "connected" : "disconnected";
+  } else if (isSlack) {
+    status = isSlackConnected ? "connected" : "disconnected";
   } else if (isAzureDevOps) {
     status = isAzureDevOpsConnected ? "connected" : "disconnected";
   } else if (isGoogleDrive) {
@@ -594,15 +612,10 @@ const IntegrationDetail = ({
   const [apiKey, setApiKey] = useState("");
   const [statusDetail, setStatusDetail] = useState<any | null>(null);
   const isCompany = integration.type === "company";
-  const isSlack = integration.id === "slack";
-  const credentialLabel = isSlack
-    ? "Password"
-    : isCompany
+  const credentialLabel = isCompany
     ? "Company API Key / Token"
     : "API Key / Token";
-  const credentialPlaceholder = isSlack
-    ? "Enter your Slack password..."
-    : `Enter your ${integration.name} API key...`;
+  const credentialPlaceholder = `Enter your ${integration.name} API key...`;
   
   // User integration mutations
   const connectMutation = useConnectIntegration();
@@ -613,6 +626,7 @@ const IntegrationDetail = ({
   
   // Google OAuth hooks
   const { initiateOAuth: initiateCalendarOAuth, disconnect: disconnectCalendar, isLoading: calendarLoading } = useGoogleCalendar();
+  const slackOAuth = useSlackConnection();
   const [basecampLoading, setBasecampLoading] = useState(false);
   const [gmailLoading, setGmailLoading] = useState(false);
   const [azureDevOpsLoading, setAzureDevOpsLoading] = useState(false);
@@ -687,6 +701,12 @@ const IntegrationDetail = ({
       if (isGoogleCalendar) {
         await disconnectCalendar();
         toast.success("Google Calendar disconnected");
+        onClose();
+        return;
+      }
+
+      if (isSlack) {
+        await slackOAuth.disconnect();
         onClose();
         return;
       }
@@ -775,6 +795,8 @@ const IntegrationDetail = ({
         if (data?.url) window.location.href = data.url;
         else throw new Error("No auth URL returned");
         setGmailLoading(false);
+      } else if (isSlack) {
+        await slackOAuth.connect();
       } else if (isAzureDevOps) {
         setAzureDevOpsLoading(true);
         const { supabase } = await import("@/integrations/supabase/client");
@@ -814,7 +836,7 @@ const IntegrationDetail = ({
     }
   };
 
-  const oauthLoading = isGoogleCalendar ? calendarLoading : isBasecamp ? basecampLoading : isGmail ? gmailLoading : isAzureDevOps ? azureDevOpsLoading : googleDriveLoading;
+  const oauthLoading = isGoogleCalendar ? calendarLoading : isBasecamp ? basecampLoading : isGmail ? gmailLoading : isSlack ? slackOAuth.isFetching : isAzureDevOps ? azureDevOpsLoading : googleDriveLoading;
   const isPending = isOAuthFlow ? oauthLoading : (isCompany ? companyMutation.isPending : (connectMutation.isPending || disconnectMutation.isPending));
   const canEdit = !isCompany || isAdmin;
 
@@ -965,7 +987,7 @@ const IntegrationDetail = ({
                   </button>
                 </div>
               ) : isOAuthFlow ? (
-                // OAuth flow (Calendar, Drive, or Basecamp)
+                // OAuth flow
                 <div className="space-y-4">
                   <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-2">
                     <p className="text-sm text-foreground">
@@ -975,6 +997,8 @@ const IntegrationDetail = ({
                         ? "Click below to authorize Duncan to access your Basecamp projects, to-dos, and messages."
                         : isGmail
                         ? "Click below to sign in with Google and grant Duncan read-only access to your Gmail for CV ingestion."
+                        : isSlack
+                        ? "Click below to authorize Duncan to connect your Slack workspace."
                         : isGoogleDrive
                         ? "Click below to sign in with Google and grant Duncan read-only access to the shared Google Drive workspace."
                         : "Click below to sign in with Google and grant Duncan access to your calendar."}
@@ -993,7 +1017,7 @@ const IntegrationDetail = ({
                     ) : (
                       <>
                         <ExternalLink className="h-4 w-4" />
-                        {isAzureDevOps ? "Connect Azure DevOps" : isBasecamp ? "Connect with Basecamp" : isGmail ? "Connect Gmail" : isGoogleDrive ? "Connect Google Drive" : "Sign in with Google"}
+                        {isAzureDevOps ? "Connect Azure DevOps" : isBasecamp ? "Connect with Basecamp" : isGmail ? "Connect Gmail" : isSlack ? "Connect Slack" : isGoogleDrive ? "Connect Google Drive" : "Sign in with Google"}
                       </>
                     )}
                   </button>
@@ -1044,7 +1068,9 @@ const IntegrationDetail = ({
               <div className="flex items-center justify-between rounded-xl border border-norman-success/20 bg-norman-success/5 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-norman-success" />
-                  <span className="text-sm font-medium text-norman-success">Connected & syncing</span>
+                  <span className="text-sm font-medium text-norman-success">
+                    {isSlack ? `Slack connected${slackWorkspaceName ? ` · ${slackWorkspaceName}` : ""}` : "Connected & syncing"}
+                  </span>
                 </div>
                 {(statusDetail?.last_verified_at || integrationData?.last_sync) && (
                   <span className="text-[10px] font-mono text-muted-foreground">{new Date(statusDetail?.last_verified_at || integrationData?.last_sync).toLocaleDateString()}</span>
@@ -1052,10 +1078,10 @@ const IntegrationDetail = ({
               </div>
               {(isRuntimeStatusIntegration || isSlack) && (
                 <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-2">
-                  <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Used by Team Briefing</div>
+                  <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{isSlack ? "Workspace" : "Used by Team Briefing"}</div>
                   <p className="text-sm text-foreground/80">
                     {isSlack
-                      ? "Only channels Duncan can access are scanned. Private or unjoined channels are now surfaced as reduced visibility."
+                      ? slackWorkspaceName || "Slack workspace connected."
                       : runtimeStatusLabel || statusDetail?.degraded_reason || "This integration is available to the Team Briefing pipeline."}
                   </p>
                   {!isSlack && statusDetail?.verification_path ? (

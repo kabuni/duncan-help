@@ -27,6 +27,7 @@ import Gmail from "./pages/Gmail";
 import ReleaseManager from "./pages/ReleaseManager";
 import WhatsNew from "./pages/WhatsNew";
 import CEOBriefing from "./pages/CEOBriefing";
+import SlackCallback from "./pages/SlackCallback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -41,6 +42,7 @@ const AppContent = () => {
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/auth/slack/callback" element={<ProtectedRoute><SlackCallback /></ProtectedRoute>} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           

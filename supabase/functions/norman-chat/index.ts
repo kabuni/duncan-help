@@ -984,6 +984,47 @@ const GOOGLE_DRIVE_TOOLS = [
   },
 ];
 
+const SLACK_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "list_slack_channels",
+      description: "List Slack channels visible to the connected user. Use when the user asks what Slack channels are available or wants to find a channel.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_slack_channel_messages",
+      description: "Read recent messages from a Slack channel by channel ID. Use after list_slack_channels or when a channel ID is known.",
+      parameters: {
+        type: "object",
+        properties: {
+          channel_id: { type: "string", description: "Slack channel ID, e.g. C123 or G123." },
+          limit: { type: "number", description: "Maximum messages to return. Default 20, max 50." },
+        },
+        required: ["channel_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "send_slack_message",
+      description: "Send a Slack message to a channel by channel ID. Ask for confirmation before sending unless the user explicitly says to send now.",
+      parameters: {
+        type: "object",
+        properties: {
+          channel_id: { type: "string", description: "Slack channel ID." },
+          text: { type: "string", description: "Message text to send." },
+        },
+        required: ["channel_id", "text"],
+      },
+    },
+  },
+];
+
 const RELEASE_TOOLS = [
   {
     type: "function",

@@ -19,7 +19,7 @@ function uint8ToBase64(bytes: Uint8Array): string {
 }
 
 async function extractDocxText(bytes: Uint8Array): Promise<string> {
-  const reader = new ZipReader(new BlobReader(new Blob([bytes])));
+  const reader = new ZipReader(new BlobReader(new Blob([bytes as BlobPart])));
   const entries = await reader.getEntries();
   let text = "";
   for (const entry of entries) {

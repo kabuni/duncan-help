@@ -25,6 +25,9 @@ export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
   created_at: string;
+  user_id: string | null;
+  sender_name?: string | null;
+  sender_avatar_url?: string | null;
 }
 
 export interface ProjectFile {
@@ -168,10 +171,31 @@ export function useProjectChats(projectId: string | null) {
 }
 
 export function useProjectChat(chatId: string | null) {
+  const { session } = useAuth();
   const { toast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+
+  const enrichMessages = useCallback(async (rows: any[]): Promise<ChatMessage[]> => {
+    const userIds = [...new Set(rows.map((message) => message.user_id).filter(Boolean))];
+    if (userIds.length === 0) return rows as ChatMessage[];
+
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, display_name, avatar_url")
+      .in("user_id", userIds);
+
+    const profileMap = new Map((profiles || []).map((profile: any) => [profile.user_id, profile]));
+    return rows.map((message) => {
+      const profile = message.user_id ? profileMap.get(message.user_id) : null;
+      return {
+        ...message,
+        sender_name: profile?.display_name || null,
+        sender_avatar_url: profile?.avatar_url || null,
+      };
+    }) as ChatMessage[];
+  }, []);
 
   const fetchMessages = useCallback(async () => {
     if (!chatId) { setMessages([]); return; }
@@ -184,10 +208,10 @@ export function useProjectChat(chatId: string | null) {
     if (error) {
       toast({ title: "Error", description: "Failed to load messages", variant: "destructive" });
     } else {
-      setMessages((data as any[]) || []);
+      setMessages(await enrichMessages((data as any[]) || []));
     }
     setLoading(false);
-  }, [chatId, toast]);
+  }, [chatId, enrichMessages, toast]);
 
   useEffect(() => { fetchMessages(); }, [fetchMessages]);
 
@@ -203,6 +227,9 @@ export function useProjectChat(chatId: string | null) {
       role: "user",
       content: message.trim(),
       created_at: new Date().toISOString(),
+      user_id: session?.user.id || null,
+      sender_name: session?.user.user_metadata?.display_name || session?.user.email || "You",
+      sender_avatar_url: session?.user.user_metadata?.avatar_url || null,
     };
     setMessages(prev => [...prev, tempUserMsg]);
 
@@ -226,7 +253,7 @@ export function useProjectChat(chatId: string | null) {
         .order("created_at", { ascending: true });
 
       if (dbMessages) {
-        setMessages(dbMessages as any[]);
+        setMessages(await enrichMessages(dbMessages as any[]));
       }
 
       return data?.reply;
@@ -238,7 +265,7 @@ export function useProjectChat(chatId: string | null) {
     } finally {
       setSending(false);
     }
-  }, [chatId, toast]);
+  }, [chatId, enrichMessages, session, toast]);
 
   return { messages, loading, sending, sendMessage, fetchMessages };
 }

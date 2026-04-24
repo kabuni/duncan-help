@@ -171,7 +171,6 @@ export function useProjectChats(projectId: string | null) {
 }
 
 export function useProjectChat(chatId: string | null) {
-  const { session } = useAuth();
   const { toast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -239,9 +238,9 @@ export function useProjectChat(chatId: string | null) {
       role: "user",
       content: message.trim(),
       created_at: new Date().toISOString(),
-      user_id: session?.user.id || null,
-      sender_name: session?.user.user_metadata?.display_name || session?.user.email || "You",
-      sender_avatar_url: session?.user.user_metadata?.avatar_url || null,
+      user_id: null,
+      sender_name: "You",
+      sender_avatar_url: null,
     };
     setMessages(prev => [...prev, tempUserMsg]);
 
@@ -269,7 +268,7 @@ export function useProjectChat(chatId: string | null) {
     } finally {
       setSending(false);
     }
-  }, [chatId, fetchAndSetMessages, session, toast]);
+  }, [chatId, fetchAndSetMessages, toast]);
 
   return { messages, loading, sending, sendMessage, fetchMessages };
 }

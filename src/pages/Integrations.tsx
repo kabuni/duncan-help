@@ -529,6 +529,8 @@ const Integrations = () => {
               isAzureBlobConnected={isAzureBlobConnected}
               isBasecampConnected={isBasecampConnected}
               isGmailConnected={isGmailConnected}
+              isSlackConnected={slackConnection.isConnected}
+              slackWorkspaceName={slackConnection.workspaceName}
               isAzureDevOpsConnected={isAzureDevOpsConnected}
               isGoogleDriveConnected={isGoogleDriveConnected}
               onClose={() => {
@@ -553,6 +555,8 @@ const IntegrationDetail = ({
   isAzureBlobConnected,
   isBasecampConnected,
   isGmailConnected,
+  isSlackConnected,
+  slackWorkspaceName,
   isAzureDevOpsConnected,
   isGoogleDriveConnected,
   onClose,
@@ -565,6 +569,8 @@ const IntegrationDetail = ({
   isAzureBlobConnected: boolean | null;
   isBasecampConnected: boolean | null;
   isGmailConnected: boolean | null;
+  isSlackConnected: boolean | null;
+  slackWorkspaceName: string | null;
   isAzureDevOpsConnected: boolean | null;
   isGoogleDriveConnected: boolean | null;
   onClose: () => void;

@@ -550,7 +550,7 @@ const MEETING_TOOLS = [
     type: "function",
     function: {
       name: "fetch_plaud_meetings",
-      description: "Fetch new Plaud AI meeting recordings and transcripts from Gmail. Pulls emails from Plaud, extracts transcripts and audio files, and stores them in the meetings database. Use this when the user wants to sync or import new meetings.",
+      description: "Sync new Plaud AI meeting recordings from Gmail into the meetings database. SLOW (~20s) — call ONLY when the user EXPLICITLY asks to sync/refresh/import meetings (keywords: 'sync', 'fetch latest', 'pull new', 'refresh', 'import'). Do NOT call this for summarization, analysis, search, or general questions about existing meetings — use list_meetings instead.",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },

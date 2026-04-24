@@ -32,6 +32,7 @@ import {
 import { useIsAdmin } from "@/hooks/useUserRoles";
 
 type IntegrationStatus = "connected" | "pending" | "disconnected";
+type StoredIntegrationStatus = IntegrationStatus | "degraded" | string | null | undefined;
 type IntegrationType = "user" | "company";
 
 type GoogleDriveStatusDetail = {
@@ -225,11 +226,17 @@ const integrations: Integration[] = [
 const hiddenIntegrationIds = new Set(["azure-blob", "basecamp", "azure-devops"]);
 const baseVisibleIntegrations = integrations.filter((integration) => !hiddenIntegrationIds.has(integration.id));
 
-const statusConfig = {
+const statusConfig: Record<IntegrationStatus, { label: string; color: string; dot: string; bg: string }> = {
   connected: { label: "Connected", color: "text-norman-success", dot: "bg-norman-success", bg: "bg-norman-success/10 border-norman-success/20" },
   pending: { label: "Pending", color: "text-norman-warning", dot: "bg-norman-warning", bg: "bg-norman-warning/10 border-norman-warning/20" },
   disconnected: { label: "Not connected", color: "text-muted-foreground", dot: "bg-muted-foreground", bg: "bg-muted/50 border-border" },
 };
+
+function normalizeStatus(status: StoredIntegrationStatus): IntegrationStatus {
+  if (status === "connected" || status === "pending" || status === "disconnected") return status;
+  if (status === "degraded") return "pending";
+  return "disconnected";
+}
 
 function getStatus(
   integration: Integration,
@@ -239,11 +246,11 @@ function getStatus(
   if (integration.type === "company") {
     const ci = companyIntegrations.find((c) => c.integration_id === integration.id);
     if (!ci) return "disconnected";
-    return ci.status as IntegrationStatus;
+    return normalizeStatus(ci.status);
   }
   const ui = userIntegrations.find((u) => u.integration_id === integration.id);
   if (!ui) return "disconnected";
-  return ui.status as IntegrationStatus;
+  return normalizeStatus(ui.status);
 }
 
 function getIntegrationData(

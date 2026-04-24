@@ -687,4 +687,3 @@ async function openaiStream(opts: CallLLMOptions, model: string): Promise<Readab
   return resp.body;
 }
 
-}

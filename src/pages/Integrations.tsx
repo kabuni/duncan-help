@@ -705,6 +705,12 @@ const IntegrationDetail = ({
         return;
       }
 
+      if (isSlack) {
+        await slackOAuth.disconnect();
+        onClose();
+        return;
+      }
+
       if (isGmail) {
         setGmailLoading(true);
         const { supabase } = await import("@/integrations/supabase/client");
@@ -789,6 +795,8 @@ const IntegrationDetail = ({
         if (data?.url) window.location.href = data.url;
         else throw new Error("No auth URL returned");
         setGmailLoading(false);
+      } else if (isSlack) {
+        await slackOAuth.connect();
       } else if (isAzureDevOps) {
         setAzureDevOpsLoading(true);
         const { supabase } = await import("@/integrations/supabase/client");
@@ -828,7 +836,7 @@ const IntegrationDetail = ({
     }
   };
 
-  const oauthLoading = isGoogleCalendar ? calendarLoading : isBasecamp ? basecampLoading : isGmail ? gmailLoading : isAzureDevOps ? azureDevOpsLoading : googleDriveLoading;
+  const oauthLoading = isGoogleCalendar ? calendarLoading : isBasecamp ? basecampLoading : isGmail ? gmailLoading : isSlack ? slackOAuth.isFetching : isAzureDevOps ? azureDevOpsLoading : googleDriveLoading;
   const isPending = isOAuthFlow ? oauthLoading : (isCompany ? companyMutation.isPending : (connectMutation.isPending || disconnectMutation.isPending));
   const canEdit = !isCompany || isAdmin;
 

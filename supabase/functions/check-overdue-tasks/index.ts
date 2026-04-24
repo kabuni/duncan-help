@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
       supabase.from("user_notification_mappings").select("duncan_user_id, slack_user_identifier, is_active").eq("is_active", true),
     ]);
 
-    const cardMap: Record<string, { title: string; status: string; owner_id: string | null }> = {};
+    const cardMap: Record<string, { id: string; title: string; status: string; owner_id: string | null }> = {};
     (cardsRes.data || []).forEach((c: any) => { cardMap[c.id] = c; });
 
     // Build mapping from profile.id → slack_user_identifier

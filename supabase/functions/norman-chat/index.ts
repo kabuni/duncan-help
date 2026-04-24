@@ -3631,6 +3631,7 @@ serve(async (req) => {
     let azureStorageAvailable = false;
     let notionToken: string | null = null;
     let basecampConnected = false;
+    let slackConnection: { accessToken: string; teamName: string | null; scope: string | null } | null = null;
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -3643,6 +3644,7 @@ serve(async (req) => {
         userId = user.id;
         userEmail = user.email || "";
         calendarAccessToken = await getCalendarAccessToken(userId, supabaseAdmin);
+        slackConnection = await getSlackConnection(userId, supabaseAdmin);
       }
     }
 
@@ -3693,6 +3695,12 @@ serve(async (req) => {
 
     if (!basecampConnected) {
       systemContent += "\n\nNote: Basecamp is not connected. If the user asks about Basecamp projects, to-dos, or messages, let them know an admin needs to connect Basecamp first via the Integrations page.";
+    }
+
+    if (slackConnection) {
+      systemContent += `\n\nSlack is connected for this user${slackConnection.teamName ? ` to ${slackConnection.teamName}` : ""}. Use Slack tools when the user asks about Slack messages, channels, or team signals.`;
+    } else {
+      systemContent += "\n\nNote: Slack is not connected for this user. If the user asks about Slack, let them know they need to connect Slack first via the Integrations page.";
     }
 
     // Inject user profile context if available
@@ -3842,6 +3850,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
     tools.push(...GMAIL_TOOLS);
     // Google Drive tools always available (connection checked at execution time)
     tools.push(...GOOGLE_DRIVE_TOOLS);
+    if (slackConnection) {
+      tools.push(...SLACK_TOOLS);
+    }
     // Analytics tools always available
     tools.push(...ANALYTICS_TOOLS);
     // Workstream management tools always available

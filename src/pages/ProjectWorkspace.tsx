@@ -159,7 +159,7 @@ export default function ProjectWorkspace() {
 
   const senderNameFor = (msg: typeof messages[number]) => {
     if (msg.role === "assistant") return "Duncan";
-    return msg.sender_name || "Project member";
+    return msg.sender_name || null;
   };
 
   if (!projectId) return null;
@@ -315,9 +315,11 @@ export default function ProjectWorkspace() {
                           </div>
                         )}
                         <div className={`max-w-[80%] space-y-1 ${msg.role === "user" ? "items-end" : "items-start"}`}>
-                          <p className={`text-[10px] font-medium text-muted-foreground ${msg.role === "user" ? "text-right" : "text-left"}`}>
-                            {senderNameFor(msg)}
-                          </p>
+                          {senderNameFor(msg) && (
+                            <p className={`text-[10px] font-medium text-muted-foreground ${msg.role === "user" ? "text-right" : "text-left"}`}>
+                              {senderNameFor(msg)}
+                            </p>
+                          )}
                           <div className={`rounded-xl px-4 py-3 text-sm ${
                             msg.role === "user"
                               ? "bg-primary text-primary-foreground"

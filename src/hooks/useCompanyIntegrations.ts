@@ -54,17 +54,20 @@ export function useUpdateCompanyIntegration() {
       );
     },
     onSuccess: (data, variables) => {
-      if (variables.integrationId === "hubspot") {
+      if (variables.integrationId === "hubspot" || variables.integrationId === "github") {
         const response = data as any;
         const integration = response?.integration ?? response;
-        console.info("[company-integrations] HubSpot save confirmation", {
+        const providerName = variables.integrationId === "hubspot" ? "HubSpot" : "GitHub";
+        console.info(`[company-integrations] ${providerName} save confirmation`, {
           requested_integration_id: variables.integrationId,
           returned_integration_id: integration?.integration_id ?? null,
           returned_status: integration?.status ?? null,
           returned_encrypted_api_key_present: typeof integration?.encrypted_api_key === "string" && integration.encrypted_api_key.length > 0,
           verification_status: response?.verification?.status ?? null,
           verification_error_code: response?.verification?.error_code ?? null,
-          saved_key_matches_hubspot: integration?.integration_id === "hubspot",
+          ...(variables.integrationId === "hubspot"
+            ? { saved_key_matches_hubspot: integration?.integration_id === "hubspot" }
+            : { saved_key_matches_github: integration?.integration_id === "github" }),
         });
       }
       qc.invalidateQueries({ queryKey: ["company-integrations"] });

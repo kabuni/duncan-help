@@ -3275,7 +3275,7 @@ async function executeNotionTool(toolName: string, args: any, token: string): Pr
         id: r.id,
         type: r.object,
         title: r.object === "page"
-          ? extractNotionText(Object.values(r.properties || {}).find((p: any) => p.type === "title")?.title || [])
+          ? extractNotionText((Object.values(r.properties || {}).find((p: any) => p.type === "title") as any)?.title || [])
           : r.title?.[0]?.plain_text || "Untitled",
         url: r.url,
         ...(r.object === "page" ? { properties: summarizeNotionProperties(r.properties) } : {}),
@@ -4049,7 +4049,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
         ? parsed
         : {};
 
-      const missingRequired = required.filter((key) => {
+      const missingRequired = (required as string[]).filter((key: string) => {
         const value = objectArgs[key];
         return value === undefined || value === null || (typeof value === "string" && value.trim().length === 0);
       });

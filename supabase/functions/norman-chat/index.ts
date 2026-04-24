@@ -12,6 +12,7 @@ const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 const NOTION_API_URL = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
+const SLACK_API_URL = "https://slack.com/api";
 
 const SYSTEM_PROMPT = `You are Duncan, an advanced reasoning and agentic operating system for internal company operations.
 
@@ -28,6 +29,7 @@ Your capabilities:
 - **Meeting Intelligence**: You can fetch and analyze meeting recordings from Plaud AI / Gemini meeting notes. Use fetch_plaud_meetings to pull new recordings from email, list_meetings to browse stored meetings (supports from_date/to_date and typo-tolerant search), get_meeting to view a specific meeting's transcript and analysis, and analyze_meetings to run AI analysis on meetings. **CRITICAL**: When the user asks about a meeting on a specific recent date (e.g. "today's standup", "yesterday's meeting", "the April 17 standup"), ALWAYS call fetch_plaud_meetings FIRST to ingest any newly-arrived notes, THEN call list_meetings with from_date/to_date for that day. This avoids returning stale meetings. Note that meeting titles in the database may contain typos (e.g. "Lighting" instead of "Lightning") — the search is now typo-tolerant, but always confirm the date matches what the user asked for before answering. You can search across all meeting transcripts to answer questions like "What did we decide about X?".
 - **Xero Finance**: You have access to the company's Xero accounting system. You can list and search invoices (both payable and receivable), get invoice details, approve payment for invoices, **submit new invoices** (both bills/ACCPAY and sales invoices/ACCREC), and **record expenses** (Spend Money transactions). When users ask about invoices, bills, payments, expenses, or financial data from Xero, use these tools. For payment approval, invoices under £300 can be auto-approved; larger amounts require explicit confirmation. Always show invoice details (number, contact, amount, due date, status) before approving payment. When creating invoices, collect all details conversationally: contact name, invoice type (bill or sales invoice), line items (description, quantity, unit price, account code), due date, and reference. Search contacts first to find the correct Xero contact. Always confirm all details before submitting. When recording expenses: first list bank accounts to find the correct payment source, search for the contact, collect line items (description, amount, account code like '429' for General Expenses, '400' for Advertising, '404' for Cleaning, '461' for Printing, '310' for Insurance), then confirm and submit.
 - **Gmail Access**: You have access to the user's personal Gmail inbox. You can list recent emails, search emails by query (sender, subject, date, keywords), read full email content, and send emails on behalf of the user. Use these tools when the user asks about their emails, wants to find a specific email, read an email, or send a new email. When sending emails, collect to, subject, and body; optionally cc and bcc. Always confirm before sending. Present email lists clearly with sender, subject, date, and unread status.
+- **Slack Access**: You have access to the user's connected Slack workspace when Slack is connected. You can list public/private channels, read recent channel messages, and post messages if the granted scopes allow it. Use Slack tools when users ask about Slack channels, messages, team activity, or Slack signals for briefings.
 
 **Email Composition Rules** (MUST follow when composing any email via send_gmail_email):
 - Subject: Clear, specific, max ~8 words. Must reflect purpose. Never use vague subjects like "Update" or "Quick note".
@@ -977,6 +979,47 @@ const GOOGLE_DRIVE_TOOLS = [
           mimeType: { type: "string", description: "The MIME type of the file (from the listing result)." },
         },
         required: ["fileId", "mimeType"],
+      },
+    },
+  },
+];
+
+const SLACK_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "list_slack_channels",
+      description: "List Slack channels visible to the connected user. Use when the user asks what Slack channels are available or wants to find a channel.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_slack_channel_messages",
+      description: "Read recent messages from a Slack channel by channel ID. Use after list_slack_channels or when a channel ID is known.",
+      parameters: {
+        type: "object",
+        properties: {
+          channel_id: { type: "string", description: "Slack channel ID, e.g. C123 or G123." },
+          limit: { type: "number", description: "Maximum messages to return. Default 20, max 50." },
+        },
+        required: ["channel_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "send_slack_message",
+      description: "Send a Slack message to a channel by channel ID. Ask for confirmation before sending unless the user explicitly says to send now.",
+      parameters: {
+        type: "object",
+        properties: {
+          channel_id: { type: "string", description: "Slack channel ID." },
+          text: { type: "string", description: "Message text to send." },
+        },
+        required: ["channel_id", "text"],
       },
     },
   },
@@ -3402,6 +3445,71 @@ async function getCalendarAccessToken(userId: string, supabaseAdmin: any): Promi
   return tokenData.access_token;
 }
 
+async function decryptSlackToken(encryptedToken: string, secret: string): Promise<string> {
+  if (!encryptedToken.startsWith("aes-256-gcm:")) return encryptedToken;
+  const [, ivPart, ciphertextPart] = encryptedToken.split(":");
+  const decode = (value: string) => Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (value.length % 4)) % 4)), (char) => char.charCodeAt(0));
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
+  const key = await crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, ["decrypt"]);
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: decode(ivPart) }, key, decode(ciphertextPart));
+  return new TextDecoder().decode(plaintext);
+}
+
+async function getSlackConnection(userId: string, supabaseAdmin: any): Promise<{ accessToken: string; teamName: string | null; scope: string | null } | null> {
+  const clientSecret = Deno.env.get("SLACK_CLIENT_SECRET");
+  if (!clientSecret) return null;
+  const { data, error } = await supabaseAdmin
+    .from("slack_connections")
+    .select("access_token, team_name, scope")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !data?.access_token) return null;
+  return {
+    accessToken: await decryptSlackToken(data.access_token, clientSecret),
+    teamName: data.team_name ?? null,
+    scope: data.scope ?? null,
+  };
+}
+
+async function executeSlackTool(toolName: string, args: any, accessToken: string): Promise<any> {
+  async function slackCall(method: string, params: Record<string, string | number> = {}, postBody?: Record<string, unknown>) {
+    const url = new URL(`${SLACK_API_URL}/${method}`);
+    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
+    const res = await fetch(url.toString(), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=utf-8" },
+      ...(postBody ? { body: JSON.stringify(postBody) } : {}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) throw new Error(data.error || `Slack ${method} failed`);
+    return data;
+  }
+
+  switch (toolName) {
+    case "list_slack_channels": {
+      const channels: any[] = [];
+      let cursor = "";
+      do {
+        const data = await slackCall("conversations.list", { limit: 200, types: "public_channel,private_channel", ...(cursor ? { cursor } : {}) });
+        channels.push(...(data.channels || []));
+        cursor = data.response_metadata?.next_cursor || "";
+      } while (cursor && channels.length < 500);
+      return channels.map((c) => ({ id: c.id, name: c.name, is_private: c.is_private, is_member: c.is_member, topic: c.topic?.value || "" }));
+    }
+    case "read_slack_channel_messages": {
+      const limit = Math.min(Math.max(Number(args.limit || 20), 1), 50);
+      const data = await slackCall("conversations.history", { channel: args.channel_id, limit });
+      return (data.messages || []).map((m: any) => ({ user: m.user, text: m.text, ts: m.ts, thread_ts: m.thread_ts }));
+    }
+    case "send_slack_message": {
+      const data = await slackCall("chat.postMessage", {}, { channel: args.channel_id, text: args.text });
+      return { success: true, channel: data.channel, ts: data.ts };
+    }
+    default:
+      throw new Error(`Unknown Slack tool: ${toolName}`);
+  }
+}
+
 async function executeCalendarTool(
   toolName: string,
   args: any,
@@ -3523,6 +3631,7 @@ serve(async (req) => {
     let azureStorageAvailable = false;
     let notionToken: string | null = null;
     let basecampConnected = false;
+    let slackConnection: { accessToken: string; teamName: string | null; scope: string | null } | null = null;
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -3535,6 +3644,7 @@ serve(async (req) => {
         userId = user.id;
         userEmail = user.email || "";
         calendarAccessToken = await getCalendarAccessToken(userId, supabaseAdmin);
+        slackConnection = await getSlackConnection(userId, supabaseAdmin);
       }
     }
 
@@ -3585,6 +3695,12 @@ serve(async (req) => {
 
     if (!basecampConnected) {
       systemContent += "\n\nNote: Basecamp is not connected. If the user asks about Basecamp projects, to-dos, or messages, let them know an admin needs to connect Basecamp first via the Integrations page.";
+    }
+
+    if (slackConnection) {
+      systemContent += `\n\nSlack is connected for this user${slackConnection.teamName ? ` to ${slackConnection.teamName}` : ""}. Use Slack tools when the user asks about Slack messages, channels, or team signals.`;
+    } else {
+      systemContent += "\n\nNote: Slack is not connected for this user. If the user asks about Slack, let them know they need to connect Slack first via the Integrations page.";
     }
 
     // Inject user profile context if available
@@ -3734,6 +3850,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
     tools.push(...GMAIL_TOOLS);
     // Google Drive tools always available (connection checked at execution time)
     tools.push(...GOOGLE_DRIVE_TOOLS);
+    if (slackConnection) {
+      tools.push(...SLACK_TOOLS);
+    }
     // Analytics tools always available
     tools.push(...ANALYTICS_TOOLS);
     // Workstream management tools always available
@@ -4228,6 +4347,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const xeroToolNames = ["list_xero_invoices", "get_xero_invoice", "approve_xero_invoice_payment", "search_xero_contacts", "create_xero_invoice", "list_xero_bank_accounts", "create_xero_expense"];
       const gmailToolNames = ["list_gmail_emails", "search_gmail", "read_gmail_email", "send_gmail_email", "read_gmail_thread", "draft_gmail_reply", "draft_gmail_email"];
       const driveToolNames = ["drive_list_files", "drive_search", "drive_get_content"];
+      const slackToolNames = ["list_slack_channels", "read_slack_channel_messages", "send_slack_message"];
       const analyticsToolNames = ["get_workstream_analytics", "get_recruitment_analytics", "get_team_activity_analytics", "get_operational_summary"];
       const workstreamMgmtToolNames = ["list_team_members", "create_workstream_card", "add_tasks_to_card", "update_workstream_card", "check_team_availability"];
       const execSummaryToolNames = ["generate_exec_summary_document"];
@@ -4299,6 +4419,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = await withToolTimeout(tc.function.name, executeGmailTool(tc.function.name, args, supabaseUrl, authHeader || ""));
            } else if (driveToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeDriveTool(tc.function.name, args, supabaseUrl, authHeader || ""));
+            } else if (slackToolNames.includes(tc.function.name)) {
+              if (!slackConnection) {
+                result = { error: "Slack is not connected. Please connect it via the Integrations page." };
+              } else {
+                result = await withToolTimeout(tc.function.name, executeSlackTool(tc.function.name, args, slackConnection.accessToken));
+              }
            } else if (analyticsToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeAnalyticsTool(tc.function.name, args, supabaseAdmin));
           } else if (workstreamMgmtToolNames.includes(tc.function.name)) {

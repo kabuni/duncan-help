@@ -7,7 +7,15 @@ const corsHeaders = {
 };
 
 const SLACK_AUTHORIZE_URL = "https://slack.com/oauth/v2/authorize";
-const SLACK_SCOPES = ["channels:read", "chat:write", "users:read"].join(",");
+const SLACK_SCOPES = [
+  "channels:read",
+  "channels:history",
+  "groups:read",
+  "groups:history",
+  "users:read",
+  "users:read.email",
+  "chat:write",
+].join(",");
 
 function getAppUrl() {
   const raw = (Deno.env.get("APP_URL") || "https://duncan.help").trim();

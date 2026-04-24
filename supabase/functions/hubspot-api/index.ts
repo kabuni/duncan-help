@@ -15,6 +15,7 @@ const HUBSPOT_API = "https://api.hubapi.com";
 type Status = "connected" | "not_configured" | "degraded";
 type CredentialSource = "connector_gateway" | "stored_token" | "env_secret" | "none";
 type RequestStage = "verify" | "summary" | "repo_scan";
+type StoredTokenState = "integration_not_configured" | "no_token_stored" | "token_decode_failed" | "token_found" | "query_error";
 
 type HubspotSummary = {
   ok: boolean;
@@ -39,6 +40,7 @@ type HubspotSummary = {
   at_risk_accounts_count?: number;
   at_risk_accounts_details?: Array<Record<string, unknown>>;
   key_contacts?: Array<Record<string, unknown>>;
+  credential_diagnostics?: Record<string, unknown>;
 };
 
 type HubspotDeal = {
@@ -161,31 +163,139 @@ async function getUser(req: Request) {
 
 async function getStoredToken() {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("company_integrations")
-    .select("encrypted_api_key, status, last_sync")
+    .select("integration_id, encrypted_api_key, status, last_sync, updated_at")
     .eq("integration_id", "hubspot")
     .maybeSingle();
 
+  if (error) {
+    logHubspot("company_integrations direct lookup", {
+      integration_id: "hubspot",
+      state: "query_error",
+      row_found: false,
+      query_error_code: error.code ?? null,
+      query_error_message: error.message ?? null,
+    });
+    return {
+      state: "query_error" as StoredTokenState,
+      rowFound: false,
+      integrationId: null,
+      encodedToken: null,
+      token: null,
+      decodeOk: false,
+      lastSync: null,
+      storedStatus: null,
+      updatedAt: null,
+      queryError: { code: error.code ?? null, message: error.message ?? null },
+    };
+  }
+
   const encodedToken = typeof data?.encrypted_api_key === "string" ? data.encrypted_api_key : null;
+  const encodedState = encodedToken === null ? "null" : encodedToken.trim().length === 0 ? "empty" : "present";
+
+  if (!data) {
+    logHubspot("company_integrations direct lookup", {
+      integration_id: "hubspot",
+      state: "integration_not_configured",
+      row_found: false,
+      encrypted_api_key_state: "null",
+    });
+    return {
+      state: "integration_not_configured" as StoredTokenState,
+      rowFound: false,
+      integrationId: null,
+      encodedToken: null,
+      token: null,
+      decodeOk: false,
+      lastSync: null,
+      storedStatus: null,
+      updatedAt: null,
+      queryError: null,
+    };
+  }
+
+  if (encodedState !== "present") {
+    logHubspot("company_integrations direct lookup", {
+      integration_id: "hubspot",
+      returned_integration_id: data.integration_id ?? null,
+      state: "no_token_stored",
+      row_found: true,
+      status: data.status ?? null,
+      last_sync: data.last_sync ?? null,
+      updated_at: data.updated_at ?? null,
+      encrypted_api_key_state: encodedState,
+    });
+    return {
+      state: "no_token_stored" as StoredTokenState,
+      rowFound: true,
+      integrationId: data.integration_id ?? null,
+      encodedToken,
+      token: null,
+      decodeOk: false,
+      lastSync: data.last_sync ?? null,
+      storedStatus: data.status ?? null,
+      updatedAt: data.updated_at ?? null,
+      queryError: null,
+    };
+  }
 
   try {
+    const decoded = atob(encodedToken).trim();
+    const state: StoredTokenState = decoded ? "token_found" : "no_token_stored";
+    logHubspot("company_integrations direct lookup", {
+      integration_id: "hubspot",
+      returned_integration_id: data.integration_id ?? null,
+      state,
+      row_found: true,
+      status: data.status ?? null,
+      last_sync: data.last_sync ?? null,
+      updated_at: data.updated_at ?? null,
+      encrypted_api_key_state: encodedState,
+      encoded_length: encodedToken.length,
+      encoded_prefix: encodedToken.slice(0, 10),
+      decode_ok: true,
+      decoded_length: decoded.length,
+      decoded_prefix: decoded.slice(0, 10),
+    });
     return {
+      state,
       rowFound: !!data,
+      integrationId: data?.integration_id ?? null,
       encodedToken,
-      token: encodedToken ? atob(encodedToken) : null,
-      decodeOk: !!encodedToken,
+      token: decoded || null,
+      decodeOk: true,
       lastSync: data?.last_sync ?? null,
       storedStatus: data?.status ?? null,
+      updatedAt: data?.updated_at ?? null,
+      queryError: null,
     };
-  } catch {
+  } catch (decodeError) {
+    logHubspot("company_integrations direct lookup", {
+      integration_id: "hubspot",
+      returned_integration_id: data.integration_id ?? null,
+      state: "token_decode_failed",
+      row_found: true,
+      status: data.status ?? null,
+      last_sync: data.last_sync ?? null,
+      updated_at: data.updated_at ?? null,
+      encrypted_api_key_state: encodedState,
+      encoded_length: encodedToken.length,
+      encoded_prefix: encodedToken.slice(0, 10),
+      decode_ok: false,
+      decode_error: decodeError instanceof Error ? decodeError.message : String(decodeError),
+    });
     return {
+      state: "token_decode_failed" as StoredTokenState,
       rowFound: !!data,
+      integrationId: data?.integration_id ?? null,
       encodedToken,
       token: null,
       decodeOk: false,
       lastSync: data?.last_sync ?? null,
       storedStatus: data?.status ?? null,
+      updatedAt: data?.updated_at ?? null,
+      queryError: null,
     };
   }
 }

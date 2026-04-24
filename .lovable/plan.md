@@ -1,165 +1,116 @@
 
-Plan: make HubSpot Team Briefing credential resolution diagnostic and reversible without changing Team Briefing behavior.
+## Plan: Slack Team Briefing permission update
 
-## Scope
+### Goal
 
-Only update the HubSpot credential/debug path and the Integrations save logging path:
+Update the Slack integration flow so Duncan requests the two missing Slack connector scopes:
 
-- `supabase/functions/hubspot-api/index.ts`
-- `src/hooks/useCompanyIntegrations.ts`
-- `src/pages/Integrations.tsx` only if the hook-level logging is not enough for clear UI-side evidence
+- `channels:join`
+- `groups:read`
 
-No database migration, no Team Briefing UI redesign, no schema/tool/frontend orchestration changes.
+Then clearly prompt the user from the Integrations UI to reconnect Slack so the new permissions take effect.
 
-## Current evidence from code
+### Current confirmed state
 
-- `team_briefing_summary` is handled in `supabase/functions/hubspot-api/index.ts` around lines 598–628.
-- It calls `resolveTeamBriefingToken(HUBSPOT_API_KEY)`, which calls `getStoredToken()`.
-- `getStoredToken()` currently queries:
+The linked Slack connector exists and is connected to the project.
 
-```ts
-.from("company_integrations")
-.select("encrypted_api_key, status, last_sync")
-.eq("integration_id", "hubspot")
-.maybeSingle()
-```
+Current configured scopes include:
 
-- It logs token state, but the final missing-token response currently collapses multiple root causes into a generic `hubspot_not_configured`.
-- `HUBSPOT_API_KEY` is read from runtime env, but the response does not clearly state whether the env fallback was present or absent.
-- The Integrations save path goes through `useUpdateCompanyIntegration()` → `manage-company-integration`, and `manage-company-integration` upserts `integration_id` exactly as provided. The frontend does not currently log the returned saved row details.
+- `channels:read`
+- `channels:history`
+- `groups:history`
+- messaging-related scopes
+
+But it is missing:
+
+- `channels:join`
+- `groups:read`
+
+The connector supports both missing scopes, so this is a reconnect/scope update issue, not a missing connector capability.
+
+### Important constraint
+
+I will not change Slack scanning behavior.
+
+No changes to:
+
+- 30-channel cap
+- 24-hour window
+- message limits
+- channel ranking
+- Slack pulse orchestration
+- Team Briefing analysis logic
+- Slack history scanning logic
+
+This means:
+
+- `channels:join` will allow Duncan’s existing auto-join logic to work for public channels.
+- `groups:read` will be added to the connector permission set for future/private-channel visibility, but I will not alter the current hardcoded channel discovery logic unless you request that separately.
 
 ## Implementation steps
 
-### 1. Strengthen the direct company integration lookup
+### 1. Trigger Slack reconnect with required scopes
 
-In `supabase/functions/hubspot-api/index.ts`, update `getStoredToken()` to return a more explicit diagnostic object:
+Use the existing Slack connector reconnect flow for the linked connection:
 
-- Include `integration_id`, `status`, `last_sync`, and `updated_at` in the select.
-- Capture query errors separately.
-- Distinguish these states:
-  - `integration_not_configured`: no row returned for `integration_id = 'hubspot'`
-  - `no_token_stored`: row exists but `encrypted_api_key` is `null` or empty
-  - `token_decode_failed`: row exists and token exists but base64 decode fails
-  - `token_found`: row exists and decoded token is non-empty
-- Log safe details only:
-  - row found yes/no
-  - integration_id returned
-  - status
-  - last_sync
-  - updated_at
-  - encrypted token state: `null`, `empty`, or `present`
-  - encoded length and safe prefix
-  - decoded length and safe prefix
-  - decode success/failure
-  - query error message/code if any
+- connection id: `std_01kn4ce01je1kbf8f54bzwwk5t`
+- required scopes:
+  - `channels:join`
+  - `groups:read`
 
-No full token will be logged.
+The reconnect prompt will tell the user that Slack permissions must be re-authorized before Team Briefing can use the updated scopes.
 
-### 2. Make `team_briefing_summary` return exact credential diagnostics
+### 2. Add Slack-specific reconnect prompt in Integrations UI
 
-In the `action === "team_briefing_summary"` branch:
+Modify only `src/pages/Integrations.tsx`.
 
-- Keep the current service-role internal-call path unchanged.
-- Before choosing credentials, log:
-  - `company_integrations` lookup result state
-  - whether `HUBSPOT_API_KEY` exists
-  - which source was selected
-- Preserve priority:
-  1. stored token from `company_integrations.integration_id = 'hubspot'`
-  2. fallback runtime secret `HUBSPOT_API_KEY`
-- If stored token is usable, return/use:
-  - `credential_source: "stored_token"`
-- If stored row exists but token is empty/null and env fallback exists:
-  - use env fallback immediately
-  - log `selected_source: "env_secret"`
-  - include diagnostics showing stored row state was `no_token_stored`
-- If stored row does not exist and env fallback exists:
-  - use env fallback immediately
-  - log `selected_source: "env_secret"`
-  - include diagnostics showing stored row state was `integration_not_configured`
-- If no usable token exists:
-  - return a non-breaking degraded/not-configured JSON response with a precise code:
-    - `integration_not_configured` if no row exists and no env fallback exists
-    - `no_token_stored` if row exists but `encrypted_api_key` is null/empty and no env fallback exists
-    - `stored_token_decode_failed` if token exists but cannot decode and no env fallback exists
-  - include `credential_source: "none"`
-  - include `degraded_reason` / `error_message` with the exact reason
+For the Slack integration detail panel, add a clear notice when Slack is connected:
 
-This keeps Team Briefing from breaking while making the root cause visible in logs and payload.
-
-### 3. Add explicit env fallback logging
-
-Still in `hubspot-api`:
-
-- Log `HUBSPOT_API_KEY` presence as a boolean only.
-- If used, log:
-  - `selected_source: "env_secret"`
-  - `header_mode: "Bearer"`
-  - token length and safe prefix only
-- Do not log the full secret.
-
-### 4. Add save-path confirmation after HubSpot token save
-
-In `src/hooks/useCompanyIntegrations.ts`, update the mutation success path to log the backend response from `manage-company-integration`:
-
-- `requested_integration_id`
-- returned `integration.integration_id`
-- returned `integration.status`
-- whether `integration.encrypted_api_key` is present if returned
-- `verification.status`
-- `verification.error_code`
-- whether the saved key matches `hubspot`
-
-Because the hook already receives the mutation result, this can be done without changing the Integrations page UI.
-
-If the hook response does not include enough information, add a narrowly scoped log in `src/pages/Integrations.tsx` after:
-
-```ts
-await companyMutation.mutateAsync({ integrationId: integration.id, apiKey: trimmedApiKey });
+```text
+Slack permissions have been updated — please reconnect your Slack account to apply the new scopes.
 ```
 
-for HubSpot only.
+The notice will explain that the new permissions allow Duncan to:
 
-### 5. Preserve existing behavior
+- automatically join public channels
+- discover private channels where permitted
+
+Add a clear button-style callout pointing the user to reconnect Slack through Connectors.
+
+This will be UI-only guidance; it will not change credential storage, tool schemas, or scanning behavior.
+
+### 3. Preserve existing Slack connection behavior
+
+Keep Slack as a user integration in the existing Integrations page.
 
 Do not change:
 
-- Team Briefing rendering
-- `CommsPulseCard`
+- `useUserIntegrations`
+- `connect-integration`
+- `ceo-slack-pulse`
 - `ceo-briefing`
-- tool schemas
-- OpenAI/Claude routing
-- HubSpot API request paths
-- database schema
-- auth model
-- integration card design
+- `CommsPulseCard`
+- backend env variables
+- connector gateway calls
 
-The only user-visible change should be clearer Team Briefing HubSpot status/reason/code when credentials are missing or not found.
+### 4. Verification
 
-## Expected result
+After implementation:
 
-When Team Briefing calls HubSpot:
+1. Confirm Slack connector configuration now requests:
+   - `channels:join`
+   - `groups:read`
 
-- If `company_integrations` has no `hubspot` row, payload/logs will say `integration_not_configured`.
-- If the row exists but token is empty/null, payload/logs will say `no_token_stored`.
-- If the row exists with a usable token, logs will show `token_found` and `credential_source: "stored_token"`.
-- If `HUBSPOT_API_KEY` exists and stored token is unusable/missing, logs will show env fallback used and Team Briefing will use `credential_source: "env_secret"`.
-- If HubSpot still returns 401 after a token is found, the failure will be clearly separated from “token not found” and classified as invalid/expired/insufficient-scope rather than “No credential.”
+2. Confirm Integrations → Slack shows the reconnect message.
 
-## Verification after approval
+3. Confirm no code changes were made to Slack scanning limits or Team Briefing scan logic.
 
-After implementation, verify:
+4. Confirm the app still builds without TypeScript errors.
 
-1. Save a HubSpot token from Integrations and confirm console log shows:
-   - requested `integration_id = "hubspot"`
-   - returned `integration_id = "hubspot"`
-   - save succeeded
-2. Run Team Briefing and inspect HubSpot function logs for:
-   - direct `company_integrations` lookup state
-   - stored token state
-   - env fallback availability
-   - selected credential source
-3. Confirm Team Briefing no longer shows `Source: No credential` unless both:
-   - no usable `company_integrations` token exists
-   - no `HUBSPOT_API_KEY` fallback exists
-4. Confirm no other integrations or Team Briefing sections are affected.
+## Expected outcome
+
+Once the user reconnects Slack:
+
+- Duncan should no longer be blocked by missing `channels:join` when trying to enter public channels.
+- Team Briefing should be able to scan public channel history after auto-join succeeds.
+- The connector will also be authorized for `groups:read`, preparing Slack for private-channel discovery without changing scan logic in this step.

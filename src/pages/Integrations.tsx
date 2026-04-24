@@ -271,6 +271,7 @@ const Integrations = () => {
   const [isGmailConnected, setIsGmailConnected] = useState<boolean | null>(null);
   const [isAzureDevOpsConnected, setIsAzureDevOpsConnected] = useState<boolean | null>(null);
   const [isGoogleDriveConnected, setIsGoogleDriveConnected] = useState<boolean | null>(null);
+  const [googleDriveStatus, setGoogleDriveStatus] = useState<GoogleDriveStatusDetail | null>(null);
   const checkAzureBlobConnection = async () => {
     try {
       const { supabase } = await import("@/integrations/supabase/client");
@@ -317,13 +318,18 @@ const Integrations = () => {
   const checkGoogleDriveConnection = async () => {
     try {
       const { supabase } = await import("@/integrations/supabase/client");
-      const { data } = await supabase
-        .from("google_drive_tokens")
-        .select("id")
-        .order("created_at", { ascending: false })
-        .limit(1);
-      setIsGoogleDriveConnected(!!data?.length);
-    } catch {
+      const { data, error } = await supabase.functions.invoke("google-drive-api", {
+        body: { action: "status" },
+      });
+      if (error) throw error;
+      setGoogleDriveStatus(data as GoogleDriveStatusDetail);
+      setIsGoogleDriveConnected(data?.status === "connected" || data?.connected === true);
+    } catch (error) {
+      setGoogleDriveStatus({
+        status: "degraded",
+        connected: false,
+        degraded_reason: error instanceof Error ? error.message : "Unable to verify Google Drive connection",
+      });
       setIsGoogleDriveConnected(false);
     }
   };

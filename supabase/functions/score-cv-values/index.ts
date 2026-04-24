@@ -183,8 +183,8 @@ You MUST call the score_values function with your assessment.`;
             workflow: "score-cv-values",
             force_provider: "openai",
             messages: [{ role: "system", content: systemPrompt }, ...cvContent.messages],
-            tools: [toolDef],
-            tool_choice: { type: "function", function: { name: "score_values" } },
+            tools: [toolDef as any],
+            tool_choice: { type: "function", function: { name: "score_values" } } as any,
           });
         } catch (err: any) {
           console.error(`AI error for ${candidate.id}:`, err?.status, err?.message);

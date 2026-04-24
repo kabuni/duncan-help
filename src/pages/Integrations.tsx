@@ -1118,6 +1118,42 @@ const IntegrationDetail = ({
                   ) : null}
                 </div>
               )}
+              {isSlack && (
+                <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
+                  <div>
+                    <h3 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Send to Slack</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">Posts with your Slack identity after reconnecting with user permissions.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="slack-channel-id" className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Channel ID</Label>
+                    <Input
+                      id="slack-channel-id"
+                      placeholder="C0123456789"
+                      value={slackChannelId}
+                      onChange={(e) => setSlackChannelId(e.target.value)}
+                      className="bg-background border-border"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="slack-message" className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Message</Label>
+                    <Textarea
+                      id="slack-message"
+                      placeholder="Type a message..."
+                      value={slackMessage}
+                      onChange={(e) => setSlackMessage(e.target.value)}
+                      className="bg-background border-border"
+                    />
+                  </div>
+                  <button
+                    onClick={handleSlackSendMessage}
+                    disabled={slackSending || !slackMessage.trim() || !slackChannelId.trim()}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:bg-primary/90 transition-all disabled:opacity-50"
+                  >
+                    {slackSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
+                    {slackSending ? "Sending..." : "Send as me"}
+                  </button>
+                </div>
+              )}
               {isBasecamp && (
                 <div className="mt-4">
                   <BasecampBrowser />

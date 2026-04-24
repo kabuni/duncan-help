@@ -200,7 +200,7 @@ async function fetchPlaudWebpage(url: string): Promise<{ transcript: string; tit
     transcript = transcript.slice(0, 60000);
     console.log(`Extracted ${transcript.length} chars from Plaud page`);
     return { transcript, title };
-  } catch (e) {
+  } catch (e: any) {
     console.error(`Error fetching Plaud webpage ${url}:`, e);
     return null;
   }
@@ -377,7 +377,7 @@ serve(async (req) => {
           dateMessages.push(candidate);
           console.log(`Pattern match: "${subjectVal}" (empty=${isEmpty})`);
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error(`Failed to check subject for ${candidate.id}:`, e);
       }
     }
@@ -476,7 +476,7 @@ serve(async (req) => {
             // Clean up binary noise for non-txt files
             transcriptText = transcriptText.replace(/[^\x20-\x7E\n\r\t]/g, " ").replace(/\s{3,}/g, " ").slice(0, 50000);
           }
-        } catch (e) {
+        } catch (e: any) {
           console.error(`Failed to download transcript attachment ${att.filename}:`, e);
         }
       }
@@ -528,7 +528,7 @@ serve(async (req) => {
           } else {
             console.error("Audio upload error:", uploadError);
           }
-        } catch (e) {
+        } catch (e: any) {
           console.error(`Failed to download audio ${att.filename}:`, e);
         }
       }
@@ -591,7 +591,7 @@ serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Fetch Plaud meetings error:", error);
     return new Response(
       JSON.stringify({ error: error.message || "Failed to fetch Plaud meetings" }),

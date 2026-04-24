@@ -336,7 +336,7 @@ Call score_competencies with your assessment. Use keys competency_0, competency_
 
         results.push({ id: candidate.id, name: candidate.name, competency_score: competencyScore, total_score: totalScore, status: newStatus });
         scored++;
-      } catch (err) {
+      } catch (err: any) {
         console.error(`Error scoring ${candidate.id}:`, err);
         failed++;
       }
@@ -346,7 +346,7 @@ Call score_competencies with your assessment. Use keys competency_0, competency_
       JSON.stringify({ success: true, scored, failed, skipped, total: candidates.length, results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Score competencies error:", error);
     return new Response(
       JSON.stringify({ error: error.message || "Failed to score competencies" }),

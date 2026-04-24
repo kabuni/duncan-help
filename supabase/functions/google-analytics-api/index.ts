@@ -272,7 +272,7 @@ serve(async (req) => {
     }
 
     throw new Error(`Unknown action: ${action}`);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Google Analytics API error:", error);
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Internal error" }), {
       status: 500,

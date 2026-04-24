@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
       status: 302,
       headers: { Location: `${appUrl}/integrations?success=azure_devops` },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Azure DevOps callback error:", error);
     const appUrl = getAppUrl();
     return new Response(null, {

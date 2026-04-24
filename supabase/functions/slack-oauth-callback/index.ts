@@ -146,7 +146,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ success: true, connection: data }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Slack callback error:", error);
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Slack OAuth callback failed" }), {
       status: 500,

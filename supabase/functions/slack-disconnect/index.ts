@@ -44,7 +44,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Slack disconnect error:", error);
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Slack disconnect failed" }), {
       status: 500,

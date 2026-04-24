@@ -183,8 +183,8 @@ You MUST call the score_values function with your assessment.`;
             workflow: "score-cv-values",
             force_provider: "openai",
             messages: [{ role: "system", content: systemPrompt }, ...cvContent.messages],
-            tools: [toolDef],
-            tool_choice: { type: "function", function: { name: "score_values" } },
+            tools: [toolDef as any],
+            tool_choice: { type: "function", function: { name: "score_values" } } as any,
           });
         } catch (err: any) {
           console.error(`AI error for ${candidate.id}:`, err?.status, err?.message);
@@ -270,7 +270,7 @@ You MUST call the score_values function with your assessment.`;
 
         results.push({ id: candidate.id, name: candidate.name, values_score: valuesScore, status: newStatus });
         scored++;
-      } catch (err) {
+      } catch (err: any) {
         console.error(`Error scoring candidate ${candidate.id}:`, err);
         failed++;
       }
@@ -280,7 +280,7 @@ You MUST call the score_values function with your assessment.`;
       JSON.stringify({ success: true, scored, failed, total: candidates.length, results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Score CV values error:", error);
     return new Response(
       JSON.stringify({ error: error.message || "Failed to score CVs" }),

@@ -441,7 +441,7 @@ serve(async (req) => {
 
       throw sendError;
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error("nda-send-signature error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),

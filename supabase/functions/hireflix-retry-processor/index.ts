@@ -57,7 +57,7 @@ async function createHireflixPosition(apiKey: string, title: string, competencie
       });
       const generated = aiData.choices?.[0]?.message?.content?.trim();
       if (generated && generated.length > 10) competencyQuestion = generated;
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to generate competency question:", err);
     }
   }
@@ -289,7 +289,7 @@ serve(async (req) => {
         }
 
         processed++;
-      } catch (err) {
+      } catch (err: any) {
         const newAttempts = (retry.attempts || 0) + 1;
         const message = err instanceof Error ? err.message : String(err);
         const isExhausted = isNonRetryableGraphQLError(message) || newAttempts >= (retry.max_attempts || 5);
@@ -317,7 +317,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ processed, succeeded, failed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Retry processor error:", error);
     return new Response(JSON.stringify({ error: error.message || "Retry processor failed" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },

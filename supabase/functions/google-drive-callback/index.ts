@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
       status: 302,
       headers: { Location: `${appUrl}/integrations?drive_connected=true` },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Google Drive callback error:", error);
     return new Response(null, {
       status: 302,

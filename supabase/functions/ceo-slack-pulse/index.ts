@@ -143,7 +143,7 @@ async function getSlackAuthStatus(apiKey: string, lovableKey: string): Promise<S
       scopes,
       missingJoinScope: !scopes.includes("channels:join"),
     };
-  } catch (e) {
+  } catch (e: any) {
     console.warn("[ceo-slack-pulse] auth.test failed", e);
     return {
       ok: false,
@@ -281,7 +281,7 @@ async function fetchHistoryPage(
       error_code: null,
       error_message: null,
     };
-  } catch (e) {
+  } catch (e: any) {
     const error_code = parseSlackApiError(e);
     return {
       ok: false,
@@ -321,7 +321,7 @@ async function joinPublicChannel(
     });
 
     return { ok: true, http_status: status, error_code: null, error_message: null };
-  } catch (e) {
+  } catch (e: any) {
     const errorCode = parseSlackApiError(e);
     const message = String(e);
     const httpStatus = Number(message.match(/HTTP\s+(\d{3})/i)?.[1] || "") || null;
@@ -556,7 +556,7 @@ RULES:
       customer_issues: Array.isArray(parsed.customer_issues) ? parsed.customer_issues : [],
       risks: Array.isArray(parsed.risks) ? parsed.risks : [],
     };
-  } catch (e) {
+  } catch (e: any) {
     console.error(`extractChannelSignals error for #${channelName}:`, e);
     return {
       commitments: [],

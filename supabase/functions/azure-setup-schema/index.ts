@@ -146,7 +146,7 @@ Deno.serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Azure schema setup error:", error);
     try { await client.end(); } catch (_) { /* ignore */ }
     return new Response(

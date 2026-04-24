@@ -291,7 +291,7 @@ Deno.serve(async (req) => {
             });
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         partialFailure = true;
         logGithub("repo scan failure", {
           repo: `${owner}/${name}`,
@@ -333,7 +333,7 @@ Deno.serve(async (req) => {
       summary,
       metrics_summary: summary,
     });
-  } catch (error) {
+  } catch (error: any) {
     const classification = classifyError(error);
     logGithub("verification failure", {
       error_code: classification.error_code,

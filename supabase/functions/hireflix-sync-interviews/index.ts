@@ -253,7 +253,7 @@ Do not include any explanation outside JSON.`;
     const avg = metrics.reduce((sum, k) => sum + (scores[k]?.score || 0), 0) / metrics.length;
     scores.final_score = Math.round(avg * 100) / 100;
     return scores;
-  } catch (e) {
+  } catch (e: any) {
     console.error("Failed to parse AI scores:", jsonStr);
     throw new Error("AI returned invalid JSON");
   }
@@ -346,7 +346,7 @@ serve(async (req) => {
       let interviews: any[];
       try {
         interviews = await fetchPositionInterviews(HIREFLIX_API_KEY, positionId);
-      } catch (e) {
+      } catch (e: any) {
         console.error(`Failed to fetch interviews for position ${positionId}:`, e);
         failed += posCandidates.length;
         for (const c of posCandidates) {
@@ -434,7 +434,7 @@ serve(async (req) => {
 
           scored++;
           results.push({ id: candidate.id, name: candidate.name, status: shouldMarkCompleted ? "scored" : "scored_no_video", final_score: scores.final_score, has_playback: !!playbackUrl });
-        } catch (e) {
+        } catch (e: any) {
           console.error(`Failed to score candidate ${candidate.id}:`, e);
           await supabaseAdmin
             .from("candidates")
@@ -473,7 +473,7 @@ serve(async (req) => {
           body: JSON.stringify({}),
         }).catch(err => console.error("Failed to trigger retry processor:", err));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to check retry queue:", err);
     }
 
@@ -510,7 +510,7 @@ serve(async (req) => {
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Hireflix sync error:", error);
 
     // Log failure to sync_logs

@@ -129,7 +129,7 @@ Write in a warm but professional tone. Be specific to the role, not generic.`,
       JSON.stringify({ success: true, job_role_id, full_text, competencies }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Generate JD error:", error);
     return new Response(
       JSON.stringify({ error: error.message || "Failed to generate JD" }),

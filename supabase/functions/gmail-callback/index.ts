@@ -114,7 +114,7 @@ serve(async (req) => {
       status: 302,
       headers: { Location: successUrl },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gmail callback error:", error);
     return new Response(null, {
       status: 302,

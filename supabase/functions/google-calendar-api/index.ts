@@ -207,7 +207,7 @@ serve(async (req) => {
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Google Calendar API error:", error);
     return new Response(
       JSON.stringify({ error: error.message || "Internal error" }),

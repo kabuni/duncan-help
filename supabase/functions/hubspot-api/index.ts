@@ -850,7 +850,7 @@ Deno.serve(async (req) => {
       credential_source: "stored_token",
       verification_path: "/crm/v3/objects/companies",
     });
-  } catch (error) {
+  } catch (error: any) {
     const classification = classifyProviderFailure(error);
     logHubspot("classified failure", {
       error_code: classification.error_code,

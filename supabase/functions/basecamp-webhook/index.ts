@@ -115,7 +115,7 @@ function parseEvent(body: any): BasecampEvent | null {
     }
 
     return null;
-  } catch (err) {
+  } catch (err: any) {
     console.error("parseEvent error:", err);
     return null;
   }
@@ -202,7 +202,7 @@ async function sendSlackDM(
         return false;
       }
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error(`Slack DM exception (attempt ${attempt + 1}):`, err);
       if (attempt === 0) { await delay(500); continue; }
       return false;
@@ -279,7 +279,7 @@ async function logResult(
       sent_at: success ? new Date().toISOString() : null,
       event_key: eventKey || null,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Failed to log notification result:", err);
   }
 }
@@ -376,7 +376,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ success: true, type: event.type, results }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("basecamp-webhook error:", err);
     return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },

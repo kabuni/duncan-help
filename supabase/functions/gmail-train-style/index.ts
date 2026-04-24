@@ -160,7 +160,7 @@ Respond with ONLY the JSON, no markdown fences.`;
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (err) {
+  } catch (err: any) {
     console.error("gmail-train-style error:", err);
     return new Response(
       JSON.stringify({ error: err.message || "Internal error" }),

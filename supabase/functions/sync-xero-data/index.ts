@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ success: true, records_synced: totalSynced }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Xero sync error:", error);
     await supabaseAdmin
       .from("sync_logs")

@@ -593,43 +593,68 @@ export async function callLLMWithFallback(opts: CallLLMOptions): Promise<Normali
 
 
 /**
- * Streaming chat. Always emits OpenAI-shaped SSE lines:
- *   data: {"choices":[{"delta":{"content":"..."}}]}
- *   data: {"choices":[{"delta":{"tool_calls":[...]}}]}
- *   data: [DONE]
- * so existing frontend parsers keep working unchanged.
- *
- * Falls back to the other provider if the primary fails BEFORE any byte is sent.
- * Once streaming has started, errors propagate (we can't rewind).
+ * Streaming chat. OpenAI-only by policy. No cross-provider fallback (streams
+ * cannot be rewound once forwarded). Uses first-chunk buffering: we wait for
+ * the first SSE byte (with timeout) before returning the stream so transient
+ * upstream failures surface as a normal error instead of a half-open stream.
  */
+const STREAM_FIRST_CHUNK_TIMEOUT_MS = 30_000;
+
 export async function streamLLM(opts: CallLLMOptions): Promise<ReadableStream<Uint8Array>> {
-  const route = WORKFLOW_ROUTING[opts.workflow] ?? WORKFLOW_ROUTING.generic;
-  const isNormanChat = opts.workflow === "norman-chat";
-  const primary = opts.force_provider ?? (isNormanChat ? "openai" : route.primary);
-  const fallback: Provider = primary === "openai" ? "openai" : route.fallback;
-
-  const tryProvider = async (provider: Provider, attempt: number): Promise<ReadableStream<Uint8Array>> => {
-    const start = Date.now();
-    if (provider === "openai") {
-      const stream = await openaiStream(opts, pickModel("openai", opts));
-      log(opts.workflow, provider, attempt, "ok", Date.now() - start, "stream=open");
-      return stream;
-    }
-    const stream = await claudeStreamAsOpenAI(opts, pickModel("claude", opts));
-    log(opts.workflow, provider, attempt, "ok", Date.now() - start, "stream=open");
-    return stream;
-  };
-
+  // Force OpenAI for streaming regardless of route.
+  const provider: Provider = "openai";
+  const start = Date.now();
   try {
-    return await tryProvider(primary, 1);
+    const stream = await openaiStream(opts, pickModel("openai", opts));
+    const buffered = await bufferFirstChunk(stream, STREAM_FIRST_CHUNK_TIMEOUT_MS);
+    log(opts.workflow, provider, 1, "ok", Date.now() - start, "stream=open");
+    return buffered;
   } catch (err: any) {
-    if (opts.force_provider || primary === fallback || !isRetryable(err?.status, primary, err?.message || "")) {
-      log(opts.workflow, primary, 1, "fail", 0, `status=${err?.status}`);
-      throw err;
-    }
-    log(opts.workflow, primary, 1, "fallback", 0, `status=${err?.status}`);
-    return await tryProvider(fallback, 2);
+    log(opts.workflow, provider, 1, "fail", Date.now() - start, `status=${err?.status}`);
+    throw classifyLLMError(provider, err?.status, err?.message || String(err));
   }
+}
+
+/**
+ * Reads up to the first non-empty chunk from `source` (with a timeout) and
+ * returns a new ReadableStream that replays it followed by the remaining
+ * source. If no chunk arrives in time, aborts and throws.
+ */
+async function bufferFirstChunk(
+  source: ReadableStream<Uint8Array>,
+  timeoutMs: number,
+): Promise<ReadableStream<Uint8Array>> {
+  const reader = source.getReader();
+  const timer = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(Object.assign(new Error("stream first-chunk timeout"), { status: 504 })), timeoutMs),
+  );
+  let first: ReadableStreamReadResult<Uint8Array>;
+  try {
+    first = await Promise.race([reader.read(), timer]);
+  } catch (err) {
+    try { await reader.cancel(); } catch { /* ignore */ }
+    throw err;
+  }
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      if (first.done) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(first.value);
+    },
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) { controller.close(); return; }
+        controller.enqueue(value);
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+    cancel() { try { reader.cancel(); } catch { /* ignore */ } },
+  });
 }
 
 async function openaiStream(opts: CallLLMOptions, model: string): Promise<ReadableStream<Uint8Array>> {
@@ -646,7 +671,6 @@ async function openaiStream(opts: CallLLMOptions, model: string): Promise<Readab
     if (model.startsWith("gpt-5")) body.max_completion_tokens = opts.max_tokens;
     else body.max_tokens = opts.max_tokens;
   }
-  // GPT-5 family only supports default temperature (1).
   if (opts.temperature !== undefined && !model.startsWith("gpt-5")) body.temperature = opts.temperature;
 
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -663,159 +687,4 @@ async function openaiStream(opts: CallLLMOptions, model: string): Promise<Readab
   return resp.body;
 }
 
-async function claudeStreamAsOpenAI(opts: CallLLMOptions, model: string): Promise<ReadableStream<Uint8Array>> {
-  const key = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!key) throw new Error("ANTHROPIC_API_KEY not configured");
-
-  const { system, messages } = toAnthropicMessages(opts.messages);
-  const body: any = {
-    model,
-    max_tokens: opts.max_tokens ?? 4096,
-    messages,
-    stream: true,
-  };
-  if (system) body.system = system;
-  if (opts.temperature !== undefined) body.temperature = opts.temperature;
-  const tools = toAnthropicTools(opts.tools);
-  if (tools) body.tools = tools;
-  const tc = toAnthropicToolChoice(opts.tool_choice);
-  if (tc) body.tool_choice = tc;
-
-  const resp = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!resp.ok || !resp.body) {
-    const text = await resp.text().catch(() => "");
-    const err: any = new Error(`Anthropic stream ${resp.status}: ${text.slice(0, 200)}`);
-    err.status = resp.status;
-    throw err;
-  }
-
-  // Transform Anthropic SSE → OpenAI-shaped SSE
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
-
-  // Track active content blocks: index → { type, toolCallIndex?, toolId?, toolName?, argumentsBuffer? }
-  const blocks = new Map<number, { type: "text" | "tool_use"; toolCallIndex?: number; toolId?: string; toolName?: string; argumentsBuffer?: string }>();
-  let toolCallCounter = 0;
-
-  function emit(delta: any): Uint8Array {
-    const payload = { choices: [{ index: 0, delta, finish_reason: null }] };
-    return encoder.encode(`data: ${JSON.stringify(payload)}\n\n`);
-  }
-  function emitFinish(reason: string): Uint8Array {
-    const payload = { choices: [{ index: 0, delta: {}, finish_reason: reason }] };
-    return encoder.encode(`data: ${JSON.stringify(payload)}\n\n`);
-  }
-
-  let buffer = "";
-
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          controller.close();
-          return;
-        }
-        buffer += decoder.decode(value, { stream: true });
-
-        let idx: number;
-        while ((idx = buffer.indexOf("\n")) !== -1) {
-          let line = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (!line.startsWith("data:")) continue;
-          const jsonStr = line.slice(5).trim();
-          if (!jsonStr) continue;
-
-          let evt: any;
-          try { evt = JSON.parse(jsonStr); } catch { continue; }
-
-          switch (evt.type) {
-            case "content_block_start": {
-              const block = evt.content_block;
-              if (block.type === "text") {
-                blocks.set(evt.index, { type: "text" });
-              } else if (block.type === "tool_use") {
-                if (!block.id || !block.name) {
-                  blocks.set(evt.index, { type: "tool_use" });
-                  break;
-                }
-                const tcIdx = toolCallCounter++;
-                blocks.set(evt.index, { type: "tool_use", toolCallIndex: tcIdx, toolId: block.id, toolName: block.name, argumentsBuffer: "" });
-                controller.enqueue(emit({
-                  tool_calls: [{
-                    index: tcIdx,
-                    id: block.id,
-                    type: "function",
-                    function: { name: block.name, arguments: "" },
-                  }],
-                }));
-              }
-              break;
-            }
-            case "content_block_delta": {
-              const b = blocks.get(evt.index);
-              if (!b) break;
-              const d = evt.delta;
-              if (d.type === "text_delta" && b.type === "text") {
-                controller.enqueue(emit({ content: d.text }));
-              } else if (d.type === "input_json_delta" && b.type === "tool_use") {
-                b.argumentsBuffer = `${b.argumentsBuffer ?? ""}${d.partial_json ?? ""}`;
-                if (!b.toolName || typeof b.toolCallIndex !== "number") break;
-                controller.enqueue(emit({
-                  tool_calls: [{
-                    index: b.toolCallIndex,
-                    function: { arguments: d.partial_json ?? "" },
-                  }],
-                }));
-              }
-              break;
-            }
-            case "content_block_stop": {
-              const b = blocks.get(evt.index);
-              if (b?.type === "tool_use" && (!b.toolName || typeof b.toolCallIndex !== "number")) {
-                blocks.delete(evt.index);
-              }
-              break;
-            }
-            case "message_delta": {
-              const reason = evt.delta?.stop_reason;
-              if (reason) {
-                const finish = reason === "tool_use" ? "tool_calls"
-                             : reason === "end_turn" ? "stop"
-                             : reason === "max_tokens" ? "length"
-                             : reason;
-                controller.enqueue(emitFinish(finish));
-              }
-              break;
-            }
-            case "message_stop": {
-              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-              controller.close();
-              return;
-            }
-            case "error": {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: evt.error })}\n\n`));
-              break;
-            }
-          }
-        }
-      } catch (err) {
-        controller.error(err);
-      }
-    },
-    cancel() {
-      try { reader.cancel(); } catch { /* ignore */ }
-    },
-  });
 }

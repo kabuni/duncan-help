@@ -3445,6 +3445,71 @@ async function getCalendarAccessToken(userId: string, supabaseAdmin: any): Promi
   return tokenData.access_token;
 }
 
+async function decryptSlackToken(encryptedToken: string, secret: string): Promise<string> {
+  if (!encryptedToken.startsWith("aes-256-gcm:")) return encryptedToken;
+  const [, ivPart, ciphertextPart] = encryptedToken.split(":");
+  const decode = (value: string) => Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (value.length % 4)) % 4)), (char) => char.charCodeAt(0));
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
+  const key = await crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, ["decrypt"]);
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: decode(ivPart) }, key, decode(ciphertextPart));
+  return new TextDecoder().decode(plaintext);
+}
+
+async function getSlackConnection(userId: string, supabaseAdmin: any): Promise<{ accessToken: string; teamName: string | null; scope: string | null } | null> {
+  const clientSecret = Deno.env.get("SLACK_CLIENT_SECRET");
+  if (!clientSecret) return null;
+  const { data, error } = await supabaseAdmin
+    .from("slack_connections")
+    .select("access_token, team_name, scope")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !data?.access_token) return null;
+  return {
+    accessToken: await decryptSlackToken(data.access_token, clientSecret),
+    teamName: data.team_name ?? null,
+    scope: data.scope ?? null,
+  };
+}
+
+async function executeSlackTool(toolName: string, args: any, accessToken: string): Promise<any> {
+  async function slackCall(method: string, params: Record<string, string | number> = {}, postBody?: Record<string, unknown>) {
+    const url = new URL(`${SLACK_API_URL}/${method}`);
+    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
+    const res = await fetch(url.toString(), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=utf-8" },
+      ...(postBody ? { body: JSON.stringify(postBody) } : {}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) throw new Error(data.error || `Slack ${method} failed`);
+    return data;
+  }
+
+  switch (toolName) {
+    case "list_slack_channels": {
+      const channels: any[] = [];
+      let cursor = "";
+      do {
+        const data = await slackCall("conversations.list", { limit: 200, types: "public_channel,private_channel", ...(cursor ? { cursor } : {}) });
+        channels.push(...(data.channels || []));
+        cursor = data.response_metadata?.next_cursor || "";
+      } while (cursor && channels.length < 500);
+      return channels.map((c) => ({ id: c.id, name: c.name, is_private: c.is_private, is_member: c.is_member, topic: c.topic?.value || "" }));
+    }
+    case "read_slack_channel_messages": {
+      const limit = Math.min(Math.max(Number(args.limit || 20), 1), 50);
+      const data = await slackCall("conversations.history", { channel: args.channel_id, limit });
+      return (data.messages || []).map((m: any) => ({ user: m.user, text: m.text, ts: m.ts, thread_ts: m.thread_ts }));
+    }
+    case "send_slack_message": {
+      const data = await slackCall("chat.postMessage", {}, { channel: args.channel_id, text: args.text });
+      return { success: true, channel: data.channel, ts: data.ts };
+    }
+    default:
+      throw new Error(`Unknown Slack tool: ${toolName}`);
+  }
+}
+
 async function executeCalendarTool(
   toolName: string,
   args: any,

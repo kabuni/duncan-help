@@ -10,6 +10,7 @@ import { useSearchParams } from "react-router-dom";
 import AppLayout from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { invokeEdge } from "@/lib/edgeApi";
 import { fastApi, withFastApi } from "@/lib/fastApiClient";
@@ -631,6 +632,9 @@ const IntegrationDetail = ({
   const [gmailLoading, setGmailLoading] = useState(false);
   const [azureDevOpsLoading, setAzureDevOpsLoading] = useState(false);
   const [googleDriveLoading, setGoogleDriveLoading] = useState(false);
+  const [slackChannelId, setSlackChannelId] = useState("");
+  const [slackMessage, setSlackMessage] = useState("");
+  const [slackSending, setSlackSending] = useState(false);
 
   const fetchRuntimeStatus = async () => {
     if (!isRuntimeStatusIntegration) {
@@ -833,6 +837,31 @@ const IntegrationDetail = ({
       setGoogleDriveLoading(false);
       setGoogleDriveLoading(false);
       toast.error(err.message || "Failed to start OAuth flow");
+    }
+  };
+
+  const handleSlackSendMessage = async () => {
+    const channelId = slackChannelId.trim();
+    const text = slackMessage.trim();
+    if (!channelId || !text) {
+      toast.error("Add a channel ID and message first");
+      return;
+    }
+
+    try {
+      setSlackSending(true);
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data, error } = await supabase.functions.invoke("slack-send-message", {
+        body: { channel_id: channelId, text },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(`Message posted as you in ${channelId}`);
+      setSlackMessage("");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to send Slack message");
+    } finally {
+      setSlackSending(false);
     }
   };
 

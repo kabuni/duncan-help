@@ -1,5 +1,6 @@
 import { Client } from "https://deno.land/x/postgres@v0.19.3/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getEmbedding } from "../_shared/embeddings.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -133,28 +134,9 @@ function forceSplit(text: string, maxTokens: number, overlapTokens: number): { c
 }
 
 async function generateEmbeddings(texts: string[]): Promise<number[][]> {
-  const openaiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!openaiKey) throw new Error("OPENAI_API_KEY not configured");
-
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${openaiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "text-embedding-3-small",
-      input: texts,
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`OpenAI embeddings failed [${response.status}]: ${err}`);
-  }
-
-  const data = await response.json();
-  return data.data.map((d: { embedding: number[] }) => d.embedding);
+  const out: number[][] = [];
+  for (const t of texts) out.push(await getEmbedding(t));
+  return out;
 }
 
 Deno.serve(async (req) => {

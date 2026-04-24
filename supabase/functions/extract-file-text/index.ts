@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callLLMWithFallback } from "../_shared/llm.ts";
+import { getEmbedding } from "../_shared/embeddings.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,33 +29,14 @@ function chunkText(text: string, maxWords = 750): string[] {
   return chunks.length > 0 ? chunks : [text.trim()];
 }
 
-/** Generate embeddings for an array of texts using OpenAI. */
+/** Generate embeddings sequentially via the centralised OpenAI helper. */
 async function generateEmbeddings(
   texts: string[],
-  apiKey: string
+  _apiKey?: string,
 ): Promise<number[][]> {
-  const resp = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "text-embedding-3-small",
-      input: texts,
-    }),
-  });
-
-  if (!resp.ok) {
-    const err = await resp.text();
-    console.error("Embeddings API error:", resp.status, err);
-    throw new Error("Failed to generate embeddings");
-  }
-
-  const data = await resp.json();
-  return data.data
-    .sort((a: any, b: any) => a.index - b.index)
-    .map((d: any) => d.embedding);
+  const out: number[][] = [];
+  for (const t of texts) out.push(await getEmbedding(t));
+  return out;
 }
 
 Deno.serve(async (req) => {

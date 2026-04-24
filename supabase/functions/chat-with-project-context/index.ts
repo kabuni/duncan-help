@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callLLMWithFallback } from "../_shared/llm.ts";
+import { getEmbedding as getEmbeddingShared } from "../_shared/embeddings.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,26 +12,8 @@ const DEFAULT_SYSTEM_PROMPT = `You are Duncan, an advanced reasoning and operati
 You are currently operating inside a Project workspace. Focus your responses on the context and instructions provided for this project.
 Be direct, precise, and efficient. Use structured output when presenting complex information.`;
 
-/** Generate embedding for a single text. */
-async function getEmbedding(text: string, apiKey: string): Promise<number[]> {
-  const resp = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "text-embedding-3-small",
-      input: text,
-    }),
-  });
-  if (!resp.ok) {
-    const err = await resp.text();
-    console.error("Embedding error:", resp.status, err);
-    throw new Error("Failed to generate query embedding");
-  }
-  const data = await resp.json();
-  return data.data[0].embedding;
+async function getEmbedding(text: string, _apiKey?: string): Promise<number[]> {
+  return await getEmbeddingShared(text);
 }
 
 Deno.serve(async (req) => {

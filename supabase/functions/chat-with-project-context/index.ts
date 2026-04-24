@@ -179,13 +179,16 @@ Deno.serve(async (req) => {
     const baseSystemPrompt = project.system_prompt?.trim() || DEFAULT_SYSTEM_PROMPT;
     const systemPrompt = baseSystemPrompt + fileContextBlock;
 
-    const aiMessages: Array<{ role: string; content: string }> = [
+    const aiMessages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string }> = [
       { role: "system", content: systemPrompt },
     ];
 
     if (history && history.length > 0) {
       for (const msg of history) {
-        aiMessages.push({ role: msg.role, content: msg.content });
+        const role = (msg.role === "assistant" || msg.role === "user" || msg.role === "system" || msg.role === "tool")
+          ? msg.role
+          : "user";
+        aiMessages.push({ role, content: msg.content });
       }
     }
 

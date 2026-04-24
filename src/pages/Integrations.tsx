@@ -34,6 +34,29 @@ import { useIsAdmin } from "@/hooks/useUserRoles";
 type IntegrationStatus = "connected" | "pending" | "disconnected";
 type IntegrationType = "user" | "company";
 
+type GoogleDriveStatusDetail = {
+  status?: "connected" | "degraded" | "disconnected";
+  connected?: boolean;
+  credential_source?: string;
+  account_email?: string | null;
+  account_name?: string | null;
+  token_expiry?: string | null;
+  updated_at?: string | null;
+  last_verified_at?: string | null;
+  visible_file_count?: number;
+  sample_files?: Array<{ id: string; name: string; mimeType?: string; modifiedTime?: string }>;
+  degraded_reason?: string;
+  error?: string;
+};
+
+const driveErrorMessages: Record<string, string> = {
+  no_code: "Google Drive authorization was cancelled before Duncan received a code.",
+  invalid_state: "Google Drive authorization returned an invalid state. Please start the connection again.",
+  token_exchange_failed: "Google rejected the authorization code. Check the Drive redirect URI and OAuth client settings.",
+  storage_failed: "Google Drive authorized successfully, but Duncan could not save the token.",
+  unknown: "An unexpected Google Drive connection error occurred.",
+};
+
 const getRuntimeStatusLabel = (detail: any | null | undefined) => {
   if (!detail) return null;
   const source = detail.credential_source === "connector_gateway"
@@ -248,6 +271,7 @@ const Integrations = () => {
   const [isGmailConnected, setIsGmailConnected] = useState<boolean | null>(null);
   const [isAzureDevOpsConnected, setIsAzureDevOpsConnected] = useState<boolean | null>(null);
   const [isGoogleDriveConnected, setIsGoogleDriveConnected] = useState<boolean | null>(null);
+  const [googleDriveStatus, setGoogleDriveStatus] = useState<GoogleDriveStatusDetail | null>(null);
   const checkAzureBlobConnection = async () => {
     try {
       const { supabase } = await import("@/integrations/supabase/client");
@@ -294,13 +318,18 @@ const Integrations = () => {
   const checkGoogleDriveConnection = async () => {
     try {
       const { supabase } = await import("@/integrations/supabase/client");
-      const { data } = await supabase
-        .from("google_drive_tokens")
-        .select("id")
-        .order("created_at", { ascending: false })
-        .limit(1);
-      setIsGoogleDriveConnected(!!data?.length);
-    } catch {
+      const { data, error } = await supabase.functions.invoke("google-drive-api", {
+        body: { action: "status" },
+      });
+      if (error) throw error;
+      setGoogleDriveStatus(data as GoogleDriveStatusDetail);
+      setIsGoogleDriveConnected(data?.status === "connected" || data?.connected === true);
+    } catch (error) {
+      setGoogleDriveStatus({
+        status: "degraded",
+        connected: false,
+        degraded_reason: error instanceof Error ? error.message : "Unable to verify Google Drive connection",
+      });
       setIsGoogleDriveConnected(false);
     }
   };
@@ -332,7 +361,7 @@ const Integrations = () => {
       setSearchParams({});
     } else if (searchParams.get("drive_error")) {
       const driveError = searchParams.get("drive_error");
-      toast.error(`Google Drive connection failed: ${driveError}`);
+      toast.error(driveErrorMessages[driveError || "unknown"] || `Google Drive connection failed: ${driveError}`);
       setSearchParams({});
     } else if (searchParams.get("gmail_connected") === "true") {
       toast.success("Gmail connected successfully!");
@@ -534,6 +563,7 @@ const Integrations = () => {
               slackWorkspaceName={slackConnection.workspaceName}
               isAzureDevOpsConnected={isAzureDevOpsConnected}
               isGoogleDriveConnected={isGoogleDriveConnected}
+              googleDriveStatus={googleDriveStatus}
               onClose={() => {
                 setSelectedIntegration(null);
                 checkGmailConnection();
@@ -560,6 +590,7 @@ const IntegrationDetail = ({
   slackWorkspaceName,
   isAzureDevOpsConnected,
   isGoogleDriveConnected,
+  googleDriveStatus,
   onClose,
 }: {
   integration: Integration;
@@ -574,6 +605,7 @@ const IntegrationDetail = ({
   slackWorkspaceName: string | null;
   isAzureDevOpsConnected: boolean | null;
   isGoogleDriveConnected: boolean | null;
+  googleDriveStatus: GoogleDriveStatusDetail | null;
   onClose: () => void;
 }) => {
   const isGoogleCalendar = integration.id === "google-calendar";
@@ -632,6 +664,8 @@ const IntegrationDetail = ({
   const [gmailLoading, setGmailLoading] = useState(false);
   const [azureDevOpsLoading, setAzureDevOpsLoading] = useState(false);
   const [googleDriveLoading, setGoogleDriveLoading] = useState(false);
+  const [googleDriveTesting, setGoogleDriveTesting] = useState(false);
+  const [localGoogleDriveStatus, setLocalGoogleDriveStatus] = useState<GoogleDriveStatusDetail | null>(googleDriveStatus);
   const [slackChannelId, setSlackChannelId] = useState("");
   const [slackMessage, setSlackMessage] = useState("");
   const [slackSending, setSlackSending] = useState(false);
@@ -653,6 +687,10 @@ const IntegrationDetail = ({
       });
     }
   };
+
+  useEffect(() => {
+    setLocalGoogleDriveStatus(googleDriveStatus);
+  }, [googleDriveStatus]);
 
   useEffect(() => {
     let active = true;
@@ -837,6 +875,27 @@ const IntegrationDetail = ({
       setGoogleDriveLoading(false);
       setGoogleDriveLoading(false);
       toast.error(err.message || "Failed to start OAuth flow");
+    }
+  };
+
+  const handleGoogleDriveTest = async () => {
+    try {
+      setGoogleDriveTesting(true);
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data, error } = await supabase.functions.invoke("google-drive-api", {
+        body: { action: "test" },
+      });
+      if (error) throw error;
+      setLocalGoogleDriveStatus(data as GoogleDriveStatusDetail);
+      if (data?.status === "connected") {
+        toast.success(`Google Drive verified${typeof data.visible_file_count === "number" ? ` · ${data.visible_file_count} files visible in test` : ""}`);
+      } else {
+        toast.error(data?.degraded_reason || data?.error || "Google Drive verification failed");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to test Google Drive");
+    } finally {
+      setGoogleDriveTesting(false);
     }
   };
 
@@ -1098,13 +1157,53 @@ const IntegrationDetail = ({
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-norman-success" />
                   <span className="text-sm font-medium text-norman-success">
-                    {isSlack ? `Slack connected${slackWorkspaceName ? ` · ${slackWorkspaceName}` : ""}` : "Connected & syncing"}
+                    {isSlack
+                      ? `Slack connected${slackWorkspaceName ? ` · ${slackWorkspaceName}` : ""}`
+                      : isGoogleDrive
+                      ? `Google Drive connected${localGoogleDriveStatus?.account_email ? ` · ${localGoogleDriveStatus.account_email}` : ""}`
+                      : "Connected & syncing"}
                   </span>
                 </div>
-                {(statusDetail?.last_verified_at || integrationData?.last_sync) && (
-                  <span className="text-[10px] font-mono text-muted-foreground">{new Date(statusDetail?.last_verified_at || integrationData?.last_sync).toLocaleDateString()}</span>
+                {(localGoogleDriveStatus?.last_verified_at || statusDetail?.last_verified_at || integrationData?.last_sync) && (
+                  <span className="text-[10px] font-mono text-muted-foreground">{new Date(localGoogleDriveStatus?.last_verified_at || statusDetail?.last_verified_at || integrationData?.last_sync).toLocaleDateString()}</span>
                 )}
               </div>
+              {isGoogleDrive && (
+                <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
+                  <div>
+                    <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Drive verification</div>
+                    <p className="mt-1 text-sm text-foreground/80">
+                      {localGoogleDriveStatus?.account_name || localGoogleDriveStatus?.account_email || "Shared Google Drive token verified."}
+                    </p>
+                    {localGoogleDriveStatus?.token_expiry ? (
+                      <p className="mt-1 text-xs text-muted-foreground">Token expiry: {new Date(localGoogleDriveStatus.token_expiry).toLocaleString()}</p>
+                    ) : null}
+                    {localGoogleDriveStatus?.visible_file_count !== undefined ? (
+                      <p className="mt-1 text-xs text-muted-foreground">Latest test saw {localGoogleDriveStatus.visible_file_count} Drive item{localGoogleDriveStatus.visible_file_count === 1 ? "" : "s"}.</p>
+                    ) : null}
+                  </div>
+                  {localGoogleDriveStatus?.sample_files?.length ? (
+                    <div className="space-y-1">
+                      {localGoogleDriveStatus.sample_files.map((file) => (
+                        <div key={file.id} className="truncate rounded-md bg-background px-2 py-1 text-xs text-muted-foreground">
+                          {file.name}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {localGoogleDriveStatus?.degraded_reason || localGoogleDriveStatus?.error ? (
+                    <p className="text-xs text-destructive">{localGoogleDriveStatus.degraded_reason || localGoogleDriveStatus.error}</p>
+                  ) : null}
+                  <button
+                    onClick={handleGoogleDriveTest}
+                    disabled={googleDriveTesting}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium text-foreground hover:bg-secondary transition-all disabled:opacity-50"
+                  >
+                    {googleDriveTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    {googleDriveTesting ? "Testing Drive..." : "Test connection"}
+                  </button>
+                </div>
+              )}
               {(isRuntimeStatusIntegration || isSlack) && (
                 <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-2">
                   <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{isSlack ? "Workspace" : "Used by Team Briefing"}</div>

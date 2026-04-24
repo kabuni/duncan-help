@@ -28,8 +28,9 @@ async function refreshAccessToken(
 async function getValidToken(
   supabaseAdmin: any,
   userId: string
-): Promise<string | null> {
+): Promise<{ accessToken: string; tokenRow: any; usedFallback: boolean } | null> {
   // First try user's own token, then fall back to any available token (shared resource)
+  let usedFallback = false;
   let { data: tokenRow, error } = await supabaseAdmin
     .from("google_drive_tokens")
     .select("*")
@@ -45,6 +46,7 @@ async function getValidToken(
       .maybeSingle();
     tokenRow = result.data;
     error = result.error;
+    usedFallback = !!tokenRow;
   }
 
   if (error || !tokenRow) return null;
@@ -67,10 +69,44 @@ async function getValidToken(
       })
       .eq("id", tokenRow.id);
 
-    return refreshed.access_token;
+    return { accessToken: refreshed.access_token, tokenRow: { ...tokenRow, token_expiry: newExpiry.toISOString() }, usedFallback };
   }
 
-  return tokenRow.access_token;
+  return { accessToken: tokenRow.access_token, tokenRow, usedFallback };
+}
+
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+async function getDriveHealth(accessToken: string) {
+  const headers = { Authorization: `Bearer ${accessToken}` };
+
+  const aboutRes = await fetch(
+    "https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress,photoLink),storageQuota",
+    { headers }
+  );
+  const aboutText = await aboutRes.text();
+  if (!aboutRes.ok) {
+    throw new Error(`Drive account check failed [${aboutRes.status}]: ${aboutText}`);
+  }
+
+  const filesRes = await fetch(
+    "https://www.googleapis.com/drive/v3/files?pageSize=5&fields=files(id,name,mimeType,modifiedTime)&orderBy=modifiedTime%20desc&q=trashed%20%3D%20false",
+    { headers }
+  );
+  const filesText = await filesRes.text();
+  if (!filesRes.ok) {
+    throw new Error(`Drive file listing failed [${filesRes.status}]: ${filesText}`);
+  }
+
+  return {
+    about: JSON.parse(aboutText),
+    files: JSON.parse(filesText).files ?? [],
+  };
 }
 
 Deno.serve(async (req) => {
@@ -103,38 +139,60 @@ Deno.serve(async (req) => {
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-    const accessToken = await getValidToken(supabaseAdmin, user.id);
-    if (!accessToken) {
-      return new Response(
-        JSON.stringify({ error: "Google Drive not connected or token expired. Please reconnect." }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const body = await req.json();
     const { action } = body;
-    const driveHeaders = { Authorization: `Bearer ${accessToken}` };
-
-    // ─── STATUS ───
-    if (action === "status") {
-      const { data: tokenRow } = await supabaseAdmin
-        .from("google_drive_tokens")
-        .select("token_expiry, updated_at")
-        .eq("connected_by", user.id)
-        .maybeSingle();
-
-      return new Response(
-        JSON.stringify({ connected: !!tokenRow }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
 
     // ─── DISCONNECT ───
     if (action === "disconnect") {
-      await supabaseAdmin.from("google_drive_tokens").delete().eq("connected_by", user.id);
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {
+        _user_id: user.id,
+        _role: "admin",
       });
+      if (!isAdmin) {
+        return jsonResponse({ error: "Admin access required to disconnect Google Drive" }, 403);
+      }
+      await supabaseAdmin.from("google_drive_tokens").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      return jsonResponse({ success: true });
+    }
+
+    const tokenInfo = await getValidToken(supabaseAdmin, user.id);
+    if (!tokenInfo) {
+      return jsonResponse({
+        status: "disconnected",
+        connected: false,
+        error: "Google Drive is not connected, or the saved refresh token is no longer valid. Please reconnect Google Drive.",
+      }, action === "status" ? 200 : 401);
+    }
+
+    const { accessToken, tokenRow, usedFallback } = tokenInfo;
+    const driveHeaders = { Authorization: `Bearer ${accessToken}` };
+
+    // ─── STATUS ───
+    if (action === "status" || action === "test") {
+      try {
+        const health = await getDriveHealth(accessToken);
+        return jsonResponse({
+          status: "connected",
+          connected: true,
+          credential_source: usedFallback ? "shared_company_token" : "connected_user_token",
+          account_email: health.about?.user?.emailAddress ?? null,
+          account_name: health.about?.user?.displayName ?? null,
+          account_picture: health.about?.user?.photoLink ?? null,
+          token_expiry: tokenRow.token_expiry,
+          updated_at: tokenRow.updated_at,
+          last_verified_at: new Date().toISOString(),
+          visible_file_count: health.files.length,
+          sample_files: health.files.slice(0, 3),
+        });
+      } catch (error) {
+        return jsonResponse({
+          status: "degraded",
+          connected: false,
+          token_expiry: tokenRow.token_expiry,
+          updated_at: tokenRow.updated_at,
+          degraded_reason: error instanceof Error ? error.message : "Google Drive verification failed",
+        });
+      }
     }
 
     // ─── LIST FILES in a folder ───

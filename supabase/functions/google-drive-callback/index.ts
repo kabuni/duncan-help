@@ -69,6 +69,21 @@ Deno.serve(async (req) => {
     const tokens = await tokenResponse.json();
     const expiry = new Date(Date.now() + tokens.expires_in * 1000);
 
+    let accountEmail: string | null = null;
+    let accountName: string | null = null;
+    try {
+      const aboutRes = await fetch("https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)", {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      });
+      if (aboutRes.ok) {
+        const about = await aboutRes.json();
+        accountEmail = about?.user?.emailAddress ?? null;
+        accountName = about?.user?.displayName ?? null;
+      }
+    } catch (metadataError) {
+      console.warn("Unable to read Google Drive account metadata:", metadataError);
+    }
+
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Delete ALL existing tokens (singleton table) then insert fresh
@@ -80,6 +95,10 @@ Deno.serve(async (req) => {
       refresh_token: tokens.refresh_token || "",
       token_expiry: expiry.toISOString(),
     });
+
+    if (!insertError && (accountEmail || accountName)) {
+      console.info("Google Drive connected", { accountEmail, accountName });
+    }
 
     if (insertError) {
       console.error("Failed to store Google Drive tokens:", insertError);

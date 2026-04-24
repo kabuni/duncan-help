@@ -17,6 +17,15 @@ const SLACK_SCOPES = [
   "users:read.email",
   "chat:write",
 ].join(",");
+const SLACK_USER_SCOPES = [
+  "chat:write",
+  "channels:read",
+  "channels:history",
+  "groups:read",
+  "groups:history",
+  "users:read",
+  "users:read.email",
+].join(",");
 
 function getAppUrl() {
   const raw = (Deno.env.get("APP_URL") || "https://duncan.help").trim();
@@ -81,6 +90,7 @@ serve(async (req) => {
     const authUrl = new URL(SLACK_AUTHORIZE_URL);
     authUrl.searchParams.set("client_id", clientId);
     authUrl.searchParams.set("scope", SLACK_SCOPES);
+    authUrl.searchParams.set("user_scope", SLACK_USER_SCOPES);
     authUrl.searchParams.set("redirect_uri", redirectUri);
     authUrl.searchParams.set("state", state);
 

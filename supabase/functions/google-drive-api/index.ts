@@ -28,8 +28,9 @@ async function refreshAccessToken(
 async function getValidToken(
   supabaseAdmin: any,
   userId: string
-): Promise<string | null> {
+): Promise<{ accessToken: string; tokenRow: any; usedFallback: boolean } | null> {
   // First try user's own token, then fall back to any available token (shared resource)
+  let usedFallback = false;
   let { data: tokenRow, error } = await supabaseAdmin
     .from("google_drive_tokens")
     .select("*")
@@ -45,6 +46,7 @@ async function getValidToken(
       .maybeSingle();
     tokenRow = result.data;
     error = result.error;
+    usedFallback = !!tokenRow;
   }
 
   if (error || !tokenRow) return null;
@@ -67,10 +69,44 @@ async function getValidToken(
       })
       .eq("id", tokenRow.id);
 
-    return refreshed.access_token;
+    return { accessToken: refreshed.access_token, tokenRow: { ...tokenRow, token_expiry: newExpiry.toISOString() }, usedFallback };
   }
 
-  return tokenRow.access_token;
+  return { accessToken: tokenRow.access_token, tokenRow, usedFallback };
+}
+
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+async function getDriveHealth(accessToken: string) {
+  const headers = { Authorization: `Bearer ${accessToken}` };
+
+  const aboutRes = await fetch(
+    "https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress,photoLink),storageQuota",
+    { headers }
+  );
+  const aboutText = await aboutRes.text();
+  if (!aboutRes.ok) {
+    throw new Error(`Drive account check failed [${aboutRes.status}]: ${aboutText}`);
+  }
+
+  const filesRes = await fetch(
+    "https://www.googleapis.com/drive/v3/files?pageSize=5&fields=files(id,name,mimeType,modifiedTime)&orderBy=modifiedTime%20desc&q=trashed%20%3D%20false",
+    { headers }
+  );
+  const filesText = await filesRes.text();
+  if (!filesRes.ok) {
+    throw new Error(`Drive file listing failed [${filesRes.status}]: ${filesText}`);
+  }
+
+  return {
+    about: JSON.parse(aboutText),
+    files: JSON.parse(filesText).files ?? [],
+  };
 }
 
 Deno.serve(async (req) => {

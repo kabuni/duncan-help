@@ -4,6 +4,19 @@ import { fastApi, withFastApi } from "@/lib/fastApiClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
+const currentUserDisplayName = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return "You";
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  return profile?.display_name || user.email || "You";
+};
+
 export interface Project {
   id: string;
   user_id: string;
@@ -231,6 +244,8 @@ export function useProjectChat(chatId: string | null) {
     if (!targetChatId || !message.trim()) return null;
     setSending(true);
 
+    const displayName = await currentUserDisplayName();
+
     // Optimistically add user message
     const tempUserMsg: ChatMessage = {
       id: `temp-${Date.now()}`,
@@ -239,7 +254,7 @@ export function useProjectChat(chatId: string | null) {
       content: message.trim(),
       created_at: new Date().toISOString(),
       user_id: null,
-      sender_name: "You",
+      sender_name: displayName,
       sender_avatar_url: null,
     };
     setMessages(prev => [...prev, tempUserMsg]);

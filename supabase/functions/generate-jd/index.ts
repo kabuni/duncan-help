@@ -106,7 +106,13 @@ Write in a warm but professional tone. Be specific to the role, not generic.`,
       });
     }
 
-    const { full_text, competencies } = JSON.parse(toolCall.function.arguments);
+    const parsed = safeParseToolArguments<{ full_text: string; competencies: any[] }>(toolCall.function.arguments);
+    if (!parsed?.full_text) {
+      return new Response(JSON.stringify({ error: "AI returned malformed JD" }), {
+        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { full_text, competencies } = parsed;
 
     // Update job role with competencies and description
     const { error: updateError } = await supabaseAdmin

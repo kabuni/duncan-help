@@ -1,116 +1,158 @@
 
-## Plan: Slack Team Briefing permission update
+## Plan: Fix the two blockers for GitHub in Team Briefing
 
-### Goal
+### Scope
 
-Update the Slack integration flow so Duncan requests the two missing Slack connector scopes:
+Only change the two requested areas:
 
-- `channels:join`
-- `groups:read`
-
-Then clearly prompt the user from the Integrations UI to reconnect Slack so the new permissions take effect.
-
-### Current confirmed state
-
-The linked Slack connector exists and is connected to the project.
-
-Current configured scopes include:
-
-- `channels:read`
-- `channels:history`
-- `groups:history`
-- messaging-related scopes
-
-But it is missing:
-
-- `channels:join`
-- `groups:read`
-
-The connector supports both missing scopes, so this is a reconnect/scope update issue, not a missing connector capability.
-
-### Important constraint
-
-I will not change Slack scanning behavior.
+1. `supabase/functions/github-api/index.ts`
+2. GitHub company-token save path used by `src/pages/Integrations.tsx`
 
 No changes to:
 
-- 30-channel cap
-- 24-hour window
-- message limits
-- channel ranking
-- Slack pulse orchestration
-- Team Briefing analysis logic
-- Slack history scanning logic
+- Team Briefing UI
+- `ceo-briefing` orchestration
+- GitHub payload shape
+- PR/repo scanning logic
+- scanning limits
+- unrelated integrations
 
-This means:
+---
 
-- `channels:join` will allow Duncan’s existing auto-join logic to work for public channels.
-- `groups:read` will be added to the connector permission set for future/private-channel visibility, but I will not alter the current hardcoded channel discovery logic unless you request that separately.
+## Fix 1: Allow internal service-role calls in `github-api`
 
-## Implementation steps
+### Current failure
 
-### 1. Trigger Slack reconnect with required scopes
+`ceo-briefing` calls:
 
-Use the existing Slack connector reconnect flow for the linked connection:
-
-- connection id: `std_01kn4ce01je1kbf8f54bzwwk5t`
-- required scopes:
-  - `channels:join`
-  - `groups:read`
-
-The reconnect prompt will tell the user that Slack permissions must be re-authorized before Team Briefing can use the updated scopes.
-
-### 2. Add Slack-specific reconnect prompt in Integrations UI
-
-Modify only `src/pages/Integrations.tsx`.
-
-For the Slack integration detail panel, add a clear notice when Slack is connected:
-
-```text
-Slack permissions have been updated — please reconnect your Slack account to apply the new scopes.
+```ts
+/functions/v1/github-api
+Authorization: Bearer SUPABASE_SERVICE_ROLE_KEY
+body: { action: "briefing_summary" }
 ```
 
-The notice will explain that the new permissions allow Duncan to:
+But `github-api` currently does this:
 
-- automatically join public channels
-- discover private channels where permitted
+```ts
+const user = await getUser(req);
+if (!user) return json({ error: "Unauthorized" }, 401);
+```
 
-Add a clear button-style callout pointing the user to reconnect Slack through Connectors.
+A service-role token is not a normal user session, so `getUser(req)` returns no user and Team Briefing receives HTTP 401.
 
-This will be UI-only guidance; it will not change credential storage, tool schemas, or scanning behavior.
+### Change
 
-### 3. Preserve existing Slack connection behavior
+Add a narrow internal-call check in `github-api`:
 
-Keep Slack as a user integration in the existing Integrations page.
+- Read the `Authorization` header
+- Compare the bearer token to `SUPABASE_SERVICE_ROLE_KEY`
+- If it matches, allow the request through
+- If it does not match, keep the existing `getUser(req)` auth gate
 
-Do not change:
+Conceptually:
 
-- `useUserIntegrations`
-- `connect-integration`
-- `ceo-slack-pulse`
-- `ceo-briefing`
-- `CommsPulseCard`
-- backend env variables
-- connector gateway calls
+```ts
+function isServiceRoleRequest(req: Request) {
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  return !!token && token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+}
+```
 
-### 4. Verification
+Then:
+
+```ts
+const isInternal = isServiceRoleRequest(req);
+
+if (!isInternal) {
+  const user = await getUser(req);
+  if (!user) return json({ error: "Unauthorized" }, 401);
+}
+```
+
+This fixes the internal Team Briefing call without removing auth for normal callers.
+
+---
+
+## Fix 2: Ensure GitHub company token saves into `company_integrations`
+
+### Current state
+
+GitHub is already listed as a company integration in `src/pages/Integrations.tsx`.
+
+The UI already routes company-token saves through:
+
+```ts
+useUpdateCompanyIntegration()
+```
+
+That hook calls:
+
+```ts
+manage-company-integration
+```
+
+The backend function already supports `integration_id === "github"` and verifies against:
+
+```ts
+https://api.github.com/user
+```
+
+Then it upserts:
+
+```ts
+company_integrations.integration_id = integration_id
+company_integrations.encrypted_api_key = btoa(token)
+company_integrations.status = verification status
+```
+
+### Change
+
+Make the GitHub save path explicit and verifiable:
+
+- Keep using the existing company integration mutation
+- Ensure GitHub saves with exactly:
+
+```ts
+integrationId: "github"
+```
+
+- Add GitHub-specific confirmation logging in `src/hooks/useCompanyIntegrations.ts`, parallel to the existing HubSpot logging, so we can confirm:
+
+```ts
+requested_integration_id: "github"
+returned_integration_id: "github"
+returned_status
+returned_encrypted_api_key_present
+verification_status
+verification_error_code
+saved_key_matches_github
+```
+
+This confirms whether the Integrations page actually created or updated the required row:
+
+```text
+company_integrations.integration_id = "github"
+```
+
+No new UI will be added.
+
+---
+
+## Verification
 
 After implementation:
 
-1. Confirm Slack connector configuration now requests:
-   - `channels:join`
-   - `groups:read`
+1. Save a GitHub token from Integrations.
+2. Confirm browser console logs show:
+   - requested integration ID is `github`
+   - returned integration ID is `github`
+   - encrypted key exists
+   - save matched GitHub
+3. Run Team Briefing.
+4. Confirm `github-api` no longer returns HTTP 401 for the internal `ceo-briefing` call.
+5. Confirm GitHub returns either:
+   - `connected` with repo/PR metrics, or
+   - a provider-level degraded status such as invalid token / missing scope
+6. Confirm Team Briefing payload shape and UI remain unchanged.
 
-2. Confirm Integrations → Slack shows the reconnect message.
-
-3. Confirm no code changes were made to Slack scanning limits or Team Briefing scan logic.
-
-4. Confirm the app still builds without TypeScript errors.
-
-## Expected outcome
-
-Once the user reconnects Slack:
-
-- Duncan should no longer be blocked by missing `channels:join` when trying to enter public channels.
-- Team Briefing should be able to scan public channel history after auto-join succeeds.
-- The connector will also be authorized for `groups:read`, preparing Slack for private-channel discovery without changing scan logic in this step.

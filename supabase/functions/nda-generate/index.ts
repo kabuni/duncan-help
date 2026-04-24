@@ -450,7 +450,7 @@ serve(async (req) => {
         return new Response(JSON.stringify({
           success: true,
           submission_id: existing.id,
-          document_url: existing.google_doc_url || existing.google_doc_id,
+          document_url: (existing as any).google_doc_url || existing.google_doc_id,
           notion_page_id: existing.notion_page_id,
           status: existing.status,
           message: "NDA was already generated.",

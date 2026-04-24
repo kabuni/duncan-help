@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { invokeEdge } from "@/lib/edgeApi";
 import { fastApi, withFastApi } from "@/lib/fastApiClient";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
+import { useSlackConnection } from "@/hooks/useSlackConnection";
 import { useAzureBlobStorage } from "@/hooks/useAzureBlobStorage";
 import BasecampBrowser from "@/components/BasecampBrowser";
 import {
@@ -87,10 +88,9 @@ const integrations: Integration[] = [
     services: ["Channels", "Direct Messages", "Threads", "Reactions"],
     type: "user",
     setupSteps: [
-      "Connect Slack from Connectors so Duncan can read workspace activity",
-      "Public channels are visible by default through the connector",
-      "Private channels still require Duncan to be invited before Team Briefing can see them",
-      "If coverage is partial, Duncan will now show the exact visibility limitation in Team Briefing",
+      "Click Connect Slack below",
+      "Approve the requested Slack permissions in the Slack consent screen",
+      "You'll be redirected back to Duncan when the connection is saved",
     ],
   },
   {
@@ -241,6 +241,7 @@ const Integrations = () => {
   const { data: companyIntegrations = [], isLoading: companyLoading } = useCompanyIntegrations();
   const { isAdmin } = useIsAdmin();
   const { isConnected: isCalendarConnected, checkConnection: checkCalendarConnection } = useGoogleCalendar();
+  const slackConnection = useSlackConnection();
   const [isAzureBlobConnected, setIsAzureBlobConnected] = useState<boolean | null>(null);
   const [isBasecampConnected, setIsBasecampConnected] = useState<boolean | null>(null);
   const [isGmailConnected, setIsGmailConnected] = useState<boolean | null>(null);

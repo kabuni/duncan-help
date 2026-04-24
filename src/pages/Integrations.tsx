@@ -1157,13 +1157,53 @@ const IntegrationDetail = ({
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-norman-success" />
                   <span className="text-sm font-medium text-norman-success">
-                    {isSlack ? `Slack connected${slackWorkspaceName ? ` · ${slackWorkspaceName}` : ""}` : "Connected & syncing"}
+                    {isSlack
+                      ? `Slack connected${slackWorkspaceName ? ` · ${slackWorkspaceName}` : ""}`
+                      : isGoogleDrive
+                      ? `Google Drive connected${localGoogleDriveStatus?.account_email ? ` · ${localGoogleDriveStatus.account_email}` : ""}`
+                      : "Connected & syncing"}
                   </span>
                 </div>
-                {(statusDetail?.last_verified_at || integrationData?.last_sync) && (
-                  <span className="text-[10px] font-mono text-muted-foreground">{new Date(statusDetail?.last_verified_at || integrationData?.last_sync).toLocaleDateString()}</span>
+                {(localGoogleDriveStatus?.last_verified_at || statusDetail?.last_verified_at || integrationData?.last_sync) && (
+                  <span className="text-[10px] font-mono text-muted-foreground">{new Date(localGoogleDriveStatus?.last_verified_at || statusDetail?.last_verified_at || integrationData?.last_sync).toLocaleDateString()}</span>
                 )}
               </div>
+              {isGoogleDrive && (
+                <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
+                  <div>
+                    <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Drive verification</div>
+                    <p className="mt-1 text-sm text-foreground/80">
+                      {localGoogleDriveStatus?.account_name || localGoogleDriveStatus?.account_email || "Shared Google Drive token verified."}
+                    </p>
+                    {localGoogleDriveStatus?.token_expiry ? (
+                      <p className="mt-1 text-xs text-muted-foreground">Token expiry: {new Date(localGoogleDriveStatus.token_expiry).toLocaleString()}</p>
+                    ) : null}
+                    {localGoogleDriveStatus?.visible_file_count !== undefined ? (
+                      <p className="mt-1 text-xs text-muted-foreground">Latest test saw {localGoogleDriveStatus.visible_file_count} Drive item{localGoogleDriveStatus.visible_file_count === 1 ? "" : "s"}.</p>
+                    ) : null}
+                  </div>
+                  {localGoogleDriveStatus?.sample_files?.length ? (
+                    <div className="space-y-1">
+                      {localGoogleDriveStatus.sample_files.map((file) => (
+                        <div key={file.id} className="truncate rounded-md bg-background px-2 py-1 text-xs text-muted-foreground">
+                          {file.name}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {localGoogleDriveStatus?.degraded_reason || localGoogleDriveStatus?.error ? (
+                    <p className="text-xs text-destructive">{localGoogleDriveStatus.degraded_reason || localGoogleDriveStatus.error}</p>
+                  ) : null}
+                  <button
+                    onClick={handleGoogleDriveTest}
+                    disabled={googleDriveTesting}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium text-foreground hover:bg-secondary transition-all disabled:opacity-50"
+                  >
+                    {googleDriveTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    {googleDriveTesting ? "Testing Drive..." : "Test connection"}
+                  </button>
+                </div>
+              )}
               {(isRuntimeStatusIntegration || isSlack) && (
                 <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-2">
                   <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{isSlack ? "Workspace" : "Used by Team Briefing"}</div>

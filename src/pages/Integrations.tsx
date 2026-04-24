@@ -34,6 +34,29 @@ import { useIsAdmin } from "@/hooks/useUserRoles";
 type IntegrationStatus = "connected" | "pending" | "disconnected";
 type IntegrationType = "user" | "company";
 
+type GoogleDriveStatusDetail = {
+  status?: "connected" | "degraded" | "disconnected";
+  connected?: boolean;
+  credential_source?: string;
+  account_email?: string | null;
+  account_name?: string | null;
+  token_expiry?: string | null;
+  updated_at?: string | null;
+  last_verified_at?: string | null;
+  visible_file_count?: number;
+  sample_files?: Array<{ id: string; name: string; mimeType?: string; modifiedTime?: string }>;
+  degraded_reason?: string;
+  error?: string;
+};
+
+const driveErrorMessages: Record<string, string> = {
+  no_code: "Google Drive authorization was cancelled before Duncan received a code.",
+  invalid_state: "Google Drive authorization returned an invalid state. Please start the connection again.",
+  token_exchange_failed: "Google rejected the authorization code. Check the Drive redirect URI and OAuth client settings.",
+  storage_failed: "Google Drive authorized successfully, but Duncan could not save the token.",
+  unknown: "An unexpected Google Drive connection error occurred.",
+};
+
 const getRuntimeStatusLabel = (detail: any | null | undefined) => {
   if (!detail) return null;
   const source = detail.credential_source === "connector_gateway"

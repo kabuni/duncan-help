@@ -558,7 +558,7 @@ const MEETING_TOOLS = [
     type: "function",
     function: {
       name: "list_meetings",
-      description: "List stored meetings with optional filters. Results are sorted by meeting_date DESC (most recent first). The search is typo-tolerant — it splits the query into words and matches any of them (so 'lightning' will also match misspellings like 'lighting'). Always prefer using from_date/to_date when the user specifies a date so you don't return stale results.",
+      description: "Default entry point for any meeting question (summarize, analyze, search, browse). List stored meetings with optional filters. Results are sorted by meeting_date DESC (most recent first). The search is typo-tolerant — it splits the query into words and matches any of them (so 'lightning' will also match misspellings like 'lighting'). Always prefer using from_date/to_date when the user specifies a date so you don't return stale results.",
       parameters: {
         type: "object",
         properties: {

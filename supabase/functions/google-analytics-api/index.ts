@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callLLMWithFallback } from "../_shared/llm.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,7 +10,6 @@ const corsHeaders = {
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const ANALYTICS_DATA_API = "https://analyticsdata.googleapis.com/v1beta";
 const ANALYTICS_ADMIN_API = "https://analyticsadmin.googleapis.com/v1beta";
-const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 
 type AnalyticsToken = {
   id: string;
@@ -185,26 +185,13 @@ async function getDashboard(accessToken: string, propertyId: string) {
 }
 
 async function answerQuestion(question: string, dashboard: any) {
-  const openAiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!openAiKey) throw new Error("OPENAI_API_KEY is not configured");
-
-  const response = await fetch(OPENAI_API_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${openAiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-5-mini",
-      messages: [
-        { role: "system", content: "You are Duncan. Answer website analytics questions using only the supplied GA4 dashboard JSON. Be concise, data-backed, and executive-friendly." },
-        { role: "user", content: `Question: ${question}\n\nGA4 dashboard JSON:\n${JSON.stringify(dashboard)}` },
-      ],
-    }),
+  const data = await callLLMWithFallback({
+    workflow: "google-analytics",
+    messages: [
+      { role: "system", content: "You are Duncan. Answer website analytics questions using only the supplied GA4 dashboard JSON. Be concise, data-backed, and executive-friendly." },
+      { role: "user", content: `Question: ${question}\n\nGA4 dashboard JSON:\n${JSON.stringify(dashboard)}` },
+    ],
   });
-
-  if (!response.ok) throw new Error(`Analytics question failed (${response.status}): ${await response.text()}`);
-  const data = await response.json();
   return data.choices?.[0]?.message?.content ?? "I couldn't generate an analytics answer from the available data.";
 }
 

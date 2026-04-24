@@ -96,7 +96,7 @@ serve(async (req) => {
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Slack send message error:", error);
     const message = error instanceof Error ? error.message : "Slack message failed";
     const status = message.includes("required") || message.includes("valid") || message.includes("4,000") ? 400 : 500;

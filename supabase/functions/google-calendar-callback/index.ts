@@ -103,7 +103,7 @@ serve(async (req) => {
 
     console.log("Successfully stored Google Calendar tokens for user:", user.id);
     return Response.redirect(`${appUrl}/integrations?success=google_calendar`);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Callback error:", error);
     const appUrl = Deno.env.get("APP_URL") || "https://duncan.help";
     return Response.redirect(`${appUrl}/integrations?error=unexpected`);

@@ -175,7 +175,7 @@ Call the extract_competencies function with your results.`,
       JSON.stringify({ success: true, job_role_id, competencies }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Parse JD error:", error);
     return new Response(
       JSON.stringify({ error: error.message || "Failed to parse JD" }),

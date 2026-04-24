@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
           tenantId = connections[0].tenantId;
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn("Failed to get Xero tenant ID:", e);
     }
 
@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
       status: 302,
       headers: { Location: `${appUrl}/integrations?success=xero` },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Xero callback error:", error);
     const appUrl = Deno.env.get("APP_URL") || "https://duncan-help.lovable.app";
     return new Response(null, {

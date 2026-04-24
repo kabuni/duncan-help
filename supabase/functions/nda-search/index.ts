@@ -105,11 +105,11 @@ Deno.serve(async (req) => {
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
-    } catch (dbError) {
+    } catch (dbError: any) {
       try { await client.end(); } catch (_) { /* ignore */ }
       throw dbError;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("NDA search error:", error);
     return new Response(
       JSON.stringify({ error: error.message }),

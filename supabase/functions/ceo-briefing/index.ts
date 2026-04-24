@@ -1107,7 +1107,7 @@ Deno.serve(async (req) => {
           })
           .eq("id", jobId)
           .in("status", ["queued", "gathering", "synthesising"]);
-      } catch (e) {
+      } catch (e: any) {
         console.error("briefing heartbeat failed:", e);
       }
     }, 25_000);
@@ -1118,7 +1118,7 @@ Deno.serve(async (req) => {
       if (typeof patch.progress === "number") heartbeatProgress = patch.progress;
       try {
         await admin.from("ceo_briefing_jobs").update(patch).eq("id", jobId);
-      } catch (e) {
+      } catch (e: any) {
         console.error("updateJob failed:", e);
       }
     };
@@ -1409,7 +1409,7 @@ Deno.serve(async (req) => {
           }
         } catch { /* ignore single-leader cal failure */ }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn("leader calendar fetch failed:", e);
     }
 

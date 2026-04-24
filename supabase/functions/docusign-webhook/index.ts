@@ -143,7 +143,7 @@ serve(async (req) => {
     console.log(`Webhook processed: submission=${submission.id}, status=${newStatus}`);
     return new Response("OK", { status: 200 });
 
-  } catch (e) {
+  } catch (e: any) {
     console.error("docusign-webhook error:", e);
     // Always return 200 to prevent DocuSign from retrying
     return new Response("OK", { status: 200 });

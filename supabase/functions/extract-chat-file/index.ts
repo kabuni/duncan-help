@@ -229,7 +229,7 @@ Deno.serve(async (req) => {
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("extract-chat-file error:", err);
     return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Extraction failed" }), {
       status: 500,

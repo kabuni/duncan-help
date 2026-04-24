@@ -861,7 +861,7 @@ async function triggerParse(supabaseUrl: string, serviceKey: string, candidateId
         storage_path: cand.cv_storage_path,
       }),
     });
-  } catch (e) {
+  } catch (e: any) {
     console.error(`Failed to trigger parse for ${candidateId}:`, e);
   }
 }

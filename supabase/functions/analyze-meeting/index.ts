@@ -208,7 +208,7 @@ For key_topics, list the main subjects discussed.`;
 
         results.push({ id, title: meeting.title, status: "analyzed", summary: analysis.summary });
         analyzed++;
-      } catch (err) {
+      } catch (err: any) {
         console.error(`Error analyzing meeting ${id}:`, err);
         failed++;
         results.push({ id, status: "failed", reason: err.message });
@@ -219,7 +219,7 @@ For key_topics, list the main subjects discussed.`;
       JSON.stringify({ success: true, analyzed, failed, total: idsToAnalyze.length, results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Analyze meeting error:", error);
     return new Response(
       JSON.stringify({ error: error.message || "Failed to analyze meetings" }),

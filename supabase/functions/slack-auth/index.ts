@@ -97,7 +97,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ url: authUrl.toString() }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Slack auth error:", error);
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Failed to start Slack OAuth" }), {
       status: 500,

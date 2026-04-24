@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
           console.log("Found Basecamp account:", accountId);
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn("Could not fetch Basecamp account ID:", e);
     }
 
@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
 
     console.log("Successfully stored Basecamp tokens for user:", user.id);
     return Response.redirect(`${appUrl}/integrations?success=basecamp`);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Basecamp callback error:", error);
     let appUrl = Deno.env.get("APP_URL") || "https://duncan.help";
     if (!appUrl.startsWith("http")) appUrl = `https://${appUrl}`;

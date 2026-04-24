@@ -341,13 +341,13 @@ async function processUser(
             },
           );
         }
-      } catch (e) {
+      } catch (e: any) {
         console.warn("Label apply failed:", e);
       }
 
       stats.created++;
       draftsToday++;
-    } catch (err) {
+    } catch (err: any) {
       console.error(`Message ${m.id} processing failed:`, err);
       stats.errors++;
     }
@@ -396,7 +396,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ success: true, ...totals }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("gmail-auto-draft fatal:", err);
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500,

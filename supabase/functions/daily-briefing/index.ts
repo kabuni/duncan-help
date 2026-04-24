@@ -203,7 +203,7 @@ serve(async (req) => {
     return new Response(JSON.stringify(briefing), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
+  } catch (e: any) {
     console.error("daily-briefing error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
@@ -277,7 +277,7 @@ async function fetchCalendarEvents(
       location: e.location || null,
       attendees: e.attendees?.length || 0,
     }));
-  } catch (err) {
+  } catch (err: any) {
     console.error("Calendar briefing error:", err);
     return [];
   }
@@ -327,7 +327,7 @@ async function fetchTokenLeaderboard(supabaseAdmin: any) {
       total_tokens: stats.total_tokens,
       request_count: stats.request_count,
     }));
-  } catch (err) {
+  } catch (err: any) {
     console.error("Leaderboard error:", err);
     return [];
   }
@@ -366,7 +366,7 @@ async function fetchAssignedCards(supabaseAdmin: any, userId: string) {
       project_tag: c.project_tag,
       assignment_status: statusMap[c.id] || "pending",
     }));
-  } catch (err) {
+  } catch (err: any) {
     console.error("Workstream cards briefing error:", err);
     return [];
   }
@@ -425,7 +425,7 @@ async function fetchAssignedTasks(supabaseAdmin: any, userId: string) {
       due_date: t.due_date,
       card_title: cardMap[t.card_id] || "Unknown card",
     }));
-  } catch (err) {
+  } catch (err: any) {
     console.error("Workstream tasks briefing error:", err);
     return [];
   }

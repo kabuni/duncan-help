@@ -631,7 +631,7 @@ async function bufferFirstChunk(
   let first: ReadableStreamReadResult<Uint8Array>;
   try {
     first = await Promise.race([reader.read(), timer]);
-  } catch (err) {
+  } catch (err: any) {
     try { await reader.cancel(); } catch { /* ignore */ }
     throw err;
   }
@@ -649,7 +649,7 @@ async function bufferFirstChunk(
         const { done, value } = await reader.read();
         if (done) { controller.close(); return; }
         controller.enqueue(value);
-      } catch (err) {
+      } catch (err: any) {
         controller.error(err);
       }
     },

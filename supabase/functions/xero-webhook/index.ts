@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response("", { status: 200 });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Xero webhook error:", error);
     return new Response("", { status: 200 }); // Xero expects 200 even on errors
   }

@@ -354,7 +354,7 @@ serve(async (req) => {
           url: interviewUrl,
           hireflix_candidate_id: hireflixCandidateId,
         });
-      } catch (err) {
+      } catch (err: any) {
         console.error(`Error inviting candidate ${candidate.id}:`, err);
         failed++;
         const reason = err instanceof Error ? err.message : "Unknown error during invite";
@@ -376,7 +376,7 @@ serve(async (req) => {
       JSON.stringify({ success: true, invited, failed, skipped, total: candidates.length, results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Hireflix send invite error:", error);
     return new Response(
       JSON.stringify({ error: error.message || "Failed to send Hireflix invites" }),

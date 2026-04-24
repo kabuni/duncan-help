@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
           results.errors.push(`${bundle.email}: ${JSON.stringify(sendData)}`);
         }
         await new Promise((r) => setTimeout(r, 120));
-      } catch (e) {
+      } catch (e: any) {
         results.failed++;
         const msg = e instanceof Error ? e.message : String(e);
         results.errors.push(`${bundle.email}: ${msg}`);
@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (e) {
+  } catch (e: any) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("send-ceo-briefing-actions error:", msg);
     return new Response(JSON.stringify({ error: msg }), {

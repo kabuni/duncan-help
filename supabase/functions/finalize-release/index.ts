@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
           const parsed = JSON.parse(aiData.choices[0].message.content);
           if (needsTitle && parsed.title) title = parsed.title;
           if (needsSummary && parsed.summary) summary = parsed.summary;
-        } catch (e) {
+        } catch (e: any) {
           console.error("Failed to parse AI JSON", e);
         }
       } catch (err: any) {
@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({ releaseId }),
       });
-    } catch (e) {
+    } catch (e: any) {
       console.error("send-release-emails failed (non-fatal)", e);
     }
 

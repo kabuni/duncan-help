@@ -270,7 +270,7 @@ You MUST call the score_values function with your assessment.`;
 
         results.push({ id: candidate.id, name: candidate.name, values_score: valuesScore, status: newStatus });
         scored++;
-      } catch (err) {
+      } catch (err: any) {
         console.error(`Error scoring candidate ${candidate.id}:`, err);
         failed++;
       }
@@ -280,7 +280,7 @@ You MUST call the score_values function with your assessment.`;
       JSON.stringify({ success: true, scored, failed, total: candidates.length, results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Score CV values error:", error);
     return new Response(
       JSON.stringify({ error: error.message || "Failed to score CVs" }),

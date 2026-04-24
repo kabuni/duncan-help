@@ -210,7 +210,7 @@ RULES:
       customer_issues: Array.isArray(parsed.customer_issues) ? parsed.customer_issues : [],
       vendor_signals: Array.isArray(parsed.vendor_signals) ? parsed.vendor_signals : [],
     };
-  } catch (e) {
+  } catch (e: any) {
     console.error("extractSignals error for", mailboxOwner, ":", e);
     return {
       commitments: [],

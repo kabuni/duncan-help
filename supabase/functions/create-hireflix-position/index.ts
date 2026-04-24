@@ -80,7 +80,7 @@ serve(async (req) => {
         if (generated && generated.length > 10) {
           competencyQuestion = generated;
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to generate competency question:", err);
         // Falls back to default
       }
@@ -206,7 +206,7 @@ serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Create Hireflix position error:", error);
     return new Response(
       JSON.stringify({ error: error.message || "Failed to create Hireflix position" }),

@@ -3175,7 +3175,7 @@ async function executeBasecampTool(
               id: list.id, title: list.title, color: list.color, cards_count: (cards || []).length,
               cards: (cards || []).map(mapCard),
             };
-          } catch (e) {
+          } catch (e: any) {
             return { id: list.id, title: list.title, color: list.color, cards: [], error: String(e) };
           }
         })
@@ -4521,7 +4521,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               content: finalContent,
             });
           }
-        } catch (error) {
+        } catch (error: any) {
           const toolError = error instanceof Error ? error : new Error(String(error));
           console.error(`Tool ${tc.function.name} threw error:`, toolError.message, toolError.stack);
           const toolName = tc?.function?.name ?? "unknown_tool";
@@ -4956,7 +4956,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
     return new Response(stream, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
-  } catch (e) {
+  } catch (e: any) {
     console.error("norman-chat error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),

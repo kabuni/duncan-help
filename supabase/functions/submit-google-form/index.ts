@@ -43,7 +43,7 @@ serve(async (req) => {
       JSON.stringify({ success, status: response.status }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (e) {
+  } catch (e: any) {
     console.error("submit-google-form error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),

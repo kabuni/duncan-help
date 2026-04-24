@@ -242,7 +242,7 @@ Deno.serve(async (req) => {
       }
 
       await client.end();
-    } catch (dbError) {
+    } catch (dbError: any) {
       try { await client.end(); } catch (_) { /* ignore */ }
       throw dbError;
     }
@@ -256,7 +256,7 @@ Deno.serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("NDA vectorization error:", error);
     return new Response(
       JSON.stringify({ error: error.message }),

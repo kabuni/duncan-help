@@ -137,11 +137,11 @@ Deno.serve(async (req) => {
         JSON.stringify({ success: true, table, operation }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
-    } catch (dbError) {
+    } catch (dbError: any) {
       try { await client.end(); } catch (_) { /* ignore */ }
       throw dbError;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Azure sync error:", error);
     return new Response(
       JSON.stringify({ error: error.message }),

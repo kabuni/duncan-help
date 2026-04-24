@@ -161,7 +161,7 @@ serve(async (req) => {
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     console.error("send-release-notifications error:", msg);
     return new Response(JSON.stringify({ error: msg }), {

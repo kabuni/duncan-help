@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
           visible_file_count: health.files.length,
           sample_files: health.files.slice(0, 3),
         });
-      } catch (error) {
+      } catch (error: any) {
         return jsonResponse({
           status: "degraded",
           connected: false,
@@ -336,7 +336,7 @@ Deno.serve(async (req) => {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Google Drive API error:", err);
     return new Response(
       JSON.stringify({ error: err.message || "Internal error" }),

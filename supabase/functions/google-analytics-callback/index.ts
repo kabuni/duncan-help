@@ -93,7 +93,7 @@ serve(async (req) => {
     }
 
     return Response.redirect(`${appUrl}/operations?ga_success=google_analytics`);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Google Analytics callback error:", error);
     return Response.redirect(`${appUrl}/operations?ga_error=unexpected`);
   }

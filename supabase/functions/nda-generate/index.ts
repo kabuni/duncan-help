@@ -220,7 +220,7 @@ async function generateDocxFromTemplate(
   let templateBytes: Uint8Array;
   try {
     templateBytes = await downloadBlobBytes(connectionString, NDA_TEMPLATE_PATH);
-  } catch (error) {
+  } catch (error: any) {
     throw new Error(
       `Failed to download NDA template from ${NDA_TEMPLATE_PATH}: ${error instanceof Error ? error.message : "Unknown error"}`
     );
@@ -611,7 +611,7 @@ serve(async (req) => {
 
       throw genError;
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error("nda-generate error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),

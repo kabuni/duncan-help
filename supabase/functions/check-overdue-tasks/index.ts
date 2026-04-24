@@ -60,7 +60,7 @@ async function sendSlackDM(
         return false;
       }
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error(`Slack DM exception (attempt ${attempt + 1}):`, err);
       if (attempt === 0) { await new Promise(r => setTimeout(r, 500)); continue; }
       return false;
@@ -114,7 +114,7 @@ async function logNotification(
       event_key: eventKey,
       user_id: profileId,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Failed to log notification:", err);
   }
 }
@@ -353,7 +353,7 @@ Deno.serve(async (req) => {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("check-overdue-tasks error:", err);
     return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" }), {
       status: 500,

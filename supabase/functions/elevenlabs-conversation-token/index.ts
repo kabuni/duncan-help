@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ token }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Token generation error:", err);
     return new Response(
       JSON.stringify({ error: err.message || "Internal error" }),

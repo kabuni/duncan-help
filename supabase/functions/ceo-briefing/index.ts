@@ -3086,7 +3086,9 @@ ULTRA COMPACT MODE (LAST ATTEMPT, MANDATORY):
       const probabilityGap = Math.max(0, 100 - outcomeProb);
       const headlineIsRed = outcomeProb < 50 || execScore < 60;
 
-      let risks: any[] = Array.isArray(parsed.payload.risks) ? [...parsed.payload.risks] : [];
+      let risks: any[] = Array.isArray(parsed.payload.risks)
+        ? parsed.payload.risks.filter((r: any) => r && typeof r === "object" && !Array.isArray(r))
+        : [];
       let autoInjectedCount = 0;
 
       // 7a. Inject synthetic risk for every silent priority not already named in risks.
@@ -3485,7 +3487,9 @@ ULTRA COMPACT MODE (LAST ATTEMPT, MANDATORY):
       }
 
       // (c) High/critical risks → mitigation call.
-      const risksArr: any[] = Array.isArray(parsed.payload.risks) ? parsed.payload.risks : [];
+      const risksArr: any[] = Array.isArray(parsed.payload.risks)
+        ? parsed.payload.risks.filter((r: any) => r && typeof r === "object" && !Array.isArray(r))
+        : [];
       for (const r of risksArr) {
         const sev = String(r?.severity || "").toLowerCase();
         if (sev !== "high" && sev !== "critical") continue;
@@ -3507,7 +3511,9 @@ ULTRA COMPACT MODE (LAST ATTEMPT, MANDATORY):
       }
 
       // (d) CEO-resolved friction.
-      const frictionArr: any[] = Array.isArray(parsed.payload.friction) ? parsed.payload.friction : [];
+      const frictionArr: any[] = Array.isArray(parsed.payload.friction)
+        ? parsed.payload.friction.filter((f: any) => f && typeof f === "object" && !Array.isArray(f))
+        : [];
       for (const f of frictionArr) {
         const resolver = String(f?.recommended_resolver || "").toLowerCase();
         if (!resolver.includes("ceo")) continue;

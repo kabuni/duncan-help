@@ -157,6 +157,11 @@ export default function ProjectWorkspace() {
       .map((part) => part[0]?.toUpperCase())
       .join("") || "?";
 
+  const senderNameFor = (msg: typeof messages[number]) => {
+    if (msg.role === "assistant") return "Duncan";
+    return msg.sender_name || "Project member";
+  };
+
   if (!projectId) return null;
 
   // Show loading while projects are being fetched
@@ -309,18 +314,23 @@ export default function ProjectWorkspace() {
                             <img src={duncanAvatar} alt="Duncan" className="h-full w-full object-cover object-[50%_30%] scale-150" />
                           </div>
                         )}
-                        <div className={`max-w-[80%] rounded-xl px-4 py-3 text-sm ${
-                          msg.role === "user"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-card border border-border text-foreground"
-                        }`}>
-                          {msg.role === "assistant" ? (
-                            <div className="prose prose-sm dark:prose-invert max-w-none">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                            </div>
-                          ) : (
-                            <p className="whitespace-pre-wrap">{msg.content}</p>
-                          )}
+                        <div className={`max-w-[80%] space-y-1 ${msg.role === "user" ? "items-end" : "items-start"}`}>
+                          <p className={`text-[10px] font-medium text-muted-foreground ${msg.role === "user" ? "text-right" : "text-left"}`}>
+                            {senderNameFor(msg)}
+                          </p>
+                          <div className={`rounded-xl px-4 py-3 text-sm ${
+                            msg.role === "user"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-card border border-border text-foreground"
+                          }`}>
+                            {msg.role === "assistant" ? (
+                              <div className="prose prose-sm dark:prose-invert max-w-none">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                              </div>
+                            ) : (
+                              <p className="whitespace-pre-wrap">{msg.content}</p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}

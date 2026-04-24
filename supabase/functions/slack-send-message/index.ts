@@ -28,7 +28,7 @@ function validateBody(body: any) {
   const channelId = typeof body?.channel_id === "string" ? body.channel_id.trim() : "";
   const text = typeof body?.text === "string" ? body.text.trim() : "";
 
-  if (!/^C[A-Z0-9]+|G[A-Z0-9]+$/.test(channelId)) throw new Error("A valid Slack channel is required");
+  if (!/^[CG][A-Z0-9]+$/.test(channelId)) throw new Error("A valid Slack channel is required");
   if (!text) throw new Error("Message text is required");
   if (text.length > 4000) throw new Error("Message must be 4,000 characters or fewer");
 

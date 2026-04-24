@@ -453,8 +453,17 @@ async function callProvider(provider: Provider, opts: CallLLMOptions, degrade = 
   return await callOpenAI(opts, model);
 }
 
-function isRetryable(status?: number): boolean {
+function isClaudeBillingOrQuotaError(provider: Provider, status: number | undefined, message: string): boolean {
+  if (provider !== "claude" || status !== 400) return false;
+  const normalized = message.toLowerCase();
+  return normalized.includes("credit balance")
+    || normalized.includes("insufficient")
+    || normalized.includes("quota");
+}
+
+function isRetryable(status?: number, provider?: Provider, message = ""): boolean {
   if (!status) return true; // network error
+  if (isClaudeBillingOrQuotaError(provider ?? "openai", status, message)) return true;
   return status === 429 || status >= 500;
 }
 
@@ -489,7 +498,8 @@ export async function callLLMWithFallback(opts: CallLLMOptions): Promise<Normali
     return res;
   } catch (err: any) {
     const status = err?.status;
-    if (opts.force_provider || !isRetryable(status)) {
+    const message = err?.message || "";
+    if (opts.force_provider || !isRetryable(status, primary, message)) {
       log(opts.workflow, primary, 1, "fail", Date.now() - t1, `status=${status} error="${(err?.message || "").slice(0, 120)}"`);
       throw err;
     }
@@ -541,7 +551,7 @@ export async function streamLLM(opts: CallLLMOptions): Promise<ReadableStream<Ui
   try {
     return await tryProvider(primary, 1);
   } catch (err: any) {
-    if (opts.force_provider || primary === fallback || !isRetryable(err?.status)) {
+    if (opts.force_provider || primary === fallback || !isRetryable(err?.status, primary, err?.message || "")) {
       log(opts.workflow, primary, 1, "fail", 0, `status=${err?.status}`);
       throw err;
     }

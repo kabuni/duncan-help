@@ -182,7 +182,7 @@ Deno.serve(async (req) => {
     // 7. Save user message
     const { error: insertUserError } = await supabase
       .from("chat_messages")
-      .insert({ chat_id, role: "user", content: message.trim() });
+      .insert({ chat_id, role: "user", content: message.trim(), user_id: user.id });
 
     if (insertUserError) {
       console.error("Failed to save user message:", insertUserError);

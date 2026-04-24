@@ -581,6 +581,7 @@ const IntegrationDetail = ({
   const isGmail = integration.id === "gmail";
   const isAzureDevOps = integration.id === "azure-devops";
   const isGoogleDrive = integration.id === "google-drive";
+  const isSlack = integration.id === "slack";
   const isHubSpot = integration.id === "hubspot";
   const isGitHub = integration.id === "github";
   const isRuntimeStatusIntegration = isHubSpot || isGitHub;
@@ -611,7 +612,6 @@ const IntegrationDetail = ({
   const [apiKey, setApiKey] = useState("");
   const [statusDetail, setStatusDetail] = useState<any | null>(null);
   const isCompany = integration.type === "company";
-  const isSlack = integration.id === "slack";
   const credentialLabel = isCompany
     ? "Company API Key / Token"
     : "API Key / Token";

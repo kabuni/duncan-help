@@ -197,6 +197,18 @@ export function useProjectChat(chatId: string | null) {
     }) as ChatMessage[];
   }, []);
 
+  const fetchAndSetMessages = useCallback(async (targetChatId: string) => {
+    const { data } = await supabase
+      .from("chat_messages")
+      .select("*")
+      .eq("chat_id", targetChatId)
+      .order("created_at", { ascending: true });
+
+    if (data) {
+      setMessages(await enrichMessages(data as any[]));
+    }
+  }, [enrichMessages]);
+
   const fetchMessages = useCallback(async () => {
     if (!chatId) { setMessages([]); return; }
     setLoading(true);
@@ -246,15 +258,7 @@ export function useProjectChat(chatId: string | null) {
       );
 
       // Refetch messages from DB to sync real IDs
-      const { data: dbMessages } = await supabase
-        .from("chat_messages")
-        .select("*")
-        .eq("chat_id", targetChatId)
-        .order("created_at", { ascending: true });
-
-      if (dbMessages) {
-        setMessages(await enrichMessages(dbMessages as any[]));
-      }
+      await fetchAndSetMessages(targetChatId);
 
       return data?.reply;
     } catch (err: any) {
@@ -265,7 +269,7 @@ export function useProjectChat(chatId: string | null) {
     } finally {
       setSending(false);
     }
-  }, [chatId, enrichMessages, session, toast]);
+  }, [chatId, fetchAndSetMessages, session, toast]);
 
   return { messages, loading, sending, sendMessage, fetchMessages };
 }

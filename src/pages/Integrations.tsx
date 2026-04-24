@@ -664,6 +664,8 @@ const IntegrationDetail = ({
   const [gmailLoading, setGmailLoading] = useState(false);
   const [azureDevOpsLoading, setAzureDevOpsLoading] = useState(false);
   const [googleDriveLoading, setGoogleDriveLoading] = useState(false);
+  const [googleDriveTesting, setGoogleDriveTesting] = useState(false);
+  const [localGoogleDriveStatus, setLocalGoogleDriveStatus] = useState<GoogleDriveStatusDetail | null>(googleDriveStatus);
   const [slackChannelId, setSlackChannelId] = useState("");
   const [slackMessage, setSlackMessage] = useState("");
   const [slackSending, setSlackSending] = useState(false);
@@ -685,6 +687,10 @@ const IntegrationDetail = ({
       });
     }
   };
+
+  useEffect(() => {
+    setLocalGoogleDriveStatus(googleDriveStatus);
+  }, [googleDriveStatus]);
 
   useEffect(() => {
     let active = true;
@@ -869,6 +875,27 @@ const IntegrationDetail = ({
       setGoogleDriveLoading(false);
       setGoogleDriveLoading(false);
       toast.error(err.message || "Failed to start OAuth flow");
+    }
+  };
+
+  const handleGoogleDriveTest = async () => {
+    try {
+      setGoogleDriveTesting(true);
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data, error } = await supabase.functions.invoke("google-drive-api", {
+        body: { action: "test" },
+      });
+      if (error) throw error;
+      setLocalGoogleDriveStatus(data as GoogleDriveStatusDetail);
+      if (data?.status === "connected") {
+        toast.success(`Google Drive verified${typeof data.visible_file_count === "number" ? ` · ${data.visible_file_count} files visible in test` : ""}`);
+      } else {
+        toast.error(data?.degraded_reason || data?.error || "Google Drive verification failed");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to test Google Drive");
+    } finally {
+      setGoogleDriveTesting(false);
     }
   };
 

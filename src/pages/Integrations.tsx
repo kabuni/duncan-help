@@ -987,7 +987,7 @@ const IntegrationDetail = ({
                   </button>
                 </div>
               ) : isOAuthFlow ? (
-                // OAuth flow (Calendar, Drive, or Basecamp)
+                // OAuth flow
                 <div className="space-y-4">
                   <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-2">
                     <p className="text-sm text-foreground">
@@ -997,6 +997,8 @@ const IntegrationDetail = ({
                         ? "Click below to authorize Duncan to access your Basecamp projects, to-dos, and messages."
                         : isGmail
                         ? "Click below to sign in with Google and grant Duncan read-only access to your Gmail for CV ingestion."
+                        : isSlack
+                        ? "Click below to authorize Duncan to connect your Slack workspace."
                         : isGoogleDrive
                         ? "Click below to sign in with Google and grant Duncan read-only access to the shared Google Drive workspace."
                         : "Click below to sign in with Google and grant Duncan access to your calendar."}
@@ -1015,7 +1017,7 @@ const IntegrationDetail = ({
                     ) : (
                       <>
                         <ExternalLink className="h-4 w-4" />
-                        {isAzureDevOps ? "Connect Azure DevOps" : isBasecamp ? "Connect with Basecamp" : isGmail ? "Connect Gmail" : isGoogleDrive ? "Connect Google Drive" : "Sign in with Google"}
+                        {isAzureDevOps ? "Connect Azure DevOps" : isBasecamp ? "Connect with Basecamp" : isGmail ? "Connect Gmail" : isSlack ? "Connect Slack" : isGoogleDrive ? "Connect Google Drive" : "Sign in with Google"}
                       </>
                     )}
                   </button>

@@ -27,31 +27,37 @@ export type WorkflowName =
   | "create-hireflix-position"
   | "generic";
 
-export const WORKFLOW_ROUTING: Record<WorkflowName, { primary: Provider; fallback: Provider }> = {
-  // Claude primary (reasoning, synthesis, writing)
-  "norman-chat":               { primary: "openai", fallback: "openai" },
+// `locked: true` means cross-provider fallback is forbidden for this workflow.
+// We still attempt a single same-provider retry and a model degrade before giving up.
+export const WORKFLOW_ROUTING: Record<WorkflowName, { primary: Provider; fallback: Provider; locked?: boolean }> = {
+  // LOCKED — streaming chat must stay on OpenAI
+  "norman-chat":               { primary: "openai", fallback: "openai", locked: true },
+  "chat-with-project-context": { primary: "openai", fallback: "openai", locked: true },
+
+  // LOCKED — Duncan voice/style fidelity
+  "gmail-auto-draft":          { primary: "claude", fallback: "claude", locked: true },
+  "gmail-train-style":         { primary: "claude", fallback: "claude", locked: true },
+
+  // Claude primary (long-form synthesis, executive writing)
   "ceo-briefing":              { primary: "claude", fallback: "openai" },
   "ceo-email-pulse":           { primary: "claude", fallback: "openai" },
   "analyze-meeting":           { primary: "claude", fallback: "openai" },
   "finalize-release":          { primary: "claude", fallback: "openai" },
   "generate-exec-summary":     { primary: "claude", fallback: "openai" },
-  "score-cv-values":           { primary: "claude", fallback: "openai" },
-  "score-cv-competencies":     { primary: "claude", fallback: "openai" },
-  "generate-jd":               { primary: "claude", fallback: "openai" },
-  "parse-jd-competencies":     { primary: "claude", fallback: "openai" },
-  "gmail-auto-draft":          { primary: "claude", fallback: "openai" },
-  "gmail-train-style":         { primary: "claude", fallback: "openai" },
-  "chat-with-project-context": { primary: "claude", fallback: "openai" },
   "hireflix-sync-interviews":  { primary: "claude", fallback: "openai" },
   "hireflix-retry-processor":  { primary: "claude", fallback: "openai" },
   "create-hireflix-position":  { primary: "claude", fallback: "openai" },
 
-  // OpenAI primary (vision, structured extraction from raw files)
+  // OpenAI primary (structured JSON / tool calling / file extraction)
+  "score-cv-values":           { primary: "openai", fallback: "claude" },
+  "score-cv-competencies":     { primary: "openai", fallback: "claude" },
+  "generate-jd":               { primary: "openai", fallback: "claude" },
+  "parse-jd-competencies":     { primary: "openai", fallback: "claude" },
   "extract-chat-file":         { primary: "openai", fallback: "claude" },
   "extract-file-text":         { primary: "openai", fallback: "claude" },
   "parse-cv":                  { primary: "openai", fallback: "claude" },
 
-  generic:                     { primary: "claude", fallback: "openai" },
+  generic:                     { primary: "openai", fallback: "claude" },
 };
 
 // Sonnet stays primary on synchronous workflows: Opus 4.5 averages 150-180s on
@@ -461,10 +467,46 @@ function isClaudeBillingOrQuotaError(provider: Provider, status: number | undefi
     || normalized.includes("quota");
 }
 
-function isRetryable(status?: number, provider?: Provider, message = ""): boolean {
-  if (!status) return true; // network error
-  if (isClaudeBillingOrQuotaError(provider ?? "openai", status, message)) return true;
+export type LLMErrorCode = "rate_limited" | "out_of_credits" | "invalid_request" | "upstream_error";
+export interface StructuredLLMError extends Error {
+  status: number;
+  code: LLMErrorCode;
+  retryable: boolean;
+  provider?: Provider;
+}
+
+export function classifyLLMError(provider: Provider, status: number | undefined, message: string): StructuredLLMError {
+  const s = status ?? 0;
+  const billing = isClaudeBillingOrQuotaError(provider, s, message);
+  let code: LLMErrorCode;
+  if (s === 429) code = "rate_limited";
+  else if (billing || s === 402) code = "out_of_credits";
+  else if (s >= 400 && s < 500) code = "invalid_request";
+  else code = "upstream_error";
+  // Same-provider retryable: 5xx, network, 429
+  const retryable = s === 0 || s === 429 || s >= 500;
+  const err = new Error(message) as StructuredLLMError;
+  err.status = s;
+  err.code = code;
+  err.retryable = retryable;
+  err.provider = provider;
+  return err;
+}
+
+function shouldSameProviderRetry(status?: number): boolean {
+  if (!status) return true;
   return status === 429 || status >= 500;
+}
+
+function shouldCrossProviderFallback(provider: Provider, status?: number, message = ""): boolean {
+  if (!status) return true;
+  if (isClaudeBillingOrQuotaError(provider, status, message)) return true;
+  if (status >= 400 && status < 500) return false; // other 4xx → no fallback
+  return status === 429 || status >= 500;
+}
+
+function isEmpty(res: NormalisedResponse): boolean {
+  return !res.choices?.[0]?.message?.content && !res.choices?.[0]?.message?.tool_calls?.length;
 }
 
 /** Single-shot call without fallback. */
@@ -478,86 +520,141 @@ export async function callLLM(opts: CallLLMOptions): Promise<NormalisedResponse>
     return res;
   } catch (err: any) {
     log(opts.workflow, provider, 1, "fail", Date.now() - start, `error="${(err?.message || "").slice(0, 120)}"`);
-    throw err;
-  }
-}
-
-/** Call with cross-provider fallback on 429 / 5xx / network / empty response. */
-export async function callLLMWithFallback(opts: CallLLMOptions): Promise<NormalisedResponse> {
-  const route = WORKFLOW_ROUTING[opts.workflow] ?? WORKFLOW_ROUTING.generic;
-  const primary = opts.force_provider ?? route.primary;
-  const fallback: Provider = primary === "claude" ? "openai" : "claude";
-
-  // Attempt 1: primary
-  const t1 = Date.now();
-  try {
-    const res = await callProvider(primary, opts);
-    const empty = !res.choices?.[0]?.message?.content && !res.choices?.[0]?.message?.tool_calls?.length;
-    if (empty) throw Object.assign(new Error("empty response"), { status: 500 });
-    log(opts.workflow, primary, 1, "ok", Date.now() - t1);
-    return res;
-  } catch (err: any) {
-    const status = err?.status;
-    const message = err?.message || "";
-    if (opts.force_provider || !isRetryable(status, primary, message)) {
-      log(opts.workflow, primary, 1, "fail", Date.now() - t1, `status=${status} error="${(err?.message || "").slice(0, 120)}"`);
-      throw err;
-    }
-    log(opts.workflow, primary, 1, "fallback", Date.now() - t1, `status=${status}`);
-  }
-
-  // Attempt 2: fallback provider
-  const t2 = Date.now();
-  try {
-    const res = await callProvider(fallback, opts);
-    const empty = !res.choices?.[0]?.message?.content && !res.choices?.[0]?.message?.tool_calls?.length;
-    if (empty) throw Object.assign(new Error("empty response"), { status: 500 });
-    log(opts.workflow, fallback, 2, "ok", Date.now() - t2);
-    return res;
-  } catch (err: any) {
-    log(opts.workflow, fallback, 2, "fail", Date.now() - t2, `status=${err?.status} error="${(err?.message || "").slice(0, 120)}"`);
-    throw err;
+    throw classifyLLMError(provider, err?.status, err?.message || String(err));
   }
 }
 
 /**
- * Streaming chat. Always emits OpenAI-shaped SSE lines:
- *   data: {"choices":[{"delta":{"content":"..."}}]}
- *   data: {"choices":[{"delta":{"tool_calls":[...]}}]}
- *   data: [DONE]
- * so existing frontend parsers keep working unchanged.
- *
- * Falls back to the other provider if the primary fails BEFORE any byte is sent.
- * Once streaming has started, errors propagate (we can't rewind).
+ * Call sequence:
+ *   1. primary (full model)
+ *   2. primary same-provider retry (5xx / 429 / network only)
+ *   3. primary degraded model (mini / haiku)
+ *   4. cross-provider fallback (skipped if route.locked, blocked for non-billing 4xx)
  */
-export async function streamLLM(opts: CallLLMOptions): Promise<ReadableStream<Uint8Array>> {
+export async function callLLMWithFallback(opts: CallLLMOptions): Promise<NormalisedResponse> {
   const route = WORKFLOW_ROUTING[opts.workflow] ?? WORKFLOW_ROUTING.generic;
-  const isNormanChat = opts.workflow === "norman-chat";
-  const primary = opts.force_provider ?? (isNormanChat ? "openai" : route.primary);
-  const fallback: Provider = primary === "openai" ? "openai" : route.fallback;
+  const primary = opts.force_provider ?? route.primary;
+  const locked = !!route.locked || !!opts.force_provider;
+  const fallback: Provider = primary === "claude" ? "openai" : "claude";
 
-  const tryProvider = async (provider: Provider, attempt: number): Promise<ReadableStream<Uint8Array>> => {
-    const start = Date.now();
-    if (provider === "openai") {
-      const stream = await openaiStream(opts, pickModel("openai", opts));
-      log(opts.workflow, provider, attempt, "ok", Date.now() - start, "stream=open");
-      return stream;
-    }
-    const stream = await claudeStreamAsOpenAI(opts, pickModel("claude", opts));
-    log(opts.workflow, provider, attempt, "ok", Date.now() - start, "stream=open");
-    return stream;
+  const tryAttempt = async (
+    provider: Provider,
+    attempt: number,
+    degrade: boolean,
+  ): Promise<NormalisedResponse> => {
+    const t = Date.now();
+    const res = await callProvider(provider, opts, degrade);
+    if (isEmpty(res)) throw Object.assign(new Error("empty response"), { status: 502 });
+    log(opts.workflow, provider, attempt, "ok", Date.now() - t, degrade ? "degraded" : undefined);
+    return res;
   };
 
+  // Attempt 1: primary, full model
+  let lastErr: any;
   try {
-    return await tryProvider(primary, 1);
+    return await tryAttempt(primary, 1, false);
   } catch (err: any) {
-    if (opts.force_provider || primary === fallback || !isRetryable(err?.status, primary, err?.message || "")) {
-      log(opts.workflow, primary, 1, "fail", 0, `status=${err?.status}`);
-      throw err;
+    lastErr = err;
+    log(opts.workflow, primary, 1, "fail", 0, `status=${err?.status}`);
+    if (!shouldSameProviderRetry(err?.status) && !shouldCrossProviderFallback(primary, err?.status, err?.message || "")) {
+      throw classifyLLMError(primary, err?.status, err?.message || "");
     }
-    log(opts.workflow, primary, 1, "fallback", 0, `status=${err?.status}`);
-    return await tryProvider(fallback, 2);
   }
+
+  // Attempt 2: same provider retry
+  if (shouldSameProviderRetry(lastErr?.status)) {
+    try {
+      return await tryAttempt(primary, 2, false);
+    } catch (err: any) {
+      lastErr = err;
+      log(opts.workflow, primary, 2, "fail", 0, `status=${err?.status}`);
+    }
+  }
+
+  // Attempt 3: same provider, degraded model
+  try {
+    return await tryAttempt(primary, 3, true);
+  } catch (err: any) {
+    lastErr = err;
+    log(opts.workflow, primary, 3, "fail", 0, `status=${err?.status} degraded`);
+  }
+
+  // Attempt 4: cross-provider fallback (locked workflows stop here)
+  if (locked || !shouldCrossProviderFallback(primary, lastErr?.status, lastErr?.message || "")) {
+    throw classifyLLMError(primary, lastErr?.status, lastErr?.message || "");
+  }
+  try {
+    return await tryAttempt(fallback, 4, false);
+  } catch (err: any) {
+    log(opts.workflow, fallback, 4, "fail", 0, `status=${err?.status}`);
+    throw classifyLLMError(fallback, err?.status, err?.message || "");
+  }
+}
+
+
+/**
+ * Streaming chat. OpenAI-only by policy. No cross-provider fallback (streams
+ * cannot be rewound once forwarded). Uses first-chunk buffering: we wait for
+ * the first SSE byte (with timeout) before returning the stream so transient
+ * upstream failures surface as a normal error instead of a half-open stream.
+ */
+const STREAM_FIRST_CHUNK_TIMEOUT_MS = 30_000;
+
+export async function streamLLM(opts: CallLLMOptions): Promise<ReadableStream<Uint8Array>> {
+  // Force OpenAI for streaming regardless of route.
+  const provider: Provider = "openai";
+  const start = Date.now();
+  try {
+    const stream = await openaiStream(opts, pickModel("openai", opts));
+    const buffered = await bufferFirstChunk(stream, STREAM_FIRST_CHUNK_TIMEOUT_MS);
+    log(opts.workflow, provider, 1, "ok", Date.now() - start, "stream=open");
+    return buffered;
+  } catch (err: any) {
+    log(opts.workflow, provider, 1, "fail", Date.now() - start, `status=${err?.status}`);
+    throw classifyLLMError(provider, err?.status, err?.message || String(err));
+  }
+}
+
+/**
+ * Reads up to the first non-empty chunk from `source` (with a timeout) and
+ * returns a new ReadableStream that replays it followed by the remaining
+ * source. If no chunk arrives in time, aborts and throws.
+ */
+async function bufferFirstChunk(
+  source: ReadableStream<Uint8Array>,
+  timeoutMs: number,
+): Promise<ReadableStream<Uint8Array>> {
+  const reader = source.getReader();
+  const timer = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(Object.assign(new Error("stream first-chunk timeout"), { status: 504 })), timeoutMs),
+  );
+  let first: ReadableStreamReadResult<Uint8Array>;
+  try {
+    first = await Promise.race([reader.read(), timer]);
+  } catch (err) {
+    try { await reader.cancel(); } catch { /* ignore */ }
+    throw err;
+  }
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      if (first.done) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(first.value);
+    },
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) { controller.close(); return; }
+        controller.enqueue(value);
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+    cancel() { try { reader.cancel(); } catch { /* ignore */ } },
+  });
 }
 
 async function openaiStream(opts: CallLLMOptions, model: string): Promise<ReadableStream<Uint8Array>> {
@@ -574,7 +671,6 @@ async function openaiStream(opts: CallLLMOptions, model: string): Promise<Readab
     if (model.startsWith("gpt-5")) body.max_completion_tokens = opts.max_tokens;
     else body.max_tokens = opts.max_tokens;
   }
-  // GPT-5 family only supports default temperature (1).
   if (opts.temperature !== undefined && !model.startsWith("gpt-5")) body.temperature = opts.temperature;
 
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -591,159 +687,3 @@ async function openaiStream(opts: CallLLMOptions, model: string): Promise<Readab
   return resp.body;
 }
 
-async function claudeStreamAsOpenAI(opts: CallLLMOptions, model: string): Promise<ReadableStream<Uint8Array>> {
-  const key = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!key) throw new Error("ANTHROPIC_API_KEY not configured");
-
-  const { system, messages } = toAnthropicMessages(opts.messages);
-  const body: any = {
-    model,
-    max_tokens: opts.max_tokens ?? 4096,
-    messages,
-    stream: true,
-  };
-  if (system) body.system = system;
-  if (opts.temperature !== undefined) body.temperature = opts.temperature;
-  const tools = toAnthropicTools(opts.tools);
-  if (tools) body.tools = tools;
-  const tc = toAnthropicToolChoice(opts.tool_choice);
-  if (tc) body.tool_choice = tc;
-
-  const resp = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!resp.ok || !resp.body) {
-    const text = await resp.text().catch(() => "");
-    const err: any = new Error(`Anthropic stream ${resp.status}: ${text.slice(0, 200)}`);
-    err.status = resp.status;
-    throw err;
-  }
-
-  // Transform Anthropic SSE → OpenAI-shaped SSE
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
-
-  // Track active content blocks: index → { type, toolCallIndex?, toolId?, toolName?, argumentsBuffer? }
-  const blocks = new Map<number, { type: "text" | "tool_use"; toolCallIndex?: number; toolId?: string; toolName?: string; argumentsBuffer?: string }>();
-  let toolCallCounter = 0;
-
-  function emit(delta: any): Uint8Array {
-    const payload = { choices: [{ index: 0, delta, finish_reason: null }] };
-    return encoder.encode(`data: ${JSON.stringify(payload)}\n\n`);
-  }
-  function emitFinish(reason: string): Uint8Array {
-    const payload = { choices: [{ index: 0, delta: {}, finish_reason: reason }] };
-    return encoder.encode(`data: ${JSON.stringify(payload)}\n\n`);
-  }
-
-  let buffer = "";
-
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          controller.close();
-          return;
-        }
-        buffer += decoder.decode(value, { stream: true });
-
-        let idx: number;
-        while ((idx = buffer.indexOf("\n")) !== -1) {
-          let line = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (!line.startsWith("data:")) continue;
-          const jsonStr = line.slice(5).trim();
-          if (!jsonStr) continue;
-
-          let evt: any;
-          try { evt = JSON.parse(jsonStr); } catch { continue; }
-
-          switch (evt.type) {
-            case "content_block_start": {
-              const block = evt.content_block;
-              if (block.type === "text") {
-                blocks.set(evt.index, { type: "text" });
-              } else if (block.type === "tool_use") {
-                if (!block.id || !block.name) {
-                  blocks.set(evt.index, { type: "tool_use" });
-                  break;
-                }
-                const tcIdx = toolCallCounter++;
-                blocks.set(evt.index, { type: "tool_use", toolCallIndex: tcIdx, toolId: block.id, toolName: block.name, argumentsBuffer: "" });
-                controller.enqueue(emit({
-                  tool_calls: [{
-                    index: tcIdx,
-                    id: block.id,
-                    type: "function",
-                    function: { name: block.name, arguments: "" },
-                  }],
-                }));
-              }
-              break;
-            }
-            case "content_block_delta": {
-              const b = blocks.get(evt.index);
-              if (!b) break;
-              const d = evt.delta;
-              if (d.type === "text_delta" && b.type === "text") {
-                controller.enqueue(emit({ content: d.text }));
-              } else if (d.type === "input_json_delta" && b.type === "tool_use") {
-                b.argumentsBuffer = `${b.argumentsBuffer ?? ""}${d.partial_json ?? ""}`;
-                if (!b.toolName || typeof b.toolCallIndex !== "number") break;
-                controller.enqueue(emit({
-                  tool_calls: [{
-                    index: b.toolCallIndex,
-                    function: { arguments: d.partial_json ?? "" },
-                  }],
-                }));
-              }
-              break;
-            }
-            case "content_block_stop": {
-              const b = blocks.get(evt.index);
-              if (b?.type === "tool_use" && (!b.toolName || typeof b.toolCallIndex !== "number")) {
-                blocks.delete(evt.index);
-              }
-              break;
-            }
-            case "message_delta": {
-              const reason = evt.delta?.stop_reason;
-              if (reason) {
-                const finish = reason === "tool_use" ? "tool_calls"
-                             : reason === "end_turn" ? "stop"
-                             : reason === "max_tokens" ? "length"
-                             : reason;
-                controller.enqueue(emitFinish(finish));
-              }
-              break;
-            }
-            case "message_stop": {
-              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-              controller.close();
-              return;
-            }
-            case "error": {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: evt.error })}\n\n`));
-              break;
-            }
-          }
-        }
-      } catch (err) {
-        controller.error(err);
-      }
-    },
-    cancel() {
-      try { reader.cancel(); } catch { /* ignore */ }
-    },
-  });
-}

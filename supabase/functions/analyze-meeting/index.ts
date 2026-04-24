@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callLLMWithFallback } from "../_shared/llm.ts";
+import { safeParseToolArguments } from "../_shared/json.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -190,7 +191,8 @@ For key_topics, list the main subjects discussed.`;
         const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
         if (!toolCall?.function?.arguments) { failed++; continue; }
 
-        const analysis = JSON.parse(toolCall.function.arguments);
+        const analysis = safeParseToolArguments<any>(toolCall.function.arguments);
+        if (!analysis) { failed++; continue; }
 
         // Update meeting with analysis
         await supabaseAdmin

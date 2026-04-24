@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ZipReader, BlobReader, TextWriter } from "https://deno.land/x/zipjs@v2.7.32/index.js";
 import { callLLMWithFallback } from "../_shared/llm.ts";
+import { safeParseToolArguments } from "../_shared/json.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -149,7 +150,13 @@ Call the extract_competencies function with your results.`,
       });
     }
 
-    const { competencies } = JSON.parse(toolCall.function.arguments);
+    const parsed = safeParseToolArguments<{ competencies: any[] }>(toolCall.function.arguments);
+    if (!parsed?.competencies) {
+      return new Response(JSON.stringify({ error: "AI returned malformed competencies" }), {
+        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { competencies } = parsed;
 
     // Update job role with extracted competencies
     const { error: updateError } = await supabaseAdmin

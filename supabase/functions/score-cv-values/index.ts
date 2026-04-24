@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callLLMWithFallback } from "../_shared/llm.ts";
+import { safeParseToolArguments } from "../_shared/json.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -208,7 +209,12 @@ You MUST call the score_values function with your assessment.`;
           continue;
         }
 
-        const scores = JSON.parse(toolCall.function.arguments);
+        const scores = safeParseToolArguments<Record<string, any>>(toolCall.function.arguments);
+        if (!scores) {
+          console.error(`Malformed scores tool args for candidate ${candidate.id}`);
+          failed++;
+          continue;
+        }
 
         // P8: Clamp all scores to valid range 1-5
         for (const v of KABUNI_VALUES) {

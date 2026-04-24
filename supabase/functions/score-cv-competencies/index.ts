@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import JSZip from "https://esm.sh/jszip@3.10.1";
 import { callLLMWithFallback } from "../_shared/llm.ts";
+import { safeParseToolArguments } from "../_shared/json.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -273,10 +274,8 @@ Call score_competencies with your assessment. Use keys competency_0, competency_
           continue;
         }
 
-        let rawScores: any;
-        try {
-          rawScores = JSON.parse(toolCall.function.arguments);
-        } catch {
+        const rawScores = safeParseToolArguments<Record<string, any>>(toolCall.function.arguments);
+        if (!rawScores) {
           failed++;
           continue;
         }

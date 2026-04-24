@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callLLMWithFallback } from "../_shared/llm.ts";
+import { safeParseToolArguments } from "../_shared/json.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -187,12 +188,12 @@ Always return the result by calling the extract_candidate_info function.`,
 
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
     if (toolCall?.function?.arguments) {
-      try {
-        const args = JSON.parse(toolCall.function.arguments);
+      const args = safeParseToolArguments<{ full_name?: string; email?: string }>(toolCall.function.arguments);
+      if (args) {
         parsedName = args.full_name || null;
         parsedEmail = args.email || null;
-      } catch (e) {
-        console.error("Failed to parse tool call arguments:", e);
+      } else {
+        console.error("parse-cv: malformed tool arguments");
       }
     }
 

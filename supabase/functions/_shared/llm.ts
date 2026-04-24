@@ -467,10 +467,46 @@ function isClaudeBillingOrQuotaError(provider: Provider, status: number | undefi
     || normalized.includes("quota");
 }
 
-function isRetryable(status?: number, provider?: Provider, message = ""): boolean {
-  if (!status) return true; // network error
-  if (isClaudeBillingOrQuotaError(provider ?? "openai", status, message)) return true;
+export type LLMErrorCode = "rate_limited" | "out_of_credits" | "invalid_request" | "upstream_error";
+export interface StructuredLLMError extends Error {
+  status: number;
+  code: LLMErrorCode;
+  retryable: boolean;
+  provider?: Provider;
+}
+
+export function classifyLLMError(provider: Provider, status: number | undefined, message: string): StructuredLLMError {
+  const s = status ?? 0;
+  const billing = isClaudeBillingOrQuotaError(provider, s, message);
+  let code: LLMErrorCode;
+  if (s === 429) code = "rate_limited";
+  else if (billing || s === 402) code = "out_of_credits";
+  else if (s >= 400 && s < 500) code = "invalid_request";
+  else code = "upstream_error";
+  // Same-provider retryable: 5xx, network, 429
+  const retryable = s === 0 || s === 429 || s >= 500;
+  const err = new Error(message) as StructuredLLMError;
+  err.status = s;
+  err.code = code;
+  err.retryable = retryable;
+  err.provider = provider;
+  return err;
+}
+
+function shouldSameProviderRetry(status?: number): boolean {
+  if (!status) return true;
   return status === 429 || status >= 500;
+}
+
+function shouldCrossProviderFallback(provider: Provider, status?: number, message = ""): boolean {
+  if (!status) return true;
+  if (isClaudeBillingOrQuotaError(provider, status, message)) return true;
+  if (status >= 400 && status < 500) return false; // other 4xx → no fallback
+  return status === 429 || status >= 500;
+}
+
+function isEmpty(res: NormalisedResponse): boolean {
+  return !res.choices?.[0]?.message?.content && !res.choices?.[0]?.message?.tool_calls?.length;
 }
 
 /** Single-shot call without fallback. */
@@ -484,47 +520,77 @@ export async function callLLM(opts: CallLLMOptions): Promise<NormalisedResponse>
     return res;
   } catch (err: any) {
     log(opts.workflow, provider, 1, "fail", Date.now() - start, `error="${(err?.message || "").slice(0, 120)}"`);
-    throw err;
+    throw classifyLLMError(provider, err?.status, err?.message || String(err));
   }
 }
 
-/** Call with cross-provider fallback on 429 / 5xx / network / empty response. */
+/**
+ * Call sequence:
+ *   1. primary (full model)
+ *   2. primary same-provider retry (5xx / 429 / network only)
+ *   3. primary degraded model (mini / haiku)
+ *   4. cross-provider fallback (skipped if route.locked, blocked for non-billing 4xx)
+ */
 export async function callLLMWithFallback(opts: CallLLMOptions): Promise<NormalisedResponse> {
   const route = WORKFLOW_ROUTING[opts.workflow] ?? WORKFLOW_ROUTING.generic;
   const primary = opts.force_provider ?? route.primary;
+  const locked = !!route.locked || !!opts.force_provider;
   const fallback: Provider = primary === "claude" ? "openai" : "claude";
 
-  // Attempt 1: primary
-  const t1 = Date.now();
-  try {
-    const res = await callProvider(primary, opts);
-    const empty = !res.choices?.[0]?.message?.content && !res.choices?.[0]?.message?.tool_calls?.length;
-    if (empty) throw Object.assign(new Error("empty response"), { status: 500 });
-    log(opts.workflow, primary, 1, "ok", Date.now() - t1);
+  const tryAttempt = async (
+    provider: Provider,
+    attempt: number,
+    degrade: boolean,
+  ): Promise<NormalisedResponse> => {
+    const t = Date.now();
+    const res = await callProvider(provider, opts, degrade);
+    if (isEmpty(res)) throw Object.assign(new Error("empty response"), { status: 502 });
+    log(opts.workflow, provider, attempt, "ok", Date.now() - t, degrade ? "degraded" : undefined);
     return res;
+  };
+
+  // Attempt 1: primary, full model
+  let lastErr: any;
+  try {
+    return await tryAttempt(primary, 1, false);
   } catch (err: any) {
-    const status = err?.status;
-    const message = err?.message || "";
-    if (opts.force_provider || !isRetryable(status, primary, message)) {
-      log(opts.workflow, primary, 1, "fail", Date.now() - t1, `status=${status} error="${(err?.message || "").slice(0, 120)}"`);
-      throw err;
+    lastErr = err;
+    log(opts.workflow, primary, 1, "fail", 0, `status=${err?.status}`);
+    if (!shouldSameProviderRetry(err?.status) && !shouldCrossProviderFallback(primary, err?.status, err?.message || "")) {
+      throw classifyLLMError(primary, err?.status, err?.message || "");
     }
-    log(opts.workflow, primary, 1, "fallback", Date.now() - t1, `status=${status}`);
   }
 
-  // Attempt 2: fallback provider
-  const t2 = Date.now();
+  // Attempt 2: same provider retry
+  if (shouldSameProviderRetry(lastErr?.status)) {
+    try {
+      return await tryAttempt(primary, 2, false);
+    } catch (err: any) {
+      lastErr = err;
+      log(opts.workflow, primary, 2, "fail", 0, `status=${err?.status}`);
+    }
+  }
+
+  // Attempt 3: same provider, degraded model
   try {
-    const res = await callProvider(fallback, opts);
-    const empty = !res.choices?.[0]?.message?.content && !res.choices?.[0]?.message?.tool_calls?.length;
-    if (empty) throw Object.assign(new Error("empty response"), { status: 500 });
-    log(opts.workflow, fallback, 2, "ok", Date.now() - t2);
-    return res;
+    return await tryAttempt(primary, 3, true);
   } catch (err: any) {
-    log(opts.workflow, fallback, 2, "fail", Date.now() - t2, `status=${err?.status} error="${(err?.message || "").slice(0, 120)}"`);
-    throw err;
+    lastErr = err;
+    log(opts.workflow, primary, 3, "fail", 0, `status=${err?.status} degraded`);
+  }
+
+  // Attempt 4: cross-provider fallback (locked workflows stop here)
+  if (locked || !shouldCrossProviderFallback(primary, lastErr?.status, lastErr?.message || "")) {
+    throw classifyLLMError(primary, lastErr?.status, lastErr?.message || "");
+  }
+  try {
+    return await tryAttempt(fallback, 4, false);
+  } catch (err: any) {
+    log(opts.workflow, fallback, 4, "fail", 0, `status=${err?.status}`);
+    throw classifyLLMError(fallback, err?.status, err?.message || "");
   }
 }
+
 
 /**
  * Streaming chat. Always emits OpenAI-shaped SSE lines:

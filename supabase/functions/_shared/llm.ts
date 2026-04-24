@@ -27,31 +27,37 @@ export type WorkflowName =
   | "create-hireflix-position"
   | "generic";
 
-export const WORKFLOW_ROUTING: Record<WorkflowName, { primary: Provider; fallback: Provider }> = {
-  // Claude primary (reasoning, synthesis, writing)
-  "norman-chat":               { primary: "openai", fallback: "openai" },
+// `locked: true` means cross-provider fallback is forbidden for this workflow.
+// We still attempt a single same-provider retry and a model degrade before giving up.
+export const WORKFLOW_ROUTING: Record<WorkflowName, { primary: Provider; fallback: Provider; locked?: boolean }> = {
+  // LOCKED — streaming chat must stay on OpenAI
+  "norman-chat":               { primary: "openai", fallback: "openai", locked: true },
+  "chat-with-project-context": { primary: "openai", fallback: "openai", locked: true },
+
+  // LOCKED — Duncan voice/style fidelity
+  "gmail-auto-draft":          { primary: "claude", fallback: "claude", locked: true },
+  "gmail-train-style":         { primary: "claude", fallback: "claude", locked: true },
+
+  // Claude primary (long-form synthesis, executive writing)
   "ceo-briefing":              { primary: "claude", fallback: "openai" },
   "ceo-email-pulse":           { primary: "claude", fallback: "openai" },
   "analyze-meeting":           { primary: "claude", fallback: "openai" },
   "finalize-release":          { primary: "claude", fallback: "openai" },
   "generate-exec-summary":     { primary: "claude", fallback: "openai" },
-  "score-cv-values":           { primary: "claude", fallback: "openai" },
-  "score-cv-competencies":     { primary: "claude", fallback: "openai" },
-  "generate-jd":               { primary: "claude", fallback: "openai" },
-  "parse-jd-competencies":     { primary: "claude", fallback: "openai" },
-  "gmail-auto-draft":          { primary: "claude", fallback: "openai" },
-  "gmail-train-style":         { primary: "claude", fallback: "openai" },
-  "chat-with-project-context": { primary: "claude", fallback: "openai" },
   "hireflix-sync-interviews":  { primary: "claude", fallback: "openai" },
   "hireflix-retry-processor":  { primary: "claude", fallback: "openai" },
   "create-hireflix-position":  { primary: "claude", fallback: "openai" },
 
-  // OpenAI primary (vision, structured extraction from raw files)
+  // OpenAI primary (structured JSON / tool calling / file extraction)
+  "score-cv-values":           { primary: "openai", fallback: "claude" },
+  "score-cv-competencies":     { primary: "openai", fallback: "claude" },
+  "generate-jd":               { primary: "openai", fallback: "claude" },
+  "parse-jd-competencies":     { primary: "openai", fallback: "claude" },
   "extract-chat-file":         { primary: "openai", fallback: "claude" },
   "extract-file-text":         { primary: "openai", fallback: "claude" },
   "parse-cv":                  { primary: "openai", fallback: "claude" },
 
-  generic:                     { primary: "claude", fallback: "openai" },
+  generic:                     { primary: "openai", fallback: "claude" },
 };
 
 // Sonnet stays primary on synchronous workflows: Opus 4.5 averages 150-180s on

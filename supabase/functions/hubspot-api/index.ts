@@ -447,8 +447,13 @@ function normalizeBearerToken(token: string | null | undefined) {
 async function resolveTeamBriefingToken(envToken?: string | null) {
   const stored = await getStoredToken();
   const encodedToken = stored?.encodedToken ?? null;
+  const envFallbackToken = normalizeBearerToken(envToken);
   logHubspot("team_briefing_summary token lookup", {
+    lookup_state: stored?.state ?? null,
     row_found: stored?.rowFound ?? false,
+    integration_id: stored?.integrationId ?? null,
+    last_sync: stored?.lastSync ?? null,
+    updated_at: stored?.updatedAt ?? null,
     encrypted_api_key_state: encodedToken === null ? "null" : encodedToken.length === 0 ? "empty" : "present",
     encoded_length: encodedToken?.length ?? 0,
     encoded_prefix: encodedToken ? encodedToken.slice(0, 10) : null,
@@ -456,6 +461,7 @@ async function resolveTeamBriefingToken(envToken?: string | null) {
     decoded_prefix: stored?.token ? stored.token.trim().slice(0, 10) : null,
     decoded_length: stored?.token ? stored.token.trim().length : 0,
     stored_status: stored?.storedStatus ?? null,
+    env_fallback_available: !!envFallbackToken,
   });
 
   const storedToken = normalizeBearerToken(stored?.token);
@@ -475,10 +481,14 @@ async function resolveTeamBriefingToken(envToken?: string | null) {
       source: "stored_token" as CredentialSource,
       lastSync: stored?.lastSync ?? null,
       stored,
+      diagnostics: {
+        stored_token_state: stored?.state ?? null,
+        env_fallback_available: !!envFallbackToken,
+      },
     };
   }
 
-  const fallbackToken = normalizeBearerToken(envToken);
+  const fallbackToken = envFallbackToken;
   if (fallbackToken) {
     logHubspot("team_briefing_summary token source", {
       selected_source: "env_secret",
@@ -491,6 +501,10 @@ async function resolveTeamBriefingToken(envToken?: string | null) {
       source: "env_secret" as CredentialSource,
       lastSync: stored?.lastSync ?? null,
       stored,
+      diagnostics: {
+        stored_token_state: stored?.state ?? null,
+        env_fallback_available: true,
+      },
     };
   }
 
@@ -499,6 +513,10 @@ async function resolveTeamBriefingToken(envToken?: string | null) {
     source: "none" as CredentialSource,
     lastSync: stored?.lastSync ?? null,
     stored,
+    diagnostics: {
+      stored_token_state: stored?.state ?? null,
+      env_fallback_available: false,
+    },
   };
 }
 

@@ -585,7 +585,7 @@ const IntegrationDetail = ({
   const isGitHub = integration.id === "github";
   const isRuntimeStatusIntegration = isHubSpot || isGitHub;
   const isGoogleOAuth = isGoogleCalendar;
-  const isOAuthFlow = isGoogleOAuth || isBasecamp || isGmail || isAzureDevOps || isGoogleDrive;
+  const isOAuthFlow = isGoogleOAuth || isBasecamp || isGmail || isSlack || isAzureDevOps || isGoogleDrive;
   
   // Determine status based on integration type
   let status: IntegrationStatus;
@@ -597,6 +597,8 @@ const IntegrationDetail = ({
     status = isBasecampConnected ? "connected" : "disconnected";
   } else if (isGmail) {
     status = isGmailConnected ? "connected" : "disconnected";
+  } else if (isSlack) {
+    status = isSlackConnected ? "connected" : "disconnected";
   } else if (isAzureDevOps) {
     status = isAzureDevOpsConnected ? "connected" : "disconnected";
   } else if (isGoogleDrive) {
@@ -610,14 +612,10 @@ const IntegrationDetail = ({
   const [statusDetail, setStatusDetail] = useState<any | null>(null);
   const isCompany = integration.type === "company";
   const isSlack = integration.id === "slack";
-  const credentialLabel = isSlack
-    ? "Password"
-    : isCompany
+  const credentialLabel = isCompany
     ? "Company API Key / Token"
     : "API Key / Token";
-  const credentialPlaceholder = isSlack
-    ? "Enter your Slack password..."
-    : `Enter your ${integration.name} API key...`;
+  const credentialPlaceholder = `Enter your ${integration.name} API key...`;
   
   // User integration mutations
   const connectMutation = useConnectIntegration();
@@ -628,6 +626,7 @@ const IntegrationDetail = ({
   
   // Google OAuth hooks
   const { initiateOAuth: initiateCalendarOAuth, disconnect: disconnectCalendar, isLoading: calendarLoading } = useGoogleCalendar();
+  const slackOAuth = useSlackConnection();
   const [basecampLoading, setBasecampLoading] = useState(false);
   const [gmailLoading, setGmailLoading] = useState(false);
   const [azureDevOpsLoading, setAzureDevOpsLoading] = useState(false);

@@ -138,6 +138,9 @@ const Index = () => {
   const navigate = useNavigate();
   const briefingTriggered = useRef(sessionStorage.getItem("duncan_briefing_done") === "true");
   const chatOps = useGeneralChats();
+  const { profile } = useProfile();
+  const userDisplayName = profile?.display_name || "You";
+  const userAvatarUrl = profile?.avatar_url || null;
 
   const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
   const [weather, setWeather] = useState<{ temp: number; description: string } | null>(null);

@@ -797,15 +797,19 @@ const Recruitment = () => {
                               return <span className="text-muted-foreground text-xs">—</span>;
                             })()}
                             <div className="mt-1">
-                              {hireflixLink ? (
-                                <a
-                                  href={hireflixLink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary underline text-[10px] inline-flex items-center gap-1"
+                              {(c.hireflix_playback_url || c.hireflix_interview_url || c.hireflix_status === "completed") ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleWatchInterview(c)}
+                                  disabled={loadingPlaybackId === c.id}
+                                  className="text-primary underline text-[10px] inline-flex items-center gap-1 disabled:opacity-60 disabled:cursor-wait"
                                 >
-                                  <ExternalLink className="h-3 w-3" /> Open Interview
-                                </a>
+                                  {loadingPlaybackId === c.id ? (
+                                    <><Loader2 className="h-3 w-3 animate-spin" /> Fetching interview...</>
+                                  ) : (
+                                    <><ExternalLink className="h-3 w-3" /> Open Interview</>
+                                  )}
+                                </button>
                               ) : (
                                 <span className="text-[10px] text-muted-foreground">No interview link available</span>
                               )}

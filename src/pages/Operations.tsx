@@ -156,14 +156,14 @@ const Operations = () => {
 
         <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-7xl">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
               <div>
-                <h2 className="text-2xl font-bold text-foreground tracking-tight">Operations Hub</h2>
-                <p className="text-sm text-muted-foreground mt-1">
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Operations Hub</h2>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                   Cross-system view of Azure DevOps work items.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={() => handleSync("azure")}
                   disabled={syncing === "azure"}
@@ -351,7 +351,7 @@ const Operations = () => {
                     ))}
                   </div>
 
-                  <div className="grid lg:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div className="rounded-xl border border-border bg-card p-4">
                       <div className="flex items-center gap-2 mb-4"><Globe2 className="h-4 w-4 text-primary" /><h3 className="font-semibold text-foreground">Highest reach</h3></div>
                       <div className="space-y-2">
@@ -376,7 +376,7 @@ const Operations = () => {
                     </div>
                   </div>
 
-                  <div className="grid lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="rounded-xl border border-border bg-card p-4">
                       <h3 className="font-semibold text-foreground mb-4">Cities</h3>
                       <div className="space-y-2">{analytics.dashboard.reach.cities.slice(0, 6).map((city) => <div key={city.label} className="flex justify-between text-sm"><span>{city.label}</span><span className="font-mono text-muted-foreground">{city.users}</span></div>)}</div>

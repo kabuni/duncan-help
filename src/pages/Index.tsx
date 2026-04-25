@@ -394,7 +394,7 @@ const Index = () => {
             <div className="mx-auto max-w-3xl space-y-6 sm:space-y-8">
               <AnimatePresence initial={false}>
                 {messages.map((msg, i) => (
-                  <MessageBubble key={i} msg={msg} downloadingUrl={downloadingUrl} handleAuthenticatedDownload={handleAuthenticatedDownload} />
+                  <MessageBubble key={i} msg={msg} downloadingUrl={downloadingUrl} handleAuthenticatedDownload={handleAuthenticatedDownload} userName={userDisplayName} userAvatarUrl={userAvatarUrl} />
                 ))}
               </AnimatePresence>
               {isLoading && messages[messages.length - 1]?.role !== "assistant" && (

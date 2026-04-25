@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile, ProfileData } from "@/hooks/useProfile";
 import { useDepartments } from "@/hooks/useDepartments";
@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Save, User, Briefcase, Building2 } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Loader2, Save, User, Briefcase, Building2, Camera } from "lucide-react";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 const ROLE_TITLES = [
@@ -92,6 +94,41 @@ export default function SettingsProfile() {
     ? [form.department, ...departmentNames]
     : departmentNames;
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be under 5MB");
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${user.id}/avatar-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path);
+      updateProfile({ avatar_url: publicUrl });
+    } catch (err: any) {
+      toast.error(err.message ?? "Upload failed");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const initials = (form.display_name || user?.email || "U")
+    .split(" ")
+    .map((s) => s[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -108,6 +145,32 @@ export default function SettingsProfile() {
       </div>
 
       <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Avatar className="h-14 w-14 border border-border">
+            <AvatarImage src={profile?.avatar_url ?? undefined} alt="Profile" />
+            <AvatarFallback className="text-sm">{initials}</AvatarFallback>
+          </Avatar>
+          <div className="space-y-1.5">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarUpload}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary disabled:opacity-50 transition-colors"
+            >
+              {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+              {isUploading ? "Uploading…" : "Change photo"}
+            </button>
+            <p className="text-[11px] text-muted-foreground/70">PNG or JPG, up to 5MB.</p>
+          </div>
+        </div>
+
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
             <User className="h-3.5 w-3.5" /> Display Name

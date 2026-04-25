@@ -205,30 +205,37 @@ export default function ProjectWorkspace() {
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
       <main className="flex-1 lg:ml-64 flex flex-col min-h-0">
         {/* Header */}
-        <header className="flex items-center gap-3 border-b border-border px-4 py-3 shrink-0">
+        <header className="flex items-center gap-1.5 sm:gap-3 border-b border-border px-2 sm:px-4 py-3 shrink-0">
           <MobileMenuButton onClick={() => setMobileOpen(true)} />
-          <button onClick={() => navigate("/projects")} className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">
+          <button onClick={() => navigate("/projects")} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">
             <ArrowLeft className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setChatListOpen(true)}
+            className="md:hidden flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+            aria-label="Open chat list"
+          >
+            <Menu className="h-4 w-4" />
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-sm font-semibold text-foreground truncate">{project.name}</h1>
-            <p className="text-[10px] text-muted-foreground truncate">
+            <p className="text-[10px] text-muted-foreground truncate hidden sm:block">
               {extractedCount > 0
                 ? `${extractedCount} file${extractedCount !== 1 ? "s" : ""} indexed • Auto-retrieval active`
                 : project.system_prompt ? "Custom instructions active" : "Default instructions"}
             </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setShowFiles(true)} className="gap-1.5 text-xs">
+          <Button variant="ghost" size="sm" onClick={() => setShowFiles(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Files">
             <FileText className="h-3.5 w-3.5" />
-            Files{files.length > 0 && ` (${files.length})`}
+            <span className="hidden sm:inline">Files{files.length > 0 && ` (${files.length})`}</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowCollaborate(true)} className="gap-1.5 text-xs">
+          <Button variant="ghost" size="sm" onClick={() => setShowCollaborate(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Collaborate">
             <Users className="h-3.5 w-3.5" />
-            Collaborate
+            <span className="hidden sm:inline">Collaborate</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={openSettings} className="gap-1.5 text-xs">
+          <Button variant="ghost" size="sm" onClick={openSettings} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Settings">
             <Settings2 className="h-3.5 w-3.5" />
-            Settings
+            <span className="hidden sm:inline">Settings</span>
           </Button>
         </header>
 

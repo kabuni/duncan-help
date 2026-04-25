@@ -15,6 +15,8 @@ import type { ChatAttachment } from "@/hooks/useNormanChat";
 import ChatInput from "@/components/chat/ChatInput";
 import { supabase } from "@/integrations/supabase/client";
 import { useGeneralChats } from "@/hooks/useGeneralChats";
+import { useProfile } from "@/hooks/useProfile";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const VoiceAgent = lazy(() => import("@/components/chat/VoiceAgent"));
 

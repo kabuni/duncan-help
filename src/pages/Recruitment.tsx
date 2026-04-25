@@ -575,7 +575,7 @@ const Recruitment = () => {
                       const comps = details?.competencies;
                       const compEntries = comps ? (Object.entries(comps) as [string, any][]) : [];
                         const competencyScore = getCandidateCompetencyScore(c);
-                        const hireflixLink = c.hireflix_interview_url ?? c.hireflix_playback_url;
+                        const hireflixLink = c.hireflix_playback_url ?? c.hireflix_interview_url;
                       const isEligible = isInviteEligible(c);
 
                       return (
@@ -824,7 +824,7 @@ const Recruitment = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {top3.map((c: any, idx: number) => {
                   const scores = c.interview_scores as any;
-                  const hireflixLink = c.hireflix_interview_url ?? c.hireflix_playback_url;
+                  const hireflixLink = c.hireflix_playback_url ?? c.hireflix_interview_url;
                   return (
                     <Card key={c.id} className={`border-border/50 ${idx === 0 ? "ring-2 ring-yellow-500/30" : ""}`}>
                       <CardContent className="pt-4 space-y-3">

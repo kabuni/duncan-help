@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Plus, MessageSquare, Send, Loader2, Settings2, Users,
-  Upload, FileText, Sparkles, Trash2, RefreshCw, PanelRightOpen, X,
+  Upload, FileText, Sparkles, Trash2, RefreshCw, PanelRightOpen, X, Menu,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -35,6 +35,7 @@ export default function ProjectWorkspace() {
   const myAvatarUrl = currentProfile?.avatar_url || null;
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [chatListOpen, setChatListOpen] = useState(false);
   const [input, setInput] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
@@ -204,37 +205,44 @@ export default function ProjectWorkspace() {
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
       <main className="flex-1 lg:ml-64 flex flex-col min-h-0">
         {/* Header */}
-        <header className="flex items-center gap-3 border-b border-border px-4 py-3 shrink-0">
+        <header className="flex items-center gap-1.5 sm:gap-3 border-b border-border px-2 sm:px-4 py-3 shrink-0">
           <MobileMenuButton onClick={() => setMobileOpen(true)} />
-          <button onClick={() => navigate("/projects")} className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">
+          <button onClick={() => navigate("/projects")} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">
             <ArrowLeft className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setChatListOpen(true)}
+            className="md:hidden flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+            aria-label="Open chat list"
+          >
+            <Menu className="h-4 w-4" />
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-sm font-semibold text-foreground truncate">{project.name}</h1>
-            <p className="text-[10px] text-muted-foreground truncate">
+            <p className="text-[10px] text-muted-foreground truncate hidden sm:block">
               {extractedCount > 0
                 ? `${extractedCount} file${extractedCount !== 1 ? "s" : ""} indexed • Auto-retrieval active`
                 : project.system_prompt ? "Custom instructions active" : "Default instructions"}
             </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setShowFiles(true)} className="gap-1.5 text-xs">
+          <Button variant="ghost" size="sm" onClick={() => setShowFiles(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Files">
             <FileText className="h-3.5 w-3.5" />
-            Files{files.length > 0 && ` (${files.length})`}
+            <span className="hidden sm:inline">Files{files.length > 0 && ` (${files.length})`}</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowCollaborate(true)} className="gap-1.5 text-xs">
+          <Button variant="ghost" size="sm" onClick={() => setShowCollaborate(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Collaborate">
             <Users className="h-3.5 w-3.5" />
-            Collaborate
+            <span className="hidden sm:inline">Collaborate</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={openSettings} className="gap-1.5 text-xs">
+          <Button variant="ghost" size="sm" onClick={openSettings} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Settings">
             <Settings2 className="h-3.5 w-3.5" />
-            Settings
+            <span className="hidden sm:inline">Settings</span>
           </Button>
         </header>
 
         {/* Workspace */}
         <div className="flex-1 flex min-h-0">
-          {/* LEFT: Chat list */}
-          <div className="w-56 shrink-0 border-r border-border flex flex-col bg-sidebar/50 hidden md:flex">
+          {/* LEFT: Chat list (desktop) */}
+          <div className="w-56 shrink-0 border-r border-border flex-col bg-sidebar/50 hidden md:flex">
             <div className="p-3 border-b border-border">
               <Button variant="outline" size="sm" onClick={handleNewChat} className="w-full gap-2 text-xs">
                 <Plus className="h-3.5 w-3.5" />
@@ -265,6 +273,50 @@ export default function ProjectWorkspace() {
               </div>
             </ScrollArea>
           </div>
+
+          {/* LEFT: Chat list (mobile drawer) */}
+          {chatListOpen && (
+            <div className="md:hidden fixed inset-0 z-50 flex">
+              <div className="absolute inset-0 bg-black/40" onClick={() => setChatListOpen(false)} />
+              <div className="relative w-64 max-w-[80%] bg-background border-r border-border flex flex-col shadow-xl animate-in slide-in-from-left duration-200">
+                <div className="flex items-center justify-between p-3 border-b border-border">
+                  <h3 className="text-sm font-semibold">Chats</h3>
+                  <button onClick={() => setChatListOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="p-3 border-b border-border">
+                  <Button variant="outline" size="sm" onClick={() => { handleNewChat(); setChatListOpen(false); }} className="w-full gap-2 text-xs">
+                    <Plus className="h-3.5 w-3.5" />
+                    New Chat
+                  </Button>
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="p-2 space-y-0.5">
+                    {chats.map(chat => (
+                      <button
+                        key={chat.id}
+                        onClick={() => { setActiveChatId(chat.id); setChatListOpen(false); }}
+                        className={`flex items-center gap-2 w-full rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                          activeChatId === chat.id
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                        }`}
+                      >
+                        <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{chat.title}</span>
+                      </button>
+                    ))}
+                    {chats.length === 0 && !chatsLoading && (
+                      <p className="px-3 py-4 text-[11px] text-muted-foreground text-center">
+                        No chats yet
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+          )}
 
           {/* CENTER: Chat */}
           <div className="flex-1 flex flex-col min-w-0">

@@ -241,8 +241,8 @@ export default function ProjectWorkspace() {
 
         {/* Workspace */}
         <div className="flex-1 flex min-h-0">
-          {/* LEFT: Chat list */}
-          <div className="w-56 shrink-0 border-r border-border flex flex-col bg-sidebar/50 hidden md:flex">
+          {/* LEFT: Chat list (desktop) */}
+          <div className="w-56 shrink-0 border-r border-border flex-col bg-sidebar/50 hidden md:flex">
             <div className="p-3 border-b border-border">
               <Button variant="outline" size="sm" onClick={handleNewChat} className="w-full gap-2 text-xs">
                 <Plus className="h-3.5 w-3.5" />
@@ -273,6 +273,50 @@ export default function ProjectWorkspace() {
               </div>
             </ScrollArea>
           </div>
+
+          {/* LEFT: Chat list (mobile drawer) */}
+          {chatListOpen && (
+            <div className="md:hidden fixed inset-0 z-50 flex">
+              <div className="absolute inset-0 bg-black/40" onClick={() => setChatListOpen(false)} />
+              <div className="relative w-64 max-w-[80%] bg-background border-r border-border flex flex-col shadow-xl animate-in slide-in-from-left duration-200">
+                <div className="flex items-center justify-between p-3 border-b border-border">
+                  <h3 className="text-sm font-semibold">Chats</h3>
+                  <button onClick={() => setChatListOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="p-3 border-b border-border">
+                  <Button variant="outline" size="sm" onClick={() => { handleNewChat(); setChatListOpen(false); }} className="w-full gap-2 text-xs">
+                    <Plus className="h-3.5 w-3.5" />
+                    New Chat
+                  </Button>
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="p-2 space-y-0.5">
+                    {chats.map(chat => (
+                      <button
+                        key={chat.id}
+                        onClick={() => { setActiveChatId(chat.id); setChatListOpen(false); }}
+                        className={`flex items-center gap-2 w-full rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                          activeChatId === chat.id
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                        }`}
+                      >
+                        <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{chat.title}</span>
+                      </button>
+                    ))}
+                    {chats.length === 0 && !chatsLoading && (
+                      <p className="px-3 py-4 text-[11px] text-muted-foreground text-center">
+                        No chats yet
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+          )}
 
           {/* CENTER: Chat */}
           <div className="flex-1 flex flex-col min-w-0">

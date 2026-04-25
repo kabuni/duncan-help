@@ -315,7 +315,7 @@ export default function ProjectWorkspace() {
                       const isUser = msg.role === "user";
                       const userMember = isUser ? members.find((m) => m.user_id === msg.user_id) : null;
                       const userName = isUser ? (msg.sender_name || userMember?.display_name || myDisplayName) : "Duncan";
-                      const userAvatar = isUser ? (userMember?.avatar_url || (msg.user_id === currentProfile && myAvatarUrl) || myAvatarUrl) : null;
+                      const userAvatar = isUser ? (userMember?.avatar_url || myAvatarUrl) : null;
                       return (
                         <div key={msg.id} className={`flex gap-2 sm:gap-3 ${isUser ? "justify-end" : ""}`}>
                           {!isUser && (

@@ -56,10 +56,10 @@ async function fetchPositionInterviews(apiKey: string, positionId: string) {
 }
 
 // Hireflix InterviewUrlType has exactly 3 fields: private, public, short
-// - "private" = admin dashboard link (REQUIRES Hireflix workspace login — NOT what we want)
-// - "public"  = hosted recording playback page (no login required) ← what we want
-// - "short"   = shortened version of the public link (also no login)
-// We prefer `public`, fall back to `short`, and only use `private` as a last resort.
+// - "private" = admin dashboard link (admin.hireflix.com/...) ← correct recruiter playback
+// - "public"  = hosted recording playback page (no login) — used only as fallback
+// - "short"   = candidate recorder link (hflx.io/c/...) — NEVER use for playback
+// We prefer `private`, fall back to `public`, and never use `short`.
 function extractReviewerPlaybackUrl(interview: any): string | null {
   // Admin playback link (admin.hireflix.com/...) — the only correct link for recruiters.
   const privateUrl = interview?.url?.private;

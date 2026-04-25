@@ -87,22 +87,22 @@ export default function ReleaseManager() {
 
   return (
     <AppLayout>
-      <div className="max-w-4xl mx-auto py-8 px-4 space-y-8">
-        <div className="flex items-center justify-between">
+      <div className="max-w-4xl mx-auto py-6 sm:py-8 px-4 sm:px-6 space-y-6 sm:space-y-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Release Manager</h1>
-            <p className="text-sm text-muted-foreground mt-1">Draft, preview, and publish Duncan release notes</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Release Manager</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">Draft, preview, and publish Duncan release notes</p>
           </div>
           <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-2" />New Release</Button>
+              <Button className="w-full sm:w-auto"><Plus className="h-4 w-4 mr-2" />New Release</Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingRelease ? "Edit Release" : "Create Release"}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 mt-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label className="text-xs">Version</Label>
                     <Input placeholder="v1.2.0" value={version} onChange={(e) => setVersion(e.target.value)} className="mt-1" />
@@ -120,9 +120,9 @@ export default function ReleaseManager() {
                   <Label className="text-xs">Changes</Label>
                   <div className="space-y-2 mt-2">
                     {changes.map((c, i) => (
-                      <div key={i} className="flex gap-2 items-start">
+                      <div key={i} className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-start">
                         <Select value={c.type} onValueChange={(v) => updateChange(i, "type", v)}>
-                          <SelectTrigger className="w-[130px] h-9 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="w-full sm:w-[130px] h-9 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="feature">🚀 Feature</SelectItem>
                             <SelectItem value="improvement">✨ Improvement</SelectItem>

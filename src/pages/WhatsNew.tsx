@@ -26,10 +26,10 @@ export default function WhatsNew() {
 
   return (
     <AppLayout>
-      <div className="max-w-3xl mx-auto py-8 px-4">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-foreground">What's New</h1>
-          <p className="text-sm text-muted-foreground mt-1">See what's changed in each Duncan release</p>
+      <div className="max-w-3xl mx-auto py-6 sm:py-8 px-4 sm:px-6">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">What's New</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">See what's changed in each Duncan release</p>
         </div>
 
         {isAdmin && (currentDraft ? <DraftBanner draft={currentDraft} /> : <NoDraftHint />)}

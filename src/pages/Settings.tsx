@@ -23,7 +23,7 @@ const Settings = () => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-8">
             <div className="flex items-center gap-3 mb-1">
               <SettingsIcon className="h-5 w-5 text-primary" />
-              <h2 className="text-2xl font-bold text-foreground tracking-tight">Settings</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Settings</h2>
             </div>
             <p className="text-sm text-muted-foreground font-mono">Manage your account and preferences</p>
           </motion.div>
@@ -34,7 +34,7 @@ const Settings = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.05 }}
-              className="rounded-xl border border-border bg-card p-6 mb-6"
+              className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-6"
             >
               <div className="flex items-center gap-2 mb-4">
                 <UserCheck className="h-4 w-4 text-primary" />
@@ -49,7 +49,7 @@ const Settings = () => {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="rounded-xl border border-border bg-card p-6 mb-6"
+            className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-6"
           >
             <div className="flex items-center gap-2 mb-4">
               <User className="h-4 w-4 text-primary" />

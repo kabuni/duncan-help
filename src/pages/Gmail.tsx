@@ -104,15 +104,15 @@ const Gmail = () => {
     <AppLayout>
       <main className="flex flex-col h-full overflow-hidden">
         {/* Top bar */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-border bg-card/50 backdrop-blur-sm shrink-0">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-6 py-3 border-b border-border bg-card/50 backdrop-blur-sm shrink-0">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4 text-primary" />
               <h1 className="text-sm font-bold text-foreground">Gmail</h1>
             </div>
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-3 w-3 text-norman-success" />
-              <span className="text-[11px] text-muted-foreground">{status.email}</span>
+            <div className="hidden sm:flex items-center gap-1.5 min-w-0">
+              <CheckCircle2 className="h-3 w-3 text-norman-success shrink-0" />
+              <span className="text-[11px] text-muted-foreground truncate">{status.email}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">

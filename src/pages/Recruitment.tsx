@@ -488,19 +488,19 @@ const Recruitment = () => {
     <AppLayout>
       <main className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">Recruitment</h1>
-            <p className="text-sm text-muted-foreground">CV ingestion, job role matching & candidate scoring</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Recruitment</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">CV ingestion, job role matching & candidate scoring</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {isGmailConnected ? (
               <>
                 <Badge variant="outline" className="border-primary/30 text-primary gap-1">
-                  <CheckCircle className="h-3 w-3" /> Gmail Connected
+                  <CheckCircle className="h-3 w-3" /> <span className="hidden sm:inline">Gmail Connected</span><span className="sm:hidden">Gmail</span>
                 </Badge>
                 <Select value={selectedRoleId || ""} onValueChange={handleRoleChange}>
-                  <SelectTrigger className="w-[200px]">
+                  <SelectTrigger className="w-full sm:w-[200px] min-w-0">
                     <SelectValue placeholder="Select a role…" />
                   </SelectTrigger>
                   <SelectContent>
@@ -510,8 +510,8 @@ const Recruitment = () => {
                   </SelectContent>
                 </Select>
                 <Button size="sm" variant="outline" onClick={fetchCVs} disabled={fetching || !selectedRoleId}>
-                  {fetching ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
-                  Fetch CVs
+                  {fetching ? <Loader2 className="h-4 w-4 animate-spin sm:mr-1" /> : <RefreshCw className="h-4 w-4 sm:mr-1" />}
+                  <span className="hidden sm:inline">Fetch CVs</span>
                 </Button>
               </>
             ) : (
@@ -524,7 +524,7 @@ const Recruitment = () => {
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           {[
             { icon: Users, label: "Total Candidates", value: candidates?.length ?? 0, color: "text-primary" },
             { icon: Briefcase, label: "Active Roles", value: jobRoles?.length ?? 0, color: "text-primary" },
@@ -557,7 +557,7 @@ const Recruitment = () => {
 
         {/* Candidates Table */}
         <Card className="border-border/50">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0 pb-4">
             <div>
               <CardTitle className="text-lg font-semibold">Candidates</CardTitle>
               <CardDescription>Ranked by total score · hover score pills for AI justification</CardDescription>

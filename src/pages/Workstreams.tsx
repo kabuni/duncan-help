@@ -89,7 +89,7 @@ const Workstreams = () => {
 
         <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-[1400px]">
           {/* Header */}
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-between mb-6">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
             <div>
               <div className="flex items-center gap-2.5 mb-1">
                 <Target className="h-5 w-5 text-primary" />
@@ -97,7 +97,7 @@ const Workstreams = () => {
               </div>
               <p className="text-xs text-muted-foreground font-mono">Track projects, tasks, and team progress</p>
             </div>
-            <Button onClick={() => setShowCreate(true)} className="gap-2">
+            <Button onClick={() => setShowCreate(true)} className="gap-2 w-full sm:w-auto">
               <Plus className="h-4 w-4" /> New Card
             </Button>
           </motion.div>

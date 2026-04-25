@@ -24,34 +24,34 @@ const PurchaseOrders = () => {
 
         <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-6xl">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1">
                   Purchase Orders
                 </p>
-                <h2 className="text-2xl font-bold text-foreground tracking-tight">
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
                   Procurement & <span className="text-primary glow-text">Budget</span>
                 </h2>
               </div>
-              <Button onClick={() => setShowForm(true)} className="gap-2">
+              <Button onClick={() => setShowForm(true)} className="gap-2 w-full sm:w-auto">
                 <Plus className="h-4 w-4" /> Raise PO
               </Button>
             </div>
           </motion.div>
 
           <Tabs defaultValue="orders" className="space-y-6">
-            <TabsList className="bg-secondary/50">
-              <TabsTrigger value="orders" className="gap-2">
+            <TabsList className="bg-secondary/50 w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
+              <TabsTrigger value="orders" className="gap-2 whitespace-nowrap">
                 <FileText className="h-3.5 w-3.5" /> My Orders
               </TabsTrigger>
-              <TabsTrigger value="approvals" className="gap-2">
+              <TabsTrigger value="approvals" className="gap-2 whitespace-nowrap">
                 <Clock className="h-3.5 w-3.5" /> Approvals
               </TabsTrigger>
-              <TabsTrigger value="budget" className="gap-2">
+              <TabsTrigger value="budget" className="gap-2 whitespace-nowrap">
                 <TrendingUp className="h-3.5 w-3.5" /> Budget
               </TabsTrigger>
               {isAdmin && (
-                <TabsTrigger value="admin" className="gap-2">
+                <TabsTrigger value="admin" className="gap-2 whitespace-nowrap">
                   <Upload className="h-3.5 w-3.5" /> Admin
                 </TabsTrigger>
               )}

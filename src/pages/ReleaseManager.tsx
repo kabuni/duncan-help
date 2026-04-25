@@ -161,9 +161,9 @@ export default function ReleaseManager() {
                   {drafts.map((r) => (
                     <Card key={r.id} className="border-dashed">
                       <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-4">
+                        <div className="flex flex-col gap-3">
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
                               <Badge variant="outline" className="text-xs font-mono">{r.version}</Badge>
                               <Badge variant="secondary" className="text-xs">Draft</Badge>
                             </div>
@@ -180,21 +180,27 @@ export default function ReleaseManager() {
                               </div>
                             )}
                           </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Button variant="ghost" size="icon" onClick={() => setPreviewRelease(r)} title="Preview">
-                              <Eye className="h-4 w-4" />
+                          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
+                            <Button variant="outline" size="sm" onClick={() => setPreviewRelease(r)} className="gap-1.5">
+                              <Eye className="h-3.5 w-3.5" />
+                              Preview
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => openEdit(r)} title="Edit">
-                              <Pencil className="h-4 w-4" />
+                            <Button variant="outline" size="sm" onClick={() => openEdit(r)} className="gap-1.5">
+                              <Pencil className="h-3.5 w-3.5" />
+                              Edit
                             </Button>
                             <Button
                               variant="default"
                               size="sm"
-                              onClick={() => publishRelease.mutate(r.id)}
+                              onClick={() => {
+                                if (confirm(`Publish ${r.version} — "${r.title}"? Make sure you've previewed it first.`)) {
+                                  publishRelease.mutate(r.id);
+                                }
+                              }}
                               disabled={publishRelease.isPending}
-                              className="ml-1"
+                              className="gap-1.5 ml-auto"
                             >
-                              {publishRelease.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1" />}
+                              {publishRelease.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                               Publish
                             </Button>
                             <Button variant="ghost" size="icon" onClick={() => deleteRelease.mutate(r.id)} className="text-destructive hover:text-destructive">

@@ -906,15 +906,19 @@ const Recruitment = () => {
                             })}
                           </div>
                         )}
-                        {hireflixLink && (
-                          <a
-                            href={hireflixLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                        {(c.hireflix_playback_url || c.hireflix_interview_url || c.hireflix_status === "completed") && (
+                          <button
+                            type="button"
+                            onClick={() => handleWatchInterview(c)}
+                            disabled={loadingPlaybackId === c.id}
+                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-60 disabled:cursor-wait"
                           >
-                            <Video className="h-3 w-3" /> Watch Interview
-                          </a>
+                            {loadingPlaybackId === c.id ? (
+                              <><Loader2 className="h-3 w-3 animate-spin" /> Fetching interview...</>
+                            ) : (
+                              <><Video className="h-3 w-3" /> Watch Interview</>
+                            )}
+                          </button>
                         )}
                       </CardContent>
                     </Card>

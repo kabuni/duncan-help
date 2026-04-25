@@ -196,15 +196,15 @@ const Operations = () => {
 
           {/* Tabs */}
           <Tabs defaultValue="work-items" className="space-y-4">
-            <TabsList className="bg-card border border-border">
-              <TabsTrigger value="work-items" className="gap-1.5">
-                <GitBranch className="h-3.5 w-3.5" /> Work Items
+            <TabsList className="bg-card border border-border w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
+              <TabsTrigger value="work-items" className="gap-1.5 whitespace-nowrap">
+                <GitBranch className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Work Items</span><span className="sm:hidden">Items</span>
               </TabsTrigger>
-              <TabsTrigger value="analytics" className="gap-1.5">
-                <BarChart3 className="h-3.5 w-3.5" /> Website Analytics
+              <TabsTrigger value="analytics" className="gap-1.5 whitespace-nowrap">
+                <BarChart3 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Website Analytics</span><span className="sm:hidden">Analytics</span>
               </TabsTrigger>
-              <TabsTrigger value="sync-logs" className="gap-1.5">
-                <Clock className="h-3.5 w-3.5" /> Sync Logs
+              <TabsTrigger value="sync-logs" className="gap-1.5 whitespace-nowrap">
+                <Clock className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Sync Logs</span><span className="sm:hidden">Logs</span>
               </TabsTrigger>
             </TabsList>
 
@@ -281,7 +281,8 @@ const Operations = () => {
                     </div>
                   ) : (
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
-                      <table className="w-full text-sm">
+                      <div className="overflow-x-auto">
+                      <table className="w-full text-sm min-w-[640px]">
                         <thead>
                           <tr className="border-b border-border bg-secondary/30">
                             <th className="text-left px-4 py-3 text-xs font-mono uppercase text-muted-foreground">ID</th>
@@ -307,6 +308,7 @@ const Operations = () => {
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     </div>
                   )}
                 </>

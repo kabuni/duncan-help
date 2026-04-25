@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile, ProfileData } from "@/hooks/useProfile";
 import { useDepartments } from "@/hooks/useDepartments";
@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Save, User, Briefcase, Building2 } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Loader2, Save, User, Briefcase, Building2, Camera } from "lucide-react";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 const ROLE_TITLES = [

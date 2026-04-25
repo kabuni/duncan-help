@@ -61,22 +61,19 @@ async function fetchPositionInterviews(apiKey: string, positionId: string) {
 // - "short"   = shortened version of the public link (also no login)
 // We prefer `public`, fall back to `short`, and only use `private` as a last resort.
 function extractReviewerPlaybackUrl(interview: any): string | null {
-  const publicUrl = interview?.url?.public;
-  if (typeof publicUrl === "string" && publicUrl.trim()) {
-    console.log(`Found playback URL (url.public): ${publicUrl}`);
-    return publicUrl.trim();
-  }
-  const shortUrl = interview?.url?.short;
-  if (typeof shortUrl === "string" && shortUrl.trim()) {
-    console.log(`Falling back to url.short: ${shortUrl}`);
-    return shortUrl.trim();
-  }
+  // Admin playback link (admin.hireflix.com/...) — the only correct link for recruiters.
   const privateUrl = interview?.url?.private;
   if (typeof privateUrl === "string" && privateUrl.trim()) {
-    console.warn(`Only url.private available for interview ${interview?.id} — this requires Hireflix login`);
+    console.log(`Found admin playback URL (url.private): ${privateUrl}`);
     return privateUrl.trim();
   }
-  console.log(`No playback URL found for interview ${interview?.id}. url object:`, JSON.stringify(interview?.url));
+  // Fallback: hosted public playback page (no login). Never fall back to url.short (candidate link).
+  const publicUrl = interview?.url?.public;
+  if (typeof publicUrl === "string" && publicUrl.trim()) {
+    console.warn(`Falling back to url.public for interview ${interview?.id} — url.private missing`);
+    return publicUrl.trim();
+  }
+  console.log(`No reviewer playback URL found for interview ${interview?.id}. url object:`, JSON.stringify(interview?.url));
   return null;
 }
 

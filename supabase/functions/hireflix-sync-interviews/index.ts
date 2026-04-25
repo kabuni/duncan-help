@@ -388,6 +388,7 @@ serve(async (req) => {
             .join("\n\n");
           interviewId = interview.id;
           playbackUrl = extractReviewerPlaybackUrl(interview);
+          console.log("SYNC PLAYBACK URL:", { candidate_id: candidate.id, playbackUrl });
           console.log(`Extracted reviewer playback URL for candidate ${candidate.id}:`, playbackUrl);
           // Hireflix InterviewType exposes interview.id (not candidate.id); persist this stable ID
           hireflixCandidateId = interview.id || hireflixCandidateId;
@@ -403,7 +404,19 @@ serve(async (req) => {
         }
 
         if (!transcript) {
-          results.push({ id: candidate.id, name: candidate.name, status: "skipped", reason: "No transcript available" });
+          // Even without a transcript, ALWAYS overwrite the latest playback URL / interview ID
+          // so stale (incorrect) playback URLs cannot persist in the DB.
+          if (interview) {
+            await supabaseAdmin
+              .from("candidates")
+              .update({
+                hireflix_interview_id: interviewId,
+                hireflix_candidate_id: hireflixCandidateId,
+                hireflix_playback_url: playbackUrl,
+              })
+              .eq("id", candidate.id);
+          }
+          results.push({ id: candidate.id, name: candidate.name, status: "skipped", reason: "No transcript available", has_playback: !!playbackUrl });
           continue;
         }
 

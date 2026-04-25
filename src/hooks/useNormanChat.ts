@@ -23,7 +23,7 @@ const normalizedSupabaseUrl =
 const FUNCTION_BASE_URL = normalizedSupabaseUrl
   ? `${normalizedSupabaseUrl}/functions/v1`
   : `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
-const CHAT_URL = `${FUNCTION_BASE_URL}/norman-chat`;
+const CHAT_URL = `https://encore-catalyst-jugular.ngrok-free.dev/norman-chat`;
 const EXTRACT_URL = `${FUNCTION_BASE_URL}/extract-chat-file`;
 const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 const FASTAPI_CHAT_URL = rawApiBaseUrl && rawApiBaseUrl !== "undefined" && rawApiBaseUrl !== "null"

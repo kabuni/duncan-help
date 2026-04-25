@@ -1,33 +1,33 @@
-## Norman Tool Selection Fix — Prevent Unnecessary `fetch_plaud_meetings`
+# Repoint `CHAT_URL` to ngrok endpoint
 
-### Problem
-The system prompt currently instructs the model to **ALWAYS** call `fetch_plaud_meetings` first when a user asks about a recent meeting. For broad summarization prompts like "Summarize my recent meetings", this triggers a ~20s Gmail sync, consumes the tool-loop execution budget, and prevents `analyze_meetings` from running — final synthesis returns empty.
+## Change
 
-### Fix (single file, prompt-only)
+In `src/hooks/useNormanChat.ts`, replace **only** the `CHAT_URL` constant so the chat hook calls the local/ngrok-tunnelled backend instead of the Supabase edge function.
 
-**File:** `supabase/functions/norman-chat/index.ts`
+## Note on line number
 
-**1. Update the Meeting Intelligence guidance (line 29)** — replace the "ALWAYS call fetch_plaud_meetings FIRST" rule with explicit gating:
+Your message says "line 17", but in the current file the `CHAT_URL` declaration is on **line 26**. Line 17 is a blank line inside an interface block. I will change the actual `CHAT_URL` line — that is unambiguously the one you described.
 
-> **Meeting Intelligence**: Use `list_meetings` to browse stored meetings (supports `from_date`/`to_date` and typo-tolerant search), `get_meeting` for a specific meeting's transcript/analysis, `analyze_meetings` to run AI analysis, and `search_meeting_transcripts` for cross-meeting topic search.
->
-> **`fetch_plaud_meetings` is a SLOW sync operation (~20s) and must ONLY be called when the user explicitly requests a sync/refresh** — i.e. the prompt contains words like "sync", "fetch latest", "pull new", "refresh meetings", "update meeting data", or "import from Plaud".
->
-> **For summarization, analysis, search, or any question about existing meetings (including "today's", "yesterday's", "recent", "this week's"): SKIP `fetch_plaud_meetings`. Go straight to `list_meetings` (with `from_date`/`to_date` when a date is implied), then `get_meeting` or `analyze_meetings` as needed.**
->
-> Only fall back to `fetch_plaud_meetings` if `list_meetings` returns zero results AND the user's intent clearly implies a meeting should exist that hasn't been ingested yet.
+## Edit
 
-**2. Update the `fetch_plaud_meetings` tool description (line 553)** to make the gating self-evident to the model:
+File: `src/hooks/useNormanChat.ts`, line 26
 
-> "Sync new Plaud AI meeting recordings from Gmail into the meetings database. **SLOW (~20s) — call ONLY when the user explicitly asks to sync/refresh/import meetings (keywords: 'sync', 'fetch latest', 'pull new', 'refresh', 'import').** Do NOT call this for summarization, analysis, search, or general questions about existing meetings — use `list_meetings` instead."
+From:
+```ts
+const CHAT_URL = `${FUNCTION_BASE_URL}/norman-chat`;
+```
 
-**3. Update the `list_meetings` tool description (line 561)** to reinforce it as the default entry point:
+To:
+```ts
+const CHAT_URL = `https://encore-catalyst-jugular.ngrok-free.dev/norman-chat`;
+```
 
-> Prepend: "**Default entry point for any meeting question (summarize, analyze, search, browse).** "
+## Not changed
 
-### Out of scope
-- No changes to orchestration, tool-loop logic, timeouts, fallback, or streaming.
-- No changes to tool execution code or `pickModel` / `WORKFLOW_ROUTING`.
+- `EXTRACT_URL`, `FASTAPI_CHAT_URL`, `FUNCTION_BASE_URL`, and every other line in the file remain untouched.
+- No other files are modified.
 
-### Expected outcome
-For "Summarize my recent meetings": model calls `list_meetings` → `analyze_meetings` (or `get_meeting` per item) → final synthesis. `fetch_plaud_meetings` is not invoked, the ~20s sync is avoided, and the tool loop completes within budget.
+## Side effects to be aware of
+
+- All `norman-chat` traffic from the app will go to the ngrok tunnel. If the tunnel is down, the main chat will fail.
+- Auth headers, streaming behaviour, and request bodies stay identical — the ngrok server must accept the same `Authorization: Bearer <supabase jwt>` header and SSE response shape as the edge function.

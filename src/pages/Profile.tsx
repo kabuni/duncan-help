@@ -56,8 +56,8 @@ const Profile = () => {
 
         <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-2xl">
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-            <h2 className="text-2xl font-bold text-foreground tracking-tight mb-1">Your Profile</h2>
-            <p className="text-sm text-muted-foreground mb-8">
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight mb-1">Your Profile</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground mb-8">
               Help Duncan understand who you are so it can personalise responses.
             </p>
           </motion.div>
@@ -66,7 +66,7 @@ const Profile = () => {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="space-y-6 rounded-xl border border-border bg-card p-6"
+            className="space-y-6 rounded-xl border border-border bg-card p-4 sm:p-6"
           >
             {/* Name */}
             <div className="space-y-2">

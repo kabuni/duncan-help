@@ -129,6 +129,50 @@ const Recruitment = () => {
   const [hasFetched, setHasFetched] = useState(false);
   const [validatingPosition, setValidatingPosition] = useState(false);
   const [assigningRole, setAssigningRole] = useState<string | null>(null);
+  const [loadingPlaybackId, setLoadingPlaybackId] = useState<string | null>(null);
+
+  const handleWatchInterview = async (candidate: any) => {
+    const isCompleted = candidate.hireflix_status === "completed";
+
+    // Case 1: playback already available
+    if (candidate.hireflix_playback_url) {
+      window.open(candidate.hireflix_playback_url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    // Case 2: completed but missing playback → trigger sync
+    if (isCompleted) {
+      setLoadingPlaybackId(candidate.id);
+      try {
+        await supabase.functions.invoke("hireflix-sync-interviews");
+
+        const { data } = await supabase
+          .from("candidates")
+          .select("*")
+          .eq("id", candidate.id)
+          .single();
+
+        await refetchCandidates();
+
+        if (data?.hireflix_playback_url) {
+          window.open(data.hireflix_playback_url, "_blank", "noopener,noreferrer");
+        } else {
+          toast.error("Interview not ready yet. Try again in a few seconds.");
+        }
+      } catch (err) {
+        console.error("Failed to sync Hireflix interview", err);
+        toast.error("Failed to fetch interview. Try again.");
+      } finally {
+        setLoadingPlaybackId(null);
+      }
+      return;
+    }
+
+    // Case 3: not completed → open candidate interview link
+    if (candidate.hireflix_interview_url) {
+      window.open(candidate.hireflix_interview_url, "_blank", "noopener,noreferrer");
+    }
+  };
 
   const { data: gmailStatus } = useQuery({
     queryKey: ["gmail-status"],

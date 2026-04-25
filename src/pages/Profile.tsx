@@ -1,14 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { User, Briefcase, Building2, Save, Loader2 } from "lucide-react";
+import { User, Briefcase, Building2, Save, Loader2, Camera } from "lucide-react";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
 import AppLayout from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useProfile, ProfileData } from "@/hooks/useProfile";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const Profile = () => {
   const { user } = useAuth();
@@ -39,6 +42,41 @@ const Profile = () => {
   const set = (key: keyof ProfileData, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be under 5MB");
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${user.id}/avatar-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path);
+      updateProfile({ avatar_url: publicUrl });
+    } catch (err: any) {
+      toast.error(err.message ?? "Upload failed");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const initials = (form.display_name || user?.email || "U")
+    .split(" ")
+    .map((s) => s[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -68,6 +106,38 @@ const Profile = () => {
             transition={{ delay: 0.1 }}
             className="space-y-6 rounded-xl border border-border bg-card p-4 sm:p-6"
           >
+            {/* Avatar */}
+            <div className="flex items-center gap-4">
+              <Avatar className="h-20 w-20 border border-border">
+                <AvatarImage src={profile?.avatar_url ?? undefined} alt="Profile" />
+                <AvatarFallback className="text-lg">{initials}</AvatarFallback>
+              </Avatar>
+              <div className="space-y-2">
+                <Label className="text-foreground">Profile Picture</Label>
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="gap-2"
+                  >
+                    {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                    {isUploading ? "Uploading…" : "Change photo"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">PNG or JPG, up to 5MB.</p>
+              </div>
+            </div>
+
             {/* Name */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2 text-foreground">

@@ -129,6 +129,50 @@ const Recruitment = () => {
   const [hasFetched, setHasFetched] = useState(false);
   const [validatingPosition, setValidatingPosition] = useState(false);
   const [assigningRole, setAssigningRole] = useState<string | null>(null);
+  const [loadingPlaybackId, setLoadingPlaybackId] = useState<string | null>(null);
+
+  const handleWatchInterview = async (candidate: any) => {
+    const isCompleted = candidate.hireflix_status === "completed";
+
+    // Case 1: playback already available
+    if (candidate.hireflix_playback_url) {
+      window.open(candidate.hireflix_playback_url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    // Case 2: completed but missing playback → trigger sync
+    if (isCompleted) {
+      setLoadingPlaybackId(candidate.id);
+      try {
+        await supabase.functions.invoke("hireflix-sync-interviews");
+
+        const { data } = await supabase
+          .from("candidates")
+          .select("*")
+          .eq("id", candidate.id)
+          .single();
+
+        await refetchCandidates();
+
+        if (data?.hireflix_playback_url) {
+          window.open(data.hireflix_playback_url, "_blank", "noopener,noreferrer");
+        } else {
+          toast.error("Interview not ready yet. Try again in a few seconds.");
+        }
+      } catch (err) {
+        console.error("Failed to sync Hireflix interview", err);
+        toast.error("Failed to fetch interview. Try again.");
+      } finally {
+        setLoadingPlaybackId(null);
+      }
+      return;
+    }
+
+    // Case 3: not completed → open candidate interview link
+    if (candidate.hireflix_interview_url) {
+      window.open(candidate.hireflix_interview_url, "_blank", "noopener,noreferrer");
+    }
+  };
 
   const { data: gmailStatus } = useQuery({
     queryKey: ["gmail-status"],
@@ -753,15 +797,19 @@ const Recruitment = () => {
                               return <span className="text-muted-foreground text-xs">—</span>;
                             })()}
                             <div className="mt-1">
-                              {hireflixLink ? (
-                                <a
-                                  href={hireflixLink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary underline text-[10px] inline-flex items-center gap-1"
+                              {(c.hireflix_playback_url || c.hireflix_interview_url || c.hireflix_status === "completed") ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleWatchInterview(c)}
+                                  disabled={loadingPlaybackId === c.id}
+                                  className="text-primary underline text-[10px] inline-flex items-center gap-1 disabled:opacity-60 disabled:cursor-wait"
                                 >
-                                  <ExternalLink className="h-3 w-3" /> Open Interview
-                                </a>
+                                  {loadingPlaybackId === c.id ? (
+                                    <><Loader2 className="h-3 w-3 animate-spin" /> Fetching interview...</>
+                                  ) : (
+                                    <><ExternalLink className="h-3 w-3" /> Open Interview</>
+                                  )}
+                                </button>
                               ) : (
                                 <span className="text-[10px] text-muted-foreground">No interview link available</span>
                               )}
@@ -858,15 +906,19 @@ const Recruitment = () => {
                             })}
                           </div>
                         )}
-                        {hireflixLink && (
-                          <a
-                            href={hireflixLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                        {(c.hireflix_playback_url || c.hireflix_interview_url || c.hireflix_status === "completed") && (
+                          <button
+                            type="button"
+                            onClick={() => handleWatchInterview(c)}
+                            disabled={loadingPlaybackId === c.id}
+                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-60 disabled:cursor-wait"
                           >
-                            <Video className="h-3 w-3" /> Watch Interview
-                          </a>
+                            {loadingPlaybackId === c.id ? (
+                              <><Loader2 className="h-3 w-3 animate-spin" /> Fetching interview...</>
+                            ) : (
+                              <><Video className="h-3 w-3" /> Watch Interview</>
+                            )}
+                          </button>
                         )}
                       </CardContent>
                     </Card>

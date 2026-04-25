@@ -425,6 +425,27 @@ serve(async (req) => {
         // DO NOT mark as "completed" if playback_url is NULL — keep as "invited" until video accessible
         const shouldMarkCompleted = !!playbackUrl;
 
+        // Fast-path: if the candidate is already completed and scored, just refresh the
+        // playback URL / interview IDs and skip the expensive OpenAI re-scoring step.
+        // This guarantees stale playback URLs always get overwritten, even when the
+        // function is under load and would otherwise time out before reaching every candidate.
+        if (
+          candidate.hireflix_status === "completed" &&
+          typeof candidate.interview_final_score === "number" &&
+          forceRescore
+        ) {
+          await supabaseAdmin
+            .from("candidates")
+            .update({
+              hireflix_interview_id: interviewId,
+              hireflix_candidate_id: hireflixCandidateId,
+              hireflix_playback_url: playbackUrl,
+            })
+            .eq("id", candidate.id);
+          results.push({ id: candidate.id, name: candidate.name, status: "url_refreshed", has_playback: !!playbackUrl });
+          continue;
+        }
+
         try {
           const scores = await scoreTranscript(transcript);
 

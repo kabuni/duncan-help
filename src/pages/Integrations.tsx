@@ -454,20 +454,20 @@ const Integrations = () => {
         <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-6xl">
           {/* Header */}
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <h2 className="text-2xl font-bold text-foreground tracking-tight">Integrations</h2>
-            <p className="text-sm text-muted-foreground mt-1">
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Integrations</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Connect your tools so Duncan can ingest, reason, and automate across your stack.
             </p>
           </motion.div>
 
 
           {/* Filters */}
-          <div className="flex items-center gap-2 mb-6">
+          <div className="flex items-center gap-2 mb-6 mt-4 overflow-x-auto scrollbar-thin -mx-1 px-1">
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setFilter(cat)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
+                className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
                   filter === cat
                     ? "bg-primary/10 text-primary border border-primary/20"
                     : "text-muted-foreground hover:text-foreground border border-transparent"
@@ -485,7 +485,7 @@ const Integrations = () => {
             </div>
           ) : (
             /* Integration Grid */
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filtered.map((integration, i) => {
                 const status = getRealtimeStatus(integration);
                 const s = statusConfig[status];

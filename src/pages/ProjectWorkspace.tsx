@@ -10,6 +10,7 @@ import Sidebar, { MobileMenuButton } from "@/components/Sidebar";
 import { supabase } from "@/integrations/supabase/client";
 import { useProjects, useProjectChats, useProjectChat, useProjectFiles, useProjectMembers } from "@/hooks/useProjects";
 import { useUserProfiles } from "@/hooks/useWorkstreams";
+import { useProfile } from "@/hooks/useProfile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +30,9 @@ export default function ProjectWorkspace() {
   const { files, uploadFile, extractText, deleteFile, isUploading, isExtracting } = useProjectFiles(projectId || null);
   const { members, loading: membersLoading, addMember, removeMember } = useProjectMembers(projectId || null);
   const { data: userProfiles = [] } = useUserProfiles({ approvedOnly: false });
+  const { profile: currentProfile } = useProfile();
+  const myDisplayName = currentProfile?.display_name || "You";
+  const myAvatarUrl = currentProfile?.avatar_url || null;
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -159,7 +163,7 @@ export default function ProjectWorkspace() {
 
   const senderNameFor = (msg: typeof messages[number]) => {
     if (msg.role === "assistant") return "Duncan";
-    return msg.sender_name || null;
+    return msg.sender_name || myDisplayName;
   };
 
   if (!projectId) return null;

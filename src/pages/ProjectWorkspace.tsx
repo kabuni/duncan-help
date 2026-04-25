@@ -311,35 +311,47 @@ export default function ProjectWorkspace() {
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                       </div>
                     )}
-                    {messages.map(msg => (
-                      <div key={msg.id} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}>
-                        {msg.role === "assistant" && (
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg overflow-hidden border border-primary/20">
-                            <img src={duncanAvatar} alt="Duncan" className="h-full w-full object-cover object-[50%_30%] scale-150" />
-                          </div>
-                        )}
-                        <div className={`max-w-[80%] space-y-1 ${msg.role === "user" ? "items-end" : "items-start"}`}>
-                          {senderNameFor(msg) && (
-                            <p className={`text-[10px] font-medium text-muted-foreground ${msg.role === "user" ? "text-right" : "text-left"}`}>
+                    {messages.map(msg => {
+                      const isUser = msg.role === "user";
+                      const userMember = isUser ? members.find((m) => m.user_id === msg.user_id) : null;
+                      const userName = isUser ? (msg.sender_name || userMember?.display_name || myDisplayName) : "Duncan";
+                      const userAvatar = isUser ? (userMember?.avatar_url || (msg.user_id === currentProfile && myAvatarUrl) || myAvatarUrl) : null;
+                      return (
+                        <div key={msg.id} className={`flex gap-2 sm:gap-3 ${isUser ? "justify-end" : ""}`}>
+                          {!isUser && (
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg overflow-hidden border border-primary/20">
+                              <img src={duncanAvatar} alt="Duncan" className="h-full w-full object-cover object-[50%_30%] scale-150" />
+                            </div>
+                          )}
+                          <div className={`max-w-[85%] sm:max-w-[80%] space-y-1 ${isUser ? "items-end" : "items-start"}`}>
+                            <p className={`text-[10px] font-medium uppercase tracking-wider text-muted-foreground ${isUser ? "text-right" : "text-left"}`}>
                               {senderNameFor(msg)}
                             </p>
-                          )}
-                          <div className={`rounded-xl px-4 py-3 text-sm ${
-                            msg.role === "user"
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-card border border-border text-foreground"
-                          }`}>
-                            {msg.role === "assistant" ? (
-                              <div className="prose prose-sm dark:prose-invert max-w-none">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                              </div>
-                            ) : (
-                              <p className="whitespace-pre-wrap">{msg.content}</p>
-                            )}
+                            <div className={`rounded-xl px-4 py-3 text-sm ${
+                              isUser
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-card border border-border text-foreground"
+                            }`}>
+                              {!isUser ? (
+                                <div className="prose prose-sm dark:prose-invert max-w-none">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                                </div>
+                              ) : (
+                                <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                              )}
+                            </div>
                           </div>
+                          {isUser && (
+                            <Avatar className="h-7 w-7 shrink-0 border border-primary/20">
+                              {userAvatar ? <AvatarImage src={userAvatar} alt={userName} /> : null}
+                              <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
+                                {initialsFor(userName)}
+                              </AvatarFallback>
+                            </Avatar>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {sending && (
                       <div className="flex gap-3">
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg overflow-hidden border border-primary/20">

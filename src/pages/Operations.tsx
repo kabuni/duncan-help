@@ -48,6 +48,36 @@ function useSyncLogs() {
   });
 }
 
+function useReposSummary(enabled: boolean) {
+  return useQuery({
+    queryKey: ["azure-repos-summary"],
+    queryFn: () => azureReposApi.teamActivitySummary(7),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+function useReposList(enabled: boolean) {
+  return useQuery({
+    queryKey: ["azure-repos-list"],
+    queryFn: () => azureReposApi.listRepos(),
+    enabled,
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+function useActivePRs(enabled: boolean) {
+  return useQuery({
+    queryKey: ["azure-active-prs"],
+    queryFn: () => azureReposApi.listPullRequests({ status: "active", top: 50 }),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
 const stateColors: Record<string, string> = {
   "New": "bg-blue-500/10 text-blue-400 border-blue-500/20",
   "Active": "bg-primary/10 text-primary border-primary/20",

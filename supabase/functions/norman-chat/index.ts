@@ -760,6 +760,7 @@ const AZURE_REPOS_TOOLS = [
   },
 ];
 
+const XERO_TOOLS = [
   {
     type: "function",
     function: {

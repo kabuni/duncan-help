@@ -684,7 +684,82 @@ const AZURE_DEVOPS_TOOLS = [
   },
 ];
 
-const XERO_TOOLS = [
+const AZURE_REPOS_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "list_azure_repos",
+      description: "List all Azure DevOps Git repositories across every project. Returns repo name, project, default branch, and size. Use to discover available repos before querying commits or PRs.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_recent_commits",
+      description: "Fetch recent commits across Azure Repos. Use for team activity, who shipped what, or briefings. Defaults to last 7 days across all repos. Optionally scope to a specific repo or author.",
+      parameters: {
+        type: "object",
+        properties: {
+          days: { type: "number", description: "Lookback window in days (1-90, default 7)" },
+          top: { type: "number", description: "Max commits per repo (1-200, default 50)" },
+          project: { type: "string", description: "Optional: project name to scope to" },
+          repository_id: { type: "string", description: "Optional: repository GUID to scope to (requires project)" },
+          author: { type: "string", description: "Optional: filter by author name or email" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_pull_requests",
+      description: "List pull requests across Azure Repos. Defaults to active (open) PRs org-wide. Returns title, status, author, source/target branches, reviewers, and votes (10=approved, 5=approved with suggestions, 0=no vote, -5=waiting, -10=rejected).",
+      parameters: {
+        type: "object",
+        properties: {
+          status: { type: "string", description: "active | completed | abandoned | all (default active)" },
+          top: { type: "number", description: "Max PRs (1-200, default 50)" },
+          project: { type: "string", description: "Optional: scope to a project" },
+          repository_id: { type: "string", description: "Optional: scope to a repo (requires project)" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_pr_reviews",
+      description: "Get review threads and comments for a specific pull request. Use to understand review velocity, blockers, or what reviewers said.",
+      parameters: {
+        type: "object",
+        properties: {
+          project: { type: "string", description: "Project name" },
+          repository_id: { type: "string", description: "Repository GUID" },
+          pull_request_id: { type: "number", description: "Pull request ID" },
+        },
+        required: ["project", "repository_id", "pull_request_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_repos_team_summary",
+      description: "Aggregated engineering activity summary for the Team Briefing: total commits, commits per author, commits per repo, recent commits list, and active PRs. Defaults to 7-day window.",
+      parameters: {
+        type: "object",
+        properties: {
+          days: { type: "number", description: "Lookback window in days (1-30, default 7)" },
+        },
+        required: [],
+      },
+    },
+  },
+];
+
   {
     type: "function",
     function: {

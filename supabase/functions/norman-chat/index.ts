@@ -4591,6 +4591,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = await withToolTimeout(tc.function.name, executeMeetingTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));
           } else if (azureDevOpsToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeAzureDevOpsTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));
+          } else if (azureReposToolNames.includes(tc.function.name)) {
+              result = await withToolTimeout(tc.function.name, executeAzureReposTool(tc.function.name, args, supabaseUrl, authHeader || ""));
           } else if (xeroToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeXeroTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || "", userId || ""));
            } else if (gmailToolNames.includes(tc.function.name)) {

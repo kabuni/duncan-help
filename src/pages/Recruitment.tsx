@@ -241,21 +241,32 @@ const Recruitment = () => {
     }
     setFetching(true);
     try {
-      const data = await withFastApi<{ ingested: number; skipped: number }>(
-        async () => {
-          const res = await supabase.functions.invoke("fetch-gmail-cvs", {
-            body: { role_id: selectedRoleId },
-          });
-          if (res.error) throw res.error;
-          return res.data;
-        },
-        () => fastApi("POST", "/recruitment/fetch-gmail-cvs", { role_id: selectedRoleId }),
-      );
-      toast.success(`Fetched ${data.ingested} new CV(s), ${data.skipped} skipped.`);
+      const res = await supabase.functions.invoke("fetch-gmail-cvs", {
+        body: { role_id: selectedRoleId },
+      });
+
+      // Detect "already running" lock conflict (HTTP 409 returned via FunctionsHttpError)
+      const errCtx: any = (res as any).error?.context;
+      if (errCtx) {
+        try {
+          const body = typeof errCtx.json === "function" ? await errCtx.json() : null;
+          if (body?.already_running || errCtx.status === 409) {
+            toast.message("Fetch already running for this role");
+            return;
+          }
+        } catch { /* ignore */ }
+      }
+      if (res.error) throw res.error;
+
+      const data: any = res.data || {};
+      toast.success(`Fetched ${data.ingested ?? 0} new CV(s), ${data.skipped ?? 0} skipped.`);
+      if (data.has_more) {
+        toast.message("More CVs remaining — run Fetch CVs again to continue.");
+      }
       setHasFetched(true);
-      refetchCandidates();
+      await refetchCandidates();
     } catch (err: any) {
-      toast.error("Failed to fetch CVs: " + err.message);
+      toast.error("Failed to fetch CVs: " + (err?.message || "unknown"));
     } finally {
       setFetching(false);
     }

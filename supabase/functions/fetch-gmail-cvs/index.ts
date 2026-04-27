@@ -891,26 +891,3 @@ serve(async (req) => {
   }
 });
 
-// Helper to trigger parse-cv without blocking on failure
-async function triggerParse(supabaseUrl: string, serviceKey: string, candidateId: string, storagePath: string) {
-  try {
-    // Fetch the actual storage path from the candidate record
-    const supabaseAdmin = createClient(supabaseUrl, serviceKey);
-    const { data: cand } = await supabaseAdmin.from("candidates").select("cv_storage_path").eq("id", candidateId).single();
-    if (!cand?.cv_storage_path) return;
-
-    await fetch(`${supabaseUrl}/functions/v1/parse-cv`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${serviceKey}`,
-      },
-      body: JSON.stringify({
-        candidate_id: candidateId,
-        storage_path: cand.cv_storage_path,
-      }),
-    });
-  } catch (e: any) {
-    console.error(`Failed to trigger parse for ${candidateId}:`, e);
-  }
-}

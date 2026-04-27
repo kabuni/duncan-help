@@ -684,6 +684,82 @@ const AZURE_DEVOPS_TOOLS = [
   },
 ];
 
+const AZURE_REPOS_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "list_azure_repos",
+      description: "List all Azure DevOps Git repositories across every project. Returns repo name, project, default branch, and size. Use to discover available repos before querying commits or PRs.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_recent_commits",
+      description: "Fetch recent commits across Azure Repos. Use for team activity, who shipped what, or briefings. Defaults to last 7 days across all repos. Optionally scope to a specific repo or author.",
+      parameters: {
+        type: "object",
+        properties: {
+          days: { type: "number", description: "Lookback window in days (1-90, default 7)" },
+          top: { type: "number", description: "Max commits per repo (1-200, default 50)" },
+          project: { type: "string", description: "Optional: project name to scope to" },
+          repository_id: { type: "string", description: "Optional: repository GUID to scope to (requires project)" },
+          author: { type: "string", description: "Optional: filter by author name or email" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_pull_requests",
+      description: "List pull requests across Azure Repos. Defaults to active (open) PRs org-wide. Returns title, status, author, source/target branches, reviewers, and votes (10=approved, 5=approved with suggestions, 0=no vote, -5=waiting, -10=rejected).",
+      parameters: {
+        type: "object",
+        properties: {
+          status: { type: "string", description: "active | completed | abandoned | all (default active)" },
+          top: { type: "number", description: "Max PRs (1-200, default 50)" },
+          project: { type: "string", description: "Optional: scope to a project" },
+          repository_id: { type: "string", description: "Optional: scope to a repo (requires project)" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_pr_reviews",
+      description: "Get review threads and comments for a specific pull request. Use to understand review velocity, blockers, or what reviewers said.",
+      parameters: {
+        type: "object",
+        properties: {
+          project: { type: "string", description: "Project name" },
+          repository_id: { type: "string", description: "Repository GUID" },
+          pull_request_id: { type: "number", description: "Pull request ID" },
+        },
+        required: ["project", "repository_id", "pull_request_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_repos_team_summary",
+      description: "Aggregated engineering activity summary for the Team Briefing: total commits, commits per author, commits per repo, recent commits list, and active PRs. Defaults to 7-day window.",
+      parameters: {
+        type: "object",
+        properties: {
+          days: { type: "number", description: "Lookback window in days (1-30, default 7)" },
+        },
+        required: [],
+      },
+    },
+  },
+];
+
 const XERO_TOOLS = [
   {
     type: "function",
@@ -2686,6 +2762,59 @@ async function executeAzureDevOpsTool(
   }
 }
 
+async function executeAzureReposTool(
+  toolName: string,
+  args: any,
+  supabaseUrl: string,
+  authHeader: string,
+): Promise<any> {
+  const callRepos = async (action: string, payload: Record<string, unknown> = {}) => {
+    const res = await fetch(`${supabaseUrl}/functions/v1/azure-repos-api`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: authHeader },
+      body: JSON.stringify({ action, ...payload }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `azure-repos-api ${action} failed (${res.status})`);
+    return data;
+  };
+
+  switch (toolName) {
+    case "list_azure_repos":
+      return await callRepos("list_repos");
+
+    case "get_recent_commits":
+      return await callRepos("get_recent_commits", {
+        days: args.days,
+        top: args.top,
+        project: args.project,
+        repository_id: args.repository_id,
+        author: args.author,
+      });
+
+    case "list_pull_requests":
+      return await callRepos("list_pull_requests", {
+        status: args.status,
+        top: args.top,
+        project: args.project,
+        repository_id: args.repository_id,
+      });
+
+    case "get_pr_reviews":
+      return await callRepos("get_pr_threads", {
+        project: args.project,
+        repository_id: args.repository_id,
+        pull_request_id: args.pull_request_id,
+      });
+
+    case "get_repos_team_summary":
+      return await callRepos("team_activity_summary", { days: args.days });
+
+    default:
+      throw new Error(`Unknown Azure Repos tool: ${toolName}`);
+  }
+}
+
 async function executeMeetingTool(
   toolName: string,
   args: any,
@@ -3890,6 +4019,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
     tools.push(...MEETING_TOOLS);
     // Azure DevOps tools always available (connection checked at execution time)
     tools.push(...AZURE_DEVOPS_TOOLS);
+    // Azure Repos tools always available (connection checked at execution time)
+    tools.push(...AZURE_REPOS_TOOLS);
     // Xero tools always available (data is synced locally)
     tools.push(...XERO_TOOLS);
     // Gmail tools always available (connection checked at execution time)
@@ -4390,6 +4521,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const basecampToolNames = ["list_basecamp_projects", "get_basecamp_todolists", "get_basecamp_todos", "get_basecamp_messages", "get_basecamp_card_table_cards"];
       const meetingToolNames = ["fetch_plaud_meetings", "list_meetings", "get_meeting", "analyze_meetings", "search_meeting_transcripts"];
       const azureDevOpsToolNames = ["list_azure_devops_projects", "query_azure_work_items", "get_azure_work_item", "search_synced_work_items"];
+      const azureReposToolNames = ["list_azure_repos", "get_recent_commits", "list_pull_requests", "get_pr_reviews", "get_repos_team_summary"];
       const xeroToolNames = ["list_xero_invoices", "get_xero_invoice", "approve_xero_invoice_payment", "search_xero_contacts", "create_xero_invoice", "list_xero_bank_accounts", "create_xero_expense"];
       const gmailToolNames = ["list_gmail_emails", "search_gmail", "read_gmail_email", "send_gmail_email", "read_gmail_thread", "draft_gmail_reply", "draft_gmail_email"];
       const driveToolNames = ["drive_list_files", "drive_search", "drive_get_content"];
@@ -4459,6 +4591,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = await withToolTimeout(tc.function.name, executeMeetingTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));
           } else if (azureDevOpsToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeAzureDevOpsTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));
+          } else if (azureReposToolNames.includes(tc.function.name)) {
+              result = await withToolTimeout(tc.function.name, executeAzureReposTool(tc.function.name, args, supabaseUrl, authHeader || ""));
           } else if (xeroToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeXeroTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || "", userId || ""));
            } else if (gmailToolNames.includes(tc.function.name)) {

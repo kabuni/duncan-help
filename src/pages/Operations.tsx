@@ -5,6 +5,7 @@ import {
   GitBranch, AlertTriangle,
   Clock, RefreshCw, Loader2, Activity, Search, X,
   BarChart3, Globe2, Users, MousePointerClick, PlugZap, Send,
+  GitPullRequest, GitCommit, FolderGit2,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { fastApi, withFastApi } from "@/lib/fastApiClient";
 import { useGoogleAnalytics } from "@/hooks/useGoogleAnalytics";
+import { azureReposApi, type TeamActivitySummary, type AzureRepo, type AzurePullRequest } from "@/lib/api/azureRepos";
 import { toast } from "sonner";
 
 function useWorkItems() {
@@ -46,6 +48,36 @@ function useSyncLogs() {
   });
 }
 
+function useReposSummary(enabled: boolean) {
+  return useQuery({
+    queryKey: ["azure-repos-summary"],
+    queryFn: () => azureReposApi.teamActivitySummary(7),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+function useReposList(enabled: boolean) {
+  return useQuery({
+    queryKey: ["azure-repos-list"],
+    queryFn: () => azureReposApi.listRepos(),
+    enabled,
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+function useActivePRs(enabled: boolean) {
+  return useQuery({
+    queryKey: ["azure-active-prs"],
+    queryFn: () => azureReposApi.listPullRequests({ status: "active", top: 50 }),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
 const stateColors: Record<string, string> = {
   "New": "bg-blue-500/10 text-blue-400 border-blue-500/20",
   "Active": "bg-primary/10 text-primary border-primary/20",
@@ -61,6 +93,12 @@ const Operations = () => {
   const [syncing, setSyncing] = useState<string | null>(null);
   const [analyticsQuestion, setAnalyticsQuestion] = useState("Where do we have the most website reach?");
   const [analyticsAnswer, setAnalyticsAnswer] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("work-items");
+
+  const reposEnabled = activeTab === "repos";
+  const { data: reposSummary, isLoading: reposLoading, error: reposError, refetch: refetchRepos } = useReposSummary(reposEnabled);
+  const { data: reposListResp, isLoading: reposListLoading } = useReposList(reposEnabled);
+  const { data: activePRsResp, isLoading: prsLoading } = useActivePRs(reposEnabled);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -195,10 +233,13 @@ const Operations = () => {
           </div>
 
           {/* Tabs */}
-          <Tabs defaultValue="work-items" className="space-y-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList className="bg-card border border-border w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
               <TabsTrigger value="work-items" className="gap-1.5 whitespace-nowrap">
                 <GitBranch className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Work Items</span><span className="sm:hidden">Items</span>
+              </TabsTrigger>
+              <TabsTrigger value="repos" className="gap-1.5 whitespace-nowrap">
+                <FolderGit2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Repos</span><span className="sm:hidden">Repos</span>
               </TabsTrigger>
               <TabsTrigger value="analytics" className="gap-1.5 whitespace-nowrap">
                 <BarChart3 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Website Analytics</span><span className="sm:hidden">Analytics</span>
@@ -311,6 +352,186 @@ const Operations = () => {
                       </div>
                     </div>
                   )}
+                </>
+              )}
+            </TabsContent>
+
+            {/* Repos */}
+            <TabsContent value="repos" className="space-y-4">
+              {(reposLoading || reposListLoading || prsLoading) && !reposSummary ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+              ) : reposError ? (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-sm text-destructive">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium">Could not load Azure Repos.</p>
+                      <p className="text-xs mt-1 opacity-80">{(reposError as Error).message}</p>
+                    </div>
+                    <button onClick={() => refetchRepos()} className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs text-foreground hover:bg-secondary">
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Summary cards */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <FolderGit2 className="h-4 w-4 text-primary" />
+                        <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repos</span>
+                      </div>
+                      <p className="text-2xl font-bold text-foreground">{reposListResp?.count ?? reposSummary?.repos_total ?? 0}</p>
+                    </div>
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <GitCommit className="h-4 w-4 text-primary" />
+                        <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Commits / 7d</span>
+                      </div>
+                      <p className="text-2xl font-bold text-foreground">{reposSummary?.commits_total ?? 0}</p>
+                    </div>
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <GitPullRequest className="h-4 w-4 text-primary" />
+                        <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Active PRs</span>
+                      </div>
+                      <p className="text-2xl font-bold text-foreground">{activePRsResp?.count ?? reposSummary?.active_prs_total ?? 0}</p>
+                    </div>
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Users className="h-4 w-4 text-primary" />
+                        <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Contributors</span>
+                      </div>
+                      <p className="text-2xl font-bold text-foreground">{reposSummary ? Object.keys(reposSummary.commits_by_author).length : 0}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Commits by author */}
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <GitCommit className="h-4 w-4 text-primary" />
+                        <h3 className="font-semibold text-foreground">Commits by author (7d)</h3>
+                      </div>
+                      {reposSummary && Object.keys(reposSummary.commits_by_author).length > 0 ? (
+                        <div className="space-y-2">
+                          {Object.entries(reposSummary.commits_by_author)
+                            .sort(([, a], [, b]) => (b as number) - (a as number))
+                            .slice(0, 10)
+                            .map(([author, count]) => (
+                              <div key={author} className="flex justify-between text-sm">
+                                <span className="text-foreground truncate">{author}</span>
+                                <span className="font-mono text-muted-foreground">{count as number}</span>
+                              </div>
+                            ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No commits in the last 7 days.</p>
+                      )}
+                    </div>
+
+                    {/* Commits by repo */}
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <FolderGit2 className="h-4 w-4 text-primary" />
+                        <h3 className="font-semibold text-foreground">Most active repos (7d)</h3>
+                      </div>
+                      {reposSummary && Object.keys(reposSummary.commits_by_repo).length > 0 ? (
+                        <div className="space-y-2">
+                          {Object.entries(reposSummary.commits_by_repo)
+                            .filter(([, c]) => (c as number) > 0)
+                            .sort(([, a], [, b]) => (b as number) - (a as number))
+                            .slice(0, 10)
+                            .map(([repo, count]) => (
+                              <div key={repo} className="flex justify-between text-sm">
+                                <span className="text-foreground truncate font-mono text-xs">{repo}</span>
+                                <span className="font-mono text-muted-foreground">{count as number}</span>
+                              </div>
+                            ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No repo activity in the last 7 days.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Active PRs */}
+                  <div className="rounded-xl border border-border bg-card p-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <GitPullRequest className="h-4 w-4 text-primary" />
+                      <h3 className="font-semibold text-foreground">Active pull requests</h3>
+                    </div>
+                    {(activePRsResp?.pull_requests || []).length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No active pull requests.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="border-b border-border">
+                            <tr className="text-left text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                              <th className="px-3 py-2">PR</th>
+                              <th className="px-3 py-2">Title</th>
+                              <th className="px-3 py-2">Author</th>
+                              <th className="px-3 py-2">Repo</th>
+                              <th className="px-3 py-2">Reviewers</th>
+                              <th className="px-3 py-2">Opened</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(activePRsResp?.pull_requests || []).slice(0, 25).map((pr: AzurePullRequest) => {
+                              const approved = pr.reviewers.filter(r => r.vote >= 5).length;
+                              const rejected = pr.reviewers.filter(r => r.vote <= -5).length;
+                              return (
+                                <tr key={pr.id} className="border-b border-border/50 hover:bg-secondary/30">
+                                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">!{pr.id}</td>
+                                  <td className="px-3 py-2 text-foreground max-w-md truncate">
+                                    {pr.is_draft && <Badge variant="outline" className="mr-2 text-[10px]">draft</Badge>}
+                                    {pr.title}
+                                  </td>
+                                  <td className="px-3 py-2 text-muted-foreground text-xs">{pr.created_by}</td>
+                                  <td className="px-3 py-2 text-muted-foreground text-xs font-mono">{pr.project}/{pr.repository}</td>
+                                  <td className="px-3 py-2 text-xs">
+                                    {approved > 0 && <span className="text-norman-success">✓{approved}</span>}
+                                    {rejected > 0 && <span className="text-destructive ml-2">✗{rejected}</span>}
+                                    {approved === 0 && rejected === 0 && <span className="text-muted-foreground">—</span>}
+                                  </td>
+                                  <td className="px-3 py-2 text-muted-foreground text-xs">
+                                    {new Date(pr.creation_date).toLocaleDateString()}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Recent commits */}
+                  <div className="rounded-xl border border-border bg-card p-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Activity className="h-4 w-4 text-primary" />
+                      <h3 className="font-semibold text-foreground">Recent commits</h3>
+                    </div>
+                    {(reposSummary?.recent_commits || []).length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No recent commits.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {(reposSummary?.recent_commits || []).slice(0, 15).map((c, i) => (
+                          <div key={`${c.date}-${i}`} className="flex items-start justify-between gap-3 text-sm border-b border-border/30 pb-2 last:border-0">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-foreground truncate">{c.message}</p>
+                              <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                                {c.project}/{c.repository} · {c.author}
+                              </p>
+                            </div>
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              {new Date(c.date).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </TabsContent>

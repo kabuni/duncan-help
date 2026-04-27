@@ -3966,6 +3966,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
     tools.push(...MEETING_TOOLS);
     // Azure DevOps tools always available (connection checked at execution time)
     tools.push(...AZURE_DEVOPS_TOOLS);
+    // Azure Repos tools always available (connection checked at execution time)
+    tools.push(...AZURE_REPOS_TOOLS);
     // Xero tools always available (data is synced locally)
     tools.push(...XERO_TOOLS);
     // Gmail tools always available (connection checked at execution time)

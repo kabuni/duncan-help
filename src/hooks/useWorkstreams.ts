@@ -617,7 +617,11 @@ export function useRespondToAssignment() {
     }) => {
       if (!user) throw new Error("Not authenticated");
 
-      const updatePayload: Record<string, any> = {
+      const updatePayload: {
+        assignment_status: string;
+        responded_at: string;
+        decline_reason?: string;
+      } = {
         assignment_status: response,
         responded_at: new Date().toISOString(),
       };

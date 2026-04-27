@@ -1,9 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
-import { API_BASE_URL, hasExternalApiBase } from "@/lib/apiConfig";
 
-const BASE = API_BASE_URL;
+const API_BASE = "https://encore-catalyst-jugular.ngrok-free.dev";
+const BASE = API_BASE;
+const hasExternalApiBase = true;
 
-// FastAPI is primary whenever VITE_API_BASE_URL is set. No separate flag required.
+// FastAPI is primary whenever API_BASE is set. No separate flag required.
 const USE_FASTAPI = hasExternalApiBase;
 
 async function getAuthHeader(): Promise<string> {

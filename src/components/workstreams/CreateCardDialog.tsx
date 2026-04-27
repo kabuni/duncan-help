@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
-import { Plus, CalendarDays, Tag, User, Flag } from "lucide-react";
+import { Plus, CalendarDays, Tag, User, Flag, Check, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCreateCard, useUserProfiles, type CardStatus, type CardPriority } from "@/hooks/useWorkstreams";
+import { useCreateCard, useUserProfiles, useProjectTags, type CardStatus, type CardPriority } from "@/hooks/useWorkstreams";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import MultiAssigneeSelect from "./MultiAssigneeSelect";
 
 interface Props {

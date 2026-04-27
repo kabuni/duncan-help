@@ -5,6 +5,7 @@ import {
   GitBranch, AlertTriangle,
   Clock, RefreshCw, Loader2, Activity, Search, X,
   BarChart3, Globe2, Users, MousePointerClick, PlugZap, Send,
+  GitPullRequest, GitCommit, FolderGit2,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { fastApi, withFastApi } from "@/lib/fastApiClient";
 import { useGoogleAnalytics } from "@/hooks/useGoogleAnalytics";
+import { azureReposApi, type TeamActivitySummary, type AzureRepo, type AzurePullRequest } from "@/lib/api/azureRepos";
 import { toast } from "sonner";
 
 function useWorkItems() {

@@ -249,9 +249,27 @@ const Recruitment = () => {
     }
     setFetching(true);
     try {
-      const res = await supabase.functions.invoke("fetch-gmail-cvs", {
-        body: { role_id: selectedRoleId },
-      });
+      let res: any;
+      if (hasExternalApiBase) {
+        try {
+          const data = await fastApi<any>("POST", "/recruitment/fetch-gmail-cvs", { role_id: selectedRoleId });
+          res = { data, error: null };
+        } catch (err: any) {
+          // FastAPI 409 → already running for this role
+          if (String(err?.message || "").includes("→ 409")) {
+            toast.message("Fetch already running for this role");
+            return;
+          }
+          console.warn("[FastAPI fetch-gmail-cvs failed, falling back to Supabase]", err);
+          res = await supabase.functions.invoke("fetch-gmail-cvs", {
+            body: { role_id: selectedRoleId },
+          });
+        }
+      } else {
+        res = await supabase.functions.invoke("fetch-gmail-cvs", {
+          body: { role_id: selectedRoleId },
+        });
+      }
 
       // Detect "already running" lock conflict (HTTP 409 returned via FunctionsHttpError)
       const errCtx: any = (res as any).error?.context;

@@ -1,6 +1,7 @@
 import { forwardRef, useState } from "react";
 import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import { canViewBriefing, canGenerateBriefing } from "@/lib/ceoAccess";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -35,13 +36,14 @@ Section.displayName = "Section";
 
 const CEOBriefing = () => {
   const { user, loading: authLoading } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const type = "morning" as const;
   const { briefing, previous, loading, generating, generate, job, cancelPolling } = useCEOBriefing(type);
   const [showRouting, setShowRouting] = useState(false);
 
   if (authLoading) return null;
   if (!canViewBriefing(user?.email)) return <Navigate to="/" replace />;
-  const canGenerate = canGenerateBriefing(user?.email);
+  const canGenerate = canGenerateBriefing(user?.email) || isAdmin;
 
   const p = (briefing?.payload as any) || {};
   const today = briefing?.briefing_date ? new Date(briefing.briefing_date) : new Date();

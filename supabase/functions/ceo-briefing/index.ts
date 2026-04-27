@@ -1,7 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callLLMWithFallback } from "../_shared/llm.ts";
 
-// Only Nimesh can trigger briefing generation. Viewing is open to all signed-in users (enforced via RLS).
+// The CEO and any user with the 'admin' role can trigger briefing generation.
+// Viewing is open to all signed-in users (enforced via RLS).
 const CEO_GENERATOR_EMAILS = ["nimesh@kabuni.com"];
 
 const corsHeaders = {
@@ -1051,9 +1052,24 @@ Deno.serve(async (req) => {
     if (claimsErr || !claimsData?.claims) return json({ error: "Unauthorized" }, 401);
 
     const email = (claimsData.claims.email as string | undefined)?.toLowerCase() ?? "";
-    if (!CEO_GENERATOR_EMAILS.includes(email)) return json({ error: "Forbidden — only the CEO can generate briefings" }, 403);
-
     const userId = claimsData.claims.sub as string;
+
+    let allowed = CEO_GENERATOR_EMAILS.includes(email);
+    if (!allowed) {
+      // Fallback: allow any user with the 'admin' role.
+      const adminCheck = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      const { data: roleRow } = await adminCheck
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "admin")
+        .maybeSingle();
+      allowed = !!roleRow;
+    }
+    if (!allowed) return json({ error: "Forbidden — only the CEO or admins can generate briefings" }, 403);
     const body = await req.json().catch(() => ({}));
     const briefing_type: "morning" | "evening" = body?.briefing_type === "evening" ? "evening" : "morning";
 

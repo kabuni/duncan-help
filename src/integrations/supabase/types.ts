@@ -186,6 +186,7 @@ export type Database = {
       }
       candidates: {
         Row: {
+          attachment_filename: string | null
           competency_score: number | null
           created_at: string
           cv_storage_path: string | null
@@ -214,6 +215,7 @@ export type Database = {
           values_score: number | null
         }
         Insert: {
+          attachment_filename?: string | null
           competency_score?: number | null
           created_at?: string
           cv_storage_path?: string | null
@@ -242,6 +244,7 @@ export type Database = {
           values_score?: number | null
         }
         Update: {
+          attachment_filename?: string | null
           competency_score?: number | null
           created_at?: string
           cv_storage_path?: string | null
@@ -520,6 +523,30 @@ export type Database = {
           name?: string
           owner_user_id?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      fetch_locks: {
+        Row: {
+          expires_at: string
+          id: string
+          locked_at: string
+          locked_by: string | null
+          resource_key: string
+        }
+        Insert: {
+          expires_at?: string
+          id?: string
+          locked_at?: string
+          locked_by?: string | null
+          resource_key: string
+        }
+        Update: {
+          expires_at?: string
+          id?: string
+          locked_at?: string
+          locked_by?: string | null
+          resource_key?: string
         }
         Relationships: []
       }

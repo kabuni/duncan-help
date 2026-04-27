@@ -190,7 +190,7 @@ const Recruitment = () => {
   const { data: candidates, refetch: refetchCandidates } = useQuery({
     queryKey: ["candidates", selectedRoleId],
     queryFn: async () => {
-      if (!selectedRoleId || !hasFetched) return [];
+      if (!selectedRoleId) return [];
       const { data, error } = await supabase
         .from("candidates")
         .select("*")
@@ -199,7 +199,7 @@ const Recruitment = () => {
       if (error) throw error;
       return data ?? [];
     },
-    enabled: !!selectedRoleId && hasFetched,
+    enabled: !!selectedRoleId,
     refetchInterval: 30000, // Auto-refresh every 30s to pick up cron sync updates
   });
 
@@ -263,7 +263,6 @@ const Recruitment = () => {
 
   const handleRoleChange = (roleId: string) => {
     setSelectedRoleId(roleId);
-    setHasFetched(false);
     setSelectedCandidates(new Set());
   };
 

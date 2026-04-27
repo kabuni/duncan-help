@@ -42,6 +42,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
   const reset = () => {
     setTitle(""); setDescription(""); setStatus("amber");
     setAssigneeIds([]); setDueDate(""); setProjectTag("");
+    setAddingNew(false); setNewTag("");
   };
 
   const handleSubmit = async () => {

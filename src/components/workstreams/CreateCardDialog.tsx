@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
-import { Plus, CalendarDays, Tag, User, Flag } from "lucide-react";
+import { Plus, CalendarDays, Tag, User, Flag, Check, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCreateCard, useUserProfiles, type CardStatus, type CardPriority } from "@/hooks/useWorkstreams";
+import { useCreateCard, useUserProfiles, useProjectTags, type CardStatus, type CardPriority } from "@/hooks/useWorkstreams";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import MultiAssigneeSelect from "./MultiAssigneeSelect";
 
 interface Props {
@@ -18,6 +19,8 @@ interface Props {
 export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Props) {
   const createCard = useCreateCard();
   const { data: users } = useUserProfiles();
+  const { data: existingTags = [] } = useProjectTags();
+  const { isAdmin } = useIsAdmin();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<CardStatus>("amber");
@@ -25,6 +28,8 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState("");
   const [projectTag, setProjectTag] = useState("");
+  const [addingNew, setAddingNew] = useState(false);
+  const [newTag, setNewTag] = useState("");
 
   // Apply prefill when dialog opens with a suggested tag (from CEO Coverage Gaps)
   useEffect(() => {
@@ -37,6 +42,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
   const reset = () => {
     setTitle(""); setDescription(""); setStatus("amber");
     setAssigneeIds([]); setDueDate(""); setProjectTag("");
+    setAddingNew(false); setNewTag("");
   };
 
   const handleSubmit = async () => {
@@ -110,17 +116,76 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
 
           <div className="space-y-1.5">
             <Label className="text-xs font-medium flex items-center gap-1"><Tag className="h-3 w-3" /> Project / Workstream</Label>
-            <Select value={projectTag || "none"} onValueChange={v => setProjectTag(v === "none" ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="Select workstream" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                <SelectItem value="Lightning Strike Event">Lightning Strike Event</SelectItem>
-                <SelectItem value="Website">Website</SelectItem>
-                <SelectItem value="K10 App">K10 App</SelectItem>
-                <SelectItem value="School Integrations">School Integrations</SelectItem>
-                <SelectItem value="Duncan">Duncan</SelectItem>
-              </SelectContent>
-            </Select>
+            {addingNew ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={newTag}
+                  onChange={e => setNewTag(e.target.value)}
+                  placeholder="New workstream name"
+                  autoFocus
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      const v = newTag.trim();
+                      if (v) { setProjectTag(v); setAddingNew(false); setNewTag(""); }
+                    } else if (e.key === "Escape") {
+                      setAddingNew(false); setNewTag("");
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="default"
+                  className="h-9 w-9 shrink-0"
+                  onClick={() => {
+                    const v = newTag.trim();
+                    if (v) { setProjectTag(v); setAddingNew(false); setNewTag(""); }
+                  }}
+                  disabled={!newTag.trim()}
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-9 w-9 shrink-0"
+                  onClick={() => { setAddingNew(false); setNewTag(""); }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <Select
+                value={projectTag || "none"}
+                onValueChange={v => {
+                  if (v === "__new__") { setAddingNew(true); return; }
+                  setProjectTag(v === "none" ? "" : v);
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Select workstream" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {/* Ensure the currently selected tag (e.g. from prefill or admin add) is always present */}
+                  {projectTag && !existingTags.includes(projectTag) && (
+                    <SelectItem value={projectTag}>{projectTag}</SelectItem>
+                  )}
+                  {existingTags.map(tag => (
+                    <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                  ))}
+                  {isAdmin && (
+                    <SelectItem value="__new__" className="text-primary font-medium">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Plus className="h-3 w-3" /> Add new workstream…
+                      </span>
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            )}
+            {isAdmin && !addingNew && (
+              <p className="text-[10px] text-muted-foreground">Admin: choose “Add new workstream…” to create a new tag.</p>
+            )}
           </div>
         </div>
 

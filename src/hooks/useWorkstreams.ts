@@ -327,6 +327,7 @@ export function useCreateCard() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workstream-cards"] });
+      qc.invalidateQueries({ queryKey: ["workstream-project-tags"] });
       toast.success("Card created");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -356,6 +357,7 @@ export function useUpdateCard() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workstream-cards"] });
       qc.invalidateQueries({ queryKey: ["workstream-card"] });
+      qc.invalidateQueries({ queryKey: ["workstream-project-tags"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -644,5 +646,25 @@ export function useRespondToAssignment() {
       toast.success(vars.response === "accepted" ? "Assignment accepted" : "Assignment declined");
     },
     onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+// Distinct project tags derived from existing cards (admin can extend at create time).
+export function useProjectTags() {
+  return useQuery({
+    queryKey: ["workstream-project-tags"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("workstream_cards")
+        .select("project_tag")
+        .not("project_tag", "is", null);
+      if (error) throw error;
+      const set = new Set<string>();
+      (data ?? []).forEach((r: { project_tag: string | null }) => {
+        if (r.project_tag && r.project_tag.trim()) set.add(r.project_tag.trim());
+      });
+      return Array.from(set).sort((a, b) => a.localeCompare(b));
+    },
+    staleTime: 60_000,
   });
 }

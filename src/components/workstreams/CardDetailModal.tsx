@@ -20,8 +20,10 @@ import {
   useUpdateTask, useUpdateTaskAssignees, useDeleteTask,
   useAddComment, useDeleteComment, useDeleteCard, useUserProfiles,
   useRespondToAssignment, useTaskComments, useAddTaskComment, useDeleteTaskComment,
+  useProjectTags,
   type CardStatus, type CardPriority, type WorkstreamTask, type UserProfile,
 } from "@/hooks/useWorkstreams";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import { StatusBadge, priorityConfig } from "./StatusBadge";
 import MultiAssigneeSelect from "./MultiAssigneeSelect";
 import { useAuth } from "@/hooks/useAuth";
@@ -52,6 +54,10 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
   const [editValue, setEditValue] = useState("");
   const [declineReason, setDeclineReason] = useState("");
   const [showDeclineInput, setShowDeclineInput] = useState(false);
+  const { data: existingTags = [] } = useProjectTags();
+  const { isAdmin } = useIsAdmin();
+  const [addingTag, setAddingTag] = useState(false);
+  const [newTag, setNewTag] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Check current user's assignment status (must be before early return)
@@ -309,17 +315,79 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                   </MetaField>
 
                   <MetaField icon={<Tag className="h-3.5 w-3.5" />} label="Project" value={card.project_tag || "None"}>
-                    <Select value={card.project_tag || "none"} onValueChange={v => updateCard.mutate({ id: card.id, project_tag: v === "none" ? null : v })}>
-                      <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        <SelectItem value="Lightning Strike Event">Lightning Strike Event</SelectItem>
-                        <SelectItem value="Website">Website</SelectItem>
-                        <SelectItem value="K10 App">K10 App</SelectItem>
-                        <SelectItem value="School Integrations">School Integrations</SelectItem>
-                        <SelectItem value="Duncan">Duncan</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {addingTag ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          value={newTag}
+                          onChange={e => setNewTag(e.target.value)}
+                          placeholder="New workstream"
+                          autoFocus
+                          className="h-7 text-xs"
+                          onKeyDown={e => {
+                            if (e.key === "Enter") {
+                              const v = newTag.trim();
+                              if (v) {
+                                updateCard.mutate({ id: card.id, project_tag: v });
+                                setAddingTag(false); setNewTag("");
+                              }
+                            } else if (e.key === "Escape") {
+                              setAddingTag(false); setNewTag("");
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 shrink-0"
+                          onClick={() => {
+                            const v = newTag.trim();
+                            if (v) {
+                              updateCard.mutate({ id: card.id, project_tag: v });
+                              setAddingTag(false); setNewTag("");
+                            }
+                          }}
+                          disabled={!newTag.trim()}
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 shrink-0"
+                          onClick={() => { setAddingTag(false); setNewTag(""); }}
+                        >
+                          <XCircle className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Select
+                        value={card.project_tag || "none"}
+                        onValueChange={v => {
+                          if (v === "__new__") { setAddingTag(true); return; }
+                          updateCard.mutate({ id: card.id, project_tag: v === "none" ? null : v });
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {card.project_tag && !existingTags.includes(card.project_tag) && (
+                            <SelectItem value={card.project_tag}>{card.project_tag}</SelectItem>
+                          )}
+                          {existingTags.map(tag => (
+                            <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                          ))}
+                          {isAdmin && (
+                            <SelectItem value="__new__" className="text-primary font-medium">
+                              <span className="inline-flex items-center gap-1.5">
+                                <Plus className="h-3 w-3" /> Add new workstream…
+                              </span>
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </MetaField>
                 </div>
 

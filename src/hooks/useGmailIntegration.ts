@@ -261,6 +261,16 @@ export function useGmailAutoDraftToggle() {
     mutationFn: async (enabled: boolean) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
+
+      if (enabled) {
+        const readiness = await gmailApi("check_auto_draft_ready");
+        if (!readiness?.ready) {
+          throw new Error(
+            readiness?.message || "Gmail needs to be reconnected before Duncan can create drafts.",
+          );
+        }
+      }
+
       const { error } = await supabase
         .from("gmail_writing_profiles")
         .update({ auto_draft_enabled: enabled })

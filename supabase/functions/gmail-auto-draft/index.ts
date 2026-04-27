@@ -16,6 +16,12 @@ const MAX_DRAFTS_PER_DAY = 100;
 const AUTO_DRAFT_PREFIX = "[Auto-drafted by Duncan — review before sending]\n\n";
 const DUNCAN_LABEL = "Duncan/Auto-Drafted";
 
+const AUTO_DRAFT_REQUIRED_SCOPES = [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.compose",
+  "https://www.googleapis.com/auth/gmail.modify",
+];
+
 const DENY_SENDER_PATTERNS = [
   /noreply@/i,
   /no-reply@/i,
@@ -40,6 +46,18 @@ async function refreshAccessToken(refreshToken: string) {
   });
   if (!res.ok) return null;
   return res.json() as Promise<{ access_token: string; expires_in: number }>;
+}
+
+async function getMissingGmailScopes(accessToken: string): Promise<string[] | null> {
+  const res = await fetch(
+    `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`,
+  );
+  if (!res.ok) return null;
+
+  const data = await res.json();
+  const granted = new Set(String(data.scope || "").split(/\s+/).filter(Boolean));
+  if (granted.has("https://mail.google.com/")) return [];
+  return AUTO_DRAFT_REQUIRED_SCOPES.filter((scope) => !granted.has(scope));
 }
 
 async function getValidToken(supabaseAdmin: any, userId: string) {
@@ -144,6 +162,18 @@ async function processUser(
     console.log(`User ${userId} has no valid Gmail token`);
     return stats;
   }
+
+  const missingScopes = await getMissingGmailScopes(tokenData.accessToken);
+  if (missingScopes && missingScopes.length > 0) {
+    console.warn(`User ${userId} missing Gmail scopes for auto-draft: ${missingScopes.join(", ")}`);
+    await supabaseAdmin
+      .from("gmail_writing_profiles")
+      .update({ auto_draft_enabled: false, auto_draft_last_run_at: new Date().toISOString() })
+      .eq("user_id", userId);
+    stats.errors++;
+    return stats;
+  }
+
   const headers = { Authorization: `Bearer ${tokenData.accessToken}` };
   const myEmail = tokenData.emailAddress || "";
   const myEmailLower = myEmail.toLowerCase();

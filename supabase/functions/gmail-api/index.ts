@@ -6,6 +6,24 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const AUTO_DRAFT_REQUIRED_SCOPES = [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.compose",
+  "https://www.googleapis.com/auth/gmail.modify",
+];
+
+async function getMissingGmailScopes(accessToken: string, requiredScopes: string[]): Promise<string[]> {
+  const res = await fetch(
+    `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`,
+  );
+  if (!res.ok) throw new Error("Unable to verify Gmail permissions. Please reconnect Gmail and try again.");
+
+  const data = await res.json();
+  const granted = new Set(String(data.scope || "").split(/\s+/).filter(Boolean));
+  if (granted.has("https://mail.google.com/")) return [];
+  return requiredScopes.filter((scope) => !granted.has(scope));
+}
+
 async function refreshAccessToken(
   refreshToken: string,
   clientId: string,
@@ -160,6 +178,24 @@ Deno.serve(async (req) => {
     }
 
     const gmailHeaders = { Authorization: `Bearer ${tokenData.accessToken}` };
+
+    // ─── CHECK AUTO-DRAFT PERMISSIONS ───
+    if (action === "check_auto_draft_ready") {
+      const missingScopes = await getMissingGmailScopes(tokenData.accessToken, AUTO_DRAFT_REQUIRED_SCOPES);
+      return new Response(
+        JSON.stringify(
+          missingScopes.length
+            ? {
+                ready: false,
+                code: "gmail_reconnect_required",
+                missingScopes,
+                message: "Gmail needs to be reconnected to grant Duncan permission to create drafts.",
+              }
+            : { ready: true },
+        ),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // ─── LIST EMAILS ───
     if (action === "list") {

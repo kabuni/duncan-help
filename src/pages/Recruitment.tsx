@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { fastApi, withFastApi } from "@/lib/fastApiClient";
+import { hasExternalApiBase } from "@/lib/apiConfig";
 import { useQuery } from "@tanstack/react-query";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -144,7 +145,14 @@ const Recruitment = () => {
     if (isCompleted) {
       setLoadingPlaybackId(candidate.id);
       try {
-        await supabase.functions.invoke("hireflix-sync-interviews");
+        await withFastApi(
+          async () => {
+            const res = await supabase.functions.invoke("hireflix-sync-interviews");
+            if (res.error) throw res.error;
+            return res.data;
+          },
+          () => fastApi("POST", "/hireflix/sync-interviews", {}),
+        );
 
         const { data } = await supabase
           .from("candidates")

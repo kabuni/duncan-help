@@ -233,10 +233,13 @@ const Operations = () => {
           </div>
 
           {/* Tabs */}
-          <Tabs defaultValue="work-items" className="space-y-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList className="bg-card border border-border w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
               <TabsTrigger value="work-items" className="gap-1.5 whitespace-nowrap">
                 <GitBranch className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Work Items</span><span className="sm:hidden">Items</span>
+              </TabsTrigger>
+              <TabsTrigger value="repos" className="gap-1.5 whitespace-nowrap">
+                <FolderGit2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Repos</span><span className="sm:hidden">Repos</span>
               </TabsTrigger>
               <TabsTrigger value="analytics" className="gap-1.5 whitespace-nowrap">
                 <BarChart3 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Website Analytics</span><span className="sm:hidden">Analytics</span>

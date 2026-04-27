@@ -93,6 +93,12 @@ const Operations = () => {
   const [syncing, setSyncing] = useState<string | null>(null);
   const [analyticsQuestion, setAnalyticsQuestion] = useState("Where do we have the most website reach?");
   const [analyticsAnswer, setAnalyticsAnswer] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("work-items");
+
+  const reposEnabled = activeTab === "repos";
+  const { data: reposSummary, isLoading: reposLoading, error: reposError, refetch: refetchRepos } = useReposSummary(reposEnabled);
+  const { data: reposListResp, isLoading: reposListLoading } = useReposList(reposEnabled);
+  const { data: activePRsResp, isLoading: prsLoading } = useActivePRs(reposEnabled);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");

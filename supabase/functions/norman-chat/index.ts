@@ -2762,7 +2762,60 @@ async function executeAzureDevOpsTool(
   }
 }
 
-async function executeMeetingTool(
+async function executeAzureReposTool(
+  toolName: string,
+  args: any,
+  supabaseUrl: string,
+  authHeader: string,
+): Promise<any> {
+  const callRepos = async (action: string, payload: Record<string, unknown> = {}) => {
+    const res = await fetch(`${supabaseUrl}/functions/v1/azure-repos-api`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: authHeader },
+      body: JSON.stringify({ action, ...payload }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `azure-repos-api ${action} failed (${res.status})`);
+    return data;
+  };
+
+  switch (toolName) {
+    case "list_azure_repos":
+      return await callRepos("list_repos");
+
+    case "get_recent_commits":
+      return await callRepos("get_recent_commits", {
+        days: args.days,
+        top: args.top,
+        project: args.project,
+        repository_id: args.repository_id,
+        author: args.author,
+      });
+
+    case "list_pull_requests":
+      return await callRepos("list_pull_requests", {
+        status: args.status,
+        top: args.top,
+        project: args.project,
+        repository_id: args.repository_id,
+      });
+
+    case "get_pr_reviews":
+      return await callRepos("get_pr_threads", {
+        project: args.project,
+        repository_id: args.repository_id,
+        pull_request_id: args.pull_request_id,
+      });
+
+    case "get_repos_team_summary":
+      return await callRepos("team_activity_summary", { days: args.days });
+
+    default:
+      throw new Error(`Unknown Azure Repos tool: ${toolName}`);
+  }
+}
+
+
   toolName: string,
   args: any,
   supabaseAdmin: any,

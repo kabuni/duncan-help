@@ -54,6 +54,10 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
   const [editValue, setEditValue] = useState("");
   const [declineReason, setDeclineReason] = useState("");
   const [showDeclineInput, setShowDeclineInput] = useState(false);
+  const { data: existingTags = [] } = useProjectTags();
+  const { isAdmin } = useIsAdmin();
+  const [addingTag, setAddingTag] = useState(false);
+  const [newTag, setNewTag] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Check current user's assignment status (must be before early return)

@@ -1,77 +1,92 @@
-## Goals
+## Goal
 
-1. **Chat UI** – stop showing only Duncan's avatar. Render the current user's avatar/initials and name on their own messages so it's clear who is talking.
-2. **Mobile responsiveness** – tighten the layouts on pages that currently feel cramped, scroll horizontally, or have controls that overflow on phone-sized viewports.
+Switch the recruitment workflow's edge-function calls to prefer FastAPI (`VITE_API_BASE_URL`) when configured, with Supabase Edge Functions as fallback. Keep all database, storage, and PostgREST traffic on Supabase. Make zero UI/design changes.
 
----
+## Current State (from exploration)
 
-## Part 1 — Chat: show "who is talking"
+- A `withFastApi` utility already exists at `src/lib/fastApiClient.ts`.
+- Most recruitment edge-function calls in `src/pages/Recruitment.tsx` and `src/components/recruitment/JobRolesManager.tsx` are already wrapped in `withFastApi(...)` with the exact FastAPI paths the user specified (`/recruitment/generate-jd`, `/recruitment/score-values`, `/recruitment/score-competencies`, `/recruitment/parse-jd`, `/hireflix/create-position`, `/hireflix/position/{id}`, `/hireflix/send-invite`, `/gmail/auth`).
+- **Two call sites are NOT wrapped yet** and call Supabase directly:
+  - `Recruitment.tsx:147` — `hireflix-sync-interviews`
+  - `Recruitment.tsx:244` — `fetch-gmail-cvs` (this one has special 409/`already_running` lock handling)
+- The current routing rule in `withFastApi` is gated by `VITE_USE_FASTAPI === "true" && hasExternalApiBase`. The user wants the trigger to be **`VITE_API_BASE_URL` set alone** — no separate `VITE_USE_FASTAPI` flag required.
 
-### Affected files
-- `src/pages/Index.tsx` (main Duncan chat — `MessageBubble`)
-- `src/pages/ProjectWorkspace.tsx` (project chat messages)
+## Changes
 
-### Changes
-- Pull `profile` (display_name, avatar_url) from `useProfile()` in both chat surfaces.
-- For **user messages**, render an avatar on the right side, mirroring the Duncan avatar pattern:
-  - Use shadcn `Avatar` + `AvatarImage` (from `profile.avatar_url`) with `AvatarFallback` showing initials of `display_name` (or "Me" if missing).
-  - Same 28px circle, border, spacing as the Duncan avatar — just placed to the right of the bubble when `role === "user"`.
-- Above each bubble (both Duncan and user) show a small sender label:
-  - `"Duncan"` for assistant messages.
-  - `profile.display_name || "You"` for user messages.
-  - Reuse the existing `senderNameFor` pattern that ProjectWorkspace already has, but extend it to the main chat (which currently has no sender label at all).
-- Keep the existing alignment (user right, assistant left) and bubble colors unchanged.
+### 1. `src/lib/fastApiClient.ts` — flip the routing rule
 
-### Result
-Each turn clearly shows who said what:
+Make FastAPI the primary path whenever `VITE_API_BASE_URL` is set:
+
+- Remove the `VITE_USE_FASTAPI` requirement. The new rule:
+  - `hasExternalApiBase === true` → FastAPI primary, Supabase fallback (try FastAPI first; on any error, log a warning and call Supabase).
+  - `hasExternalApiBase === false` → Supabase only (current behaviour preserved exactly; no shadow call, no FastAPI traffic).
+- Keep `USE_FASTAPI` exported for backwards compatibility, but redefine it as `hasExternalApiBase`.
+- Keep the existing `fastApi()` function and the `withFastApi()` signature unchanged so all existing call sites keep working.
+
+This single change automatically updates every recruitment call already using `withFastApi` (generate-jd ×2, parse-jd-competencies, create-hireflix-position, delete-hireflix-position, score-cv-values, score-cv-competencies, hireflix-send-invite, gmail-auth) — they will now route to FastAPI first when `VITE_API_BASE_URL` is set.
+
+### 2. `src/pages/Recruitment.tsx` — wrap the two remaining calls
+
+**a) `hireflix-sync-interviews` (line ~147)**
+
+Wrap with `withFastApi`, preserving fire-and-forget semantics:
+
+```ts
+await withFastApi(
+  async () => {
+    const res = await supabase.functions.invoke("hireflix-sync-interviews");
+    if (res.error) throw res.error;
+    return res.data;
+  },
+  () => fastApi("POST", "/hireflix/sync-interviews", {}),
+);
 ```
-[Duncan avatar]  Duncan
-                 Lorem ipsum…
-                                              You / Display Name [User avatar]
-                                              Hi Duncan, can you…
+
+**b) `fetch-gmail-cvs` (line ~244)** — special case
+
+This one inspects `res.error.context` for an HTTP 409 / `already_running` lock response. To preserve that behaviour without changing UI logic, we keep the existing Supabase invocation path inline, and only add a FastAPI-first attempt before it:
+
+```ts
+let res: any;
+if (hasExternalApiBase) {
+  try {
+    const data = await fastApi<any>("POST", "/recruitment/fetch-gmail-cvs", { role_id: selectedRoleId });
+    res = { data, error: null };
+  } catch (err: any) {
+    // FastAPI 409 → already running
+    if (String(err?.message || "").includes("→ 409")) {
+      toast.message("Fetch already running for this role");
+      return;
+    }
+    console.warn("[FastAPI fetch-gmail-cvs failed, falling back to Supabase]", err);
+    res = await supabase.functions.invoke("fetch-gmail-cvs", { body: { role_id: selectedRoleId } });
+  }
+} else {
+  res = await supabase.functions.invoke("fetch-gmail-cvs", { body: { role_id: selectedRoleId } });
+}
+// …existing 409 / has_more handling untouched below…
 ```
 
----
+Import `hasExternalApiBase` and `fastApi` at the top of `Recruitment.tsx` (already imported in this file's neighbourhood; verify and add if missing).
 
-## Part 2 — Mobile responsiveness pass
+### 3. Out of scope (explicitly unchanged)
 
-Audit shows several pages have very few responsive utilities and break on ≤414px widths. Targeted fixes:
+- All `supabase.from(...)` queries (candidates, job_roles, sync_logs, hireflix_retry_queue, profiles, etc.).
+- All `supabase.storage.*` calls (CV signed URLs, JD upload).
+- All PostgREST REST calls.
+- All UI, toast copy, loading states, query keys, and component structure.
+- `JobRolesManager.tsx` — no source edits needed; its calls already route correctly via `withFastApi` once step 1 lands.
 
-### `src/pages/Recruitment.tsx` (worst offender — 976 lines, almost no `sm:` classes)
-- Wrap the candidates table in `overflow-x-auto` with `min-w-[640px]` so it scrolls instead of squishing.
-- Stack the page header (title + filters + buttons) vertically on mobile (`flex-col sm:flex-row`, `gap-2`).
-- Reduce header padding on mobile (`px-3 sm:px-6`, `py-3 sm:py-4`).
-- Make role-tab buttons horizontally scrollable (`flex overflow-x-auto scrollbar-thin` + `whitespace-nowrap`).
+## Behaviour after the change
 
-### `src/pages/Operations.tsx`
-- Convert KPI/stat grids from fixed columns to `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`.
-- Tables: wrap in `overflow-x-auto`, set `min-w-[600px]`.
-- Header: stack title + sync button vertically on mobile.
+| `VITE_API_BASE_URL` | Edge-function calls | DB / Storage / REST |
+|---|---|---|
+| **set** | FastAPI first → Supabase fallback on error | Supabase (unchanged) |
+| **empty** | Supabase only (no FastAPI traffic) | Supabase (unchanged) |
 
-### `src/pages/PurchaseOrders.tsx`, `src/pages/Workstreams.tsx`, `src/pages/ReleaseManager.tsx`, `src/pages/WhatsNew.tsx`, `src/pages/Profile.tsx`, `src/pages/Settings.tsx`, `src/pages/FeedbackIssues.tsx`, `src/pages/Integrations.tsx`, `src/pages/Gmail.tsx`
-For each: do a focused responsiveness pass:
-- Page container padding → `px-3 sm:px-6 lg:px-8`, `py-4 sm:py-6`.
-- Header rows → `flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4`.
-- Card grids → `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3` (instead of fixed multi-column).
-- Tables/wide content → wrap in `overflow-x-auto` with sensible `min-w-[…]`.
-- Long button rows → `flex-wrap` so they wrap instead of overflowing.
-- Hide secondary text/labels on `<sm` where space-constrained (e.g. `<span className="hidden sm:inline">`).
-- Reduce font sizes one step on mobile where headings overflow (e.g. `text-2xl sm:text-3xl`).
+## Verification checklist
 
-### Shared components touched
-- `src/components/po/POList.tsx`, `src/components/po/POForm.tsx`, `src/components/recruitment/JobRolesManager.tsx`, `src/components/workstreams/KanbanBoard.tsx` — same pattern: stack on mobile, wrap tables in scroll containers, allow buttons to wrap.
-
-### Out of scope
-- No changes to the Sidebar (already mobile-aware via `AppLayout`'s `MobileMenuButton`).
-- No visual redesign — just responsive utility tweaks. Desktop appearance unchanged.
-- No backend or data changes.
-
----
-
-## Verification
-After implementation:
-- Open `/`, `/recruitment`, `/operations`, `/workstreams`, `/purchase-orders`, `/integrations`, `/whats-new`, `/settings`, `/profile`, `/feedback`, `/gmail`, `/release-manager` at 375×812 (iPhone) and confirm:
-  - No horizontal page scroll.
-  - Headers + buttons wrap cleanly.
-  - Tables scroll inside their containers, not the whole page.
-- Send a chat message on `/` and inside a project chat → confirm the user's avatar and name appear on the right, Duncan's on the left.
+- With `VITE_API_BASE_URL` empty: recruitment behaves exactly as today (no network calls to any external host; no console warnings about FastAPI).
+- With `VITE_API_BASE_URL` set: each of the 10 listed endpoints hits FastAPI first; on a 4xx/5xx/network failure, Supabase Edge Function is invoked transparently and the UI shows the same result.
+- `fetch-gmail-cvs` 409 lock flow still surfaces the "Fetch already running for this role" toast, regardless of which backend served the response.
+- No changes to candidate list, role list, scoring badges, JD generation UI, or Hireflix buttons.

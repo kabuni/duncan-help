@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { fastApi, withFastApi } from "@/lib/fastApiClient";
+import { hasExternalApiBase } from "@/lib/apiConfig";
 import { useQuery } from "@tanstack/react-query";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -144,7 +145,14 @@ const Recruitment = () => {
     if (isCompleted) {
       setLoadingPlaybackId(candidate.id);
       try {
-        await supabase.functions.invoke("hireflix-sync-interviews");
+        await withFastApi(
+          async () => {
+            const res = await supabase.functions.invoke("hireflix-sync-interviews");
+            if (res.error) throw res.error;
+            return res.data;
+          },
+          () => fastApi("POST", "/hireflix/sync-interviews", {}),
+        );
 
         const { data } = await supabase
           .from("candidates")
@@ -241,9 +249,27 @@ const Recruitment = () => {
     }
     setFetching(true);
     try {
-      const res = await supabase.functions.invoke("fetch-gmail-cvs", {
-        body: { role_id: selectedRoleId },
-      });
+      let res: any;
+      if (hasExternalApiBase) {
+        try {
+          const data = await fastApi<any>("POST", "/recruitment/fetch-gmail-cvs", { role_id: selectedRoleId });
+          res = { data, error: null };
+        } catch (err: any) {
+          // FastAPI 409 → already running for this role
+          if (String(err?.message || "").includes("→ 409")) {
+            toast.message("Fetch already running for this role");
+            return;
+          }
+          console.warn("[FastAPI fetch-gmail-cvs failed, falling back to Supabase]", err);
+          res = await supabase.functions.invoke("fetch-gmail-cvs", {
+            body: { role_id: selectedRoleId },
+          });
+        }
+      } else {
+        res = await supabase.functions.invoke("fetch-gmail-cvs", {
+          body: { role_id: selectedRoleId },
+        });
+      }
 
       // Detect "already running" lock conflict (HTTP 409 returned via FunctionsHttpError)
       const errCtx: any = (res as any).error?.context;

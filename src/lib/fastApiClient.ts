@@ -3,7 +3,8 @@ import { API_BASE_URL, hasExternalApiBase } from "@/lib/apiConfig";
 
 const BASE = API_BASE_URL;
 
-const USE_FASTAPI = import.meta.env.VITE_USE_FASTAPI === "true" && hasExternalApiBase;
+// FastAPI is primary whenever VITE_API_BASE_URL is set. No separate flag required.
+const USE_FASTAPI = hasExternalApiBase;
 
 async function getAuthHeader(): Promise<string> {
   const { data } = await supabase.auth.getSession();

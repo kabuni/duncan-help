@@ -164,121 +164,118 @@ You MUST call the score_values function with your assessment.`;
       },
     };
 
-    let scored = 0;
-    let failed = 0;
-    const results: any[] = [];
+    // Long-running: process candidates in the background to avoid the 150s edge timeout.
+    // The UI polls candidate rows for `values_score` / `status` updates.
+    const processCandidates = async () => {
+      let scored = 0;
+      let failed = 0;
 
-    for (const candidate of candidates) {
-      try {
-        const cvContent = await getCvContent(supabaseAdmin, candidate.cv_storage_path!);
-        if (!cvContent) {
-          failed++;
-          continue;
-        }
-
-        let aiData: any;
+      for (const candidate of candidates) {
         try {
-          // CV files use OpenAI file-content blocks; force OpenAI to avoid Claude shape mismatch.
-          aiData = await callLLMWithFallback({
-            workflow: "score-cv-values",
-            force_provider: "openai",
-            messages: [{ role: "system", content: systemPrompt }, ...cvContent.messages],
-            tools: [toolDef as any],
-            tool_choice: { type: "function", function: { name: "score_values" } } as any,
-          });
+          const cvContent = await getCvContent(supabaseAdmin, candidate.cv_storage_path!);
+          if (!cvContent) {
+            failed++;
+            continue;
+          }
+
+          let aiData: any;
+          try {
+            // CV files use OpenAI file-content blocks; force OpenAI to avoid Claude shape mismatch.
+            aiData = await callLLMWithFallback({
+              workflow: "score-cv-values",
+              force_provider: "openai",
+              messages: [{ role: "system", content: systemPrompt }, ...cvContent.messages],
+              tools: [toolDef as any],
+              tool_choice: { type: "function", function: { name: "score_values" } } as any,
+            });
+          } catch (err: any) {
+            console.error(`AI error for ${candidate.id}:`, err?.status, err?.message);
+            // On rate-limit / credit-exhaustion, stop the batch — running further calls won't succeed.
+            if (err?.status === 429 || err?.status === 402) {
+              console.error(`Aborting batch due to status ${err?.status}. Scored=${scored} Failed=${failed}`);
+              return;
+            }
+            failed++;
+            continue;
+          }
+
+          const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
+          if (!toolCall?.function?.arguments) {
+            console.error(`No tool call for candidate ${candidate.id}`);
+            failed++;
+            continue;
+          }
+
+          const scores = safeParseToolArguments<Record<string, any>>(toolCall.function.arguments);
+          if (!scores) {
+            console.error(`Malformed scores tool args for candidate ${candidate.id}`);
+            failed++;
+            continue;
+          }
+
+          // P8: Clamp all scores to valid range 1-5
+          for (const v of KABUNI_VALUES) {
+            if (scores[v.key]?.score !== undefined) {
+              scores[v.key].score = clampScore(scores[v.key].score);
+            }
+          }
+
+          const allScores = KABUNI_VALUES.map((v) => scores[v.key]?.score ?? 0).filter((s) => s > 0);
+          if (allScores.length === 0) {
+            console.error(`All scores were 0 for candidate ${candidate.id}`);
+            failed++;
+            continue;
+          }
+          const valuesAvg = allScores.reduce((a: number, b: number) => a + b, 0) / allScores.length;
+          const valuesScore = Math.round(valuesAvg * 10) / 10;
+
+          const existingDetails = (candidate.scoring_details as any) || {};
+          const newDetails = { ...existingDetails, values: scores };
+
+          const competencyScore = candidate.competency_score;
+          let totalScore: number | null = null;
+          if (competencyScore != null && valuesScore != null) {
+            totalScore = Math.round(((valuesScore + competencyScore) / 2) * 10) / 10;
+          }
+
+          const newStatus = competencyScore != null ? "fully_scored" : "values_scored";
+
+          const { error: updateError } = await supabaseAdmin
+            .from("candidates")
+            .update({
+              values_score: valuesScore,
+              total_score: totalScore,
+              scoring_details: newDetails,
+              status: newStatus,
+            })
+            .eq("id", candidate.id);
+
+          if (updateError) {
+            console.error(`Update error for ${candidate.id}:`, updateError);
+            failed++;
+            continue;
+          }
+
+          scored++;
         } catch (err: any) {
-          console.error(`AI error for ${candidate.id}:`, err?.status, err?.message);
-          if (err?.status === 429) {
-            return new Response(JSON.stringify({ error: "Rate limited. Try again shortly.", scored, failed }), {
-              status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-          if (err?.status === 402) {
-            return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits." }), {
-              status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
+          console.error(`Error scoring candidate ${candidate.id}:`, err);
           failed++;
-          continue;
         }
-
-        const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-        if (!toolCall?.function?.arguments) {
-          console.error(`No tool call for candidate ${candidate.id}`);
-          failed++;
-          continue;
-        }
-
-        const scores = safeParseToolArguments<Record<string, any>>(toolCall.function.arguments);
-        if (!scores) {
-          console.error(`Malformed scores tool args for candidate ${candidate.id}`);
-          failed++;
-          continue;
-        }
-
-        // P8: Clamp all scores to valid range 1-5
-        for (const v of KABUNI_VALUES) {
-          if (scores[v.key]?.score !== undefined) {
-            scores[v.key].score = clampScore(scores[v.key].score);
-          }
-        }
-
-        // Calculate values score average
-        const allScores = KABUNI_VALUES.map((v) => scores[v.key]?.score ?? 0).filter((s) => s > 0);
-        if (allScores.length === 0) {
-          console.error(`All scores were 0 for candidate ${candidate.id}`);
-          failed++;
-          continue;
-        }
-        const valuesAvg = allScores.reduce((a: number, b: number) => a + b, 0) / allScores.length;
-        const valuesScore = Math.round(valuesAvg * 10) / 10;
-
-        // Merge with existing scoring_details
-        const existingDetails = (candidate.scoring_details as any) || {};
-        const newDetails = { ...existingDetails, values: scores };
-
-        // P3: Only calculate total_score if BOTH scores exist
-        const competencyScore = candidate.competency_score;
-        let totalScore: number | null = null;
-        if (competencyScore != null && valuesScore != null) {
-          totalScore = Math.round(((valuesScore + competencyScore) / 2) * 10) / 10;
-        }
-
-        // P4: Determine correct status
-        let newStatus: string;
-        if (competencyScore != null) {
-          newStatus = "fully_scored";
-        } else {
-          newStatus = "values_scored";
-        }
-
-        const { error: updateError } = await supabaseAdmin
-          .from("candidates")
-          .update({
-            values_score: valuesScore,
-            total_score: totalScore,
-            scoring_details: newDetails,
-            status: newStatus,
-          })
-          .eq("id", candidate.id);
-
-        if (updateError) {
-          console.error(`Update error for ${candidate.id}:`, updateError);
-          failed++;
-          continue;
-        }
-
-        results.push({ id: candidate.id, name: candidate.name, values_score: valuesScore, status: newStatus });
-        scored++;
-      } catch (err: any) {
-        console.error(`Error scoring candidate ${candidate.id}:`, err);
-        failed++;
       }
-    }
+
+      console.log(`score-cv-values batch complete: scored=${scored} failed=${failed} total=${candidates.length}`);
+    };
+
+    // @ts-ignore - EdgeRuntime is provided by the Supabase edge runtime
+    EdgeRuntime.waitUntil(processCandidates());
 
     return new Response(
-      JSON.stringify({ success: true, scored, failed, total: candidates.length, results }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        success: true,
+        queued: candidates.length,
+        message: "Scoring started in the background. Poll candidates for updated values_score/status.",
+      }),
+      { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
     console.error("Score CV values error:", error);

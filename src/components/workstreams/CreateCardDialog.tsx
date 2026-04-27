@@ -19,6 +19,8 @@ interface Props {
 export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Props) {
   const createCard = useCreateCard();
   const { data: users } = useUserProfiles();
+  const { data: existingTags = [] } = useProjectTags();
+  const { isAdmin } = useIsAdmin();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<CardStatus>("amber");
@@ -26,6 +28,8 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState("");
   const [projectTag, setProjectTag] = useState("");
+  const [addingNew, setAddingNew] = useState(false);
+  const [newTag, setNewTag] = useState("");
 
   // Apply prefill when dialog opens with a suggested tag (from CEO Coverage Gaps)
   useEffect(() => {

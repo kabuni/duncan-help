@@ -108,6 +108,13 @@ const NON_CV_TERMS = [
 const ROLE_FETCH_MAX_RESULTS_PER_PAGE = 100;
 const ROLE_FETCH_MAX_PAGES = 20;
 
+// Per-fetch processing limits to prevent edge-function timeout
+const MAX_MESSAGES_PER_RUN = 50;
+// Concurrency limit for parse-cv to avoid 429 rate-limit storms
+const PARSE_CONCURRENCY = 2;
+// Lock TTL: auto-expires after 15 minutes in case of crash
+const LOCK_TTL_MINUTES = 15;
+
 function stripFileExtension(filename: string): string {
   return filename.replace(/\.(pdf|docx?|rtf)$/i, "");
 }

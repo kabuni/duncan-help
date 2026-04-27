@@ -3,12 +3,10 @@
  *
  * Two tiers:
  *  - VIEWERS: any authenticated user can read briefings (`canViewBriefing`).
- *  - GENERATORS: only the CEO (Nimesh) can trigger generation (`canGenerateBriefing`).
- *
- * If the generator allowlist changes, also update:
- *  - supabase/functions/ceo-briefing/index.ts (CEO_GENERATOR_EMAILS)
- *  - supabase/functions/send-ceo-briefing-actions/index.ts (CEO_EMAILS)
- *  - RLS INSERT policies on `ceo_briefings` and `ceo_briefing_jobs`
+ *  - GENERATORS: the CEO (Nimesh) OR any user with the 'admin' role can trigger generation.
+ *    `canGenerateBriefing(email)` only checks the email allowlist; admin status is
+ *    layered on at the call site (see `src/pages/CEOBriefing.tsx`) via `useIsAdmin`,
+ *    and enforced server-side in `supabase/functions/ceo-briefing/index.ts` and via RLS.
  */
 
 /** @deprecated legacy viewer allowlist — viewing is now open to all signed-in users. */

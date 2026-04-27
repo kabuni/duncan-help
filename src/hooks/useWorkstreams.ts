@@ -327,6 +327,7 @@ export function useCreateCard() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workstream-cards"] });
+      qc.invalidateQueries({ queryKey: ["workstream-project-tags"] });
       toast.success("Card created");
     },
     onError: (e: Error) => toast.error(e.message),

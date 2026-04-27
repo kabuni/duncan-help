@@ -507,15 +507,7 @@ serve(async (req) => {
       : `has:attachment (filename:pdf OR filename:docx OR filename:doc)`;
     console.log("Gmail search query:", query);
 
-    const searchOutcome = await fetchMatchingMessages(query, gmailHeaders, Boolean(selectedRole));
-    const messages = searchOutcome.messages;
-
-    console.log("Gmail search coverage:", {
-      selectedRole: selectedRole?.title ?? null,
-      totalMessages: messages.length,
-      pagesFetched: searchOutcome.pagesFetched,
-      exhausted: searchOutcome.exhausted,
-    });
+    // (Gmail search executed inside the lock-protected block below.)
 
     // ---- Acquire per-role fetch lock ----
     const lockKey = `fetch-gmail-cvs:${filterRoleId ?? "all"}`;

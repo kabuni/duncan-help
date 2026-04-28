@@ -1234,13 +1234,13 @@ Deno.serve(async (req) => {
     let email_pulse: any = null;
     let slack_pulse: any = null;
     let hubspot_signal: any = null;
-    let github_signal: any = null;
+    let azure_repos_signal: any = null;
     let slack_pulse_error: string | null = null;
     let email_pulse_error: string | null = null;
     let hubspot_signal_error: string | null = null;
-    let github_signal_error: string | null = null;
+    let azure_repos_signal_error: string | null = null;
     try {
-      const [epRes, spRes, hubspotRes, githubRes] = await Promise.all([
+      const [epRes, spRes, hubspotRes, azureReposRes] = await Promise.all([
         fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ceo-email-pulse`, {
           method: "POST",
           headers: {
@@ -1265,14 +1265,14 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({ action: "team_briefing_summary" }),
         }).catch((e) => { console.warn("hubspot-api fetch failed:", e); hubspot_signal_error = `fetch failed: ${e?.message || e}`; return null; }),
-        fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/github-api`, {
+        fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/azure-repos-api`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
           },
           body: JSON.stringify({ action: "briefing_summary" }),
-        }).catch((e) => { console.warn("github-api fetch failed:", e); github_signal_error = `fetch failed: ${e?.message || e}`; return null; }),
+        }).catch((e) => { console.warn("azure-repos-api fetch failed:", e); azure_repos_signal_error = `fetch failed: ${e?.message || e}`; return null; }),
       ]);
       if (epRes && epRes.ok) {
         email_pulse = await epRes.json();
@@ -1295,19 +1295,19 @@ Deno.serve(async (req) => {
         hubspot_signal_error = `HTTP ${hubspotRes.status}`;
         console.warn("hubspot-api non-200:", hubspotRes.status);
       }
-      if (githubRes && githubRes.ok) {
-        github_signal = await githubRes.json();
-        if (github_signal?.ok === false) github_signal_error = github_signal?.error || "github returned ok=false";
-      } else if (githubRes) {
-        github_signal_error = `HTTP ${githubRes.status}`;
-        console.warn("github-api non-200:", githubRes.status);
+      if (azureReposRes && azureReposRes.ok) {
+        azure_repos_signal = await azureReposRes.json();
+        if (azure_repos_signal?.ok === false) azure_repos_signal_error = azure_repos_signal?.error || "github returned ok=false";
+      } else if (azureReposRes) {
+        azure_repos_signal_error = `HTTP ${azureReposRes.status}`;
+        console.warn("azure-repos-api non-200:", azureReposRes.status);
       }
     } catch (e: any) {
       console.warn("comms pulse invoke failed:", e);
       if (!slack_pulse_error) slack_pulse_error = `invoke failed: ${e?.message || e}`;
       if (!email_pulse_error) email_pulse_error = `invoke failed: ${e?.message || e}`;
       if (!hubspot_signal_error) hubspot_signal_error = `invoke failed: ${e?.message || e}`;
-      if (!github_signal_error) github_signal_error = `invoke failed: ${e?.message || e}`;
+      if (!azure_repos_signal_error) azure_repos_signal_error = `invoke failed: ${e?.message || e}`;
     }
     const normalizeExternalSignal = (
       signal: any,
@@ -1351,9 +1351,9 @@ Deno.serve(async (req) => {
       },
       (source) => `${Number(source?.active_deals_count ?? 0)} active deals · ${Number(source?.at_risk_accounts_count ?? source?.at_risk_accounts ?? 0)} at-risk accounts · ${Array.isArray(source?.key_contacts) ? source.key_contacts.length : 0} key contacts`,
     );
-    const normalizedGithubSignal = normalizeExternalSignal(
-      github_signal,
-      github_signal_error,
+    const normalizedAzureReposSignal = normalizeExternalSignal(
+      azure_repos_signal,
+      azure_repos_signal_error,
       {
         repos_scanned: 0,
         open_prs: 0,
@@ -1363,7 +1363,7 @@ Deno.serve(async (req) => {
       },
       (source) => `${Number(source?.open_prs ?? 0)} open PRs · ${Number(source?.blocked_prs ?? 0)} blocked · ${Number(source?.stale_prs ?? 0)} stale across ${Number(source?.repos_scanned ?? 0)} repos`,
     );
-    console.log(`[ceo-briefing] email_pulse: ${email_pulse ? 'ok' : 'null'} (err=${email_pulse_error}); slack_pulse: ${slack_pulse ? 'ok' : 'null'} (err=${slack_pulse_error}); hubspot: ${normalizedHubspotSignal.status} (err=${normalizedHubspotSignal.degraded_reason}); github: ${normalizedGithubSignal.status} (err=${normalizedGithubSignal.degraded_reason})`);
+    console.log(`[ceo-briefing] email_pulse: ${email_pulse ? 'ok' : 'null'} (err=${email_pulse_error}); slack_pulse: ${slack_pulse ? 'ok' : 'null'} (err=${slack_pulse_error}); hubspot: ${normalizedHubspotSignal.status} (err=${normalizedHubspotSignal.degraded_reason}); azure_repos: ${normalizedAzureReposSignal.status} (err=${normalizedAzureReposSignal.degraded_reason})`);
 
     // ─── Calendar events for leaders (last 7d) — best-effort, opt-in via google_calendar_tokens ─
     let leaderCalendarEvents: Array<{ summary: string | null; start: string | null; organiser_alias?: string | null; attendee_aliases?: string[] }> = [];
@@ -2365,9 +2365,9 @@ ULTRA COMPACT MODE (LAST ATTEMPT, MANDATORY):
       hubspot: normalizedHubspotSignal
         ? `HubSpot ${normalizedHubspotSignal.status === "connected" ? "connected" : normalizedHubspotSignal.status}. Accounts scanned: ${normalizedHubspotSignal.accounts_scanned ?? 0}. ${normalizedHubspotSignal.metrics_summary || normalizedHubspotSignal.summary || normalizedHubspotSignal.error_message || "No material CRM signal returned."}`
         : `HubSpot summary unavailable${hubspot_signal_error ? ` — error: ${hubspot_signal_error}` : ""}.`,
-      github: normalizedGithubSignal
-        ? `GitHub ${normalizedGithubSignal.status === "connected" ? "connected" : normalizedGithubSignal.status}. Repos scanned: ${normalizedGithubSignal.repos_scanned ?? 0}. ${normalizedGithubSignal.metrics_summary || normalizedGithubSignal.summary || normalizedGithubSignal.error_message || "No material engineering signal returned."}`
-        : `GitHub summary unavailable${github_signal_error ? ` — error: ${github_signal_error}` : ""}.`,
+      github: normalizedAzureReposSignal
+        ? `Azure Repos ${normalizedAzureReposSignal.status === "connected" ? "connected" : normalizedAzureReposSignal.status}. Repos scanned: ${normalizedAzureReposSignal.repos_scanned ?? 0}. ${normalizedAzureReposSignal.metrics_summary || normalizedAzureReposSignal.summary || normalizedAzureReposSignal.error_message || "No material engineering signal returned."}`
+        : `Azure Repos summary unavailable${azure_repos_signal_error ? ` — error: ${azure_repos_signal_error}` : ""}.`,
       email: "Per-mailbox 24h scan via ceo-email-pulse for opted-in users only.",
       meetings: "Plaud-ingested transcripts via fetch-plaud-meetings (last 24h for activity, last 10 transcripts for priority signals).",
       azure_devops: "azure_work_items table — last 24h changes.",
@@ -3062,10 +3062,10 @@ ULTRA COMPACT MODE (LAST ATTEMPT, MANDATORY):
       } else if (normalizedHubspotSignal.summary) {
         company_pulse_status.evidence.push(`HubSpot: ${normalizedHubspotSignal.summary}`);
       }
-      if (normalizedGithubSignal.status !== "connected") {
-        company_pulse_status.blockers.push(`Engineering delivery visibility reduced — GitHub is ${normalizedGithubSignal.status}${normalizedGithubSignal.degraded_reason ? ` (${normalizedGithubSignal.degraded_reason})` : ""}.`);
-      } else if (normalizedGithubSignal.summary) {
-        company_pulse_status.evidence.push(`GitHub: ${normalizedGithubSignal.summary}`);
+      if (normalizedAzureReposSignal.status !== "connected") {
+        company_pulse_status.blockers.push(`Engineering delivery visibility reduced — Azure Repos is ${normalizedAzureReposSignal.status}${normalizedAzureReposSignal.degraded_reason ? ` (${normalizedAzureReposSignal.degraded_reason})` : ""}.`);
+      } else if (normalizedAzureReposSignal.summary) {
+        company_pulse_status.evidence.push(`Azure Repos: ${normalizedAzureReposSignal.summary}`);
       }
       if (slack_pulse?.degraded && slack_pulse?.degraded_codes?.length) {
         company_pulse_status.blockers.push(`Slack visibility is partial — ${slack_pulse.degraded_codes.join(", ")}.`);
@@ -3397,7 +3397,7 @@ ULTRA COMPACT MODE (LAST ATTEMPT, MANDATORY):
       const sourcesUnavailable: string[] = [];
       if (!slack_pulse) sourcesUnavailable.push("slack_inbound");
       if (normalizedHubspotSignal.status !== "connected" || !normalizedHubspotSignal.summary) sourcesUnavailable.push("hubspot");
-      if (normalizedGithubSignal.status !== "connected" || !normalizedGithubSignal.summary) sourcesUnavailable.push("github");
+      if (normalizedAzureReposSignal.status !== "connected" || !normalizedAzureReposSignal.summary) sourcesUnavailable.push("azure_repos");
 
       // Per-pass tally from the LLM-emitted friction items (best-effort)
       const passTally = { A: 0, B: 0, C: 0, D: 0, unspecified: 0 };
@@ -3416,7 +3416,7 @@ ULTRA COMPACT MODE (LAST ATTEMPT, MANDATORY):
         slack_pulse_error: slack_pulse_error || null,
         email_pulse_error: email_pulse_error || null,
         hubspot_signal_error: hubspot_signal_error || null,
-        github_signal_error: github_signal_error || null,
+        azure_repos_signal_error: azure_repos_signal_error || null,
         scanned: {
           workstream_cards: Array.isArray(cards) ? (cards as any[]).length : 0,
           azure_work_items: Array.isArray(workItems) ? workItems.length : 0,
@@ -3769,23 +3769,23 @@ ULTRA COMPACT MODE (LAST ATTEMPT, MANDATORY):
       summary: normalizedHubspotSignal.summary,
       degraded_reason: normalizedHubspotSignal.degraded_reason,
     };
-    parsed.payload.github_signal = {
-      status: normalizedGithubSignal.status,
-      connected: normalizedGithubSignal.connected,
-      credential_source: normalizedGithubSignal.credential_source,
-      verification_path: normalizedGithubSignal.verification_path,
-      last_sync_at: normalizedGithubSignal.last_sync_at,
-      error_code: normalizedGithubSignal.error_code,
-      error_message: normalizedGithubSignal.error_message,
-      metrics_summary: normalizedGithubSignal.metrics_summary,
-      repos_scanned: normalizedGithubSignal.repos_scanned,
-      open_prs: normalizedGithubSignal.open_prs,
-      blocked_prs: normalizedGithubSignal.blocked_prs,
-      stale_prs: normalizedGithubSignal.stale_prs,
-      release_risks: normalizedGithubSignal.release_risks,
-      signals: normalizedGithubSignal.signals,
-      summary: normalizedGithubSignal.summary,
-      degraded_reason: normalizedGithubSignal.degraded_reason,
+    parsed.payload.azure_repos_signal = {
+      status: normalizedAzureReposSignal.status,
+      connected: normalizedAzureReposSignal.connected,
+      credential_source: normalizedAzureReposSignal.credential_source,
+      verification_path: normalizedAzureReposSignal.verification_path,
+      last_sync_at: normalizedAzureReposSignal.last_sync_at,
+      error_code: normalizedAzureReposSignal.error_code,
+      error_message: normalizedAzureReposSignal.error_message,
+      metrics_summary: normalizedAzureReposSignal.metrics_summary,
+      repos_scanned: normalizedAzureReposSignal.repos_scanned,
+      open_prs: normalizedAzureReposSignal.open_prs,
+      blocked_prs: normalizedAzureReposSignal.blocked_prs,
+      stale_prs: normalizedAzureReposSignal.stale_prs,
+      release_risks: normalizedAzureReposSignal.release_risks,
+      signals: normalizedAzureReposSignal.signals,
+      summary: normalizedAzureReposSignal.summary,
+      degraded_reason: normalizedAzureReposSignal.degraded_reason,
     };
 
     // ─── Automation Progress: ground in server data + recommendation floor ──

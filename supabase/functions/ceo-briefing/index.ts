@@ -1297,7 +1297,7 @@ Deno.serve(async (req) => {
       }
       if (azureReposRes && azureReposRes.ok) {
         azure_repos_signal = await azureReposRes.json();
-        if (azure_repos_signal?.ok === false) azure_repos_signal_error = azure_repos_signal?.error || "github returned ok=false";
+        if (azure_repos_signal?.ok === false) azure_repos_signal_error = azure_repos_signal?.error || "azure-repos returned ok=false";
       } else if (azureReposRes) {
         azure_repos_signal_error = `HTTP ${azureReposRes.status}`;
         console.warn("azure-repos-api non-200:", azureReposRes.status);

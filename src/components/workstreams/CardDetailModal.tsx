@@ -84,7 +84,22 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
   };
 
   const handleToggleTask = (task: WorkstreamTask) => {
-    updateTask.mutate({ id: task.id, card_id: task.card_id, completed: !task.completed });
+    const nowCompleted = !task.completed;
+    updateTask.mutate({
+      id: task.id,
+      card_id: task.card_id,
+      completed: nowCompleted,
+      status: nowCompleted ? "done" : (task.status === "done" ? "green" : task.status),
+    });
+  };
+
+  const handleSetTaskStatus = (task: WorkstreamTask, status: CardStatus) => {
+    updateTask.mutate({
+      id: task.id,
+      card_id: task.card_id,
+      status,
+      completed: status === "done",
+    });
   };
 
   const handleAddComment = () => {
@@ -439,6 +454,7 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                         onDelete={() => deleteTask.mutate({ id: task.id, card_id: task.card_id })}
                         onUpdateAssignees={(ids) => updateTaskAssignees.mutate({ taskId: task.id, cardId: task.card_id, userIds: ids })}
                         onUpdateDueDate={(d) => updateTask.mutate({ id: task.id, card_id: task.card_id, due_date: d })}
+                        onSetStatus={(s) => handleSetTaskStatus(task, s)}
                       />
                     ))}
 
@@ -565,7 +581,7 @@ function MetaField({ icon, label, value, children }: {
 }
 
 function TaskRow({
-  task, users, currentUserId, onToggle, onDelete, onUpdateAssignees, onUpdateDueDate,
+  task, users, currentUserId, onToggle, onDelete, onUpdateAssignees, onUpdateDueDate, onSetStatus,
 }: {
   task: WorkstreamTask;
   users: UserProfile[];
@@ -574,6 +590,7 @@ function TaskRow({
   onDelete: () => void;
   onUpdateAssignees: (ids: string[]) => void;
   onUpdateDueDate: (date: string | null) => void;
+  onSetStatus: (status: CardStatus) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [newComment, setNewComment] = useState("");
@@ -604,6 +621,7 @@ function TaskRow({
             {task.title}
           </span>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <TaskStatusPicker status={task.status} onChange={onSetStatus} />
             {(task.assignees || []).map(a => (
               <Badge key={a.user_id} variant="secondary" className="text-[10px] py-0 px-1.5">
                 {(a.display_name || "?").split(" ")[0]}
@@ -720,5 +738,36 @@ function TaskRow({
         </div>
       )}
     </div>
+  );
+}
+
+function TaskStatusPicker({ status, onChange }: { status: CardStatus; onChange: (s: CardStatus) => void }) {
+  const opts: { value: CardStatus; label: string; emoji: string; dot: string }[] = [
+    { value: "red", label: "Red", emoji: "🔴", dot: "bg-red-500" },
+    { value: "amber", label: "Yellow", emoji: "🟡", dot: "bg-amber-500" },
+    { value: "green", label: "Green", emoji: "🟢", dot: "bg-emerald-500" },
+    { value: "done", label: "Done", emoji: "✅", dot: "bg-primary" },
+  ];
+  const current = opts.find(o => o.value === status) || opts[2];
+  return (
+    <Select value={status} onValueChange={(v) => onChange(v as CardStatus)}>
+      <SelectTrigger
+        className="h-5 w-auto px-1.5 py-0 gap-1 text-[10px] border-border bg-secondary/50 hover:bg-secondary"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className={`h-1.5 w-1.5 rounded-full ${current.dot}`} />
+        <span className="text-muted-foreground">{current.label}</span>
+      </SelectTrigger>
+      <SelectContent>
+        {opts.map(o => (
+          <SelectItem key={o.value} value={o.value} className="text-xs">
+            <span className="inline-flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${o.dot}`} />
+              {o.label}
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

@@ -841,10 +841,7 @@ serve(async (req) => {
           const bytes = new Uint8Array(binaryStr.length);
           for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
 
-          const sanitizedFilename = cv.filename
-            .normalize("NFKD")
-            .replace(/[^a-zA-Z0-9\-_.]+/g, "-")
-            .toLowerCase();
+          const sanitizedFilename = sanitizeFilenameForStorage(cv.filename);
           const storagePath = `${Date.now()}_${sanitizedFilename}`;
           const { error: uploadError } = await supabaseAdmin.storage
             .from("cvs")

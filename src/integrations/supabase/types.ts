@@ -189,6 +189,7 @@ export type Database = {
           attachment_filename: string | null
           competency_score: number | null
           created_at: string
+          cv_hash: string | null
           cv_storage_path: string | null
           cv_text: string | null
           email: string | null
@@ -206,6 +207,7 @@ export type Database = {
           interview_scored_at: string | null
           interview_scores: Json | null
           interview_transcript: string | null
+          is_score_locked: boolean
           job_role_id: string | null
           name: string
           scoring_details: Json | null
@@ -218,6 +220,7 @@ export type Database = {
           attachment_filename?: string | null
           competency_score?: number | null
           created_at?: string
+          cv_hash?: string | null
           cv_storage_path?: string | null
           cv_text?: string | null
           email?: string | null
@@ -235,6 +238,7 @@ export type Database = {
           interview_scored_at?: string | null
           interview_scores?: Json | null
           interview_transcript?: string | null
+          is_score_locked?: boolean
           job_role_id?: string | null
           name: string
           scoring_details?: Json | null
@@ -247,6 +251,7 @@ export type Database = {
           attachment_filename?: string | null
           competency_score?: number | null
           created_at?: string
+          cv_hash?: string | null
           cv_storage_path?: string | null
           cv_text?: string | null
           email?: string | null
@@ -264,6 +269,7 @@ export type Database = {
           interview_scored_at?: string | null
           interview_scores?: Json | null
           interview_transcript?: string | null
+          is_score_locked?: boolean
           job_role_id?: string | null
           name?: string
           scoring_details?: Json | null

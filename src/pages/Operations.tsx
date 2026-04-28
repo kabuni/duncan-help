@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { fastApi, withFastApi } from "@/lib/fastApiClient";
 import { useGoogleAnalytics } from "@/hooks/useGoogleAnalytics";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import { azureReposApi, type TeamActivitySummary, type AzureRepo, type AzurePullRequest } from "@/lib/api/azureRepos";
 import { toast } from "sonner";
 

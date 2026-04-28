@@ -153,12 +153,12 @@ export default function SettingsGmail() {
               <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
                 {trained
                   ? "Skips noreply senders, calendar invites, list emails, and short notifications. Capped at 100 drafts per day."
-                  : "Train Duncan on your writing style first — otherwise drafts will sound generic."}
+                  : "You can enable this now — Duncan will start drafting once you've trained your writing style above."}
               </p>
             </div>
             <Switch
               checked={autoDraftEnabled}
-              disabled={!trained || autoDraftToggle.isPending}
+              disabled={autoDraftToggle.isPending}
               onCheckedChange={(v) => autoDraftToggle.mutate(v)}
             />
           </div>

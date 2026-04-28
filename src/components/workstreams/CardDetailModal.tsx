@@ -84,7 +84,22 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
   };
 
   const handleToggleTask = (task: WorkstreamTask) => {
-    updateTask.mutate({ id: task.id, card_id: task.card_id, completed: !task.completed });
+    const nowCompleted = !task.completed;
+    updateTask.mutate({
+      id: task.id,
+      card_id: task.card_id,
+      completed: nowCompleted,
+      status: nowCompleted ? "done" : (task.status === "done" ? "green" : task.status),
+    });
+  };
+
+  const handleSetTaskStatus = (task: WorkstreamTask, status: CardStatus) => {
+    updateTask.mutate({
+      id: task.id,
+      card_id: task.card_id,
+      status,
+      completed: status === "done",
+    });
   };
 
   const handleAddComment = () => {

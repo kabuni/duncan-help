@@ -454,6 +454,7 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                         onDelete={() => deleteTask.mutate({ id: task.id, card_id: task.card_id })}
                         onUpdateAssignees={(ids) => updateTaskAssignees.mutate({ taskId: task.id, cardId: task.card_id, userIds: ids })}
                         onUpdateDueDate={(d) => updateTask.mutate({ id: task.id, card_id: task.card_id, due_date: d })}
+                        onSetStatus={(s) => handleSetTaskStatus(task, s)}
                       />
                     ))}
 

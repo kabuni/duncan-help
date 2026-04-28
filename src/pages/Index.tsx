@@ -418,6 +418,32 @@ const Index = () => {
           </button>
         </div>
 
+        {/* Briefing status banners */}
+        {briefingError && (
+          <div className="relative z-10 mx-4 sm:mx-8 mt-3 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-xs">
+            <span className="text-destructive-foreground">
+              Your daily briefing couldn't load.
+            </span>
+            <button
+              onClick={() => runBriefing()}
+              className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        {isLoading && !hasMessages && !briefingError && (
+          <div className="relative z-10 mx-4 sm:mx-8 mt-3 flex items-center gap-2 rounded-lg border border-border bg-card/60 px-4 py-2.5 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Generating your briefing…
+          </div>
+        )}
+        {briefingTimestamp && !briefingError && (
+          <div className="relative z-10 mx-4 sm:mx-8 mt-2 text-[10px] text-muted-foreground/70">
+            Last briefing at {new Date(briefingTimestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </div>
+        )}
+
         {/* Content area */}
         <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 sm:px-8 py-4 sm:py-6">
           {!hasMessages ? (

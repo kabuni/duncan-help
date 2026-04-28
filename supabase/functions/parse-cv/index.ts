@@ -229,6 +229,87 @@ Always return the result by calling the extract_candidate_info function.`,
       updateData.email = parsedEmail;
     }
 
+    // ---- Post-parse identity reconciliation ----
+    // If another candidate exists for the same job_role_id with the same email
+    // (or same normalized name when email is missing), prefer the existing
+    // higher-quality record and mark this one as a duplicate to avoid double-counting.
+    const { data: thisCandidate } = await supabaseAdmin
+      .from("candidates")
+      .select("id, job_role_id")
+      .eq("id", candidate_id)
+      .maybeSingle();
+
+    if (thisCandidate?.job_role_id) {
+      const normalizedName = parsedName.toLowerCase().trim().replace(/\s+/g, " ");
+      let sibling: { id: string; status: string; total_score: number | null } | null = null;
+      let matchReason: "matched_by_email" | "matched_by_name" | null = null;
+
+      if (parsedEmail) {
+        const { data: byEmail } = await supabaseAdmin
+          .from("candidates")
+          .select("id, status, total_score")
+          .eq("job_role_id", thisCandidate.job_role_id)
+          .neq("id", candidate_id)
+          .ilike("email", parsedEmail)
+          .order("total_score", { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle();
+        if (byEmail) {
+          sibling = byEmail;
+          matchReason = "matched_by_email";
+        }
+      }
+
+      if (!sibling && normalizedName.length >= 3) {
+        const { data: byName } = await supabaseAdmin
+          .from("candidates")
+          .select("id, status, total_score")
+          .eq("job_role_id", thisCandidate.job_role_id)
+          .neq("id", candidate_id)
+          .ilike("name", normalizedName)
+          .order("total_score", { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle();
+        if (byName) {
+          sibling = byName;
+          matchReason = "matched_by_name";
+        }
+      }
+
+      if (sibling && matchReason) {
+        const siblingIsBetter =
+          sibling.status === "fully_scored" ||
+          sibling.status === "scored" ||
+          (sibling.total_score ?? -1) > -1;
+
+        if (siblingIsBetter) {
+          console.log(
+            `[parse-cv identity-merge] candidate=${candidate_id} ${matchReason} sibling=${sibling.id} (status=${sibling.status}) -> marking duplicate`
+          );
+          await supabaseAdmin
+            .from("candidates")
+            .update({
+              ...updateData,
+              status: "duplicate_merged",
+              failure_reason: `Duplicate of ${sibling.id} (${matchReason})`,
+            })
+            .eq("id", candidate_id);
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              candidate_id,
+              parsed_name: parsedName,
+              parsed_email: parsedEmail,
+              merged_into: sibling.id,
+              match_reason: matchReason,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+    }
+
     const { error: updateError } = await supabaseAdmin
       .from("candidates")
       .update(updateData)

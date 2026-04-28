@@ -105,6 +105,46 @@ const NON_CV_TERMS = [
   "update",
 ];
 
+// Hard blocklist: filename tokens that immediately disqualify a file as a CV.
+// Applied per-file (not per-message) so a CV emailed alongside an NDA still ingests.
+const NON_CV_FILENAME_TOKENS = [
+  "nda",
+  "agreement",
+  "invoice",
+  "receipt",
+  "contract",
+  "form",
+  "declaration",
+  "purchase-order",
+  "purchaseorder",
+  "po-",
+];
+
+function isBlockedNonCvFilename(filename: string): boolean {
+  const normalized = filename.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return NON_CV_FILENAME_TOKENS.some((token) => {
+    // word-boundary-ish match against hyphen-normalized name
+    return (
+      normalized === token ||
+      normalized.startsWith(`${token}-`) ||
+      normalized.endsWith(`-${token}`) ||
+      normalized.includes(`-${token}-`)
+    );
+  });
+}
+
+function normalizeCandidateName(name: string): string {
+  return name.toLowerCase().trim().replace(/\s+/g, " ");
+}
+
+function sanitizeFilenameForStorage(filename: string): string {
+  return filename
+    .normalize("NFKD")
+    .replace(/[^a-zA-Z0-9\-_.]+/g, "-")
+    .replace(/-+/g, "-")
+    .toLowerCase();
+}
+
 const ROLE_FETCH_MAX_RESULTS_PER_PAGE = 100;
 const ROLE_FETCH_MAX_PAGES = 20;
 
@@ -349,9 +389,20 @@ interface CvAttachment {
 interface ProcessingDetail {
   gmail_message_id: string;
   filename: string;
-  outcome: "ingested" | "skipped" | "unmatched" | "parse_failed" | "upload_failed" | "reprocessed" | "duplicate_email";
+  outcome:
+    | "ingested"
+    | "skipped"
+    | "unmatched"
+    | "parse_failed"
+    | "upload_failed"
+    | "reprocessed"
+    | "duplicate_email"
+    | "skipped_non_cv"
+    | "matched_existing";
   reason?: string;
   candidate_id?: string;
+  matched_existing_candidate_id?: string;
+  match_reason?: "matched_by_email" | "matched_by_name" | "new_insert";
   role_title?: string;
   confidence?: string;
 }
@@ -577,6 +628,8 @@ serve(async (req) => {
         const msgHeaders = msgData.payload?.headers || [];
         const subject = msgHeaders.find((h: any) => h.name.toLowerCase() === "subject")?.value || "";
         const snippet = msgData.snippet || "";
+        const fromHeader = msgHeaders.find((h: any) => h.name.toLowerCase() === "from")?.value || "";
+        const senderEmail = fromHeader ? extractSenderEmail(fromHeader).toLowerCase() : "";
 
         if (selectedRole && !subjectMatchesRole(subject, selectedRole.title)) {
           continue;
@@ -635,7 +688,21 @@ serve(async (req) => {
         }
 
         for (const cv of cvAttachments) {
-          // ---- DEDUP: gmail_message_id + attachment_filename ----
+          // ---- BLOCK NON-CV FILES (filename heuristic) ----
+          if (isBlockedNonCvFilename(cv.filename)) {
+            skipped++;
+            details.push({
+              gmail_message_id: msg.id,
+              filename: cv.filename,
+              outcome: "skipped_non_cv",
+              reason: "Filename matches non-CV blocklist (nda/agreement/invoice/receipt/contract/form/declaration)",
+              role_title: matchedRoleTitle || selectedRole?.title || undefined,
+            });
+            console.log(`[skipped_non_cv] ${cv.filename} (msg=${msg.id})`);
+            continue;
+          }
+
+          // ---- DEDUP A: gmail_message_id + attachment_filename ----
           const { data: existing } = await supabaseAdmin
             .from("candidates")
             .select("id, status, job_role_id")
@@ -687,6 +754,76 @@ serve(async (req) => {
             continue;
           }
 
+          // ---- DEDUP B: identity resolution (email or normalized name) within same role ----
+          // Only enforce when we have a role; orphan/unmatched rows can still be inserted.
+          if (matchedRoleId) {
+            const filenameNameGuess = candidateNameFromFilename(cv.filename);
+            const normalizedNameGuess = normalizeCandidateName(filenameNameGuess);
+            const candidateNameLooksReal = !isGenericName(filenameNameGuess) && normalizedNameGuess.length >= 3;
+
+            let identityMatch: { id: string; status: string; total_score: number | null; cv_storage_path: string | null } | null = null;
+            let matchReason: "matched_by_email" | "matched_by_name" | null = null;
+
+            // Prefer email match (sender email is the strongest pre-parse signal)
+            if (senderEmail && isValidEmail(senderEmail)) {
+              const { data: byEmail } = await supabaseAdmin
+                .from("candidates")
+                .select("id, status, total_score, cv_storage_path")
+                .eq("job_role_id", matchedRoleId)
+                .ilike("email", senderEmail)
+                .order("total_score", { ascending: false, nullsFirst: false })
+                .limit(1)
+                .maybeSingle();
+              if (byEmail) {
+                identityMatch = byEmail;
+                matchReason = "matched_by_email";
+              }
+            }
+
+            // Fall back to normalized-name match (filename-derived guess)
+            if (!identityMatch && candidateNameLooksReal) {
+              const { data: byName } = await supabaseAdmin
+                .from("candidates")
+                .select("id, status, total_score, cv_storage_path, name")
+                .eq("job_role_id", matchedRoleId)
+                .ilike("name", normalizedNameGuess)
+                .order("total_score", { ascending: false, nullsFirst: false })
+                .limit(1)
+                .maybeSingle();
+              if (byName) {
+                identityMatch = byName;
+                matchReason = "matched_by_name";
+              }
+            }
+
+            if (identityMatch && matchReason) {
+              const existingIsComplete =
+                identityMatch.status === "fully_scored" || identityMatch.status === "scored";
+
+              console.log(
+                `[identity-match] ${matchReason} role=${matchedRoleId} existing=${identityMatch.id} status=${identityMatch.status} -> skipping new insert for ${cv.filename}`
+              );
+
+              // If the existing record is incomplete, re-trigger parsing on its CV (don't insert a new row)
+              if (!existingIsComplete && identityMatch.cv_storage_path) {
+                parseQueue.push({ candidateId: identityMatch.id, storagePath: identityMatch.cv_storage_path });
+              }
+
+              skipped++;
+              details.push({
+                gmail_message_id: msg.id,
+                filename: cv.filename,
+                outcome: "matched_existing",
+                reason: `Same human already exists for this role (${matchReason})`,
+                candidate_id: identityMatch.id,
+                matched_existing_candidate_id: identityMatch.id,
+                match_reason: matchReason,
+                role_title: matchedRoleTitle || selectedRole?.title || undefined,
+              });
+              continue;
+            }
+          }
+
           // Download attachment
           const attachRes = await fetch(
             `${GMAIL_API}/messages/${msg.id}/attachments/${cv.attachmentId}`,
@@ -704,10 +841,7 @@ serve(async (req) => {
           const bytes = new Uint8Array(binaryStr.length);
           for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
 
-          const sanitizedFilename = cv.filename
-            .normalize("NFKD")
-            .replace(/[^a-zA-Z0-9\-_.]+/g, "-")
-            .toLowerCase();
+          const sanitizedFilename = sanitizeFilenameForStorage(cv.filename);
           const storagePath = `${Date.now()}_${sanitizedFilename}`;
           const { error: uploadError } = await supabaseAdmin.storage
             .from("cvs")

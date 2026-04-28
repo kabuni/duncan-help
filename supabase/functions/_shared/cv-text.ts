@@ -3,12 +3,7 @@
 // from PDF/DOCX before sending. Keeps full content (no aggressive truncation).
 
 import JSZip from "https://esm.sh/jszip@3.10.1";
-import { getDocument, GlobalWorkerOptions } from "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs";
-
-// Disable the worker (Deno edge runtime has no Web Worker support for pdfjs).
-// pdfjs falls back to running parsing on the main thread.
-// @ts-ignore
-GlobalWorkerOptions.workerSrc = "";
+import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
 
 const MAX_CV_CHARS = 120_000; // generous cap to keep prompt under model limits
 
@@ -52,25 +47,9 @@ async function extractDocxText(bytes: Uint8Array): Promise<string | null> {
 
 async function extractPdfText(bytes: Uint8Array): Promise<string | null> {
   try {
-    const loadingTask = getDocument({
-      data: bytes,
-      disableFontFace: true,
-      useSystemFonts: false,
-      isEvalSupported: false,
-    });
-    const pdf = await loadingTask.promise;
-    const parts: string[] = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const pageText = (content.items as any[])
-        .map((it: any) => (typeof it?.str === "string" ? it.str : ""))
-        .join(" ")
-        .replace(/[ \t]{2,}/g, " ")
-        .trim();
-      if (pageText) parts.push(pageText);
-    }
-    const joined = parts.join("\n\n").trim();
+    const pdf = await getDocumentProxy(bytes);
+    const { text } = await extractText(pdf, { mergePages: true });
+    const joined = (Array.isArray(text) ? text.join("\n\n") : String(text || "")).trim();
     return joined.length > 0 ? joined : null;
   } catch (err) {
     console.error("PDF extraction failed:", err);

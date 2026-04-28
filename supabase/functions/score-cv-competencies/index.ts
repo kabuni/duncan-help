@@ -15,6 +15,13 @@ function clampScore(score: number): number {
   return Math.max(1, Math.min(5, Math.round(n)));
 }
 
+/** Stable SHA-256 of the extracted CV text (lowercased, whitespace-collapsed). */
+async function hashCvText(text: string): Promise<string> {
+  const normalised = text.toLowerCase().replace(/\s+/g, " ").trim();
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalised));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /**
  * Convert a competency name to a safe, semantic snake_case key.
  *   "Decision Making"          → "decision_making"
@@ -167,8 +174,11 @@ serve(async (req) => {
 
     if (candidateId) {
       query = query.eq("id", candidateId);
+      // Even when targeting a specific candidate, refuse to overwrite a locked
+      // score unless the caller explicitly forces it.
+      if (!forceRescore) query = query.eq("is_score_locked", false);
     } else if (!forceRescore) {
-      query = query.is("competency_score", null);
+      query = query.is("competency_score", null).eq("is_score_locked", false);
     }
     if (roleId) query = query.eq("job_role_id", roleId);
     query = query.not("status", "in", '("unmatched","parse_failed")');
@@ -215,6 +225,51 @@ serve(async (req) => {
           console.error(`CV text extraction failed for ${candidate.id} (${candidate.cv_storage_path})`);
           failed++;
           continue;
+        }
+
+        const cvHash = await hashCvText(cv.text);
+
+        // Cache hit: a candidate with the SAME cv_hash + role has already been
+        // scored for competencies. Reuse those scores deterministically without
+        // calling the LLM. Only consider rows that already carry a competency
+        // score AND a competencies block in scoring_details.
+        if (!forceRescore) {
+          const { data: cached } = await supabaseAdmin
+            .from("candidates")
+            .select("id, name, competency_score, scoring_details")
+            .eq("cv_hash", cvHash)
+            .eq("job_role_id", candidate.job_role_id)
+            .not("competency_score", "is", null)
+            .neq("id", candidate.id)
+            .limit(1)
+            .maybeSingle();
+          if (cached?.competency_score != null && (cached.scoring_details as any)?.competencies) {
+            const existingDetails = (candidate.scoring_details as any) || {};
+            const newDetails = {
+              ...existingDetails,
+              competencies: (cached.scoring_details as any).competencies,
+              competencies_meta: {
+                source: "cv_hash_cache",
+                cached_from: cached.id,
+                cached_from_name: cached.name,
+                scored_at: new Date().toISOString(),
+              },
+            };
+            const valuesScore = candidate.values_score;
+            const newStatus = valuesScore != null ? "fully_scored" : "competency_scored";
+            const isLocked = valuesScore != null;
+            await supabaseAdmin.from("candidates").update({
+              competency_score: cached.competency_score,
+              scoring_details: newDetails,
+              status: newStatus,
+              cv_hash: cvHash,
+              ...(isLocked ? { is_score_locked: true } : {}),
+            }).eq("id", candidate.id);
+            console.log(`[score-cv-competencies] candidate=${candidate.id} reused cached scores from ${cached.id}`);
+            results.push({ id: candidate.id, name: candidate.name, competency_score: cached.competency_score, status: newStatus, source: "cache" });
+            scored++;
+            continue;
+          }
         }
 
         const keyMap = buildCompetencyKeyMap(competencies);
@@ -346,6 +401,9 @@ Each entry requires an integer score from 1 to 5 and a non-empty justification.`
             competency_score: competencyScore,
             scoring_details: newDetails,
             status: newStatus,
+            cv_hash: cvHash,
+            // Lock once both component scores are present.
+            ...(newStatus === "fully_scored" ? { is_score_locked: true } : {}),
           })
           .eq("id", candidate.id);
 

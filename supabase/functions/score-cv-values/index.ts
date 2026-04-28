@@ -89,6 +89,7 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const candidateId = body.candidate_id;
     const roleId = body.role_id;
+    const forceRescore = body?.force === true;
 
     // P7: Only score candidates that need scoring
     let query = supabaseAdmin
@@ -99,9 +100,11 @@ serve(async (req) => {
 
     if (candidateId) {
       query = query.eq("id", candidateId);
-    } else {
-      // P7: Skip already values-scored candidates unless explicitly targeting one
-      query = query.is("values_score", null);
+      // Refuse to overwrite locked rows unless explicitly forced.
+      if (!forceRescore) query = query.eq("is_score_locked", false);
+    } else if (!forceRescore) {
+      // Skip already values-scored AND already-locked candidates in batch mode.
+      query = query.is("values_score", null).eq("is_score_locked", false);
     }
 
     if (roleId) {
@@ -242,6 +245,8 @@ You MUST call the score_values function with your assessment.`;
               values_score: valuesScore,
               scoring_details: newDetails,
               status: newStatus,
+              // Lock once both component scores are present.
+              ...(newStatus === "fully_scored" ? { is_score_locked: true } : {}),
             })
             .eq("id", candidate.id);
 

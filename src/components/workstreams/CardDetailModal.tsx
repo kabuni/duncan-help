@@ -581,7 +581,7 @@ function MetaField({ icon, label, value, children }: {
 }
 
 function TaskRow({
-  task, users, currentUserId, onToggle, onDelete, onUpdateAssignees, onUpdateDueDate,
+  task, users, currentUserId, onToggle, onDelete, onUpdateAssignees, onUpdateDueDate, onSetStatus,
 }: {
   task: WorkstreamTask;
   users: UserProfile[];
@@ -590,6 +590,7 @@ function TaskRow({
   onDelete: () => void;
   onUpdateAssignees: (ids: string[]) => void;
   onUpdateDueDate: (date: string | null) => void;
+  onSetStatus: (status: CardStatus) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [newComment, setNewComment] = useState("");

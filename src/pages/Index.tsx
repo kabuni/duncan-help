@@ -136,7 +136,9 @@ MessageBubble.displayName = "MessageBubble";
 const Index = () => {
   const { messages, isLoading, extractionProgress, send, sendBriefing, clearMessages, setMessages } = useNormanChat();
   const navigate = useNavigate();
-  const briefingTriggered = useRef(sessionStorage.getItem("duncan_briefing_done") === "true");
+  const briefingTriggered = useRef(false);
+  const [briefingError, setBriefingError] = useState(false);
+  const [briefingTimestamp, setBriefingTimestamp] = useState<string | null>(null);
   const chatOps = useGeneralChats();
   const { profile } = useProfile();
   const userDisplayName = profile?.display_name || "You";
@@ -168,49 +170,96 @@ const Index = () => {
     })();
   }, [chatOps.activeChatId]);
 
-  // Auto-trigger daily briefing on every dashboard visit
-  useEffect(() => {
-    if (briefingTriggered.current) return;
+  // ── Daily Briefing flow (server is single source of truth) ──
+  // 1. POST /daily-briefing → returns either { already_shown_today } or full data
+  // 2. If new data → stream via sendBriefing()
+  // 3. On stream success → POST /mark-briefing-shown to lock for the day
+  // No sessionStorage gate. No pre-emptive locking. Retry-safe.
+  const runBriefing = useCallback(async () => {
+    setBriefingError(false);
+    briefingTriggered.current = true;
 
-    const fetchBriefing = async (accessToken: string) => {
-      if (briefingTriggered.current) return;
-      briefingTriggered.current = true;
-      sessionStorage.setItem("duncan_briefing_done", "true");
+    try {
+      console.info("[Duncan] briefing: fetch start");
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.warn("[Duncan] briefing: no session, aborting");
+        briefingTriggered.current = false;
+        return;
+      }
 
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/daily-briefing`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      console.info("[Duncan] briefing: API response", resp.status);
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error("[Duncan] briefing: API error", resp.status, errText);
+        throw new Error(`Briefing fetch failed (${resp.status})`);
+      }
+
+      const briefingData = await resp.json();
+      if (briefingData?.already_shown_today) {
+        console.info("[Duncan] briefing: already shown today, skipping");
+        if (briefingData.last_briefing_at) {
+          setBriefingTimestamp(briefingData.last_briefing_at);
+        }
+        return;
+      }
+
+      console.info("[Duncan] briefing: streaming via sendBriefing");
+      const ok = await sendBriefing(briefingData);
+
+      if (!ok) {
+        throw new Error("Briefing stream did not complete");
+      }
+
+      // Stream succeeded → NOW lock the day
       try {
-        console.log("Duncan: Fetching daily briefing...");
-        const resp = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/daily-briefing`,
+        const markResp = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mark-briefing-shown`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
+              Authorization: `Bearer ${session.access_token}`,
             },
           }
         );
-
-        if (!resp.ok) {
-          const errText = await resp.text();
-          console.error("Briefing response error:", resp.status, errText);
-          throw new Error("Briefing fetch failed");
+        if (!markResp.ok) {
+          console.warn("[Duncan] briefing: mark-shown failed", markResp.status);
+        } else {
+          const markData = await markResp.json();
+          if (markData.last_briefing_at) {
+            setBriefingTimestamp(markData.last_briefing_at);
+          }
+          console.info("[Duncan] briefing: marked as shown");
         }
-        const briefingData = await resp.json();
-        if (briefingData?.already_shown_today) {
-          console.log("Duncan: Briefing already shown today, skipping.");
-          return;
-        }
-        console.log("Duncan: Briefing data received, sending to chat...");
-        sendBriefing(briefingData);
-      } catch (err) {
-        console.error("Briefing auto-trigger error:", err);
+      } catch (markErr) {
+        console.warn("[Duncan] briefing: mark-shown threw", markErr);
       }
-    };
+    } catch (err) {
+      console.error("[Duncan] briefing: failure reason →", err);
+      setBriefingError(true);
+      briefingTriggered.current = false; // allow retry
+    }
+  }, [sendBriefing]);
+
+  useEffect(() => {
+    if (briefingTriggered.current) return;
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         if (!session || briefingTriggered.current) return;
-        await fetchBriefing(session.access_token);
+        await runBriefing();
       }
     );
 
@@ -218,11 +267,11 @@ const Index = () => {
       if (briefingTriggered.current) return;
       const { data: { session } } = await supabase.auth.getSession();
       if (!session || briefingTriggered.current) return;
-      await fetchBriefing(session.access_token);
+      await runBriefing();
     })();
 
     return () => subscription.unsubscribe();
-  }, [sendBriefing]);
+  }, [runBriefing]);
 
   useEffect(() => {
     navigator.geolocation?.getCurrentPosition(
@@ -368,6 +417,32 @@ const Index = () => {
             <FolderOpen className="h-3.5 w-3.5" /> Operations
           </button>
         </div>
+
+        {/* Briefing status banners */}
+        {briefingError && (
+          <div className="relative z-10 mx-4 sm:mx-8 mt-3 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-xs">
+            <span className="text-destructive-foreground">
+              Your daily briefing couldn't load.
+            </span>
+            <button
+              onClick={() => runBriefing()}
+              className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        {isLoading && !hasMessages && !briefingError && (
+          <div className="relative z-10 mx-4 sm:mx-8 mt-3 flex items-center gap-2 rounded-lg border border-border bg-card/60 px-4 py-2.5 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Generating your briefing…
+          </div>
+        )}
+        {briefingTimestamp && !briefingError && (
+          <div className="relative z-10 mx-4 sm:mx-8 mt-2 text-[10px] text-muted-foreground/70">
+            Last briefing at {new Date(briefingTimestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </div>
+        )}
 
         {/* Content area */}
         <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 sm:px-8 py-4 sm:py-6">

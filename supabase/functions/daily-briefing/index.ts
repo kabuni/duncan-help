@@ -123,12 +123,10 @@ serve(async (req) => {
       fetchAssignedTasks(supabaseAdmin, user.id),
     ]);
 
-    // Update last_briefing_at in preferences
-    const updatedPrefs = { ...prefs, last_briefing_at: now.toISOString() };
-    await supabaseAdmin
-      .from("profiles")
-      .update({ preferences: updatedPrefs })
-      .eq("user_id", user.id);
+    // NOTE: We deliberately do NOT update last_briefing_at here.
+    // The lock is applied only after successful LLM stream via the
+    // `mark-briefing-shown` endpoint. This prevents silent lockouts
+    // when the briefing fails mid-flight.
 
     // Extract action items assigned to user from meetings
     const userActionItems: any[] = [];

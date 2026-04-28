@@ -4040,7 +4040,10 @@ Format as a natural, readable summary with clear sections. If a section has no d
     tools.push(...RELEASE_TOOLS);
     // Lovable contributors snapshot (admin-only, requires attached screenshot)
     tools.push(...LOVABLE_CONTRIBUTORS_TOOLS);
-    if (!shouldBypassTools && tools.length > 0) {
+    // Briefing mode must always return text, never invoke tools.
+    if (mode === "briefing") {
+      requestBody.tool_choice = "none";
+    } else if (!shouldBypassTools && tools.length > 0) {
       requestBody.tools = tools;
     }
 

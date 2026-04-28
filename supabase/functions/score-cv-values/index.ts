@@ -172,21 +172,19 @@ You MUST call the score_values function with your assessment.`;
 
       for (const candidate of candidates) {
         try {
-          const cvMessages = await getCvMessages(supabaseAdmin, candidate.cv_storage_path!);
-          if (!cvMessages) {
+          const cvContent = await getCvContent(supabaseAdmin, candidate.cv_storage_path!);
+          if (!cvContent) {
             failed++;
             continue;
           }
 
           let aiData: any;
           try {
-            // Deterministic scoring on Claude Haiku 4.5 (temperature=0).
+            // CV files use OpenAI file-content blocks; force OpenAI to avoid Claude shape mismatch.
             aiData = await callLLMWithFallback({
               workflow: "score-cv-values",
-              force_provider: "claude",
-              model_override: { claude: "claude-haiku-4-5" },
-              temperature: 0,
-              messages: [{ role: "system", content: systemPrompt }, ...cvMessages],
+              force_provider: "openai",
+              messages: [{ role: "system", content: systemPrompt }, ...cvContent.messages],
               tools: [toolDef as any],
               tool_choice: { type: "function", function: { name: "score_values" } } as any,
             });

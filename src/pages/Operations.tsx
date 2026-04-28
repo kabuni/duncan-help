@@ -91,6 +91,7 @@ const Operations = () => {
   const { data: workItems = [], isLoading: wiLoading } = useWorkItems();
   const { data: syncLogs = [], isLoading: slLoading } = useSyncLogs();
   const analytics = useGoogleAnalytics();
+  const { isAdmin } = useIsAdmin();
   const [syncing, setSyncing] = useState<string | null>(null);
   const [analyticsQuestion, setAnalyticsQuestion] = useState("Where do we have the most website reach?");
   const [analyticsAnswer, setAnalyticsAnswer] = useState<string | null>(null);

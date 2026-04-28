@@ -1,30 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import JSZip from "https://esm.sh/jszip@3.10.1";
 import { callLLMWithFallback } from "../_shared/llm.ts";
 import { safeParseToolArguments } from "../_shared/json.ts";
+import { extractCvText } from "../_shared/cv-text.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-function uint8ToBase64(bytes: Uint8Array): string {
-  const CHUNK = 8192;
-  let result = "";
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    result += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(result);
-}
-
-function getMimeType(filename: string): string {
-  const lower = filename.toLowerCase();
-  if (lower.endsWith(".pdf")) return "application/pdf";
-  if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-  if (lower.endsWith(".doc")) return "application/msword";
-  return "application/octet-stream";
-}
 
 function clampScore(score: number): number {
   const n = Number(score);
@@ -32,71 +15,120 @@ function clampScore(score: number): number {
   return Math.max(1, Math.min(5, Math.round(n)));
 }
 
-function decodeXmlEntities(value: string): string {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+/**
+ * Convert a competency name to a safe, semantic snake_case key.
+ *   "Decision Making"          → "decision_making"
+ *   "Cross-Cultural Collab."   → "cross_cultural_collab"
+ *   "C++ Skills"               → "c_skills"
+ * Falls back to `competency_<index>` if the slug is empty.
+ */
+function slugifyCompetencyName(name: string, index: number): string {
+  const slug = String(name || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")           // strip accents
+    .replace(/[^a-z0-9]+/g, "_")               // non-alphanumerics → _
+    .replace(/^_+|_+$/g, "")                   // trim leading/trailing _
+    .replace(/_{2,}/g, "_");                   // collapse repeats
+  if (!slug) return `competency_${index}`;
+  // Ensure key starts with a letter (JSON Schema property names are free-form
+  // but some validators dislike leading digits).
+  if (/^[0-9]/.test(slug)) return `c_${slug}`;
+  return slug;
 }
 
-function cleanDocxText(xml: string): string {
-  return decodeXmlEntities(
-    xml
-      .replace(/<w:tab\/>/g, "\t")
-      .replace(/<w:br\/>/g, "\n")
-      .replace(/<w:cr\/>/g, "\n")
-      .replace(/<w:p[^>]*>/g, "\n")
-      .replace(/<\/w:p>/g, "\n")
-      .replace(/<[^>]+>/g, " ")
-  )
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-async function getCvContent(supabaseAdmin: any, storagePath: string): Promise<any[] | null> {
-  const { data: fileData, error } = await supabaseAdmin.storage.from("cvs").download(storagePath);
-  if (error || !fileData) return null;
-
-  const bytes = new Uint8Array(await fileData.arrayBuffer());
-  const filename = storagePath.split("/").pop() || "cv.pdf";
-  const lowerFilename = filename.toLowerCase();
-
-  if (lowerFilename.endsWith(".docx")) {
-    try {
-      const zip = await JSZip.loadAsync(bytes);
-      const documentXmlFile = zip.file("word/document.xml");
-      if (documentXmlFile) {
-        const xml = await documentXmlFile.async("string");
-        const extractedText = cleanDocxText(xml).slice(0, 120000);
-        if (extractedText.length > 0) {
-          return [
-            {
-              role: "user",
-              content: `Candidate CV (${filename}):\n\n${extractedText}\n\nScore this candidate's CV against the competencies listed in the system prompt.`,
-            },
-          ];
-        }
-      }
-    } catch (docxError) {
-      console.error(`DOCX extraction failed for ${storagePath}:`, docxError);
+/** Build unique semantic keys for a list of competencies, deduping collisions. */
+function buildCompetencyKeyMap(
+  competencies: Array<{ name: string }>,
+): Array<{ key: string; name: string; index: number }> {
+  const used = new Set<string>();
+  const out: Array<{ key: string; name: string; index: number }> = [];
+  competencies.forEach((c, i) => {
+    let base = slugifyCompetencyName(c?.name || "", i);
+    let key = base;
+    let n = 2;
+    while (used.has(key)) {
+      key = `${base}_${n++}`;
     }
+    used.add(key);
+    out.push({ key, name: c?.name || `Competency ${i + 1}`, index: i });
+  });
+  return out;
+}
+
+interface CompetencyResult { score: number; justification: string; }
+
+function buildToolSchema(keyMap: Array<{ key: string; name: string }>) {
+  const properties: Record<string, any> = {};
+  for (const { key, name } of keyMap) {
+    properties[key] = {
+      type: "object",
+      description: `Score for competency "${name}"`,
+      properties: {
+        score: { type: "integer", minimum: 1, maximum: 5 },
+        justification: { type: "string", description: "Brief evidence-based justification (1–2 sentences quoting CV evidence)" },
+      },
+      required: ["score", "justification"],
+      additionalProperties: false,
+    };
   }
-
-  const mimeType = getMimeType(filename);
-  const base64 = uint8ToBase64(bytes);
-
-  return [
-    {
-      role: "user",
-      content: [
-        { type: "file", file: { filename, file_data: `data:${mimeType};base64,${base64}` } },
-        { type: "text", text: "Score this candidate's CV against the competencies listed in the system prompt." },
-      ],
+  return {
+    type: "function" as const,
+    function: {
+      name: "score_competencies",
+      description: "Submit competency scores for the candidate. You MUST provide a score and justification for every competency key listed in the schema.",
+      parameters: {
+        type: "object",
+        properties,
+        required: keyMap.map((k) => k.key),
+        additionalProperties: false,
+      },
     },
-  ];
+  };
+}
+
+function buildSystemPrompt(roleTitle: string, keyMap: Array<{ key: string; name: string }>, competencies: Array<{ name: string; description?: string }>) {
+  const list = keyMap
+    .map(({ key, name }, i) => `${i + 1}. key: "${key}" — ${name}: ${competencies[i]?.description || "No description provided"}`)
+    .join("\n");
+  return `You are an expert recruitment assessor. Score this candidate's CV against the following competencies for the "${roleTitle}" role.
+
+For EACH competency, score 1–5:
+1 = No evidence
+2 = Minimal evidence
+3 = Some evidence
+4 = Good evidence
+5 = Exceptional evidence
+
+Be CRITICAL. Only give high scores when the CV provides clear, specific evidence. Quote or reference concrete CV evidence in each justification.
+
+Competencies (use the exact key shown — do NOT invent new keys):
+${list}
+
+Call score_competencies ONCE. The arguments object MUST contain EVERY key listed above (${keyMap.map((k) => `"${k.key}"`).join(", ")}). Each entry must have an integer score from 1 to 5 and a justification string. Do not omit any key.`;
+}
+
+function validateScoresPayload(
+  raw: any,
+  keyMap: Array<{ key: string; name: string }>,
+): { ok: true; scores: Record<string, CompetencyResult> } | { ok: false; missing: string[]; invalid: string[] } {
+  const missing: string[] = [];
+  const invalid: string[] = [];
+  const scores: Record<string, CompetencyResult> = {};
+  if (!raw || typeof raw !== "object") {
+    return { ok: false, missing: keyMap.map((k) => k.key), invalid: [] };
+  }
+  for (const { key } of keyMap) {
+    const entry = raw[key];
+    if (!entry || typeof entry !== "object") { missing.push(key); continue; }
+    const scoreNum = Number(entry.score);
+    const justif = typeof entry.justification === "string" ? entry.justification.trim() : "";
+    if (!Number.isFinite(scoreNum) || scoreNum < 1 || scoreNum > 5) { invalid.push(key); continue; }
+    if (!justif) { invalid.push(key); continue; }
+    scores[key] = { score: clampScore(scoreNum), justification: justif };
+  }
+  if (missing.length > 0 || invalid.length > 0) return { ok: false, missing, invalid };
+  return { ok: true, scores };
 }
 
 serve(async (req) => {
@@ -123,10 +155,10 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const candidateId = body?.candidate_id as string | undefined;
     const roleId = body?.role_id as string | undefined;
+    const forceRescore = body?.force === true;
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // P7: Only score candidates that need competency scoring
     let query = supabaseAdmin
       .from("candidates")
       .select("*")
@@ -135,16 +167,10 @@ serve(async (req) => {
 
     if (candidateId) {
       query = query.eq("id", candidateId);
-    } else {
-      // P7: Skip already competency-scored candidates unless explicitly targeting one
+    } else if (!forceRescore) {
       query = query.is("competency_score", null);
     }
-
-    if (roleId) {
-      query = query.eq("job_role_id", roleId);
-    }
-
-    // P7: Exclude unmatched and parse_failed candidates
+    if (roleId) query = query.eq("job_role_id", roleId);
     query = query.not("status", "in", '("unmatched","parse_failed")');
 
     const { data: candidates, error: fetchError } = await query;
@@ -157,15 +183,9 @@ serve(async (req) => {
 
     if (!candidates || candidates.length === 0) {
       return new Response(JSON.stringify({
-        scored: 0,
-        skipped: 0,
-        failed: 0,
-        message: roleId
-          ? "No eligible candidates remain for the selected role."
-          : "No eligible candidates remain to score.",
-      }), {
-        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        scored: 0, skipped: 0, failed: 0,
+        message: roleId ? "No eligible candidates remain for the selected role." : "No eligible candidates remain to score.",
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const roleIds = [...new Set(candidates.map((c: any) => c.job_role_id))];
@@ -173,7 +193,6 @@ serve(async (req) => {
       .from("job_roles")
       .select("id, title, competencies")
       .in("id", roleIds);
-
     const roleMap = new Map((roles || []).map((r: any) => [r.id, r]));
 
     let scored = 0;
@@ -191,67 +210,44 @@ serve(async (req) => {
       }
 
       try {
-        const cvMessages = await getCvMessages(supabaseAdmin, candidate.cv_storage_path!);
-        if (!cvMessages) {
+        const cv = await extractCvText(supabaseAdmin, candidate.cv_storage_path!);
+        if (!cv) {
+          console.error(`CV text extraction failed for ${candidate.id} (${candidate.cv_storage_path})`);
           failed++;
           continue;
         }
 
-        const properties: any = {};
-        const required: string[] = [];
-        competencies.forEach((_: any, i: number) => {
-          const key = `competency_${i}`;
-          properties[key] = {
-            type: "object",
-            properties: {
-              score: { type: "number", minimum: 1, maximum: 5 },
-              justification: { type: "string", description: "Brief evidence-based justification" },
-            },
-            required: ["score", "justification"],
-            additionalProperties: false,
-          };
-          required.push(key);
-        });
+        const keyMap = buildCompetencyKeyMap(competencies);
+        const toolDef = buildToolSchema(keyMap);
+        const systemPrompt = buildSystemPrompt(role.title, keyMap, competencies);
 
-        const competencyList = competencies.map((c: any, i: number) =>
-          `${i + 1}. ${c?.name || `Competency ${i + 1}`}: ${c?.description || "No description provided"}`
-        ).join("\n");
+        const baseMessages: any[] = [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: `Candidate CV (${cv.filename}):\n\n${cv.text}\n\nScore this candidate against EVERY competency listed in the system prompt. Call score_competencies once with all required keys.`,
+          },
+        ];
 
-        const systemPrompt = `You are an expert recruitment assessor. Score this candidate's CV against the following competencies for the "${role.title}" role.
-
-For EACH competency, score 1-5:
-1 = No evidence
-2 = Minimal evidence
-3 = Some evidence
-4 = Good evidence
-5 = Exceptional evidence
-
-Be CRITICAL. Only give high scores with clear CV evidence.
-
-Competencies:
-${competencyList}
-
-Call score_competencies with your assessment. Use keys competency_0, competency_1, etc. matching the order above.`;
-
-        let aiData: any;
-        try {
-          // Deterministic scoring on Claude Haiku 4.5 (temperature=0).
-          aiData = await callLLMWithFallback({
+        const callOnce = async (extraMessages: any[] = []) => {
+          return await callLLMWithFallback({
             workflow: "score-cv-competencies",
             force_provider: "claude",
             model_override: { claude: "claude-haiku-4-5" },
             temperature: 0,
-            messages: [{ role: "system", content: systemPrompt }, ...cvMessages],
-            tools: [{
-              type: "function",
-              function: {
-                name: "score_competencies",
-                description: "Submit competency scores for the candidate",
-                parameters: { type: "object", properties, required, additionalProperties: false },
-              },
-            }],
+            max_tokens: 4096,
+            messages: [...baseMessages, ...extraMessages],
+            tools: [toolDef],
             tool_choice: { type: "function", function: { name: "score_competencies" } },
           });
+        };
+
+        let aiData: any;
+        let validated: ReturnType<typeof validateScoresPayload> | null = null;
+        let lastRaw: any = null;
+
+        try {
+          aiData = await callOnce();
         } catch (err: any) {
           console.error(`AI error for ${candidate.id}:`, err?.status, err?.message);
           if (err?.status === 429) {
@@ -269,51 +265,80 @@ Call score_competencies with your assessment. Use keys competency_0, competency_
         }
 
         const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-        if (!toolCall?.function?.arguments) {
-          failed++;
-          continue;
+        if (toolCall?.function?.arguments) {
+          lastRaw = safeParseToolArguments<Record<string, any>>(toolCall.function.arguments);
+          validated = validateScoresPayload(lastRaw, keyMap);
+        } else {
+          validated = { ok: false, missing: keyMap.map((k) => k.key), invalid: [] };
         }
 
-        const rawScores = safeParseToolArguments<Record<string, any>>(toolCall.function.arguments);
-        if (!rawScores) {
-          failed++;
-          continue;
+        // Single corrective retry if the tool call was incomplete or malformed.
+        if (!validated.ok) {
+          const missing = (validated as any).missing as string[];
+          const invalid = (validated as any).invalid as string[];
+          console.warn(`[score-cv-competencies] candidate=${candidate.id} retrying — missing=[${missing.join(",")}] invalid=[${invalid.join(",")}]`);
+
+          const correction = `Your previous response to score_competencies was invalid.
+${missing.length ? `Missing keys: ${missing.join(", ")}.` : ""}
+${invalid.length ? `Invalid (bad score or empty justification) keys: ${invalid.join(", ")}.` : ""}
+You MUST call score_competencies again with the EXACT keys: ${keyMap.map((k) => k.key).join(", ")}.
+Each entry requires an integer score from 1 to 5 and a non-empty justification.`;
+
+          let retryData: any;
+          try {
+            retryData = await callOnce([
+              { role: "assistant", content: "I need to resubmit with all required keys." },
+              { role: "user", content: correction },
+            ]);
+          } catch (err: any) {
+            console.error(`Retry AI error for ${candidate.id}:`, err?.status, err?.message);
+            failed++;
+            continue;
+          }
+
+          const retryCall = retryData.choices?.[0]?.message?.tool_calls?.[0];
+          if (!retryCall?.function?.arguments) {
+            console.error(`Retry produced no tool call for ${candidate.id}`);
+            failed++;
+            continue;
+          }
+          lastRaw = safeParseToolArguments<Record<string, any>>(retryCall.function.arguments);
+          validated = validateScoresPayload(lastRaw, keyMap);
+          if (!validated.ok) {
+            const m2 = (validated as any).missing as string[];
+            const i2 = (validated as any).invalid as string[];
+            console.error(`Retry still invalid for ${candidate.id}: missing=[${m2.join(",")}] invalid=[${i2.join(",")}]`);
+            failed++;
+            continue;
+          }
         }
 
-        // P8: Clamp scores and build competency map
-        const competencyScores: any = {};
-        competencies.forEach((comp: any, i: number) => {
-          const key = `competency_${i}`;
-          const raw = rawScores[key] || { score: 0, justification: "Not scored" };
-          competencyScores[comp.name] = {
-            score: clampScore(raw.score),
-            justification: raw.justification || "Not scored",
-          };
-        });
-
-        const allScores = Object.values(competencyScores).map((v: any) => Number(v.score) || 0).filter((s) => s > 0);
-        if (allScores.length === 0) {
-          console.error(`All competency scores were 0 for candidate ${candidate.id}`);
-          failed++;
-          continue;
+        // Build the legacy-shaped competencyScores keyed by competency name (UI compatibility).
+        const competencyScores: Record<string, CompetencyResult> = {};
+        for (const { key, name } of keyMap) {
+          const entry = (validated.scores as Record<string, CompetencyResult>)[key];
+          competencyScores[name] = { score: entry.score, justification: entry.justification };
         }
-        const avg = allScores.reduce((a: number, b: number) => a + b, 0) / allScores.length;
+
+        const allScores = Object.values(competencyScores).map((v) => v.score);
+        const avg = allScores.reduce((a, b) => a + b, 0) / allScores.length;
         const competencyScore = Math.round(avg * 10) / 10;
 
-        // total_score is recomputed automatically by the DB trigger
-        // (single source of truth: trg_recompute_total_score)
         const valuesScore = candidate.values_score;
-
-        // P4: Determine correct status
-        let newStatus: string;
-        if (valuesScore != null) {
-          newStatus = "fully_scored";
-        } else {
-          newStatus = "competency_scored";
-        }
+        const newStatus = valuesScore != null ? "fully_scored" : "competency_scored";
 
         const existingDetails = (candidate.scoring_details as any) || {};
-        const newDetails = { ...existingDetails, competencies: competencyScores };
+        const newDetails = {
+          ...existingDetails,
+          competencies: competencyScores,
+          // Audit trail of the exact keys/model used for this run.
+          competencies_meta: {
+            model: aiData?._model || "claude-haiku-4-5",
+            provider: aiData?._provider || "claude",
+            schema_keys: keyMap.map((k) => ({ key: k.key, name: k.name })),
+            scored_at: new Date().toISOString(),
+          },
+        };
 
         const { error: updateError } = await supabaseAdmin
           .from("candidates")

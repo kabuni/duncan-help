@@ -205,7 +205,7 @@ const CEOBriefing = () => {
                   emailPulse={p.email_pulse}
                   slackPulse={p.slack_pulse}
                   hubspotSignal={p.hubspot_signal}
-                  githubSignal={p.github_signal}
+                  azureReposSignal={p.azure_repos_signal}
                 />
 
                 {p.data_coverage_audit && (

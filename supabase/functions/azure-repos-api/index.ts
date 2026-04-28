@@ -84,15 +84,21 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Trusted internal calls (e.g. ceo-briefing) authenticate with the service role key.
+    const bearerToken = authHeader.replace(/^Bearer\s+/i, "");
+    const isTrustedInternalCall = !!bearerToken && bearerToken === supabaseServiceKey;
+
+    if (!isTrustedInternalCall) {
+      const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: authHeader } },
       });
+      const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
+      if (userError || !user) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const { data: tokenRow, error: tokenError } = await supabaseAdmin
@@ -397,6 +403,88 @@ Deno.serve(async (req) => {
           recent_commits: recentCommits.slice(0, 20),
           active_prs_total: activePRs.length,
           active_prs: activePRs.slice(0, 20),
+        };
+        break;
+      }
+
+      // ---------------- Briefing summary (Team Briefing engineering signal) ----------------
+      case "briefing_summary": {
+        const verifiedAt = new Date().toISOString();
+
+        // Discover repos org-wide (cap to keep latency reasonable).
+        const projects = await adoFetch(`${orgUrl}/_apis/projects?api-version=7.1&$top=200`, accessToken);
+        const repoList: { project: string; id: string; name: string }[] = [];
+        for (const p of projects.value || []) {
+          try {
+            const r = await adoFetch(
+              `${orgUrl}/${encodeURIComponent(p.name)}/_apis/git/repositories?api-version=7.1`,
+              accessToken,
+            );
+            for (const repo of r.value || []) {
+              if (repo.isDisabled) continue;
+              repoList.push({ project: p.name, id: repo.id, name: repo.name });
+            }
+          } catch (e) {
+            console.warn(`briefing_summary: list repos failed for ${p.name}`, e);
+          }
+        }
+
+        // Org-wide active PRs (single call instead of per-repo).
+        let openPrs = 0;
+        let blockedPrs = 0;
+        let stalePrs = 0;
+        const signals: Array<Record<string, unknown>> = [];
+        let partialFailure = false;
+
+        try {
+          const prRes = await adoFetch(
+            `${orgUrl}/_apis/git/pullrequests?searchCriteria.status=active&$top=200&api-version=7.1`,
+            accessToken,
+          );
+          const prs = prRes.value || [];
+          openPrs = prs.length;
+          const staleThreshold = Date.now() - 7 * 24 * 60 * 60 * 1000;
+          for (const pr of prs) {
+            const repoLabel = `${pr.repository?.project?.name || "?"}/${pr.repository?.name || "?"}`;
+            const updatedAt = Date.parse(pr.creationDate || "");
+            const isStale = Number.isFinite(updatedAt) && updatedAt < staleThreshold;
+            if (pr.isDraft) blockedPrs += 1;
+            if (isStale) stalePrs += 1;
+            if ((pr.isDraft || isStale) && signals.length < 6) {
+              signals.push({
+                type: pr.isDraft ? "blocked_pr" : "stale_pr",
+                repo: repoLabel,
+                label: pr.title || "Untitled PR",
+              });
+            }
+          }
+        } catch (e) {
+          partialFailure = true;
+          console.warn("briefing_summary: PR scan failed", e);
+        }
+
+        const reposScanned = repoList.length;
+        const summary = reposScanned === 0
+          ? "Azure Repos connected but no repositories were available to scan."
+          : `${openPrs} open PRs, ${blockedPrs} blocked drafts, and ${stalePrs} stale PRs across ${reposScanned} repositories.`;
+
+        result = {
+          connected: true,
+          status: partialFailure ? "degraded" : "connected",
+          credential_source: "stored_token",
+          verification_path: "/_apis/git/pullrequests",
+          last_verified_at: verifiedAt,
+          last_sync_at: verifiedAt,
+          error_code: partialFailure ? "pr_scan_partial_failure" : null,
+          error_message: partialFailure ? "Some pull requests could not be scanned fully" : null,
+          repos_scanned: reposScanned,
+          open_prs: openPrs,
+          blocked_prs: blockedPrs,
+          stale_prs: stalePrs,
+          release_risks: blockedPrs + stalePrs,
+          signals,
+          summary,
+          metrics_summary: summary,
         };
         break;
       }

@@ -15,6 +15,13 @@ function clampScore(score: number): number {
   return Math.max(1, Math.min(5, Math.round(n)));
 }
 
+/** Stable SHA-256 of the extracted CV text (lowercased, whitespace-collapsed). */
+async function hashCvText(text: string): Promise<string> {
+  const normalised = text.toLowerCase().replace(/\s+/g, " ").trim();
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalised));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /**
  * Convert a competency name to a safe, semantic snake_case key.
  *   "Decision Making"          → "decision_making"

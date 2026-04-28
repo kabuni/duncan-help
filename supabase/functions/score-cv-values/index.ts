@@ -2,6 +2,14 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callLLMWithFallback } from "../_shared/llm.ts";
 import { safeParseToolArguments } from "../_shared/json.ts";
+import { extractCvText } from "../_shared/cv-text.ts";
+
+/** Stable SHA-256 of the extracted CV text (lowercased, whitespace-collapsed). */
+async function hashCvText(text: string): Promise<string> {
+  const normalised = text.toLowerCase().replace(/\s+/g, " ").trim();
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalised));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

@@ -84,15 +84,21 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Trusted internal calls (e.g. ceo-briefing) authenticate with the service role key.
+    const bearerToken = authHeader.replace(/^Bearer\s+/i, "");
+    const isTrustedInternalCall = !!bearerToken && bearerToken === supabaseServiceKey;
+
+    if (!isTrustedInternalCall) {
+      const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: authHeader } },
       });
+      const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
+      if (userError || !user) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const { data: tokenRow, error: tokenError } = await supabaseAdmin

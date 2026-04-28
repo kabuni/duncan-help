@@ -792,21 +792,22 @@ serve(async (req) => {
             const normalizedNameGuess = normalizeCandidateName(filenameNameGuess);
             const candidateNameLooksReal = !isGenericName(filenameNameGuess) && normalizedNameGuess.length >= 3;
 
-            let identityMatch: { id: string; status: string; total_score: number | null; cv_storage_path: string | null } | null = null;
+            let identityMatch: { id: string; status: string; total_score: number | null; cv_storage_path: string | null; name?: string | null; created_at?: string } | null = null;
             let matchReason: "matched_by_email" | "matched_by_name" | null = null;
 
             // Prefer email match (sender email is the strongest pre-parse signal)
             if (senderEmail && isValidEmail(senderEmail)) {
               const { data: byEmail } = await supabaseAdmin
                 .from("candidates")
-                .select("id, status, total_score, cv_storage_path")
+                .select("id, status, total_score, cv_storage_path, name, created_at")
                 .eq("job_role_id", matchedRoleId)
                 .ilike("email", senderEmail)
-                .order("total_score", { ascending: false, nullsFirst: false })
-                .limit(1)
-                .maybeSingle();
-              if (byEmail) {
-                identityMatch = byEmail;
+                .neq("status", "duplicate_merged");
+              const bestEmailMatch = pickBestCandidate((byEmail || []).filter((candidate: any) =>
+                filenameLooksLikeExistingCandidate(filenameNameGuess, candidate.name)
+              ));
+              if (bestEmailMatch) {
+                identityMatch = bestEmailMatch;
                 matchReason = "matched_by_email";
               }
             }
@@ -815,14 +816,13 @@ serve(async (req) => {
             if (!identityMatch && candidateNameLooksReal) {
               const { data: byName } = await supabaseAdmin
                 .from("candidates")
-                .select("id, status, total_score, cv_storage_path, name")
+                .select("id, status, total_score, cv_storage_path, name, created_at")
                 .eq("job_role_id", matchedRoleId)
                 .ilike("name", normalizedNameGuess)
-                .order("total_score", { ascending: false, nullsFirst: false })
-                .limit(1)
-                .maybeSingle();
-              if (byName) {
-                identityMatch = byName;
+                .neq("status", "duplicate_merged");
+              const bestNameMatch = pickBestCandidate(byName || []);
+              if (bestNameMatch) {
+                identityMatch = bestNameMatch;
                 matchReason = "matched_by_name";
               }
             }

@@ -271,10 +271,13 @@ export function useGmailAutoDraftToggle() {
         }
       }
 
+      // Upsert so users without an existing profile row can still enable the toggle
       const { error } = await supabase
         .from("gmail_writing_profiles")
-        .update({ auto_draft_enabled: enabled })
-        .eq("user_id", user.id);
+        .upsert(
+          { user_id: user.id, auto_draft_enabled: enabled } as any,
+          { onConflict: "user_id" },
+        );
       if (error) throw error;
       return { enabled };
     },

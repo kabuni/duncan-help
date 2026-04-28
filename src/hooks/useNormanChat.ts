@@ -317,9 +317,10 @@ export function useNormanChat() {
   );
 
   const sendBriefing = useCallback(
-    async (briefingData: Record<string, any>) => {
+    async (briefingData: Record<string, any>): Promise<boolean> => {
       setIsLoading(true);
       let assistantSoFar = "";
+      let success = false;
 
       const upsertAssistant = (chunk: string) => {
         assistantSoFar += chunk;
@@ -335,16 +336,14 @@ export function useNormanChat() {
       };
 
       try {
+        console.info("[Duncan] briefing: fetch start");
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const controller = new AbortController();
         const timeoutId = window.setTimeout(() => controller.abort(), CHAT_REQUEST_TIMEOUT_MS);
 
         const briefingPrompt = `Generate my personalized morning briefing. Here is the latest data from across our systems:\n\n${JSON.stringify(briefingData, null, 2)}`;
-
-        const apiMessages = [
-          { role: "user", content: briefingPrompt },
-        ];
+        const apiMessages = [{ role: "user", content: briefingPrompt }];
 
         try {
           const resp = await fetch(CHAT_URL, {
@@ -357,28 +356,32 @@ export function useNormanChat() {
             signal: controller.signal,
           });
 
+          console.info("[Duncan] briefing: API response", resp.status);
           if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
             throw new Error(err.error || `Request failed (${resp.status})`);
           }
 
           await streamAssistantResponse(resp, upsertAssistant, "briefing");
+          success = true;
+          console.info("[Duncan] briefing: completed successfully");
         } finally {
           window.clearTimeout(timeoutId);
         }
       } catch (e) {
-        console.error("Duncan briefing error:", e);
+        console.error("[Duncan] briefing: failure reason →", e);
         if (mountedRef.current) {
           toast.error("Daily briefing could not be completed right now.");
         }
-        upsertAssistant(
-          `Good morning! I wasn't able to fetch your full briefing right now, but I'm here and ready to help. Ask me anything! 🐾`
-        );
+        // Do NOT inject a fake assistant message on failure — leave the chat
+        // empty so the page-level retry UI can drive the recovery flow.
       } finally {
         setIsLoading(false);
       }
+
+      return success;
     },
-    []
+    [profile]
   );
 
   const clearMessages = useCallback(() => setMessages([]), []);

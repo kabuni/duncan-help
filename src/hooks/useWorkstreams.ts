@@ -255,6 +255,7 @@ export function useWorkstreamCard(cardId: string | null) {
           } as WorkstreamCard,
           tasks: tasks.map(t => ({
             ...t,
+            status: ((t as any).status || (t.completed ? "done" : "green")) as CardStatus,
             assignee_name: t.assignee_id ? profileMap[t.assignee_id] : undefined,
             assignees: taskAssigneeMap[t.id] || [],
           })) as WorkstreamTask[],

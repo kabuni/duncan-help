@@ -2365,7 +2365,7 @@ ULTRA COMPACT MODE (LAST ATTEMPT, MANDATORY):
       hubspot: normalizedHubspotSignal
         ? `HubSpot ${normalizedHubspotSignal.status === "connected" ? "connected" : normalizedHubspotSignal.status}. Accounts scanned: ${normalizedHubspotSignal.accounts_scanned ?? 0}. ${normalizedHubspotSignal.metrics_summary || normalizedHubspotSignal.summary || normalizedHubspotSignal.error_message || "No material CRM signal returned."}`
         : `HubSpot summary unavailable${hubspot_signal_error ? ` — error: ${hubspot_signal_error}` : ""}.`,
-      github: normalizedAzureReposSignal
+      azure_repos: normalizedAzureReposSignal
         ? `Azure Repos ${normalizedAzureReposSignal.status === "connected" ? "connected" : normalizedAzureReposSignal.status}. Repos scanned: ${normalizedAzureReposSignal.repos_scanned ?? 0}. ${normalizedAzureReposSignal.metrics_summary || normalizedAzureReposSignal.summary || normalizedAzureReposSignal.error_message || "No material engineering signal returned."}`
         : `Azure Repos summary unavailable${azure_repos_signal_error ? ` — error: ${azure_repos_signal_error}` : ""}.`,
       email: "Per-mailbox 24h scan via ceo-email-pulse for opted-in users only.",

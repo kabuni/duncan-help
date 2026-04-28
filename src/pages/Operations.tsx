@@ -544,18 +544,22 @@ const Operations = () => {
               ) : !analytics.isConnected ? (
                 <div className="rounded-xl border border-border bg-card p-8 text-center">
                   <PlugZap className="h-9 w-9 mx-auto mb-3 text-primary" />
-                  <h3 className="text-lg font-semibold text-foreground">Connect Google Analytics</h3>
+                  <h3 className="text-lg font-semibold text-foreground">Google Analytics not connected</h3>
                   <p className="text-sm text-muted-foreground mt-2 max-w-xl mx-auto">
-                    Connect GA4 so Duncan can report traffic, reach, demographics, and answer questions about website performance.
+                    {isAdmin
+                      ? "Connect Duncan's GA4 account once — every team member will then see the same company-wide analytics."
+                      : "Website analytics will appear here once an admin connects Duncan's GA4 account."}
                   </p>
-                  <button
-                    onClick={() => analytics.initiateOAuth().catch((err: any) => toast.error(err.message || "Connection failed"))}
-                    disabled={analytics.isConnecting}
-                    className="mt-5 inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
-                  >
-                    {analytics.isConnecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
-                    Connect Google Analytics
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => analytics.initiateOAuth().catch((err: any) => toast.error(err.message || "Connection failed"))}
+                      disabled={analytics.isConnecting}
+                      className="mt-5 inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+                    >
+                      {analytics.isConnecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
+                      Connect Google Analytics
+                    </button>
+                  )}
                 </div>
               ) : analytics.dashboard ? (
                 <>

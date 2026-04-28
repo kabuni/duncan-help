@@ -389,9 +389,20 @@ interface CvAttachment {
 interface ProcessingDetail {
   gmail_message_id: string;
   filename: string;
-  outcome: "ingested" | "skipped" | "unmatched" | "parse_failed" | "upload_failed" | "reprocessed" | "duplicate_email";
+  outcome:
+    | "ingested"
+    | "skipped"
+    | "unmatched"
+    | "parse_failed"
+    | "upload_failed"
+    | "reprocessed"
+    | "duplicate_email"
+    | "skipped_non_cv"
+    | "matched_existing";
   reason?: string;
   candidate_id?: string;
+  matched_existing_candidate_id?: string;
+  match_reason?: "matched_by_email" | "matched_by_name" | "new_insert";
   role_title?: string;
   confidence?: string;
 }

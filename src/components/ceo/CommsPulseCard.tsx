@@ -91,7 +91,7 @@ interface Props {
     summary?: string | null;
     degraded_reason?: string | null;
   } | null;
-  githubSignal?: {
+  azureReposSignal?: {
     status?: string;
     connected?: boolean;
     credential_source?: string | null;
@@ -688,7 +688,7 @@ function SlackColumn({ pulse }: { pulse: SlackPulseSummary | null | undefined })
   );
 }
 
-export default function CommsPulseCard({ emailPulse, slackPulse, hubspotSignal, githubSignal }: Props) {
+export default function CommsPulseCard({ emailPulse, slackPulse, hubspotSignal, azureReposSignal }: Props) {
   const [expanded, setExpanded] = useState(false);
 
   // Leadership status from email pulse (slack equivalent doesn't exist yet)
@@ -708,7 +708,7 @@ export default function CommsPulseCard({ emailPulse, slackPulse, hubspotSignal, 
         }))
       : [];
 
-  const hasAnyComms = !!(emailPulse?.per_mailbox || slackPulse || hubspotSignal || githubSignal);
+  const hasAnyComms = !!(emailPulse?.per_mailbox || slackPulse || hubspotSignal || azureReposSignal);
   if (!hasAnyComms) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-card p-4">
@@ -746,13 +746,13 @@ export default function CommsPulseCard({ emailPulse, slackPulse, hubspotSignal, 
               secondaryMetric={{ label: "Stale / Risk", value: `${Number(hubspotSignal?.stale_deals || 0)} / ${Number(hubspotSignal?.at_risk_accounts || 0)}` }}
             />
           )}
-          {githubSignal && (
+          {azureReposSignal && (
             <ExternalSignalColumn
-              title="GitHub"
+              title="Azure Repos"
               icon={GitBranch}
-              signal={githubSignal}
-              primaryMetric={{ label: "Repos", value: Number(githubSignal?.repos_scanned || 0) }}
-              secondaryMetric={{ label: "Open / Blocked", value: `${Number(githubSignal?.open_prs || 0)} / ${Number(githubSignal?.blocked_prs || 0)}` }}
+              signal={azureReposSignal}
+              primaryMetric={{ label: "Repos", value: Number(azureReposSignal?.repos_scanned || 0) }}
+              secondaryMetric={{ label: "Open / Blocked", value: `${Number(azureReposSignal?.open_prs || 0)} / ${Number(azureReposSignal?.blocked_prs || 0)}` }}
             />
           )}
         </div>

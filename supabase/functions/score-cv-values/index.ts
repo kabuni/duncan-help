@@ -2,7 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callLLMWithFallback } from "../_shared/llm.ts";
 import { safeParseToolArguments } from "../_shared/json.ts";
-import { extractCvText } from "../_shared/cv-text.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +17,23 @@ const KABUNI_VALUES = [
   { key: "build_for_long_term", name: "Build for the Long Term", description: "Build with purpose, patience, and ambition. Creating infrastructure, not features. A movement designed to last." },
 ];
 
+function uint8ToBase64(bytes: Uint8Array): string {
+  const CHUNK = 8192;
+  let result = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    result += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(result);
+}
+
+function getMimeType(filename: string): string {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (lower.endsWith(".doc")) return "application/msword";
+  return "application/octet-stream";
+}
+
 // P8: Clamp score to valid range
 function clampScore(score: number): number {
   const n = Number(score);
@@ -25,15 +41,26 @@ function clampScore(score: number): number {
   return Math.max(1, Math.min(5, Math.round(n)));
 }
 
-async function getCvMessages(supabaseAdmin: any, storagePath: string): Promise<any[] | null> {
-  const cv = await extractCvText(supabaseAdmin, storagePath);
-  if (!cv) return null;
-  return [
-    {
-      role: "user",
-      content: `Candidate CV (${cv.filename}):\n\n${cv.text}\n\nScore this candidate's CV against the Kabuni company values described in the system prompt.`,
-    },
-  ];
+async function getCvContent(supabaseAdmin: any, storagePath: string): Promise<{ messages: any[] } | null> {
+  const { data: fileData, error } = await supabaseAdmin.storage.from("cvs").download(storagePath);
+  if (error || !fileData) return null;
+
+  const bytes = new Uint8Array(await fileData.arrayBuffer());
+  const filename = storagePath.split("/").pop() || "cv.pdf";
+  const mimeType = getMimeType(filename);
+  const base64 = uint8ToBase64(bytes);
+
+  return {
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "file", file: { filename, file_data: `data:${mimeType};base64,${base64}` } },
+          { type: "text", text: "Score this candidate's CV against the Kabuni company values described in the system prompt." },
+        ],
+      },
+    ],
+  };
 }
 
 serve(async (req) => {
@@ -42,10 +69,10 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-    if (!ANTHROPIC_API_KEY) {
-      return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }), {
+    if (!OPENAI_API_KEY) {
+      return new Response(JSON.stringify({ error: "OPENAI_API_KEY not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

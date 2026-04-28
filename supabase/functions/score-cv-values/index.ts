@@ -245,6 +245,8 @@ You MUST call the score_values function with your assessment.`;
               values_score: valuesScore,
               scoring_details: newDetails,
               status: newStatus,
+              // Lock once both component scores are present.
+              ...(newStatus === "fully_scored" ? { is_score_locked: true } : {}),
             })
             .eq("id", candidate.id);
 

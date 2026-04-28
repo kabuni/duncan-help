@@ -136,7 +136,9 @@ MessageBubble.displayName = "MessageBubble";
 const Index = () => {
   const { messages, isLoading, extractionProgress, send, sendBriefing, clearMessages, setMessages } = useNormanChat();
   const navigate = useNavigate();
-  const briefingTriggered = useRef(sessionStorage.getItem("duncan_briefing_done") === "true");
+  const briefingTriggered = useRef(false);
+  const [briefingError, setBriefingError] = useState(false);
+  const [briefingTimestamp, setBriefingTimestamp] = useState<string | null>(null);
   const chatOps = useGeneralChats();
   const { profile } = useProfile();
   const userDisplayName = profile?.display_name || "You";

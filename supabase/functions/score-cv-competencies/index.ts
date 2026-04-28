@@ -119,7 +119,7 @@ serve(async (req) => {
       }
 
       try {
-        const cvMessages = await getCvContent(supabaseAdmin, candidate.cv_storage_path!);
+        const cvMessages = await getCvMessages(supabaseAdmin, candidate.cv_storage_path!);
         if (!cvMessages) {
           failed++;
           continue;
@@ -163,11 +163,12 @@ Call score_competencies with your assessment. Use keys competency_0, competency_
 
         let aiData: any;
         try {
-          // DOCX path produces plain-text user messages (Claude-safe); PDF path uses OpenAI file blocks.
-          // Force OpenAI to keep file-content compatibility consistent.
+          // Deterministic scoring on Claude Haiku 4.5 (temperature=0).
           aiData = await callLLMWithFallback({
             workflow: "score-cv-competencies",
-            force_provider: "openai",
+            force_provider: "claude",
+            model_override: { claude: "claude-haiku-4-5" },
+            temperature: 0,
             messages: [{ role: "system", content: systemPrompt }, ...cvMessages],
             tools: [{
               type: "function",

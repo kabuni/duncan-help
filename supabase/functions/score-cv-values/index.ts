@@ -232,19 +232,15 @@ You MUST call the score_values function with your assessment.`;
           const existingDetails = (candidate.scoring_details as any) || {};
           const newDetails = { ...existingDetails, values: scores };
 
+          // total_score is recomputed automatically by the DB trigger
+          // (single source of truth: trg_recompute_total_score)
           const competencyScore = candidate.competency_score;
-          let totalScore: number | null = null;
-          if (competencyScore != null && valuesScore != null) {
-            totalScore = Math.round(((valuesScore + competencyScore) / 2) * 10) / 10;
-          }
-
           const newStatus = competencyScore != null ? "fully_scored" : "values_scored";
 
           const { error: updateError } = await supabaseAdmin
             .from("candidates")
             .update({
               values_score: valuesScore,
-              total_score: totalScore,
               scoring_details: newDetails,
               status: newStatus,
             })

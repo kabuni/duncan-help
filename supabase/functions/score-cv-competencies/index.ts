@@ -330,7 +330,7 @@ Call score_competencies with your assessment. Use keys competency_0, competency_
           continue;
         }
 
-        results.push({ id: candidate.id, name: candidate.name, competency_score: competencyScore, total_score: totalScore, status: newStatus });
+        results.push({ id: candidate.id, name: candidate.name, competency_score: competencyScore, status: newStatus });
         scored++;
       } catch (err: any) {
         console.error(`Error scoring ${candidate.id}:`, err);

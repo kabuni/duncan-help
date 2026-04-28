@@ -190,7 +190,6 @@ You MUST call the score_values function with your assessment.`;
             });
           } catch (err: any) {
             console.error(`AI error for ${candidate.id}:`, err?.status, err?.message);
-            // On rate-limit / credit-exhaustion, stop the batch — running further calls won't succeed.
             if (err?.status === 429 || err?.status === 402) {
               console.error(`Aborting batch due to status ${err?.status}. Scored=${scored} Failed=${failed}`);
               return;

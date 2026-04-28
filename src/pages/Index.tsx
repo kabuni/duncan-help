@@ -170,49 +170,96 @@ const Index = () => {
     })();
   }, [chatOps.activeChatId]);
 
-  // Auto-trigger daily briefing on every dashboard visit
-  useEffect(() => {
-    if (briefingTriggered.current) return;
+  // ── Daily Briefing flow (server is single source of truth) ──
+  // 1. POST /daily-briefing → returns either { already_shown_today } or full data
+  // 2. If new data → stream via sendBriefing()
+  // 3. On stream success → POST /mark-briefing-shown to lock for the day
+  // No sessionStorage gate. No pre-emptive locking. Retry-safe.
+  const runBriefing = useCallback(async () => {
+    setBriefingError(false);
+    briefingTriggered.current = true;
 
-    const fetchBriefing = async (accessToken: string) => {
-      if (briefingTriggered.current) return;
-      briefingTriggered.current = true;
-      sessionStorage.setItem("duncan_briefing_done", "true");
+    try {
+      console.info("[Duncan] briefing: fetch start");
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.warn("[Duncan] briefing: no session, aborting");
+        briefingTriggered.current = false;
+        return;
+      }
 
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/daily-briefing`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      console.info("[Duncan] briefing: API response", resp.status);
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error("[Duncan] briefing: API error", resp.status, errText);
+        throw new Error(`Briefing fetch failed (${resp.status})`);
+      }
+
+      const briefingData = await resp.json();
+      if (briefingData?.already_shown_today) {
+        console.info("[Duncan] briefing: already shown today, skipping");
+        if (briefingData.last_briefing_at) {
+          setBriefingTimestamp(briefingData.last_briefing_at);
+        }
+        return;
+      }
+
+      console.info("[Duncan] briefing: streaming via sendBriefing");
+      const ok = await sendBriefing(briefingData);
+
+      if (!ok) {
+        throw new Error("Briefing stream did not complete");
+      }
+
+      // Stream succeeded → NOW lock the day
       try {
-        console.log("Duncan: Fetching daily briefing...");
-        const resp = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/daily-briefing`,
+        const markResp = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mark-briefing-shown`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
+              Authorization: `Bearer ${session.access_token}`,
             },
           }
         );
-
-        if (!resp.ok) {
-          const errText = await resp.text();
-          console.error("Briefing response error:", resp.status, errText);
-          throw new Error("Briefing fetch failed");
+        if (!markResp.ok) {
+          console.warn("[Duncan] briefing: mark-shown failed", markResp.status);
+        } else {
+          const markData = await markResp.json();
+          if (markData.last_briefing_at) {
+            setBriefingTimestamp(markData.last_briefing_at);
+          }
+          console.info("[Duncan] briefing: marked as shown");
         }
-        const briefingData = await resp.json();
-        if (briefingData?.already_shown_today) {
-          console.log("Duncan: Briefing already shown today, skipping.");
-          return;
-        }
-        console.log("Duncan: Briefing data received, sending to chat...");
-        sendBriefing(briefingData);
-      } catch (err) {
-        console.error("Briefing auto-trigger error:", err);
+      } catch (markErr) {
+        console.warn("[Duncan] briefing: mark-shown threw", markErr);
       }
-    };
+    } catch (err) {
+      console.error("[Duncan] briefing: failure reason →", err);
+      setBriefingError(true);
+      briefingTriggered.current = false; // allow retry
+    }
+  }, [sendBriefing]);
+
+  useEffect(() => {
+    if (briefingTriggered.current) return;
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         if (!session || briefingTriggered.current) return;
-        await fetchBriefing(session.access_token);
+        await runBriefing();
       }
     );
 
@@ -220,11 +267,11 @@ const Index = () => {
       if (briefingTriggered.current) return;
       const { data: { session } } = await supabase.auth.getSession();
       if (!session || briefingTriggered.current) return;
-      await fetchBriefing(session.access_token);
+      await runBriefing();
     })();
 
     return () => subscription.unsubscribe();
-  }, [sendBriefing]);
+  }, [runBriefing]);
 
   useEffect(() => {
     navigator.geolocation?.getCurrentPosition(

@@ -370,9 +370,40 @@ function isGenericName(name: string): boolean {
 function candidateNameFromFilename(filename: string): string {
   return filename
     .replace(/\.(pdf|docx?|rtf)$/i, "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/[_\-\.]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function filenameLooksLikeExistingCandidate(filenameName: string, existingName: string | null): boolean {
+  if (!existingName || isGenericName(existingName)) return false;
+  const normalizedFilename = normalizeText(filenameName);
+  const normalizedExisting = normalizeText(existingName);
+  if (normalizedExisting.length < 3) return false;
+  const tokens = normalizedExisting.split(" ").filter((token) => token.length > 1);
+  if (tokens.length < 2) return false;
+  return normalizedFilename.includes(normalizedExisting) || tokens.every((token) => normalizedFilename.includes(token));
+}
+
+function candidateQualityRank(status: string): number {
+  if (status === "fully_scored") return 0;
+  if (status === "scored") return 1;
+  if (status === "values_scored" || status === "competency_scored") return 2;
+  if (status === "parsed") return 3;
+  if (status === "pending") return 4;
+  return 5;
+}
+
+function pickBestCandidate<T extends { status: string; total_score: number | null; created_at?: string }>(candidates: T[]): T | null {
+  if (candidates.length === 0) return null;
+  return [...candidates].sort((a, b) => {
+    const rankDelta = candidateQualityRank(a.status) - candidateQualityRank(b.status);
+    if (rankDelta !== 0) return rankDelta;
+    const scoreDelta = (b.total_score ?? -1) - (a.total_score ?? -1);
+    if (scoreDelta !== 0) return scoreDelta;
+    return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
+  })[0];
 }
 
 function extractSenderEmail(fromHeader: string): string {
@@ -761,21 +792,22 @@ serve(async (req) => {
             const normalizedNameGuess = normalizeCandidateName(filenameNameGuess);
             const candidateNameLooksReal = !isGenericName(filenameNameGuess) && normalizedNameGuess.length >= 3;
 
-            let identityMatch: { id: string; status: string; total_score: number | null; cv_storage_path: string | null } | null = null;
+            let identityMatch: { id: string; status: string; total_score: number | null; cv_storage_path: string | null; name?: string | null; created_at?: string } | null = null;
             let matchReason: "matched_by_email" | "matched_by_name" | null = null;
 
             // Prefer email match (sender email is the strongest pre-parse signal)
             if (senderEmail && isValidEmail(senderEmail)) {
               const { data: byEmail } = await supabaseAdmin
                 .from("candidates")
-                .select("id, status, total_score, cv_storage_path")
+                .select("id, status, total_score, cv_storage_path, name, created_at")
                 .eq("job_role_id", matchedRoleId)
                 .ilike("email", senderEmail)
-                .order("total_score", { ascending: false, nullsFirst: false })
-                .limit(1)
-                .maybeSingle();
-              if (byEmail) {
-                identityMatch = byEmail;
+                .neq("status", "duplicate_merged");
+              const bestEmailMatch = pickBestCandidate((byEmail || []).filter((candidate: any) =>
+                filenameLooksLikeExistingCandidate(filenameNameGuess, candidate.name)
+              ));
+              if (bestEmailMatch) {
+                identityMatch = bestEmailMatch;
                 matchReason = "matched_by_email";
               }
             }
@@ -784,14 +816,14 @@ serve(async (req) => {
             if (!identityMatch && candidateNameLooksReal) {
               const { data: byName } = await supabaseAdmin
                 .from("candidates")
-                .select("id, status, total_score, cv_storage_path, name")
+                .select("id, status, total_score, cv_storage_path, name, created_at")
                 .eq("job_role_id", matchedRoleId)
-                .ilike("name", normalizedNameGuess)
-                .order("total_score", { ascending: false, nullsFirst: false })
-                .limit(1)
-                .maybeSingle();
-              if (byName) {
-                identityMatch = byName;
+                .neq("status", "duplicate_merged");
+              const bestNameMatch = pickBestCandidate((byName || []).filter((candidate: any) =>
+                filenameLooksLikeExistingCandidate(filenameNameGuess, candidate.name)
+              ));
+              if (bestNameMatch) {
+                identityMatch = bestNameMatch;
                 matchReason = "matched_by_name";
               }
             }

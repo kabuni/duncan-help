@@ -217,16 +217,25 @@ serve(async (req) => {
     const { action, question } = await req.json();
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Shared Google Analytics: always use the canonical (oldest) connected token,
+    // so every authenticated user sees the same company-wide GA data without
+    // having to connect their own account.
     if (action === "disconnect") {
-      await supabaseAdmin.from("google_analytics_tokens").delete().eq("user_id", user.id);
+      // Only admins may disconnect the shared GA connection.
+      const { data: isAdmin } = await supabaseAdmin.rpc("has_role", { _user_id: user.id, _role: "admin" });
+      if (!isAdmin) {
+        return new Response(JSON.stringify({ error: "Only admins can disconnect Google Analytics" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      await supabaseAdmin.from("google_analytics_tokens").delete().neq("id", "00000000-0000-0000-0000-000000000000");
       return new Response(JSON.stringify({ connected: false }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const { data: tokenData, error: tokenError } = await supabaseAdmin
       .from("google_analytics_tokens")
       .select("id, user_id, access_token, refresh_token, token_expiry, property_id, property_name")
-      .eq("user_id", user.id)
-      .single();
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
 
     if (tokenError || !tokenData) {
       return new Response(JSON.stringify({ connected: false, code: "NOT_CONNECTED" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });

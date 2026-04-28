@@ -401,6 +401,9 @@ Each entry requires an integer score from 1 to 5 and a non-empty justification.`
             competency_score: competencyScore,
             scoring_details: newDetails,
             status: newStatus,
+            cv_hash: cvHash,
+            // Lock once both component scores are present.
+            ...(newStatus === "fully_scored" ? { is_score_locked: true } : {}),
           })
           .eq("id", candidate.id);
 

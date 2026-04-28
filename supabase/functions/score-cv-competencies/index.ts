@@ -227,6 +227,51 @@ serve(async (req) => {
           continue;
         }
 
+        const cvHash = await hashCvText(cv.text);
+
+        // Cache hit: a candidate with the SAME cv_hash + role has already been
+        // scored for competencies. Reuse those scores deterministically without
+        // calling the LLM. Only consider rows that already carry a competency
+        // score AND a competencies block in scoring_details.
+        if (!forceRescore) {
+          const { data: cached } = await supabaseAdmin
+            .from("candidates")
+            .select("id, name, competency_score, scoring_details")
+            .eq("cv_hash", cvHash)
+            .eq("job_role_id", candidate.job_role_id)
+            .not("competency_score", "is", null)
+            .neq("id", candidate.id)
+            .limit(1)
+            .maybeSingle();
+          if (cached?.competency_score != null && (cached.scoring_details as any)?.competencies) {
+            const existingDetails = (candidate.scoring_details as any) || {};
+            const newDetails = {
+              ...existingDetails,
+              competencies: (cached.scoring_details as any).competencies,
+              competencies_meta: {
+                source: "cv_hash_cache",
+                cached_from: cached.id,
+                cached_from_name: cached.name,
+                scored_at: new Date().toISOString(),
+              },
+            };
+            const valuesScore = candidate.values_score;
+            const newStatus = valuesScore != null ? "fully_scored" : "competency_scored";
+            const isLocked = valuesScore != null;
+            await supabaseAdmin.from("candidates").update({
+              competency_score: cached.competency_score,
+              scoring_details: newDetails,
+              status: newStatus,
+              cv_hash: cvHash,
+              ...(isLocked ? { is_score_locked: true } : {}),
+            }).eq("id", candidate.id);
+            console.log(`[score-cv-competencies] candidate=${candidate.id} reused cached scores from ${cached.id}`);
+            results.push({ id: candidate.id, name: candidate.name, competency_score: cached.competency_score, status: newStatus, source: "cache" });
+            scored++;
+            continue;
+          }
+        }
+
         const keyMap = buildCompetencyKeyMap(competencies);
         const toolDef = buildToolSchema(keyMap);
         const systemPrompt = buildSystemPrompt(role.title, keyMap, competencies);

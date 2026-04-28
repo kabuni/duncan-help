@@ -180,9 +180,73 @@ You MUST call the score_values function with your assessment.`;
     const processCandidates = async () => {
       let scored = 0;
       let failed = 0;
+      let cached = 0;
 
       for (const candidate of candidates) {
         try {
+          // Compute cv_hash up-front so we can short-circuit on cache hits.
+          // Falls back gracefully if text extraction fails — we still try the
+          // OpenAI file-block path below for legacy/scanned PDFs.
+          let cvHash: string | null = null;
+          try {
+            const cvText = await extractCvText(supabaseAdmin, candidate.cv_storage_path!);
+            if (cvText?.text) cvHash = await hashCvText(cvText.text);
+          } catch (err) {
+            console.warn(`[score-cv-values] hash extraction failed for ${candidate.id}:`, err);
+          }
+
+          // Cache lookup: same CV + same role already scored → reuse deterministically.
+          if (cvHash && !forceRescore) {
+            const { data: cacheHit } = await supabaseAdmin
+              .from("candidates")
+              .select("id, name, values_score, scoring_details")
+              .eq("cv_hash", cvHash)
+              .eq("job_role_id", candidate.job_role_id)
+              .not("values_score", "is", null)
+              .neq("id", candidate.id)
+              .limit(1)
+              .maybeSingle();
+
+            if (cacheHit?.values_score != null && (cacheHit.scoring_details as any)?.values) {
+              const existingDetails = (candidate.scoring_details as any) || {};
+              const newDetails = {
+                ...existingDetails,
+                values: (cacheHit.scoring_details as any).values,
+                values_meta: {
+                  source: "cv_hash_cache",
+                  cached_from_candidate_id: cacheHit.id,
+                  cached_from_name: cacheHit.name,
+                  reused_at: new Date().toISOString(),
+                },
+              };
+              const competencyScore = candidate.competency_score;
+              const newStatus = competencyScore != null ? "fully_scored" : "values_scored";
+              const isLocked = competencyScore != null;
+
+              const { error: cacheUpdateError } = await supabaseAdmin
+                .from("candidates")
+                .update({
+                  values_score: cacheHit.values_score,
+                  scoring_details: newDetails,
+                  status: newStatus,
+                  cv_hash: cvHash,
+                  ...(isLocked ? { is_score_locked: true } : {}),
+                })
+                .eq("id", candidate.id);
+
+              if (cacheUpdateError) {
+                console.error(`[score-cv-values] cache update error for ${candidate.id}:`, cacheUpdateError);
+                failed++;
+                continue;
+              }
+
+              console.log(`[score-cv-values] candidate=${candidate.id} reused values from ${cacheHit.id}`);
+              cached++;
+              scored++;
+              continue;
+            }
+          }
+
           const cvContent = await getCvContent(supabaseAdmin, candidate.cv_storage_path!);
           if (!cvContent) {
             failed++;
@@ -240,7 +304,16 @@ You MUST call the score_values function with your assessment.`;
           const valuesScore = Math.round(valuesAvg * 10) / 10;
 
           const existingDetails = (candidate.scoring_details as any) || {};
-          const newDetails = { ...existingDetails, values: scores };
+          const newDetails = {
+            ...existingDetails,
+            values: scores,
+            values_meta: {
+              source: "llm",
+              provider: aiData?._provider || "openai",
+              model: aiData?._model || null,
+              scored_at: new Date().toISOString(),
+            },
+          };
 
           // total_score is recomputed automatically by the DB trigger
           // (single source of truth: trg_recompute_total_score)
@@ -253,6 +326,8 @@ You MUST call the score_values function with your assessment.`;
               values_score: valuesScore,
               scoring_details: newDetails,
               status: newStatus,
+              // Persist hash so future duplicates can hit the cache.
+              ...(cvHash ? { cv_hash: cvHash } : {}),
               // Lock once both component scores are present.
               ...(newStatus === "fully_scored" ? { is_score_locked: true } : {}),
             })
@@ -271,7 +346,7 @@ You MUST call the score_values function with your assessment.`;
         }
       }
 
-      console.log(`score-cv-values batch complete: scored=${scored} failed=${failed} total=${candidates.length}`);
+      console.log(`score-cv-values batch complete: scored=${scored} cached=${cached} failed=${failed} total=${candidates.length}`);
     };
 
     // @ts-ignore - EdgeRuntime is provided by the Supabase edge runtime

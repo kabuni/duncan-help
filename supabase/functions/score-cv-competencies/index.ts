@@ -167,8 +167,11 @@ serve(async (req) => {
 
     if (candidateId) {
       query = query.eq("id", candidateId);
+      // Even when targeting a specific candidate, refuse to overwrite a locked
+      // score unless the caller explicitly forces it.
+      if (!forceRescore) query = query.eq("is_score_locked", false);
     } else if (!forceRescore) {
-      query = query.is("competency_score", null);
+      query = query.is("competency_score", null).eq("is_score_locked", false);
     }
     if (roleId) query = query.eq("job_role_id", roleId);
     query = query.not("status", "in", '("unmatched","parse_failed")');

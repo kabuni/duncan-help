@@ -105,6 +105,46 @@ const NON_CV_TERMS = [
   "update",
 ];
 
+// Hard blocklist: filename tokens that immediately disqualify a file as a CV.
+// Applied per-file (not per-message) so a CV emailed alongside an NDA still ingests.
+const NON_CV_FILENAME_TOKENS = [
+  "nda",
+  "agreement",
+  "invoice",
+  "receipt",
+  "contract",
+  "form",
+  "declaration",
+  "purchase-order",
+  "purchaseorder",
+  "po-",
+];
+
+function isBlockedNonCvFilename(filename: string): boolean {
+  const normalized = filename.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return NON_CV_FILENAME_TOKENS.some((token) => {
+    // word-boundary-ish match against hyphen-normalized name
+    return (
+      normalized === token ||
+      normalized.startsWith(`${token}-`) ||
+      normalized.endsWith(`-${token}`) ||
+      normalized.includes(`-${token}-`)
+    );
+  });
+}
+
+function normalizeCandidateName(name: string): string {
+  return name.toLowerCase().trim().replace(/\s+/g, " ");
+}
+
+function sanitizeFilenameForStorage(filename: string): string {
+  return filename
+    .normalize("NFKD")
+    .replace(/[^a-zA-Z0-9\-_.]+/g, "-")
+    .replace(/-+/g, "-")
+    .toLowerCase();
+}
+
 const ROLE_FETCH_MAX_RESULTS_PER_PAGE = 100;
 const ROLE_FETCH_MAX_PAGES = 20;
 

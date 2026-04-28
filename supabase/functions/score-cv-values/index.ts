@@ -42,10 +42,10 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
-    if (!OPENAI_API_KEY) {
-      return new Response(JSON.stringify({ error: "OPENAI_API_KEY not configured" }), {
+    if (!ANTHROPIC_API_KEY) {
+      return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -145,25 +145,26 @@ You MUST call the score_values function with your assessment.`;
 
       for (const candidate of candidates) {
         try {
-          const cvContent = await getCvContent(supabaseAdmin, candidate.cv_storage_path!);
-          if (!cvContent) {
+          const cvMessages = await getCvMessages(supabaseAdmin, candidate.cv_storage_path!);
+          if (!cvMessages) {
             failed++;
             continue;
           }
 
           let aiData: any;
           try {
-            // CV files use OpenAI file-content blocks; force OpenAI to avoid Claude shape mismatch.
+            // Deterministic scoring on Claude Haiku 4.5 (temperature=0).
             aiData = await callLLMWithFallback({
               workflow: "score-cv-values",
-              force_provider: "openai",
-              messages: [{ role: "system", content: systemPrompt }, ...cvContent.messages],
+              force_provider: "claude",
+              model_override: { claude: "claude-haiku-4-5" },
+              temperature: 0,
+              messages: [{ role: "system", content: systemPrompt }, ...cvMessages],
               tools: [toolDef as any],
               tool_choice: { type: "function", function: { name: "score_values" } } as any,
             });
           } catch (err: any) {
             console.error(`AI error for ${candidate.id}:`, err?.status, err?.message);
-            // On rate-limit / credit-exhaustion, stop the batch — running further calls won't succeed.
             if (err?.status === 429 || err?.status === 402) {
               console.error(`Aborting batch due to status ${err?.status}. Scored=${scored} Failed=${failed}`);
               return;

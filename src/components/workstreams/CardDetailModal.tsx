@@ -740,3 +740,34 @@ function TaskRow({
     </div>
   );
 }
+
+function TaskStatusPicker({ status, onChange }: { status: CardStatus; onChange: (s: CardStatus) => void }) {
+  const opts: { value: CardStatus; label: string; emoji: string; dot: string }[] = [
+    { value: "red", label: "Red", emoji: "🔴", dot: "bg-red-500" },
+    { value: "amber", label: "Yellow", emoji: "🟡", dot: "bg-amber-500" },
+    { value: "green", label: "Green", emoji: "🟢", dot: "bg-emerald-500" },
+    { value: "done", label: "Done", emoji: "✅", dot: "bg-primary" },
+  ];
+  const current = opts.find(o => o.value === status) || opts[2];
+  return (
+    <Select value={status} onValueChange={(v) => onChange(v as CardStatus)}>
+      <SelectTrigger
+        className="h-5 w-auto px-1.5 py-0 gap-1 text-[10px] border-border bg-secondary/50 hover:bg-secondary"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className={`h-1.5 w-1.5 rounded-full ${current.dot}`} />
+        <span className="text-muted-foreground">{current.label}</span>
+      </SelectTrigger>
+      <SelectContent>
+        {opts.map(o => (
+          <SelectItem key={o.value} value={o.value} className="text-xs">
+            <span className="inline-flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${o.dot}`} />
+              {o.label}
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}

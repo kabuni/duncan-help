@@ -628,6 +628,8 @@ serve(async (req) => {
         const msgHeaders = msgData.payload?.headers || [];
         const subject = msgHeaders.find((h: any) => h.name.toLowerCase() === "subject")?.value || "";
         const snippet = msgData.snippet || "";
+        const fromHeader = msgHeaders.find((h: any) => h.name.toLowerCase() === "from")?.value || "";
+        const senderEmail = fromHeader ? extractSenderEmail(fromHeader).toLowerCase() : "";
 
         if (selectedRole && !subjectMatchesRole(subject, selectedRole.title)) {
           continue;

@@ -818,9 +818,10 @@ serve(async (req) => {
                 .from("candidates")
                 .select("id, status, total_score, cv_storage_path, name, created_at")
                 .eq("job_role_id", matchedRoleId)
-                .ilike("name", normalizedNameGuess)
                 .neq("status", "duplicate_merged");
-              const bestNameMatch = pickBestCandidate(byName || []);
+              const bestNameMatch = pickBestCandidate((byName || []).filter((candidate: any) =>
+                filenameLooksLikeExistingCandidate(filenameNameGuess, candidate.name)
+              ));
               if (bestNameMatch) {
                 identityMatch = bestNameMatch;
                 matchReason = "matched_by_name";

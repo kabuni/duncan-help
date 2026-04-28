@@ -4041,9 +4041,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
     // Lovable contributors snapshot (admin-only, requires attached screenshot)
     tools.push(...LOVABLE_CONTRIBUTORS_TOOLS);
     // Briefing mode must always return text, never invoke tools.
-    if (mode === "briefing") {
-      requestBody.tool_choice = "none";
-    } else if (!shouldBypassTools && tools.length > 0) {
+    // Do NOT set tool_choice without tools — OpenAI rejects that combination.
+    if (mode !== "briefing" && !shouldBypassTools && tools.length > 0) {
       requestBody.tools = tools;
     }
 

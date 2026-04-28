@@ -621,6 +621,7 @@ function TaskRow({
             {task.title}
           </span>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <TaskStatusPicker status={task.status} onChange={onSetStatus} />
             {(task.assignees || []).map(a => (
               <Badge key={a.user_id} variant="secondary" className="text-[10px] py-0 px-1.5">
                 {(a.display_name || "?").split(" ")[0]}

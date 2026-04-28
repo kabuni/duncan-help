@@ -300,12 +300,9 @@ Call score_competencies with your assessment. Use keys competency_0, competency_
         const avg = allScores.reduce((a: number, b: number) => a + b, 0) / allScores.length;
         const competencyScore = Math.round(avg * 10) / 10;
 
-        // P3: Only calculate total_score if BOTH scores exist
+        // total_score is recomputed automatically by the DB trigger
+        // (single source of truth: trg_recompute_total_score)
         const valuesScore = candidate.values_score;
-        let totalScore: number | null = null;
-        if (valuesScore != null && competencyScore != null) {
-          totalScore = Math.round(((valuesScore + competencyScore) / 2) * 10) / 10;
-        }
 
         // P4: Determine correct status
         let newStatus: string;
@@ -322,7 +319,6 @@ Call score_competencies with your assessment. Use keys competency_0, competency_
           .from("candidates")
           .update({
             competency_score: competencyScore,
-            total_score: totalScore,
             scoring_details: newDetails,
             status: newStatus,
           })

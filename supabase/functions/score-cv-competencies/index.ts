@@ -1,30 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import JSZip from "https://esm.sh/jszip@3.10.1";
 import { callLLMWithFallback } from "../_shared/llm.ts";
 import { safeParseToolArguments } from "../_shared/json.ts";
+import { extractCvText } from "../_shared/cv-text.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-function uint8ToBase64(bytes: Uint8Array): string {
-  const CHUNK = 8192;
-  let result = "";
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    result += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(result);
-}
-
-function getMimeType(filename: string): string {
-  const lower = filename.toLowerCase();
-  if (lower.endsWith(".pdf")) return "application/pdf";
-  if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-  if (lower.endsWith(".doc")) return "application/msword";
-  return "application/octet-stream";
-}
 
 // P8: Clamp score to valid range
 function clampScore(score: number): number {
@@ -33,69 +16,13 @@ function clampScore(score: number): number {
   return Math.max(1, Math.min(5, Math.round(n)));
 }
 
-function decodeXmlEntities(value: string): string {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
-function cleanDocxText(xml: string): string {
-  return decodeXmlEntities(
-    xml
-      .replace(/<w:tab\/>/g, "\t")
-      .replace(/<w:br\/>/g, "\n")
-      .replace(/<w:cr\/>/g, "\n")
-      .replace(/<w:p[^>]*>/g, "\n")
-      .replace(/<\/w:p>/g, "\n")
-      .replace(/<[^>]+>/g, " ")
-  )
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-async function getCvContent(supabaseAdmin: any, storagePath: string): Promise<any[] | null> {
-  const { data: fileData, error } = await supabaseAdmin.storage.from("cvs").download(storagePath);
-  if (error || !fileData) return null;
-
-  const bytes = new Uint8Array(await fileData.arrayBuffer());
-  const filename = storagePath.split("/").pop() || "cv.pdf";
-  const lowerFilename = filename.toLowerCase();
-
-  if (lowerFilename.endsWith(".docx")) {
-    try {
-      const zip = await JSZip.loadAsync(bytes);
-      const documentXmlFile = zip.file("word/document.xml");
-      if (documentXmlFile) {
-        const xml = await documentXmlFile.async("string");
-        const extractedText = cleanDocxText(xml).slice(0, 120000);
-        if (extractedText.length > 0) {
-          return [
-            {
-              role: "user",
-              content: `Candidate CV (${filename}):\n\n${extractedText}\n\nScore this candidate's CV against the competencies listed in the system prompt.`,
-            },
-          ];
-        }
-      }
-    } catch (docxError) {
-      console.error(`DOCX extraction failed for ${storagePath}:`, docxError);
-    }
-  }
-
-  const mimeType = getMimeType(filename);
-  const base64 = uint8ToBase64(bytes);
-
+async function getCvMessages(supabaseAdmin: any, storagePath: string): Promise<any[] | null> {
+  const cv = await extractCvText(supabaseAdmin, storagePath);
+  if (!cv) return null;
   return [
     {
       role: "user",
-      content: [
-        { type: "file", file: { filename, file_data: `data:${mimeType};base64,${base64}` } },
-        { type: "text", text: "Score this candidate's CV against the competencies listed in the system prompt." },
-      ],
+      content: `Candidate CV (${cv.filename}):\n\n${cv.text}\n\nScore this candidate's CV against the competencies listed in the system prompt.`,
     },
   ];
 }

@@ -197,6 +197,7 @@ const Recruitment = () => {
         .from("candidates")
         .select("*")
         .eq("job_role_id", selectedRoleId)
+        .not("status", "in", "(duplicate_merged)")
         .order("total_score", { ascending: false, nullsFirst: false });
       if (error) throw error;
       return data ?? [];

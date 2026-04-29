@@ -23,6 +23,65 @@ export interface WorkstreamCard {
   tasks_completed?: number;
   owner_name?: string;
   assignees?: AssigneeInfo[];
+  overall_status?: CardStatus;
+  task_breakdown?: TaskBreakdown;
+}
+
+export interface TaskBreakdown {
+  red: number;
+  yellow: number;
+  green: number;
+  done: number;
+}
+
+/**
+ * Computes a card's *overall* health from its tasks.
+ * - No tasks            → "red"
+ * - Any red task        → "red"
+ * - Any amber task      → "amber" (treated as "yellow" in UI copy)
+ * - All tasks done      → "done"
+ * - Otherwise           → "green"
+ *
+ * Uses task.status as the source of truth. A task with completed=true
+ * is normalized to "done" to handle inconsistent legacy rows.
+ */
+export function getOverallStatus(
+  tasks: Array<{ status?: CardStatus | string | null; completed?: boolean }> | undefined | null
+): CardStatus {
+  if (!tasks || tasks.length === 0) return "red";
+
+  let hasRed = false;
+  let hasAmber = false;
+  let allDone = true;
+
+  for (const t of tasks) {
+    const raw = (t.completed ? "done" : (t.status || "red")) as string;
+    const s: CardStatus = raw === "yellow" ? "amber" : (raw as CardStatus);
+    if (s !== "done") allDone = false;
+    if (s === "red") hasRed = true;
+    else if (s === "amber") hasAmber = true;
+  }
+
+  if (hasRed) return "red";
+  if (hasAmber) return "amber";
+  if (allDone) return "done";
+  return "green";
+}
+
+export function getTaskBreakdown(
+  tasks: Array<{ status?: CardStatus | string | null; completed?: boolean }> | undefined | null
+): TaskBreakdown {
+  const out: TaskBreakdown = { red: 0, yellow: 0, green: 0, done: 0 };
+  if (!tasks) return out;
+  for (const t of tasks) {
+    const raw = (t.completed ? "done" : (t.status || "red")) as string;
+    const s = raw === "amber" ? "yellow" : raw;
+    if (s === "red") out.red++;
+    else if (s === "yellow") out.yellow++;
+    else if (s === "green") out.green++;
+    else if (s === "done") out.done++;
+  }
+  return out;
 }
 
 export interface AssigneeInfo {
@@ -125,7 +184,7 @@ export function useWorkstreamCards(filters?: {
 
       // Fetch task counts, card assignees, and owner profiles in parallel
       const [tasksRes, cardAssigneesRes] = await Promise.all([
-        supabase.from("workstream_tasks").select("card_id, completed").in("card_id", cardIds),
+        supabase.from("workstream_tasks").select("card_id, completed, status").in("card_id", cardIds),
         supabase.from("workstream_card_assignees").select("card_id, user_id, assignment_status, responded_at, decline_reason").in("card_id", cardIds),
       ]);
 
@@ -143,12 +202,15 @@ export function useWorkstreamCards(filters?: {
         profileMap = (profiles || []).reduce((acc, p) => ({ ...acc, [p.user_id]: p.display_name || "Unknown" }), {});
       }
 
-      // Aggregate task counts
+      // Aggregate task counts + group raw tasks per card for overall-status computation
       const taskCounts: Record<string, { total: number; completed: number }> = {};
-      (tasksRes.data || []).forEach(t => {
+      const tasksByCard: Record<string, Array<{ status?: string | null; completed?: boolean }>> = {};
+      (tasksRes.data || []).forEach((t: any) => {
         if (!taskCounts[t.card_id]) taskCounts[t.card_id] = { total: 0, completed: 0 };
         taskCounts[t.card_id].total++;
         if (t.completed) taskCounts[t.card_id].completed++;
+        if (!tasksByCard[t.card_id]) tasksByCard[t.card_id] = [];
+        tasksByCard[t.card_id].push({ status: t.status, completed: t.completed });
       });
 
       // Aggregate card assignees
@@ -167,15 +229,20 @@ export function useWorkstreamCards(filters?: {
         );
       }
 
-      return filteredCards.map(c => ({
-        ...c,
-        status: c.status as CardStatus,
-        priority: c.priority as CardPriority,
-        tasks_total: taskCounts[c.id]?.total || 0,
-        tasks_completed: taskCounts[c.id]?.completed || 0,
-        owner_name: c.owner_id ? profileMap[c.owner_id] : undefined,
-        assignees: cardAssigneeMap[c.id] || [],
-      })) as WorkstreamCard[];
+      return filteredCards.map(c => {
+        const cardTasks = tasksByCard[c.id] || [];
+        return {
+          ...c,
+          status: c.status as CardStatus,
+          priority: c.priority as CardPriority,
+          tasks_total: taskCounts[c.id]?.total || 0,
+          tasks_completed: taskCounts[c.id]?.completed || 0,
+          owner_name: c.owner_id ? profileMap[c.owner_id] : undefined,
+          assignees: cardAssigneeMap[c.id] || [],
+          overall_status: getOverallStatus(cardTasks),
+          task_breakdown: getTaskBreakdown(cardTasks),
+        };
+      }) as WorkstreamCard[];
     },
   });
 }
@@ -245,6 +312,13 @@ export function useWorkstreamCard(cardId: string | null) {
           taskAssigneeMap[ta.task_id].push({ user_id: ta.user_id, display_name: profileMap[ta.user_id] || "Unknown" });
         });
 
+        const mappedTasks = tasks.map(t => ({
+          ...t,
+          status: ((t as any).status || (t.completed ? "done" : "red")) as CardStatus,
+          assignee_name: t.assignee_id ? profileMap[t.assignee_id] : undefined,
+          assignees: taskAssigneeMap[t.id] || [],
+        })) as WorkstreamTask[];
+
         return {
           card: {
             ...card,
@@ -252,13 +326,10 @@ export function useWorkstreamCard(cardId: string | null) {
             priority: card.priority as CardPriority,
             owner_name: card.owner_id ? profileMap[card.owner_id] : undefined,
             assignees: cardAssignees.map((a: any) => ({ user_id: a.user_id, display_name: profileMap[a.user_id] || "Unknown", assignment_status: a.assignment_status, responded_at: a.responded_at, decline_reason: a.decline_reason })),
+            overall_status: getOverallStatus(mappedTasks),
+            task_breakdown: getTaskBreakdown(mappedTasks),
           } as WorkstreamCard,
-          tasks: tasks.map(t => ({
-            ...t,
-            status: ((t as any).status || (t.completed ? "done" : "green")) as CardStatus,
-            assignee_name: t.assignee_id ? profileMap[t.assignee_id] : undefined,
-            assignees: taskAssigneeMap[t.id] || [],
-          })) as WorkstreamTask[],
+          tasks: mappedTasks,
           comments: comments.map(c => ({ ...c, user_name: profileMap[c.user_id] })) as WorkstreamComment[],
           activity: activity.map(a => ({ ...a, user_name: profileMap[a.user_id] })) as WorkstreamActivity[],
         };
@@ -288,6 +359,8 @@ export function useWorkstreamCard(cardId: string | null) {
           priority: card.priority as CardPriority,
           owner_name: card.owner_id ? profileMap[card.owner_id] : undefined,
           assignees: cardAssignees.map((a: any) => ({ user_id: a.user_id, display_name: profileMap[a.user_id] || "Unknown", assignment_status: a.assignment_status, responded_at: a.responded_at, decline_reason: a.decline_reason })),
+          overall_status: getOverallStatus([]),
+          task_breakdown: getTaskBreakdown([]),
         } as WorkstreamCard,
         tasks: [] as WorkstreamTask[],
         comments: comments.map(c => ({ ...c, user_name: profileMap[c.user_id] })) as WorkstreamComment[],
@@ -310,7 +383,7 @@ export function useCreateCard() {
       const { assignee_ids, ...cardInput } = input;
       const { data, error } = await supabase
         .from("workstream_cards")
-        .insert({ ...cardInput, created_by: user.id })
+        .insert({ status: "red", ...cardInput, created_by: user.id })
         .select("id")
         .single();
       if (error) throw error;
@@ -410,7 +483,7 @@ export function useCreateTask() {
       const { assignee_ids, ...taskInput } = input;
       const { data, error } = await supabase
         .from("workstream_tasks")
-        .insert(taskInput)
+        .insert({ status: "red", ...taskInput })
         .select()
         .single();
       if (error) throw error;

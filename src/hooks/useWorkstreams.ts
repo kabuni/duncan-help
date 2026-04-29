@@ -477,7 +477,7 @@ export function useCreateTask() {
       const { assignee_ids, ...taskInput } = input;
       const { data, error } = await supabase
         .from("workstream_tasks")
-        .insert(taskInput)
+        .insert({ status: "red", ...taskInput })
         .select()
         .single();
       if (error) throw error;

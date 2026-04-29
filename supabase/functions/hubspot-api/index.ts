@@ -562,6 +562,8 @@ async function fetchHubspotLists(token: string, source: CredentialSource) {
 
   return results;
 }
+
+function normalizeBearerToken(token: string | null | undefined) {
   const trimmed = token?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : null;
 }

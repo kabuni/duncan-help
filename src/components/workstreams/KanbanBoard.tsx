@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import type { WorkstreamCard, CardStatus } from "@/hooks/useWorkstreams";
 import { useUpdateCard } from "@/hooks/useWorkstreams";
 import { StatusBadge, getStatusBorderClass, priorityConfig } from "./StatusBadge";
+import { HealthBadge, TaskBreakdownPills, StatusMismatchWarning } from "./HealthIndicator";
 
 const COLUMNS: { status: CardStatus; label: string; emoji: string }[] = [
   { status: "red", label: "Red", emoji: "🔴" },

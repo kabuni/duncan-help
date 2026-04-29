@@ -186,3 +186,12 @@ function KanbanCard({ card, onClick, onDragStart }: {
     </div>
   );
 }
+
+function OverallDot({ status }: { status: CardStatus }) {
+  const cls =
+    status === "red" ? "bg-red-500"
+    : status === "amber" ? "bg-amber-500"
+    : status === "green" ? "bg-emerald-500"
+    : "bg-primary";
+  return <span className={`h-2 w-2 rounded-full ${cls}`} title={`Overall: ${status}`} />;
+}

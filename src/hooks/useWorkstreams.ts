@@ -23,6 +23,65 @@ export interface WorkstreamCard {
   tasks_completed?: number;
   owner_name?: string;
   assignees?: AssigneeInfo[];
+  overall_status?: CardStatus;
+  task_breakdown?: TaskBreakdown;
+}
+
+export interface TaskBreakdown {
+  red: number;
+  yellow: number;
+  green: number;
+  done: number;
+}
+
+/**
+ * Computes a card's *overall* health from its tasks.
+ * - No tasks            → "red"
+ * - Any red task        → "red"
+ * - Any amber task      → "amber" (treated as "yellow" in UI copy)
+ * - All tasks done      → "done"
+ * - Otherwise           → "green"
+ *
+ * Uses task.status as the source of truth. A task with completed=true
+ * is normalized to "done" to handle inconsistent legacy rows.
+ */
+export function getOverallStatus(
+  tasks: Array<{ status?: CardStatus | string | null; completed?: boolean }> | undefined | null
+): CardStatus {
+  if (!tasks || tasks.length === 0) return "red";
+
+  let hasRed = false;
+  let hasAmber = false;
+  let allDone = true;
+
+  for (const t of tasks) {
+    const raw = (t.completed ? "done" : (t.status || "red")) as string;
+    const s: CardStatus = raw === "yellow" ? "amber" : (raw as CardStatus);
+    if (s !== "done") allDone = false;
+    if (s === "red") hasRed = true;
+    else if (s === "amber") hasAmber = true;
+  }
+
+  if (hasRed) return "red";
+  if (hasAmber) return "amber";
+  if (allDone) return "done";
+  return "green";
+}
+
+export function getTaskBreakdown(
+  tasks: Array<{ status?: CardStatus | string | null; completed?: boolean }> | undefined | null
+): TaskBreakdown {
+  const out: TaskBreakdown = { red: 0, yellow: 0, green: 0, done: 0 };
+  if (!tasks) return out;
+  for (const t of tasks) {
+    const raw = (t.completed ? "done" : (t.status || "red")) as string;
+    const s = raw === "amber" ? "yellow" : raw;
+    if (s === "red") out.red++;
+    else if (s === "yellow") out.yellow++;
+    else if (s === "green") out.green++;
+    else if (s === "done") out.done++;
+  }
+  return out;
 }
 
 export interface AssigneeInfo {

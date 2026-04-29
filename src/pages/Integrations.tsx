@@ -223,7 +223,7 @@ const integrations: Integration[] = [
   },
 ];
 
-const hiddenIntegrationIds = new Set(["azure-blob", "basecamp", "azure-devops", "hubspot", "github"]);
+const hiddenIntegrationIds = new Set(["azure-blob", "basecamp", "azure-devops", "github"]);
 const baseVisibleIntegrations = integrations.filter((integration) => !hiddenIntegrationIds.has(integration.id));
 
 const statusConfig: Record<IntegrationStatus, { label: string; color: string; dot: string; bg: string }> = {

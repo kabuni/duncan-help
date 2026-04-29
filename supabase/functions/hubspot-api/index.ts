@@ -702,7 +702,7 @@ function isClosedDeal(stage?: string | null) {
   return normalized.includes("closed won") || normalized.includes("closed lost") || normalized === "closedwon" || normalized === "closedlost";
 }
 
-function buildTeamBriefingSummary(companiesPayload: any, dealsPayload: any, contactsPayload: any, lastVerifiedAt: string, degradedReason: string | null = null, errorCode: string | null = null) {
+function buildTeamBriefingSummary(companiesPayload: any, dealsPayload: any, contactsPayload: any, lastVerifiedAt: string, degradedReason: string | null = null, errorCode: string | null = null, lists: Array<Record<string, unknown>> = []) {
   const companies = extractResults<HubspotCompany>(companiesPayload);
   const deals = extractResults<HubspotDeal>(dealsPayload);
   const contacts = extractResults<HubspotContact>(contactsPayload);

@@ -25,6 +25,7 @@ import {
 } from "@/hooks/useWorkstreams";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { StatusBadge, priorityConfig } from "./StatusBadge";
+import { HealthBadge, TaskBreakdownPills, StatusMismatchWarning } from "./HealthIndicator";
 import MultiAssigneeSelect from "./MultiAssigneeSelect";
 import { useAuth } from "@/hooks/useAuth";
 

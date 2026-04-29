@@ -442,7 +442,126 @@ async function hubspotApi(path: string, token: string, stage: RequestStage = "su
   return data;
 }
 
-function normalizeBearerToken(token: string | null | undefined) {
+async function hubspotApiPost(path: string, body: unknown, token: string, stage: RequestStage = "summary", source: CredentialSource = "stored_token") {
+  logHubspot("verification endpoint", { source, path, stage, method: "POST", auth_header_format: "Bearer <token>", ...tokenFingerprint(token) });
+  const res = await fetch(`${HUBSPOT_API}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  logHubspot("provider response", { source, stage, path, status: res.status, snippet: safeSnippet(data) });
+  if (!res.ok) {
+    throw new ProviderRequestError("HubSpot API failed", {
+      status: res.status,
+      body: data,
+      source,
+      stage,
+      path,
+    });
+  }
+  return data;
+}
+
+async function fetchHubspotLists(token: string, source: CredentialSource) {
+  const results: Array<{
+    requested_name: string;
+    list_id: string | null;
+    matched_name: string | null;
+    member_count: number | null;
+    processing_type: string | null;
+    updated_at: string | null;
+    error?: string | null;
+  }> = [];
+
+  for (const requestedName of TEAM_BRIEFING_LISTS) {
+    try {
+      const search = await hubspotApiPost(
+        "/crm/v3/lists/search",
+        { query: requestedName, count: 10 },
+        token,
+        "summary",
+        source,
+      );
+      const lists = Array.isArray(search?.lists) ? search.lists : [];
+      const lower = requestedName.toLowerCase();
+      const exact = lists.find((l: any) => (l?.name || "").toLowerCase() === lower);
+      const partial = exact || lists.find((l: any) => (l?.name || "").toLowerCase().includes(lower));
+      const match: any = partial || null;
+
+      if (!match) {
+        results.push({
+          requested_name: requestedName,
+          list_id: null,
+          matched_name: null,
+          member_count: null,
+          processing_type: null,
+          updated_at: null,
+        });
+        continue;
+      }
+
+      const listId = String(match.listId ?? match.id ?? "");
+      let memberCount: number | null = null;
+      let updatedAt: string | null = match.updatedAt ?? null;
+      let processingType: string | null = match.processingType ?? null;
+
+      if (typeof match.additionalProperties?.hs_list_size === "number") {
+        memberCount = match.additionalProperties.hs_list_size;
+      } else if (typeof match.size === "number") {
+        memberCount = match.size;
+      }
+
+      if (memberCount === null && listId) {
+        try {
+          const detail = await hubspotApi(`/crm/v3/lists/${listId}`, token, "summary", source);
+          const list = detail?.list ?? detail;
+          memberCount = typeof list?.additionalProperties?.hs_list_size === "number"
+            ? list.additionalProperties.hs_list_size
+            : typeof list?.size === "number"
+            ? list.size
+            : null;
+          updatedAt = list?.updatedAt ?? updatedAt;
+          processingType = list?.processingType ?? processingType;
+        } catch (detailErr) {
+          logHubspot("list detail fetch failed", {
+            list_id: listId,
+            requested_name: requestedName,
+            error: detailErr instanceof Error ? detailErr.message : String(detailErr),
+          });
+        }
+      }
+
+      results.push({
+        requested_name: requestedName,
+        list_id: listId || null,
+        matched_name: match.name ?? null,
+        member_count: memberCount,
+        processing_type: processingType,
+        updated_at: updatedAt,
+      });
+    } catch (err) {
+      logHubspot("list search failed", {
+        requested_name: requestedName,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      results.push({
+        requested_name: requestedName,
+        list_id: null,
+        matched_name: null,
+        member_count: null,
+        processing_type: null,
+        updated_at: null,
+        error: err instanceof Error ? err.message : "Lookup failed",
+      });
+    }
+  }
+
+  return results;
+}
   const trimmed = token?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : null;
 }

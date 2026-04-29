@@ -312,6 +312,13 @@ export function useWorkstreamCard(cardId: string | null) {
           taskAssigneeMap[ta.task_id].push({ user_id: ta.user_id, display_name: profileMap[ta.user_id] || "Unknown" });
         });
 
+        const mappedTasks = tasks.map(t => ({
+          ...t,
+          status: ((t as any).status || (t.completed ? "done" : "red")) as CardStatus,
+          assignee_name: t.assignee_id ? profileMap[t.assignee_id] : undefined,
+          assignees: taskAssigneeMap[t.id] || [],
+        })) as WorkstreamTask[];
+
         return {
           card: {
             ...card,
@@ -319,13 +326,10 @@ export function useWorkstreamCard(cardId: string | null) {
             priority: card.priority as CardPriority,
             owner_name: card.owner_id ? profileMap[card.owner_id] : undefined,
             assignees: cardAssignees.map((a: any) => ({ user_id: a.user_id, display_name: profileMap[a.user_id] || "Unknown", assignment_status: a.assignment_status, responded_at: a.responded_at, decline_reason: a.decline_reason })),
+            overall_status: getOverallStatus(mappedTasks),
+            task_breakdown: getTaskBreakdown(mappedTasks),
           } as WorkstreamCard,
-          tasks: tasks.map(t => ({
-            ...t,
-            status: ((t as any).status || (t.completed ? "done" : "green")) as CardStatus,
-            assignee_name: t.assignee_id ? profileMap[t.assignee_id] : undefined,
-            assignees: taskAssigneeMap[t.id] || [],
-          })) as WorkstreamTask[],
+          tasks: mappedTasks,
           comments: comments.map(c => ({ ...c, user_name: profileMap[c.user_id] })) as WorkstreamComment[],
           activity: activity.map(a => ({ ...a, user_name: profileMap[a.user_id] })) as WorkstreamActivity[],
         };

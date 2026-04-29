@@ -821,6 +821,7 @@ function buildTeamBriefingSummary(companiesPayload: any, dealsPayload: any, cont
     active_deals_count: activeDeals.length,
     active_deals: activeDeals.slice(0, 6),
     key_contacts: contactPriority,
+    lists,
     customer_escalations: 0,
     signals,
     summary,

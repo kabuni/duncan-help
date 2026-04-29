@@ -25,6 +25,7 @@ import {
 } from "@/hooks/useWorkstreams";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { StatusBadge, priorityConfig } from "./StatusBadge";
+import { HealthBadge, TaskBreakdownPills, StatusMismatchWarning } from "./HealthIndicator";
 import MultiAssigneeSelect from "./MultiAssigneeSelect";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -187,23 +188,10 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
                     <StatusBadge status={card.status} size="md" />
                     {card.overall_status && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
-                        <span className="text-muted-foreground/70">Overall</span>
-                        <span className={`h-1.5 w-1.5 rounded-full ${
-                          card.overall_status === "red" ? "bg-red-500"
-                          : card.overall_status === "amber" ? "bg-amber-500"
-                          : card.overall_status === "green" ? "bg-emerald-500"
-                          : "bg-primary"
-                        }`} />
-                        <span className="capitalize">
-                          {card.overall_status === "amber" ? "Yellow" : card.overall_status}
-                        </span>
-                        {card.task_breakdown && (tasks.length > 0) && (
-                          <span className="text-muted-foreground/70 font-mono ml-1">
-                            · {card.task_breakdown.red}R/{card.task_breakdown.yellow}Y/{card.task_breakdown.green}G/{card.task_breakdown.done}✓
-                          </span>
-                        )}
-                      </span>
+                      <HealthBadge status={card.overall_status} size="md" />
+                    )}
+                    {card.overall_status && card.status !== card.overall_status && tasks.length > 0 && (
+                      <StatusMismatchWarning />
                     )}
                     {card.project_tag && (
                       <span className="text-[10px] font-mono bg-secondary text-muted-foreground px-2 py-0.5 rounded-md">
@@ -211,6 +199,11 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                       </span>
                     )}
                   </div>
+                  {card.task_breakdown && (
+                    <div className="mt-2">
+                      <TaskBreakdownPills breakdown={card.task_breakdown} />
+                    </div>
+                  )}
                 </div>
               </div>
 

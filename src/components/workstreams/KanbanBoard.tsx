@@ -124,6 +124,20 @@ function KanbanCard({ card, onClick, onDragStart }: {
         </p>
       )}
 
+      {/* Overall (computed) status + breakdown */}
+      {card.tasks_total! > 0 && card.overall_status && card.task_breakdown && (
+        <div className="flex items-center gap-2 mb-2 text-[10px]">
+          <span className="text-muted-foreground">Overall</span>
+          <OverallDot status={card.overall_status} />
+          <span className="text-muted-foreground/80 font-mono">
+            {card.task_breakdown.red > 0 && <span className="text-red-500">{card.task_breakdown.red}R </span>}
+            {card.task_breakdown.yellow > 0 && <span className="text-amber-500">{card.task_breakdown.yellow}Y </span>}
+            {card.task_breakdown.green > 0 && <span className="text-emerald-500">{card.task_breakdown.green}G </span>}
+            {card.task_breakdown.done > 0 && <span className="text-primary">{card.task_breakdown.done}✓</span>}
+          </span>
+        </div>
+      )}
+
       {/* Footer: tasks + assignees + due date */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 flex-1 overflow-hidden">

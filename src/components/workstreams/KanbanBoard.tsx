@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import type { WorkstreamCard, CardStatus } from "@/hooks/useWorkstreams";
 import { useUpdateCard } from "@/hooks/useWorkstreams";
 import { StatusBadge, getStatusBorderClass, priorityConfig } from "./StatusBadge";
-import { HealthBadge, TaskBreakdownPills, StatusMismatchWarning } from "./HealthIndicator";
 
 const COLUMNS: { status: CardStatus; label: string; emoji: string }[] = [
   { status: "red", label: "Red", emoji: "🔴" },
@@ -125,18 +124,17 @@ function KanbanCard({ card, onClick, onDragStart }: {
         </p>
       )}
 
-      {/* Health (computed) + breakdown */}
-      {card.overall_status && card.task_breakdown && (
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <HealthBadge status={card.overall_status} />
-          {card.status !== card.overall_status && card.tasks_total! > 0 && (
-            <StatusMismatchWarning />
-          )}
-        </div>
-      )}
-      {card.task_breakdown && (
-        <div className="mb-3">
-          <TaskBreakdownPills breakdown={card.task_breakdown} />
+      {/* Overall (computed) status + breakdown */}
+      {card.tasks_total! > 0 && card.overall_status && card.task_breakdown && (
+        <div className="flex items-center gap-2 mb-2 text-[10px]">
+          <span className="text-muted-foreground">Overall</span>
+          <OverallDot status={card.overall_status} />
+          <span className="text-muted-foreground/80 font-mono">
+            {card.task_breakdown.red > 0 && <span className="text-red-500">{card.task_breakdown.red}R </span>}
+            {card.task_breakdown.yellow > 0 && <span className="text-amber-500">{card.task_breakdown.yellow}Y </span>}
+            {card.task_breakdown.green > 0 && <span className="text-emerald-500">{card.task_breakdown.green}G </span>}
+            {card.task_breakdown.done > 0 && <span className="text-primary">{card.task_breakdown.done}✓</span>}
+          </span>
         </div>
       )}
 

@@ -40,8 +40,11 @@ type HubspotSummary = {
   at_risk_accounts_count?: number;
   at_risk_accounts_details?: Array<Record<string, unknown>>;
   key_contacts?: Array<Record<string, unknown>>;
+  lists?: Array<Record<string, unknown>>;
   credential_diagnostics?: Record<string, unknown>;
 };
+
+const TEAM_BRIEFING_LISTS = ["Scout Programme", "Marketing Newsletter"] as const;
 
 type HubspotDeal = {
   id: string;

@@ -184,7 +184,7 @@ export function useWorkstreamCards(filters?: {
 
       // Fetch task counts, card assignees, and owner profiles in parallel
       const [tasksRes, cardAssigneesRes] = await Promise.all([
-        supabase.from("workstream_tasks").select("card_id, completed").in("card_id", cardIds),
+        supabase.from("workstream_tasks").select("card_id, completed, status").in("card_id", cardIds),
         supabase.from("workstream_card_assignees").select("card_id, user_id, assignment_status, responded_at, decline_reason").in("card_id", cardIds),
       ]);
 
@@ -202,12 +202,15 @@ export function useWorkstreamCards(filters?: {
         profileMap = (profiles || []).reduce((acc, p) => ({ ...acc, [p.user_id]: p.display_name || "Unknown" }), {});
       }
 
-      // Aggregate task counts
+      // Aggregate task counts + group raw tasks per card for overall-status computation
       const taskCounts: Record<string, { total: number; completed: number }> = {};
-      (tasksRes.data || []).forEach(t => {
+      const tasksByCard: Record<string, Array<{ status?: string | null; completed?: boolean }>> = {};
+      (tasksRes.data || []).forEach((t: any) => {
         if (!taskCounts[t.card_id]) taskCounts[t.card_id] = { total: 0, completed: 0 };
         taskCounts[t.card_id].total++;
         if (t.completed) taskCounts[t.card_id].completed++;
+        if (!tasksByCard[t.card_id]) tasksByCard[t.card_id] = [];
+        tasksByCard[t.card_id].push({ status: t.status, completed: t.completed });
       });
 
       // Aggregate card assignees

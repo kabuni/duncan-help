@@ -221,7 +221,7 @@ function ExternalSignalColumn({
 
       {hubspotSignal ? (
         <div className="space-y-3 border-t border-border/70 pt-3">
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Active deals</div>

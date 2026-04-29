@@ -90,6 +90,15 @@ interface Props {
     customer_escalations?: number;
     summary?: string | null;
     degraded_reason?: string | null;
+    lists?: Array<{
+      requested_name: string;
+      list_id?: string | null;
+      matched_name?: string | null;
+      member_count?: number | null;
+      processing_type?: string | null;
+      updated_at?: string | null;
+      error?: string | null;
+    }>;
   } | null;
   azureReposSignal?: {
     status?: string;

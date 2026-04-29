@@ -229,15 +229,20 @@ export function useWorkstreamCards(filters?: {
         );
       }
 
-      return filteredCards.map(c => ({
-        ...c,
-        status: c.status as CardStatus,
-        priority: c.priority as CardPriority,
-        tasks_total: taskCounts[c.id]?.total || 0,
-        tasks_completed: taskCounts[c.id]?.completed || 0,
-        owner_name: c.owner_id ? profileMap[c.owner_id] : undefined,
-        assignees: cardAssigneeMap[c.id] || [],
-      })) as WorkstreamCard[];
+      return filteredCards.map(c => {
+        const cardTasks = tasksByCard[c.id] || [];
+        return {
+          ...c,
+          status: c.status as CardStatus,
+          priority: c.priority as CardPriority,
+          tasks_total: taskCounts[c.id]?.total || 0,
+          tasks_completed: taskCounts[c.id]?.completed || 0,
+          owner_name: c.owner_id ? profileMap[c.owner_id] : undefined,
+          assignees: cardAssigneeMap[c.id] || [],
+          overall_status: getOverallStatus(cardTasks),
+          task_breakdown: getTaskBreakdown(cardTasks),
+        };
+      }) as WorkstreamCard[];
     },
   });
 }

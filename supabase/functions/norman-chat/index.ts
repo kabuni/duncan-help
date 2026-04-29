@@ -3798,8 +3798,16 @@ serve(async (req) => {
       throw new Error("OPENAI_API_KEY is not configured");
     }
 
-    // Get user from auth header
+    // Get user from auth header — REQUIRE a real authenticated user.
+    // Reject missing header or anon-key-only callers (getUser() returns no user for the anon key).
     const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: missing bearer token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     let userId: string | null = null;
     let userEmail: string = "";
     let calendarAccessToken: string | null = null;
@@ -3810,18 +3818,20 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    if (authHeader) {
-      const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user } } = await supabaseUser.auth.getUser();
-      if (user) {
-        userId = user.id;
-        userEmail = user.email || "";
-        calendarAccessToken = await getCalendarAccessToken(userId, supabaseAdmin);
-        slackConnection = await getSlackConnection(userId, supabaseAdmin);
-      }
+    const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: authenticated user required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
+    userId = user.id;
+    userEmail = user.email || "";
+    calendarAccessToken = await getCalendarAccessToken(userId, supabaseAdmin);
+    slackConnection = await getSlackConnection(userId, supabaseAdmin);
 
     // Check Azure Blob Storage availability
     azureStorageAvailable = !!getAzureStorageConfig();

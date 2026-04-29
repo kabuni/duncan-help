@@ -1,7 +1,7 @@
 project_id = "rfwvemsjwytxxhwowpqh"
 
 [functions.norman-chat]
-verify_jwt = false
+verify_jwt = true
 
 [functions.connect-integration]
 verify_jwt = false

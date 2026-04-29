@@ -90,6 +90,15 @@ interface Props {
     customer_escalations?: number;
     summary?: string | null;
     degraded_reason?: string | null;
+    lists?: Array<{
+      requested_name: string;
+      list_id?: string | null;
+      matched_name?: string | null;
+      member_count?: number | null;
+      processing_type?: string | null;
+      updated_at?: string | null;
+      error?: string | null;
+    }>;
   } | null;
   azureReposSignal?: {
     status?: string;
@@ -212,7 +221,7 @@ function ExternalSignalColumn({
 
       {hubspotSignal ? (
         <div className="space-y-3 border-t border-border/70 pt-3">
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Active deals</div>
@@ -301,6 +310,64 @@ function ExternalSignalColumn({
                 </div>
               )}
             </div>
+
+            {(() => {
+              const lists = Array.isArray(hubspotSignal?.lists) ? hubspotSignal.lists : [];
+              const found = lists.filter((l) => l?.matched_name).length;
+              const total = lists.length;
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Marketing lists</div>
+                    <Badge variant="outline" className="text-[10px] font-mono">{total > 0 ? `${found}/${total}` : "0"}</Badge>
+                  </div>
+                  {total > 0 ? (
+                    <div className="space-y-2">
+                      {lists.map((list, idx) => {
+                        const isFound = !!list?.matched_name;
+                        const hasError = !!list?.error;
+                        const tone = hasError
+                          ? "border-amber-500/40 bg-amber-500/5"
+                          : isFound
+                          ? "border-border bg-background/60"
+                          : "border-dashed border-border bg-muted/20";
+                        const proc = (list?.processing_type || "").toUpperCase();
+                        const procLabel = proc === "DYNAMIC" ? "Dynamic" : proc === "MANUAL" || proc === "STATIC" ? "Static" : proc ? proc.toLowerCase() : null;
+                        return (
+                          <div key={`${list?.requested_name}-${idx}`} className={`rounded border p-2.5 space-y-1 ${tone}`}>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="text-xs font-medium text-foreground truncate">{list?.requested_name}</div>
+                                {isFound && list?.matched_name && list.matched_name !== list.requested_name ? (
+                                  <div className="text-[10px] text-muted-foreground truncate">Matched: {list.matched_name}</div>
+                                ) : null}
+                              </div>
+                              {procLabel ? <Badge variant="outline" className="text-[10px] font-mono shrink-0">{procLabel}</Badge> : null}
+                            </div>
+                            {hasError ? (
+                              <div className="text-[10px] text-amber-600 dark:text-amber-400">Lookup failed: {list?.error}</div>
+                            ) : isFound ? (
+                              <div className="flex items-baseline gap-1.5">
+                                <span className="text-base font-semibold tabular-nums text-foreground">
+                                  {typeof list?.member_count === "number" ? list.member_count.toLocaleString() : "—"}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">members</span>
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-muted-foreground">Not found in connected portal</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded border border-dashed border-border bg-muted/20 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
+                      {hubspotEmptyTone}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       ) : null}

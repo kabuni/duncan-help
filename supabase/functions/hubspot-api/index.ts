@@ -40,8 +40,11 @@ type HubspotSummary = {
   at_risk_accounts_count?: number;
   at_risk_accounts_details?: Array<Record<string, unknown>>;
   key_contacts?: Array<Record<string, unknown>>;
+  lists?: Array<Record<string, unknown>>;
   credential_diagnostics?: Record<string, unknown>;
 };
+
+const TEAM_BRIEFING_LISTS = ["Scout Programme", "Marketing Newsletter"] as const;
 
 type HubspotDeal = {
   id: string;
@@ -439,6 +442,127 @@ async function hubspotApi(path: string, token: string, stage: RequestStage = "su
   return data;
 }
 
+async function hubspotApiPost(path: string, body: unknown, token: string, stage: RequestStage = "summary", source: CredentialSource = "stored_token") {
+  logHubspot("verification endpoint", { source, path, stage, method: "POST", auth_header_format: "Bearer <token>", ...tokenFingerprint(token) });
+  const res = await fetch(`${HUBSPOT_API}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  logHubspot("provider response", { source, stage, path, status: res.status, snippet: safeSnippet(data) });
+  if (!res.ok) {
+    throw new ProviderRequestError("HubSpot API failed", {
+      status: res.status,
+      body: data,
+      source,
+      stage,
+      path,
+    });
+  }
+  return data;
+}
+
+async function fetchHubspotLists(token: string, source: CredentialSource) {
+  const results: Array<{
+    requested_name: string;
+    list_id: string | null;
+    matched_name: string | null;
+    member_count: number | null;
+    processing_type: string | null;
+    updated_at: string | null;
+    error?: string | null;
+  }> = [];
+
+  for (const requestedName of TEAM_BRIEFING_LISTS) {
+    try {
+      const search = await hubspotApiPost(
+        "/crm/v3/lists/search",
+        { query: requestedName, count: 10 },
+        token,
+        "summary",
+        source,
+      );
+      const lists = Array.isArray(search?.lists) ? search.lists : [];
+      const lower = requestedName.toLowerCase();
+      const exact = lists.find((l: any) => (l?.name || "").toLowerCase() === lower);
+      const partial = exact || lists.find((l: any) => (l?.name || "").toLowerCase().includes(lower));
+      const match: any = partial || null;
+
+      if (!match) {
+        results.push({
+          requested_name: requestedName,
+          list_id: null,
+          matched_name: null,
+          member_count: null,
+          processing_type: null,
+          updated_at: null,
+        });
+        continue;
+      }
+
+      const listId = String(match.listId ?? match.id ?? "");
+      let memberCount: number | null = null;
+      let updatedAt: string | null = match.updatedAt ?? null;
+      let processingType: string | null = match.processingType ?? null;
+
+      if (typeof match.additionalProperties?.hs_list_size === "number") {
+        memberCount = match.additionalProperties.hs_list_size;
+      } else if (typeof match.size === "number") {
+        memberCount = match.size;
+      }
+
+      if (memberCount === null && listId) {
+        try {
+          const detail = await hubspotApi(`/crm/v3/lists/${listId}`, token, "summary", source);
+          const list = detail?.list ?? detail;
+          memberCount = typeof list?.additionalProperties?.hs_list_size === "number"
+            ? list.additionalProperties.hs_list_size
+            : typeof list?.size === "number"
+            ? list.size
+            : null;
+          updatedAt = list?.updatedAt ?? updatedAt;
+          processingType = list?.processingType ?? processingType;
+        } catch (detailErr) {
+          logHubspot("list detail fetch failed", {
+            list_id: listId,
+            requested_name: requestedName,
+            error: detailErr instanceof Error ? detailErr.message : String(detailErr),
+          });
+        }
+      }
+
+      results.push({
+        requested_name: requestedName,
+        list_id: listId || null,
+        matched_name: match.name ?? null,
+        member_count: memberCount,
+        processing_type: processingType,
+        updated_at: updatedAt,
+      });
+    } catch (err) {
+      logHubspot("list search failed", {
+        requested_name: requestedName,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      results.push({
+        requested_name: requestedName,
+        list_id: null,
+        matched_name: null,
+        member_count: null,
+        processing_type: null,
+        updated_at: null,
+        error: err instanceof Error ? err.message : "Lookup failed",
+      });
+    }
+  }
+
+  return results;
+}
+
 function normalizeBearerToken(token: string | null | undefined) {
   const trimmed = token?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : null;
@@ -578,7 +702,7 @@ function isClosedDeal(stage?: string | null) {
   return normalized.includes("closed won") || normalized.includes("closed lost") || normalized === "closedwon" || normalized === "closedlost";
 }
 
-function buildTeamBriefingSummary(companiesPayload: any, dealsPayload: any, contactsPayload: any, lastVerifiedAt: string, degradedReason: string | null = null, errorCode: string | null = null) {
+function buildTeamBriefingSummary(companiesPayload: any, dealsPayload: any, contactsPayload: any, lastVerifiedAt: string, degradedReason: string | null = null, errorCode: string | null = null, lists: Array<Record<string, unknown>> = []) {
   const companies = extractResults<HubspotCompany>(companiesPayload);
   const deals = extractResults<HubspotDeal>(dealsPayload);
   const contacts = extractResults<HubspotContact>(contactsPayload);
@@ -697,6 +821,7 @@ function buildTeamBriefingSummary(companiesPayload: any, dealsPayload: any, cont
     active_deals_count: activeDeals.length,
     active_deals: activeDeals.slice(0, 6),
     key_contacts: contactPriority,
+    lists,
     customer_escalations: 0,
     signals,
     summary,
@@ -760,14 +885,15 @@ Deno.serve(async (req) => {
       }
 
       await hubspotApi("/crm/v3/objects/companies?limit=1&properties=name", resolved.token, "verify", resolved.source);
-      const [companies, deals, contacts] = await Promise.all([
+      const [companies, deals, contacts, lists] = await Promise.all([
         hubspotApi("/crm/v3/objects/companies?limit=50&properties=name,hs_lastmodifieddate,hubspotscore,notes_last_updated", resolved.token, "summary", resolved.source),
         hubspotApi("/crm/v3/objects/deals?limit=50&associations=companies,contacts&properties=dealname,dealstage,hs_lastmodifieddate,amount,closedate,hubspot_owner_id", resolved.token, "summary", resolved.source),
         hubspotApi("/crm/v3/objects/contacts?limit=50&properties=firstname,lastname,email,company,lifecyclestage,hubspot_owner_id,lastmodifieddate,notes_last_updated", resolved.token, "summary", resolved.source),
+        fetchHubspotLists(resolved.token, resolved.source),
       ]);
 
       return json({
-        ...buildTeamBriefingSummary(companies, deals, contacts, resolved.lastSync ?? verifiedAt),
+        ...buildTeamBriefingSummary(companies, deals, contacts, resolved.lastSync ?? verifiedAt, null, null, lists),
         credential_source: resolved.source,
         verification_path: "/crm/v3/objects/companies",
         credential_diagnostics: resolved.diagnostics,

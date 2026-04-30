@@ -3346,16 +3346,16 @@ function mapCard(c: any) {
 }
 
 async function getNotionToken(supabaseAdmin: any): Promise<string | null> {
-  const { data: integration } = await supabaseAdmin
-    .from("company_integrations")
-    .select("encrypted_api_key, status")
-    .eq("integration_id", "notion")
-    .single();
-
-  if (!integration || integration.status !== "connected" || !integration.encrypted_api_key) {
+  // Plaintext is held in Supabase Vault; resolve via service-role RPC.
+  const { data: token, error } = await supabaseAdmin.rpc(
+    "get_company_integration_secret",
+    { p_integration_id: "notion" }
+  );
+  if (error) {
+    console.error("[norman-chat] getNotionToken vault lookup failed", error);
     return null;
   }
-  return atob(integration.encrypted_api_key);
+  return (token as string | null) || null;
 }
 
 function extractNotionText(richText: any[]): string {

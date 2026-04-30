@@ -44,7 +44,7 @@ type HubspotSummary = {
   credential_diagnostics?: Record<string, unknown>;
 };
 
-const TEAM_BRIEFING_LISTS = ["Scout Programme", "Marketing Newsletter"] as const;
+// Marketing forms (HubSpot Forms API) — fetched dynamically, no hardcoded names.
 
 type HubspotDeal = {
   id: string;
@@ -472,7 +472,7 @@ async function hubspotApiPost(path: string, body: unknown, token: string, stage:
   return data;
 }
 
-async function fetchHubspotLists(token: string, source: CredentialSource) {
+async function fetchHubspotForms(token: string, source: CredentialSource) {
   const results: Array<{
     requested_name: string;
     list_id: string | null;
@@ -483,87 +483,62 @@ async function fetchHubspotLists(token: string, source: CredentialSource) {
     error?: string | null;
   }> = [];
 
-  for (const requestedName of TEAM_BRIEFING_LISTS) {
-    try {
-      const search = await hubspotApiPost(
-        "/crm/v3/lists/search",
-        { query: requestedName, count: 10 },
-        token,
-        "summary",
-        source,
-      );
-      const lists = Array.isArray(search?.lists) ? search.lists : [];
-      const lower = requestedName.toLowerCase();
-      const exact = lists.find((l: any) => (l?.name || "").toLowerCase() === lower);
-      const partial = exact || lists.find((l: any) => (l?.name || "").toLowerCase().includes(lower));
-      const match: any = partial || null;
+  let formsPayload: any;
+  try {
+    formsPayload = await hubspotApi("/marketing/v3/forms?limit=100", token, "summary", source);
+  } catch (err) {
+    logHubspot("form fetch failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return results;
+  }
 
-      if (!match) {
-        results.push({
-          requested_name: requestedName,
-          list_id: null,
-          matched_name: null,
-          member_count: null,
-          processing_type: null,
-          updated_at: null,
-        });
-        continue;
+  const forms: any[] = Array.isArray(formsPayload?.results) ? formsPayload.results : [];
+  logHubspot("form_fetch_ok", { count: forms.length });
+
+  // Fetch submission counts in parallel with limited concurrency.
+  const concurrency = 10;
+  const withCounts: Array<{ form: any; submission_count: number | null; error: string | null }> = [];
+  for (let i = 0; i < forms.length; i += concurrency) {
+    const batch = forms.slice(i, i + concurrency);
+    const settled = await Promise.all(batch.map(async (form) => {
+      const formId = form?.id ?? form?.guid ?? null;
+      if (!formId) return { form, submission_count: null, error: null };
+      try {
+        const resp = await hubspotApi(
+          `/form-integrations/v1/submissions/forms/${formId}?limit=1`,
+          token,
+          "summary",
+          source,
+        );
+        const total = typeof resp?.total === "number"
+          ? resp.total
+          : typeof resp?.totalCount === "number"
+          ? resp.totalCount
+          : null;
+        return { form, submission_count: total, error: null };
+      } catch (err) {
+        return {
+          form,
+          submission_count: null,
+          error: err instanceof Error ? err.message : String(err),
+        };
       }
+    }));
+    withCounts.push(...settled);
+  }
 
-      const listId = String(match.listId ?? match.id ?? "");
-      let memberCount: number | null = null;
-      let updatedAt: string | null = match.updatedAt ?? null;
-      let processingType: string | null = match.processingType ?? null;
-
-      if (typeof match.additionalProperties?.hs_list_size === "number") {
-        memberCount = match.additionalProperties.hs_list_size;
-      } else if (typeof match.size === "number") {
-        memberCount = match.size;
-      }
-
-      if (memberCount === null && listId) {
-        try {
-          const detail = await hubspotApi(`/crm/v3/lists/${listId}`, token, "summary", source);
-          const list = detail?.list ?? detail;
-          memberCount = typeof list?.additionalProperties?.hs_list_size === "number"
-            ? list.additionalProperties.hs_list_size
-            : typeof list?.size === "number"
-            ? list.size
-            : null;
-          updatedAt = list?.updatedAt ?? updatedAt;
-          processingType = list?.processingType ?? processingType;
-        } catch (detailErr) {
-          logHubspot("list detail fetch failed", {
-            list_id: listId,
-            requested_name: requestedName,
-            error: detailErr instanceof Error ? detailErr.message : String(detailErr),
-          });
-        }
-      }
-
-      results.push({
-        requested_name: requestedName,
-        list_id: listId || null,
-        matched_name: match.name ?? null,
-        member_count: memberCount,
-        processing_type: processingType,
-        updated_at: updatedAt,
-      });
-    } catch (err) {
-      logHubspot("list search failed", {
-        requested_name: requestedName,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      results.push({
-        requested_name: requestedName,
-        list_id: null,
-        matched_name: null,
-        member_count: null,
-        processing_type: null,
-        updated_at: null,
-        error: err instanceof Error ? err.message : "Lookup failed",
-      });
-    }
+  for (const { form, submission_count, error } of withCounts) {
+    const name = form?.name ?? "Unnamed form";
+    results.push({
+      requested_name: name,
+      list_id: form?.id ?? form?.guid ?? null,
+      matched_name: name,
+      member_count: submission_count,
+      processing_type: form?.formType ?? null,
+      updated_at: form?.updatedAt ?? null,
+      ...(error ? { error } : {}),
+    });
   }
 
   return results;
@@ -895,7 +870,7 @@ Deno.serve(async (req) => {
         hubspotApi("/crm/v3/objects/companies?limit=50&properties=name,hs_lastmodifieddate,hubspotscore,notes_last_updated", resolved.token, "summary", resolved.source),
         hubspotApi("/crm/v3/objects/deals?limit=50&associations=companies,contacts&properties=dealname,dealstage,hs_lastmodifieddate,amount,closedate,hubspot_owner_id", resolved.token, "summary", resolved.source),
         hubspotApi("/crm/v3/objects/contacts?limit=50&properties=firstname,lastname,email,company,lifecyclestage,hubspot_owner_id,lastmodifieddate,notes_last_updated", resolved.token, "summary", resolved.source),
-        fetchHubspotLists(resolved.token, resolved.source),
+        fetchHubspotForms(resolved.token, resolved.source),
       ]);
 
       return json({

@@ -318,7 +318,7 @@ function ExternalSignalColumn({
               return (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Marketing lists</div>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Marketing forms</div>
                     <Badge variant="outline" className="text-[10px] font-mono">{total > 0 ? `${found}/${total}` : "0"}</Badge>
                   </div>
                   {total > 0 ? (
@@ -351,7 +351,7 @@ function ExternalSignalColumn({
                                 <span className="text-base font-semibold tabular-nums text-foreground">
                                   {typeof list?.member_count === "number" ? list.member_count.toLocaleString() : "—"}
                                 </span>
-                                <span className="text-[10px] text-muted-foreground">members</span>
+                                <span className="text-[10px] text-muted-foreground">submissions</span>
                               </div>
                             ) : (
                               <div className="text-[10px] text-muted-foreground">Not found in connected portal</div>

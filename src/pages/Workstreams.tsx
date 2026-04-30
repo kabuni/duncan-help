@@ -111,22 +111,8 @@ const Workstreams = () => {
             </Button>
           </motion.div>
 
-          {/* Dashboard summary */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-6"
-          >
-            <StatCard label="Total" value={stats.total} icon={<LayoutGrid className="h-3.5 w-3.5" />} />
-            <StatCard label="Red" value={stats.red} icon={<span className="h-2.5 w-2.5 rounded-full bg-red-500" />} valueColor="text-red-500" />
-            <StatCard label="Yellow" value={stats.amber} icon={<span className="h-2.5 w-2.5 rounded-full bg-amber-500" />} valueColor="text-amber-500" />
-            <StatCard label="Green" value={stats.green} icon={<span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />} valueColor="text-emerald-500" />
-            <StatCard label="Done" value={stats.done} icon={<CheckCircle2 className="h-3.5 w-3.5 text-primary" />} valueColor="text-primary" />
-            <StatCard label="Overdue" value={stats.overdue} icon={<AlertTriangle className="h-3.5 w-3.5 text-red-500" />} valueColor="text-red-500" />
-            <StatCard label="My Cards" value={stats.myCards} icon={<User className="h-3.5 w-3.5" />} />
-            <StatCard label="This Week" value={stats.thisWeek} icon={<CalendarDays className="h-3.5 w-3.5" />} />
-          </motion.div>
+          {/* Global progress overview */}
+          <ProgressOverview overview={overview} />
 
           {/* Filters + view toggle */}
           <motion.div

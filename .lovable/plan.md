@@ -1,61 +1,214 @@
-# Fix: Restrict `company_integrations` SELECT to authenticated users
+## Goal
 
-## Goal (scope = 1b only)
+Replace fake base64 "encryption" of `company_integrations.encrypted_api_key` with **Supabase Vault** (the supported successor to pgsodium TCE — pgsodium itself is not installed and is deprecated by Supabase, you confirmed Vault).
 
-Close the public-read hole on `public.company_integrations` so anonymous (`anon`) users can no longer read the table (which currently exposes Base64-encoded HubSpot/GitHub/Notion tokens). Admin write access stays untouched. No other hardening (encryption, column masking, token rotation) is included in this step — those are explicitly out of scope per your instruction.
+After this change:
+- The ciphertext never sits in `public.company_integrations`.
+- Edge functions resolve the plaintext token by looking up `vault.decrypted_secrets` via the service role.
+- The `public` schema only stores a Vault secret UUID — useless on its own even if RLS leaks.
 
-## Current state (verified against the live DB)
+## Scope
 
-Policies on `public.company_integrations`:
+**Migrating (2 files — active code paths):**
+1. `supabase/functions/manage-company-integration/index.ts` — writer
+2. `supabase/functions/norman-chat/index.ts` — reader (Notion token, line 3348 `getNotionToken`)
 
-```text
-Admins can manage company integrations | roles: {public} | ALL  | USING has_role(auth.uid(),'admin')
-Everyone can view company integrations  | roles: {public} | SELECT | USING true
-```
+**Not migrating (3 files — decommissioned per project memory: "Legal/NDA tools — do not re-add"):**
+- `supabase/functions/nda-generate/index.ts`
+- `supabase/functions/nda-send-signature/index.ts`
+- `supabase/functions/docusign-webhook/index.ts`
 
-The second policy is the problem: `public` role + `USING true` means PostgREST serves the entire table to the `anon` JWT.
+These edge functions are dead code for the decommissioned NDA/DocuSign tooling. Touching them now would resurrect imports and surface area for code we're supposed to be retiring. If you want them migrated anyway (or deleted), say so and I'll do it in the same pass.
 
-## Change
+## Database changes (one migration)
 
-A single migration that:
-
-1. Drops `"Everyone can view company integrations"`.
-2. Creates a replacement SELECT policy scoped to the `authenticated` role only.
-3. Leaves the existing admin ALL policy in place (admins are also authenticated, so they keep full access).
-
-The `anon` role will no longer match any SELECT policy → reads return zero rows / 401-style empty result via PostgREST.
-
-## Migration SQL
+Repurpose the existing `encrypted_api_key TEXT` column to hold the Vault secret UUID (as text). No new column, no schema breakage for unrelated code.
 
 ```sql
--- Restrict company_integrations SELECT to authenticated users only.
--- Removes public/anon read access to API tokens stored in this table.
+-- 1. Helper: upsert plaintext into vault and return the secret UUID.
+--    SECURITY DEFINER so edge functions calling with anon/auth role can't,
+--    only service_role can EXECUTE (granted explicitly).
+create or replace function public.set_company_integration_secret(
+  p_integration_id text,
+  p_plaintext text
+) returns uuid
+language plpgsql
+security definer
+set search_path = public, vault
+as $$
+declare
+  v_existing text;
+  v_secret_id uuid;
+begin
+  select encrypted_api_key into v_existing
+  from public.company_integrations
+  where integration_id = p_integration_id;
 
-DROP POLICY IF EXISTS "Everyone can view company integrations"
-  ON public.company_integrations;
+  -- If the existing value parses as a UUID, treat it as a vault secret id and update in place.
+  begin
+    v_secret_id := v_existing::uuid;
+    perform vault.update_secret(v_secret_id, p_plaintext);
+  exception when others then
+    v_secret_id := vault.create_secret(
+      p_plaintext,
+      'company_integration:' || p_integration_id,
+      'API key for company integration ' || p_integration_id
+    );
+  end;
 
-CREATE POLICY "Authenticated users can view company integrations"
-  ON public.company_integrations
-  FOR SELECT
-  TO authenticated
-  USING (true);
+  return v_secret_id;
+end;
+$$;
+
+revoke all on function public.set_company_integration_secret(text, text) from public, anon, authenticated;
+grant execute on function public.set_company_integration_secret(text, text) to service_role;
+
+-- 2. Helper: read plaintext back. service_role only.
+create or replace function public.get_company_integration_secret(
+  p_integration_id text
+) returns text
+language plpgsql
+security definer
+set search_path = public, vault
+as $$
+declare
+  v_secret_ref text;
+  v_plain text;
+begin
+  select encrypted_api_key into v_secret_ref
+  from public.company_integrations
+  where integration_id = p_integration_id and status = 'connected';
+
+  if v_secret_ref is null then return null; end if;
+
+  select decrypted_secret into v_plain
+  from vault.decrypted_secrets
+  where id = v_secret_ref::uuid;
+
+  return v_plain;
+exception when others then
+  return null;
+end;
+$$;
+
+revoke all on function public.get_company_integration_secret(text) from public, anon, authenticated;
+grant execute on function public.get_company_integration_secret(text) to service_role;
+
+-- 3. One-time backfill: migrate the 3 rows that currently hold base64 ciphertext
+--    (hubspot, notion, github) into vault and replace encrypted_api_key with the UUID.
+do $$
+declare
+  r record;
+  v_plain text;
+  v_id uuid;
+begin
+  for r in
+    select integration_id, encrypted_api_key
+    from public.company_integrations
+    where encrypted_api_key is not null
+      and length(encrypted_api_key) > 0
+  loop
+    -- Skip if it already looks like a UUID (idempotent re-run).
+    begin
+      perform r.encrypted_api_key::uuid;
+      continue;
+    exception when others then null;
+    end;
+
+    -- Decode base64. If decoding fails, skip and log.
+    begin
+      v_plain := convert_from(decode(r.encrypted_api_key, 'base64'), 'UTF8');
+    exception when others then
+      raise notice 'Skipping % — not valid base64', r.integration_id;
+      continue;
+    end;
+
+    v_id := vault.create_secret(
+      v_plain,
+      'company_integration:' || r.integration_id,
+      'Backfilled from base64 on ' || now()::text
+    );
+
+    update public.company_integrations
+    set encrypted_api_key = v_id::text
+    where integration_id = r.integration_id;
+  end loop;
+end $$;
 ```
 
-Notes:
-- `TO authenticated` is the key change vs. the old policy (which targeted `public`, implicitly including `anon`).
-- `USING (true)` preserves current app behaviour for logged-in users — `useCompanyIntegrations` (`src/hooks/useCompanyIntegrations.ts`) keeps working for any signed-in user, just not for anonymous visitors.
-- The existing `"Admins can manage company integrations"` ALL policy is untouched, so admin writes via `manage-company-integration` continue to work (that edge function uses the service role anyway, which bypasses RLS).
+After the backfill, the column physically contains a UUID for hubspot/notion/github; the actual tokens live in `vault.secrets` encrypted with the project's Vault root key.
 
-## Impact / regressions to expect
+## Edge function changes
 
-- `anon` (logged-out) clients calling `from('company_integrations').select(...)` will now get an empty result. No code path in the app does this from a logged-out state — `Integrations.tsx` is behind `ProtectedRoute`.
-- All authenticated users can still *see metadata* (id, integration_id, status, last_sync, documents_ingested, encrypted_api_key, etc.). The `encrypted_api_key` column is still readable by any authenticated user and is still only Base64. That is intentional for this step — narrowing to admin-only and replacing Base64 with real encryption are tracked for the follow-up phase you asked me to defer.
+### `manage-company-integration/index.ts` (line ~278–296)
 
-## Out of scope (explicitly not in this migration)
+Replace:
 
-- Restricting SELECT to admins only.
-- Hiding/removing the `encrypted_api_key` column from SELECT.
-- Replacing Base64 with real encryption (pgsodium / Vault).
-- Rotating the currently exposed HubSpot, GitHub, Notion tokens.
+```ts
+const encryptedKey = btoa(normalizedApiKey);
+...
+.upsert({ integration_id, encrypted_api_key: encryptedKey, ... })
+```
 
-Awaiting approval to switch to build mode and create the migration file.
+With:
+
+```ts
+const { data: secretIdRow, error: secretErr } = await supabaseAdmin.rpc(
+  "set_company_integration_secret",
+  { p_integration_id: integration_id, p_plaintext: normalizedApiKey }
+);
+if (secretErr) throw secretErr;
+const vaultSecretId = secretIdRow as string;
+
+.upsert({ integration_id, encrypted_api_key: vaultSecretId, ... })
+```
+
+`supabaseAdmin` is already the service-role client, so the RPC is allowed.
+
+### `norman-chat/index.ts` `getNotionToken` (line 3348–3359)
+
+Replace:
+
+```ts
+const { data: integration } = await supabaseAdmin
+  .from("company_integrations")
+  .select("encrypted_api_key, status")
+  .eq("integration_id", "notion")
+  .single();
+if (!integration || integration.status !== "connected" || !integration.encrypted_api_key) return null;
+return atob(integration.encrypted_api_key);
+```
+
+With:
+
+```ts
+const { data: token, error } = await supabaseAdmin.rpc(
+  "get_company_integration_secret",
+  { p_integration_id: "notion" }
+);
+if (error || !token) return null;
+return token as string;
+```
+
+The other `atob`/`btoa` calls in `norman-chat/index.ts` (lines 3625, etc.) and in `nda-send-signature/index.ts` (lines 71, 76, 122, 135, 144, 319) are **JWT/RSA/binary encoding for DocuSign and Slack signing** — unrelated to the encryption story. They are not touched.
+
+## Security outcome
+
+| Before | After |
+|---|---|
+| `encrypted_api_key` = base64 of token, anyone with table read → `atob()` → token | `encrypted_api_key` = Vault secret UUID; plaintext only retrievable via `service_role` RPC |
+| RLS leak = full token leak | RLS leak = useless UUID |
+| Decryption = `atob()` in any browser | Decryption = Vault root key inside Postgres |
+
+## Rollout
+
+1. Apply the migration (creates RPCs + backfills hubspot/notion/github into Vault in the same transaction).
+2. Deploy the two updated edge functions.
+3. Verify: call `manage-company-integration` to re-save Notion (round-trips through Vault), then send a Notion request via Duncan chat to confirm `getNotionToken` still returns the live token.
+
+## Out of scope (not changed)
+
+- The 3 NDA/DocuSign edge functions (decommissioned).
+- `nda-send-signature` JWT/RSA `btoa`/`atob` (legitimate base64, not encryption).
+- RLS policies on `company_integrations` (already fixed in previous step).
+- Token rotation for hubspot/notion/github (recommended separately — they were exposed publicly until yesterday).

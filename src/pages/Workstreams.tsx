@@ -76,10 +76,13 @@ const Workstreams = () => {
       taskTotals.green += tb.green;
       taskTotals.done += tb.done;
       totalTasks += tb.red + tb.yellow + tb.green + tb.done;
-      if (tb.red > 0) cardCounts.red++;
-      if (tb.yellow > 0) cardCounts.yellow++;
-      if (tb.green > 0) cardCounts.green++;
-      if (tb.done > 0) cardCounts.done++;
+
+      // Card-level status (normalize "amber" -> "yellow")
+      const rawStatus = (card.status as string) || "";
+      const cardStatus = rawStatus === "amber" ? "yellow" : rawStatus;
+      if (cardStatus === "red" || cardStatus === "yellow" || cardStatus === "green" || cardStatus === "done") {
+        cardCounts[cardStatus as "red" | "yellow" | "green" | "done"]++;
+      }
     }
 
     const doneTasks = taskTotals.done;

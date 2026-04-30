@@ -62,23 +62,32 @@ const Workstreams = () => {
   // For dashboard: fetch ALL cards (unfiltered) separately for stats
   const { data: allCards } = useWorkstreamCards();
 
-  // Dashboard stats
-  const stats = useMemo(() => {
+  // Global progress overview (ignores filters; uses all cards)
+  const overview = useMemo(() => {
     const c = allCards || [];
-    const myCards = c.filter(card => card.owner_id === user?.id);
-    const overdue = c.filter(card => card.due_date && isPast(new Date(card.due_date)) && card.status !== "done");
-    const thisWeekTasks = c.filter(card => card.due_date && isThisWeek(new Date(card.due_date)));
-    return {
-      total: c.length,
-      red: c.filter(x => x.status === "red").length,
-      amber: c.filter(x => x.status === "amber").length,
-      green: c.filter(x => x.status === "green").length,
-      done: c.filter(x => x.status === "done").length,
-      overdue: overdue.length,
-      myCards: myCards.length,
-      thisWeek: thisWeekTasks.length,
-    };
-  }, [allCards, user?.id]);
+    const totalCards = c.length;
+    const taskTotals = { red: 0, yellow: 0, green: 0, done: 0 };
+    const cardCounts = { red: 0, yellow: 0, green: 0, done: 0 };
+    let totalTasks = 0;
+
+    for (const card of c) {
+      const tb = card.task_breakdown || { red: 0, yellow: 0, green: 0, done: 0 };
+      taskTotals.red += tb.red;
+      taskTotals.yellow += tb.yellow;
+      taskTotals.green += tb.green;
+      taskTotals.done += tb.done;
+      totalTasks += tb.red + tb.yellow + tb.green + tb.done;
+      if (tb.red > 0) cardCounts.red++;
+      if (tb.yellow > 0) cardCounts.yellow++;
+      if (tb.green > 0) cardCounts.green++;
+      if (tb.done > 0) cardCounts.done++;
+    }
+
+    const doneTasks = taskTotals.done;
+    const completionPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+    return { totalCards, totalTasks, doneTasks, completionPct, taskTotals, cardCounts };
+  }, [allCards]);
 
   const displayCards = cards || [];
 

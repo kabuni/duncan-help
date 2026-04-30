@@ -255,15 +255,15 @@ function ProgressOverview({ overview }: { overview: OverviewData }) {
       <div className="rounded-xl border border-border bg-card/60 p-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Task Distribution</h3>
-          <span className="text-[10px] font-mono text-muted-foreground">{totalTasks} tasks · {totalCards} cards</span>
+          <span className="text-[10px] font-mono text-muted-foreground">{activeTasks} active · {doneTasks} done · {totalCards} cards</span>
         </div>
 
-        {totalTasks === 0 ? (
+        {activeTasks === 0 ? (
           <div className="h-3 w-full rounded-full bg-secondary/60" />
         ) : (
           <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary/60">
             {segments.map(s => {
-              const pct = (s.count / totalTasks) * 100;
+              const pct = (s.count / activeTasks) * 100;
               if (pct <= 0) return null;
               return (
                 <div
@@ -280,7 +280,7 @@ function ProgressOverview({ overview }: { overview: OverviewData }) {
         )}
 
         {/* Legend */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
           {segments.map(s => (
             <div key={s.key} className="flex items-center gap-2 text-[11px]">
               <span className={`h-2 w-2 rounded-full ${s.dot}`} />

@@ -76,13 +76,10 @@ const Workstreams = () => {
       taskTotals.green += tb.green;
       taskTotals.done += tb.done;
       totalTasks += tb.red + tb.yellow + tb.green + tb.done;
-
-      // Each card belongs to ONE status using worst-status priority:
-      // red > yellow > green > done. Cards with no tasks are ignored.
       if (tb.red > 0) cardCounts.red++;
-      else if (tb.yellow > 0) cardCounts.yellow++;
-      else if (tb.green > 0) cardCounts.green++;
-      else if (tb.done > 0) cardCounts.done++;
+      if (tb.yellow > 0) cardCounts.yellow++;
+      if (tb.green > 0) cardCounts.green++;
+      if (tb.done > 0) cardCounts.done++;
     }
 
     const doneTasks = taskTotals.done;

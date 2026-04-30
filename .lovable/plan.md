@@ -1,48 +1,121 @@
-## Goal
+## What's actually broken
 
-Replace the hardcoded HubSpot **Lists** lookup ("Scout Programme", "Marketing Newsletter") in `hubspot-api/index.ts` with a fetch of **all HubSpot Forms** via `GET /marketing/v3/forms`, return name + submission count for each, and surface them in the existing "Marketing lists" card on the CEO Briefing.
+Your diagnosis (one side uses `btoa`, the other uses Vault) is **not** what the code shows. Both sides are already on Vault:
 
-## Why
+- `manage-company-integration/index.ts` line 281 calls `set_company_integration_secret` RPC.
+- `hubspot-api/index.ts` line 246 calls `get_company_integration_secret` RPC.
+- There is no `btoa()` anywhere in `manage-company-integration`.
 
-The two names being searched are HubSpot **Forms**, not Lists. The `/crm/v3/lists/search` endpoint will never match them, which is why the section shows nothing. Switching to the Forms API and showing all forms will (a) actually display real data and (b) let us see what's available before deciding what to highlight.
+The real problem is in the `set_company_integration_secret` SQL function, and I confirmed it from the database:
 
-## Changes
+- `public.company_integrations` row for `hubspot` has `status = 'connected'`, `last_sync` updated today, but `encrypted_api_key IS NULL`.
+- A valid vault secret exists (`company_integration:hubspot:...`) from earlier today, but the row no longer points to it.
 
-### 1. `supabase/functions/hubspot-api/index.ts`
+### Why the RPC returns NULL
 
-- **Remove** the `TEAM_BRIEFING_LISTS` constant (line 47).
-- **Replace** `fetchHubspotLists()` (lines 475–~570) with `fetchHubspotForms(token, source)`:
-  - Call `GET /marketing/v3/forms?limit=100` via the existing `hubspotApi()` helper.
-  - For each form, also fetch its submission count from `GET /form-integrations/v1/submissions/forms/{formId}?limit=1` (HubSpot returns `total` in the response). Run these in parallel with `Promise.all`, capped to a reasonable concurrency (e.g. 10 at a time) to stay under rate limits. If submission lookup fails for a form, return `submission_count: null` rather than failing the whole batch.
-  - Return an array shaped to stay backwards-compatible with the existing `CommsPulseCard` UI (which reads `requested_name`, `matched_name`, `member_count`):
-    ```ts
-    {
-      requested_name: form.name,        // shown as the label
-      matched_name: form.name,          // non-null = "found" styling
-      list_id: form.id ?? form.guid,
-      member_count: submissionCount,    // reused as "submissions"
-      processing_type: form.formType ?? null,
-      updated_at: form.updatedAt ?? null,
-    }
-    ```
-  - Keep `logHubspot(...)` calls for observability (rename event labels from `list_*` → `form_*`).
-- **Update** the call site at line 898 (`fetchHubspotLists` → `fetchHubspotForms`) and the variable name in the `Promise.all`.
-- Leave `buildTeamBriefingSummary` and the `lists` field on the response untouched — the UI will continue to read `signal.lists` and we'll just be feeding forms into it. (No frontend rename needed in this pass to keep the diff small; we can rename `lists` → `forms` end-to-end as a follow-up.)
+Current `set_company_integration_secret`:
 
-### 2. `src/components/ceo/CommsPulseCard.tsx` (label only)
+```sql
+select encrypted_api_key into v_existing
+  from public.company_integrations
+  where integration_id = p_integration_id;
 
-- Change the section heading "Marketing lists" → **"Marketing forms"** (line ~321).
-- Change the per-row count label so users understand the number is submissions, e.g. show `member_count` as "{n} submissions" instead of relying on the implicit "members" reading. (Inspect lines 315–360 and adjust the small caption above the number; the value rendering itself stays the same.)
+begin
+  v_secret_id := v_existing::uuid;                          -- v_existing is NULL  -> v_secret_id := NULL
+  perform vault.update_secret(v_secret_id, p_plaintext);    -- update with NULL id: no-op, no exception
+exception when others then
+  v_secret_id := vault.create_secret(...);                  -- never reached
+end;
 
-No type changes, no other consumer updates.
+return v_secret_id;                                         -- returns NULL
+```
 
-## Out of scope
+Once the column is ever NULL (which it is right now), every reconnect:
+1. RPC returns NULL.
+2. `manage-company-integration` upserts `encrypted_api_key = NULL`.
+3. `hubspot-api` sees `encrypted_api_key_state = "null"` -> returns `no_token_stored` -> UI shows "key is null / decode failed".
 
-- Renaming the response field from `lists` to `forms` across the edge function + UI types — keeping the existing field name avoids a wider refactor. Flagged as a follow-up.
-- The Forms API requires the `forms` scope on the HubSpot Private App token. If it's missing the call will return 403; the function will log it and return an empty array (existing error path). I'll mention this in the verification step so you can grant the scope if needed.
+This explains every symptom in your message without any storage mismatch.
+
+## Fix
+
+### 1. Patch the `set_company_integration_secret` RPC (migration)
+
+Treat a NULL or non-UUID `v_existing` as "no existing secret, create a new one." Also coerce `vault.update_secret`'s return so we never propagate NULL when the path "succeeded." New body:
+
+```sql
+declare
+  v_existing text;
+  v_secret_id uuid;
+begin
+  select encrypted_api_key into v_existing
+    from public.company_integrations
+    where integration_id = p_integration_id;
+
+  if v_existing is not null and v_existing <> '' then
+    begin
+      v_secret_id := v_existing::uuid;
+      perform vault.update_secret(v_secret_id, p_plaintext);
+    exception when others then
+      v_secret_id := null;  -- fall through to create
+    end;
+  end if;
+
+  if v_secret_id is null then
+    v_secret_id := vault.create_secret(
+      p_plaintext,
+      'company_integration:' || p_integration_id || ':' || gen_random_uuid()::text,
+      'API key for company integration ' || p_integration_id
+    );
+  end if;
+
+  return v_secret_id;
+end;
+```
+
+Net effect: the function can never return NULL on success. It will always either reuse the existing vault secret or create a new one and return its UUID.
+
+### 2. Defensive guard in `manage-company-integration/index.ts`
+
+Right after the RPC call (around line 284), if `vaultSecretId` is null/empty, throw a clear error instead of upserting NULL into the column:
+
+```ts
+if (!vaultSecretId || typeof vaultSecretId !== "string") {
+  console.error("[manage-company-integration] vault returned empty secret id", { vaultSecretId });
+  throw new Error("Failed to persist integration secret to vault");
+}
+```
+
+This prevents this class of bug from ever silently re-occurring.
+
+### 3. Re-link the existing orphaned vault secret (one-time data fix)
+
+The current row is broken right now. The migration above only fixes future reconnects — the row's `encrypted_api_key` is still NULL, so the next call to `hubspot-api` will keep failing until you reconnect once. Two options:
+
+- **Preferred (zero user action):** in the same migration, point the existing row at the orphaned vault secret already in `vault.secrets`:
+  ```sql
+  update public.company_integrations
+  set encrypted_api_key = (
+    select id::text from vault.secrets
+    where name like 'company_integration:hubspot:%'
+    order by updated_at desc limit 1
+  )
+  where integration_id = 'hubspot' and encrypted_api_key is null;
+  ```
+  This restores the connection without you needing to paste the token again, assuming the vault secret still holds the correct (and `forms`-scoped) token.
+
+- **Alternative:** skip the data fix; you reconnect HubSpot once after the migration deploys. The fixed RPC will create a fresh vault secret and write its UUID into the row correctly.
+
+I'll include the data fix in the migration since it costs nothing if the vault secret happens to be stale (you'd just reconnect anyway).
 
 ## Verification after applying
 
-1. Open CEO Briefing → "Marketing forms" section should list every form in HubSpot with its submission count.
-2. Check `supabase--edge_function_logs` for `hubspot-api` → look for `form_fetch_ok` with a non-zero count, no 403s.
-3. If 403: add the `forms` scope to the HubSpot Private App and retry.
+1. `select integration_id, status, encrypted_api_key from public.company_integrations where integration_id='hubspot';` — `encrypted_api_key` must now be a UUID, not NULL.
+2. Open CEO Briefing -> trigger any HubSpot card. `hubspot-api` logs should show `state: "token_found"`, `vault_lookup_ok: true`.
+3. Disconnect + reconnect HubSpot from the Integrations page. Re-run query in step 1 — `encrypted_api_key` should still be a non-null UUID.
+4. If still 403 on Forms, that's the separate `forms` scope issue from earlier — unrelated to this fix.
+
+## Out of scope
+
+- Changing the storage scheme (`btoa` vs Vault). Both sides are already on Vault and that's the right design.
+- Touching `hubspot-api` retrieval logic — the existing code already handles the happy path correctly once the column is populated.

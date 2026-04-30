@@ -1,85 +1,61 @@
-## Goal
+# Fix: Restrict `company_integrations` SELECT to authenticated users
 
-Add a fourth column to the HubSpot section on Team Briefing showing membership counts for two named lists: **Scout Programme** and **Marketing Newsletter**. Wire up `hubspot-api` to fetch them and `CommsPulseCard.tsx` to render them.
+## Goal (scope = 1b only)
 
-## Important caveat (from prior diagnosis)
+Close the public-read hole on `public.company_integrations` so anonymous (`anon`) users can no longer read the table (which currently exposes Base64-encoded HubSpot/GitHub/Notion tokens). Admin write access stays untouched. No other hardening (encryption, column masking, token rotation) is included in this step — those are explicitly out of scope per your instruction.
 
-The currently connected HubSpot portal (`147532149`) does **not contain** lists named "Scout Programme" or "Marketing Newsletter" — only 3 unrelated workflow/spam lists. After this change, the column will render with the correct UI but show **0 / not found** until the integration is reconnected to the production portal that holds those lists.
+## Current state (verified against the live DB)
 
-The implementation handles this gracefully: if a list isn't found by name, the UI shows "Not found in portal" with a helpful tone, instead of an error.
-
-## Changes
-
-### 1. `supabase/functions/hubspot-api/index.ts`
-
-Inside the `team_briefing_summary` action (around line 762-774), after the existing companies/deals/contacts fetch, add a parallel fetch for HubSpot Lists:
-
-- Use `POST /crm/v3/lists/search` with body `{ query: "Scout Programme", count: 5 }` and same for `"Marketing Newsletter"` (already verified scope `crm.lists.read` works on this token).
-- For each match, resolve to the best name match (case-insensitive exact > contains).
-- Fetch member count via `GET /crm/v3/lists/{listId}` (response includes `additionalProperties.hs_list_size` or membership metadata).
-- Add a new helper `fetchHubspotLists(token, source)` that returns:
-  ```ts
-  Array<{
-    requested_name: string;       // "Scout Programme" | "Marketing Newsletter"
-    list_id: string | null;
-    matched_name: string | null;  // actual name in HubSpot, null if not found
-    member_count: number | null;  // null if not found
-    processing_type: string | null; // "MANUAL" | "DYNAMIC"
-    updated_at: string | null;
-  }>
-  ```
-- Wrap the lists fetch in its own try/catch so a list failure does NOT degrade the whole HubSpot section. On failure, return entries with `member_count: null` and a `error` field.
-- Extend `HubspotSummary` type and `buildTeamBriefingSummary()` to accept and pass through a `lists` field.
-
-### 2. `src/components/ceo/CommsPulseCard.tsx`
-
-- Extend the `hubspotSignal` prop type (around line 50-93) with:
-  ```ts
-  lists?: Array<{
-    requested_name: string;
-    list_id: string | null;
-    matched_name: string | null;
-    member_count: number | null;
-    processing_type: string | null;
-    updated_at: string | null;
-    error?: string | null;
-  }>;
-  ```
-- Change the HubSpot grid (line 215) from `xl:grid-cols-3` to `xl:grid-cols-4` and add a fourth column "Marketing lists":
-  - Header badge shows count of lists found (e.g. `2/2` or `0/2`).
-  - Each list rendered as a row with: name, member count (large tabular-num), and a small badge for `processing_type` ("Static" / "Dynamic").
-  - If `matched_name` is null: show "Not found in portal" in muted tone.
-  - If `error` is present: show "Lookup failed" in amber tone with the error.
-- Reuse the existing `hubspotEmptyTone` pattern for empty states.
-
-### 3. No DB / config changes required
-
-- `crm.lists.read` scope already verified on the live token.
-- No new secrets, no new tables, no migrations.
-
-## Technical details
+Policies on `public.company_integrations`:
 
 ```text
-Team Briefing HubSpot row (after change):
-
-┌──────────────┬──────────────┬──────────────┬────────────────────┐
-│ Active deals │ At-risk accts│ Key contacts │ Marketing lists    │
-│              │              │              │ ──────────────────│
-│  ...         │  ...         │  ...         │ Scout Programme   │
-│              │              │              │   142 · Dynamic   │
-│              │              │              │ Marketing News.   │
-│              │              │              │   Not found       │
-└──────────────┴──────────────┴──────────────┴────────────────────┘
+Admins can manage company integrations | roles: {public} | ALL  | USING has_role(auth.uid(),'admin')
+Everyone can view company integrations  | roles: {public} | SELECT | USING true
 ```
 
-API endpoints used:
-- `POST https://api.hubapi.com/crm/v3/lists/search` — find list by name
-- `GET https://api.hubapi.com/crm/v3/lists/{listId}` — fetch list metadata + size
+The second policy is the problem: `public` role + `USING true` means PostgREST serves the entire table to the `anon` JWT.
 
-Both go through the existing `hubspotApi()` helper (Bearer token, same error classification).
+## Change
 
-## Out of scope
+A single migration that:
 
-- Reconnecting HubSpot to the correct portal (user action, already flagged).
-- Listing actual list members or contacts in those lists (only counts).
-- Configurable list names in UI (hardcoded as requested).
+1. Drops `"Everyone can view company integrations"`.
+2. Creates a replacement SELECT policy scoped to the `authenticated` role only.
+3. Leaves the existing admin ALL policy in place (admins are also authenticated, so they keep full access).
+
+The `anon` role will no longer match any SELECT policy → reads return zero rows / 401-style empty result via PostgREST.
+
+## Migration SQL
+
+```sql
+-- Restrict company_integrations SELECT to authenticated users only.
+-- Removes public/anon read access to API tokens stored in this table.
+
+DROP POLICY IF EXISTS "Everyone can view company integrations"
+  ON public.company_integrations;
+
+CREATE POLICY "Authenticated users can view company integrations"
+  ON public.company_integrations
+  FOR SELECT
+  TO authenticated
+  USING (true);
+```
+
+Notes:
+- `TO authenticated` is the key change vs. the old policy (which targeted `public`, implicitly including `anon`).
+- `USING (true)` preserves current app behaviour for logged-in users — `useCompanyIntegrations` (`src/hooks/useCompanyIntegrations.ts`) keeps working for any signed-in user, just not for anonymous visitors.
+- The existing `"Admins can manage company integrations"` ALL policy is untouched, so admin writes via `manage-company-integration` continue to work (that edge function uses the service role anyway, which bypasses RLS).
+
+## Impact / regressions to expect
+
+- `anon` (logged-out) clients calling `from('company_integrations').select(...)` will now get an empty result. No code path in the app does this from a logged-out state — `Integrations.tsx` is behind `ProtectedRoute`.
+- All authenticated users can still *see metadata* (id, integration_id, status, last_sync, documents_ingested, encrypted_api_key, etc.). The `encrypted_api_key` column is still readable by any authenticated user and is still only Base64. That is intentional for this step — narrowing to admin-only and replacing Base64 with real encryption are tracked for the follow-up phase you asked me to defer.
+
+## Out of scope (explicitly not in this migration)
+
+- Restricting SELECT to admins only.
+- Hiding/removing the `encrypted_api_key` column from SELECT.
+- Replacing Base64 with real encryption (pgsodium / Vault).
+- Rotating the currently exposed HubSpot, GitHub, Notion tokens.
+
+Awaiting approval to switch to build mode and create the migration file.

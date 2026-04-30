@@ -487,8 +487,13 @@ async function fetchHubspotForms(token: string, source: CredentialSource) {
   try {
     formsPayload = await hubspotApi("/marketing/v3/forms?limit=100", token, "summary", source);
   } catch (err) {
+    const detail = err instanceof ProviderRequestError ? {
+      status: err.status,
+      body: typeof err.body === "string" ? err.body.slice(0, 1500) : JSON.stringify(err.body ?? {}).slice(0, 1500),
+    } : {};
     logHubspot("form fetch failed", {
       error: err instanceof Error ? err.message : String(err),
+      ...detail,
     });
     return results;
   }

@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useWorkstreamCards, useUserProfiles, type WorkstreamCard, type CardStatus } from "@/hooks/useWorkstreams";
-import { useAuth } from "@/hooks/useAuth";
+
 import { isPast, isThisWeek } from "date-fns";
 import KanbanBoard from "@/components/workstreams/KanbanBoard";
 import CardDetailModal from "@/components/workstreams/CardDetailModal";
@@ -23,7 +23,6 @@ import { format } from "date-fns";
 type ViewMode = "board" | "list";
 
 const Workstreams = () => {
-  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<ViewMode>("board");
   const [search, setSearch] = useState("");
@@ -62,23 +61,32 @@ const Workstreams = () => {
   // For dashboard: fetch ALL cards (unfiltered) separately for stats
   const { data: allCards } = useWorkstreamCards();
 
-  // Dashboard stats
-  const stats = useMemo(() => {
+  // Global progress overview (ignores filters; uses all cards)
+  const overview = useMemo(() => {
     const c = allCards || [];
-    const myCards = c.filter(card => card.owner_id === user?.id);
-    const overdue = c.filter(card => card.due_date && isPast(new Date(card.due_date)) && card.status !== "done");
-    const thisWeekTasks = c.filter(card => card.due_date && isThisWeek(new Date(card.due_date)));
-    return {
-      total: c.length,
-      red: c.filter(x => x.status === "red").length,
-      amber: c.filter(x => x.status === "amber").length,
-      green: c.filter(x => x.status === "green").length,
-      done: c.filter(x => x.status === "done").length,
-      overdue: overdue.length,
-      myCards: myCards.length,
-      thisWeek: thisWeekTasks.length,
-    };
-  }, [allCards, user?.id]);
+    const totalCards = c.length;
+    const taskTotals = { red: 0, yellow: 0, green: 0, done: 0 };
+    const cardCounts = { red: 0, yellow: 0, green: 0, done: 0 };
+    let totalTasks = 0;
+
+    for (const card of c) {
+      const tb = card.task_breakdown || { red: 0, yellow: 0, green: 0, done: 0 };
+      taskTotals.red += tb.red;
+      taskTotals.yellow += tb.yellow;
+      taskTotals.green += tb.green;
+      taskTotals.done += tb.done;
+      totalTasks += tb.red + tb.yellow + tb.green + tb.done;
+      if (tb.red > 0) cardCounts.red++;
+      if (tb.yellow > 0) cardCounts.yellow++;
+      if (tb.green > 0) cardCounts.green++;
+      if (tb.done > 0) cardCounts.done++;
+    }
+
+    const doneTasks = taskTotals.done;
+    const completionPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+    return { totalCards, totalTasks, doneTasks, completionPct, taskTotals, cardCounts };
+  }, [allCards]);
 
   const displayCards = cards || [];
 
@@ -102,22 +110,8 @@ const Workstreams = () => {
             </Button>
           </motion.div>
 
-          {/* Dashboard summary */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-6"
-          >
-            <StatCard label="Total" value={stats.total} icon={<LayoutGrid className="h-3.5 w-3.5" />} />
-            <StatCard label="Red" value={stats.red} icon={<span className="h-2.5 w-2.5 rounded-full bg-red-500" />} valueColor="text-red-500" />
-            <StatCard label="Yellow" value={stats.amber} icon={<span className="h-2.5 w-2.5 rounded-full bg-amber-500" />} valueColor="text-amber-500" />
-            <StatCard label="Green" value={stats.green} icon={<span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />} valueColor="text-emerald-500" />
-            <StatCard label="Done" value={stats.done} icon={<CheckCircle2 className="h-3.5 w-3.5 text-primary" />} valueColor="text-primary" />
-            <StatCard label="Overdue" value={stats.overdue} icon={<AlertTriangle className="h-3.5 w-3.5 text-red-500" />} valueColor="text-red-500" />
-            <StatCard label="My Cards" value={stats.myCards} icon={<User className="h-3.5 w-3.5" />} />
-            <StatCard label="This Week" value={stats.thisWeek} icon={<CalendarDays className="h-3.5 w-3.5" />} />
-          </motion.div>
+          {/* Global progress overview */}
+          <ProgressOverview overview={overview} />
 
           {/* Filters + view toggle */}
           <motion.div
@@ -222,14 +216,88 @@ const Workstreams = () => {
   );
 };
 
-function StatCard({ label, value, icon, valueColor }: {
-  label: string; value: number; icon: React.ReactNode; valueColor?: string;
-}) {
+interface OverviewData {
+  totalCards: number;
+  totalTasks: number;
+  doneTasks: number;
+  completionPct: number;
+  taskTotals: { red: number; yellow: number; green: number; done: number };
+  cardCounts: { red: number; yellow: number; green: number; done: number };
+}
+
+function ProgressOverview({ overview }: { overview: OverviewData }) {
+  const { totalCards, totalTasks, doneTasks, completionPct, taskTotals, cardCounts } = overview;
+
+  const segments = [
+    { key: "red", label: "Red", count: taskTotals.red, bar: "bg-red-500", text: "text-red-500", dot: "bg-red-500" },
+    { key: "yellow", label: "Yellow", count: taskTotals.yellow, bar: "bg-amber-500", text: "text-amber-500", dot: "bg-amber-500" },
+    { key: "green", label: "Green", count: taskTotals.green, bar: "bg-emerald-500", text: "text-emerald-500", dot: "bg-emerald-500" },
+    { key: "done", label: "Done", count: taskTotals.done, bar: "bg-primary", text: "text-primary", dot: "bg-primary" },
+  ] as const;
+
   return (
-    <div className="rounded-xl border border-border bg-card/60 px-3 py-3 text-center">
-      <div className="flex items-center justify-center gap-1.5 mb-1">{icon}</div>
-      <span className={`text-lg font-bold ${valueColor || "text-foreground"}`}>{value}</span>
-      <p className="text-[10px] text-muted-foreground mt-0.5">{label}</p>
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.05 }}
+      className="mb-6 space-y-4"
+    >
+      {/* KPI Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <KpiBox label="Total Cards" value={String(totalCards)} />
+        <KpiBox label="Total Tasks" value={String(totalTasks)} />
+        <KpiBox label="Tasks Done" value={`${doneTasks} / ${totalTasks}`} />
+        <KpiBox label="Completion" value={`${completionPct}%`} valueColor="text-primary" />
+      </div>
+
+      {/* Stacked Progress Bar */}
+      <div className="rounded-xl border border-border bg-card/60 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Task Distribution</h3>
+          <span className="text-[10px] font-mono text-muted-foreground">{totalTasks} tasks · {totalCards} cards</span>
+        </div>
+
+        {totalTasks === 0 ? (
+          <div className="h-3 w-full rounded-full bg-secondary/60" />
+        ) : (
+          <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary/60">
+            {segments.map(s => {
+              const pct = (s.count / totalTasks) * 100;
+              if (pct <= 0) return null;
+              return (
+                <div
+                  key={s.key}
+                  className={`${s.bar} h-full flex items-center justify-center text-[9px] font-medium text-white/95 transition-all`}
+                  style={{ width: `${pct}%` }}
+                  title={`${s.label}: ${s.count} tasks (${Math.round(pct)}%)`}
+                >
+                  {pct >= 10 && <span className="px-1 truncate">{s.label} ({s.count})</span>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Legend */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+          {segments.map(s => (
+            <div key={s.key} className="flex items-center gap-2 text-[11px]">
+              <span className={`h-2 w-2 rounded-full ${s.dot}`} />
+              <span className={`font-medium ${s.text}`}>{s.label}</span>
+              <span className="text-muted-foreground">— {cardCounts[s.key as keyof typeof cardCounts]} cards, {s.count} tasks</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function KpiBox({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card/60 px-4 py-3">
+      <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={`mt-1 text-2xl font-bold tracking-tight ${valueColor || "text-foreground"}`}>{value}</p>
     </div>
   );
 }

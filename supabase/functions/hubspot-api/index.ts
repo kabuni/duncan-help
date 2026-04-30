@@ -243,37 +243,12 @@ async function getStoredToken() {
     };
   }
 
-  try {
-    const decoded = atob(encodedToken).trim();
-    const state: StoredTokenState = decoded ? "token_found" : "no_token_stored";
-    logHubspot("company_integrations direct lookup", {
-      integration_id: "hubspot",
-      returned_integration_id: data.integration_id ?? null,
-      state,
-      row_found: true,
-      status: data.status ?? null,
-      last_sync: data.last_sync ?? null,
-      updated_at: data.updated_at ?? null,
-      encrypted_api_key_state: encodedState,
-      encoded_length: encodedToken.length,
-      encoded_prefix: encodedToken.slice(0, 10),
-      decode_ok: true,
-      decoded_length: decoded.length,
-      decoded_prefix: decoded.slice(0, 10),
-    });
-    return {
-      state,
-      rowFound: !!data,
-      integrationId: data?.integration_id ?? null,
-      encodedToken,
-      token: decoded || null,
-      decodeOk: true,
-      lastSync: data?.last_sync ?? null,
-      storedStatus: data?.status ?? null,
-      updatedAt: data?.updated_at ?? null,
-      queryError: null,
-    };
-  } catch (decodeError) {
+  const { data: vaultToken, error: vaultErr } = await supabase.rpc(
+    "get_company_integration_secret",
+    { p_integration_id: "hubspot" },
+  );
+
+  if (vaultErr || !vaultToken) {
     logHubspot("company_integrations direct lookup", {
       integration_id: "hubspot",
       returned_integration_id: data.integration_id ?? null,
@@ -286,7 +261,8 @@ async function getStoredToken() {
       encoded_length: encodedToken.length,
       encoded_prefix: encodedToken.slice(0, 10),
       decode_ok: false,
-      decode_error: decodeError instanceof Error ? decodeError.message : String(decodeError),
+      vault_lookup_ok: false,
+      vault_error: vaultErr?.message ?? null,
     });
     return {
       state: "token_decode_failed" as StoredTokenState,
@@ -301,6 +277,36 @@ async function getStoredToken() {
       queryError: null,
     };
   }
+
+  const decoded = (vaultToken as string).trim();
+  const state: StoredTokenState = decoded ? "token_found" : "no_token_stored";
+  logHubspot("company_integrations direct lookup", {
+    integration_id: "hubspot",
+    returned_integration_id: data.integration_id ?? null,
+    state,
+    row_found: true,
+    status: data.status ?? null,
+    last_sync: data.last_sync ?? null,
+    updated_at: data.updated_at ?? null,
+    encrypted_api_key_state: encodedState,
+    encoded_length: encodedToken.length,
+    encoded_prefix: encodedToken.slice(0, 10),
+    decode_ok: true,
+    vault_lookup_ok: true,
+    decoded_length: decoded.length,
+  });
+  return {
+    state,
+    rowFound: !!data,
+    integrationId: data?.integration_id ?? null,
+    encodedToken,
+    token: decoded || null,
+    decodeOk: true,
+    lastSync: data?.last_sync ?? null,
+    storedStatus: data?.status ?? null,
+    updatedAt: data?.updated_at ?? null,
+    queryError: null,
+  };
 }
 
 function classifyProviderFailure(error: unknown) {

@@ -132,27 +132,32 @@ function isServiceRoleRequest(req: Request) {
 
 async function getStoredToken() {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { data } = await supabase
+  const { data: meta } = await supabase
     .from("company_integrations")
     .select("encrypted_api_key, status, last_sync")
     .eq("integration_id", "github")
     .maybeSingle();
 
-  if (!data?.encrypted_api_key) return null;
+  if (!meta?.encrypted_api_key) return null;
 
-  try {
-    return {
-      token: atob(data.encrypted_api_key),
-      lastSync: data.last_sync ?? null,
-      storedStatus: data.status ?? null,
-    };
-  } catch {
+  const { data: token, error } = await supabase.rpc(
+    "get_company_integration_secret",
+    { p_integration_id: "github" },
+  );
+
+  if (error || !token) {
     return {
       token: null,
-      lastSync: data.last_sync ?? null,
-      storedStatus: data.status ?? null,
+      lastSync: meta.last_sync ?? null,
+      storedStatus: meta.status ?? null,
     };
   }
+
+  return {
+    token: token as string,
+    lastSync: meta.last_sync ?? null,
+    storedStatus: meta.status ?? null,
+  };
 }
 
 async function githubRequest<T>(path: string, token: string) {

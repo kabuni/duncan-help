@@ -232,12 +232,16 @@ function ProgressOverview({ overview }: { overview: OverviewData }) {
   const { totalCards, totalTasks, doneTasks, completionPct, taskTotals, cardCounts } = overview;
 
   const segments = [
-    { key: "red", label: "Red", count: taskTotals.red, bar: "bg-red-500", text: "text-red-500", dot: "bg-red-500" },
-    { key: "yellow", label: "Yellow", count: taskTotals.yellow, bar: "bg-amber-500", text: "text-amber-500", dot: "bg-amber-500" },
-    { key: "green", label: "Green", count: taskTotals.green, bar: "bg-emerald-500", text: "text-emerald-500", dot: "bg-emerald-500" },
-  ] as const;
+    { key: "red" as const, label: "Red", tasks: taskTotals.red, cards: cardCounts.red, bar: "bg-red-500", text: "text-red-500", dot: "bg-red-500" },
+    { key: "yellow" as const, label: "Yellow", tasks: taskTotals.yellow, cards: cardCounts.yellow, bar: "bg-amber-500", text: "text-amber-500", dot: "bg-amber-500" },
+    { key: "green" as const, label: "Green", tasks: taskTotals.green, cards: cardCounts.green, bar: "bg-emerald-500", text: "text-emerald-500", dot: "bg-emerald-500" },
+  ];
 
+  // Weight = active cards + active tasks per status (cards count even with no tasks)
+  const segmentsWithWeight = segments.map(s => ({ ...s, weight: s.cards + s.tasks }));
+  const totalWeight = segmentsWithWeight.reduce((sum, s) => sum + s.weight, 0);
   const activeTasks = taskTotals.red + taskTotals.yellow + taskTotals.green;
+  const activeCards = cardCounts.red + cardCounts.yellow + cardCounts.green;
 
   return (
     <motion.div
@@ -257,25 +261,25 @@ function ProgressOverview({ overview }: { overview: OverviewData }) {
       {/* Stacked Progress Bar */}
       <div className="rounded-xl border border-border bg-card/60 p-4">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Task Distribution</h3>
-          <span className="text-[10px] font-mono text-muted-foreground">{activeTasks} active · {doneTasks} done · {totalCards} cards</span>
+          <h3 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Status Distribution</h3>
+          <span className="text-[10px] font-mono text-muted-foreground">{activeCards} active cards · {activeTasks} active tasks · {doneTasks} tasks done</span>
         </div>
 
-        {activeTasks === 0 ? (
+        {totalWeight === 0 ? (
           <div className="h-3 w-full rounded-full bg-secondary/60" />
         ) : (
           <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary/60">
-            {segments.map(s => {
-              const pct = (s.count / activeTasks) * 100;
+            {segmentsWithWeight.map(s => {
+              const pct = (s.weight / totalWeight) * 100;
               if (pct <= 0) return null;
               return (
                 <div
                   key={s.key}
                   className={`${s.bar} h-full flex items-center justify-center text-[9px] font-medium text-white/95 transition-all`}
                   style={{ width: `${pct}%` }}
-                  title={`${s.label}: ${s.count} tasks (${Math.round(pct)}%)`}
+                  title={`${s.label}: ${s.cards} cards, ${s.tasks} tasks (${Math.round(pct)}%)`}
                 >
-                  {pct >= 10 && <span className="px-1 truncate">{s.label} ({s.count})</span>}
+                  {pct >= 12 && <span className="px-1 truncate">{s.label} ({s.cards}c/{s.tasks}t)</span>}
                 </div>
               );
             })}
@@ -284,11 +288,11 @@ function ProgressOverview({ overview }: { overview: OverviewData }) {
 
         {/* Legend */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
-          {segments.map(s => (
+          {segmentsWithWeight.map(s => (
             <div key={s.key} className="flex items-center gap-2 text-[11px]">
               <span className={`h-2 w-2 rounded-full ${s.dot}`} />
               <span className={`font-medium ${s.text}`}>{s.label}</span>
-              <span className="text-muted-foreground">— {cardCounts[s.key as keyof typeof cardCounts]} cards, {s.count} tasks</span>
+              <span className="text-muted-foreground">— {s.cards} cards, {s.tasks} tasks</span>
             </div>
           ))}
         </div>

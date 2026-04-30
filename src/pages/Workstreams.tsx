@@ -232,8 +232,9 @@ function ProgressOverview({ overview }: { overview: OverviewData }) {
     { key: "red", label: "Red", count: taskTotals.red, bar: "bg-red-500", text: "text-red-500", dot: "bg-red-500" },
     { key: "yellow", label: "Yellow", count: taskTotals.yellow, bar: "bg-amber-500", text: "text-amber-500", dot: "bg-amber-500" },
     { key: "green", label: "Green", count: taskTotals.green, bar: "bg-emerald-500", text: "text-emerald-500", dot: "bg-emerald-500" },
-    { key: "done", label: "Done", count: taskTotals.done, bar: "bg-primary", text: "text-primary", dot: "bg-primary" },
   ] as const;
+
+  const activeTasks = taskTotals.red + taskTotals.yellow + taskTotals.green;
 
   return (
     <motion.div
@@ -254,15 +255,15 @@ function ProgressOverview({ overview }: { overview: OverviewData }) {
       <div className="rounded-xl border border-border bg-card/60 p-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Task Distribution</h3>
-          <span className="text-[10px] font-mono text-muted-foreground">{totalTasks} tasks · {totalCards} cards</span>
+          <span className="text-[10px] font-mono text-muted-foreground">{activeTasks} active · {doneTasks} done · {totalCards} cards</span>
         </div>
 
-        {totalTasks === 0 ? (
+        {activeTasks === 0 ? (
           <div className="h-3 w-full rounded-full bg-secondary/60" />
         ) : (
           <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary/60">
             {segments.map(s => {
-              const pct = (s.count / totalTasks) * 100;
+              const pct = (s.count / activeTasks) * 100;
               if (pct <= 0) return null;
               return (
                 <div
@@ -279,7 +280,7 @@ function ProgressOverview({ overview }: { overview: OverviewData }) {
         )}
 
         {/* Legend */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
           {segments.map(s => (
             <div key={s.key} className="flex items-center gap-2 text-[11px]">
               <span className={`h-2 w-2 rounded-full ${s.dot}`} />

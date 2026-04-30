@@ -2325,6 +2325,10 @@ export type Database = {
         Args: { body?: Json; function_name: string }
         Returns: number
       }
+      get_company_integration_secret: {
+        Args: { p_integration_id: string }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2345,6 +2349,10 @@ export type Database = {
           id: string
           similarity: number
         }[]
+      }
+      set_company_integration_secret: {
+        Args: { p_integration_id: string; p_plaintext: string }
+        Returns: string
       }
     }
     Enums: {

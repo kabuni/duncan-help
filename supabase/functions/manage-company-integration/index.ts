@@ -276,7 +276,17 @@ serve(async (req) => {
     });
 
     const verify = await verifyCredential(integration_id, normalizedApiKey);
-    const encryptedKey = btoa(normalizedApiKey);
+
+    // Store plaintext in Supabase Vault; we persist only the secret UUID.
+    const { data: vaultSecretId, error: vaultError } = await supabaseAdmin.rpc(
+      "set_company_integration_secret",
+      { p_integration_id: integration_id, p_plaintext: normalizedApiKey }
+    );
+    if (vaultError) {
+      console.error("[manage-company-integration] vault store failed", vaultError);
+      throw vaultError;
+    }
+
     const now = new Date().toISOString();
     const status = verify.status;
 
@@ -285,7 +295,7 @@ serve(async (req) => {
       .upsert(
         {
           integration_id,
-          encrypted_api_key: encryptedKey,
+          encrypted_api_key: vaultSecretId as string,
           status,
           updated_by: user.id,
           last_sync: now,

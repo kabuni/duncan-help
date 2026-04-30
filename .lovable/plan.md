@@ -1,89 +1,48 @@
-## Diagnosis
+## Goal
 
-The error "Failed to decode base64" is **not** in `norman-chat/index.ts`. I audited it — the only `atob()` left there is at line 3625 and is unrelated JWT base64url decoding.
+Replace the hardcoded HubSpot **Lists** lookup ("Scout Programme", "Marketing Newsletter") in `hubspot-api/index.ts` with a fetch of **all HubSpot Forms** via `GET /marketing/v3/forms`, return name + submission count for each, and surface them in the existing "Marketing lists" card on the CEO Briefing.
 
-The actual culprits are two **other** edge functions that `norman-chat` invokes during chat (HubSpot/GitHub tool calls):
+## Why
 
-- `supabase/functions/hubspot-api/index.ts` — `getStoredToken()` line 247: `atob(encodedToken)`
-- `supabase/functions/github-api/index.ts` — `getStoredToken()` line 145: `atob(data.encrypted_api_key)`
+The two names being searched are HubSpot **Forms**, not Lists. The `/crm/v3/lists/search` endpoint will never match them, which is why the section shows nothing. Switching to the Forms API and showing all forms will (a) actually display real data and (b) let us see what's available before deciding what to highlight.
 
-Both still read `encrypted_api_key` directly from `company_integrations` and `atob()` it. After the Vault migration that column holds a UUID like `7c1a...-...-...`. Hyphens are invalid base64 → `atob()` throws "Failed to decode base64" → bubbles up as the chat error you see.
+## Changes
 
-`norman-chat`'s `getNotionToken` is already on the new RPC, which is why it wasn't caught.
+### 1. `supabase/functions/hubspot-api/index.ts`
 
-## Scope of the fix
+- **Remove** the `TEAM_BRIEFING_LISTS` constant (line 47).
+- **Replace** `fetchHubspotLists()` (lines 475–~570) with `fetchHubspotForms(token, source)`:
+  - Call `GET /marketing/v3/forms?limit=100` via the existing `hubspotApi()` helper.
+  - For each form, also fetch its submission count from `GET /form-integrations/v1/submissions/forms/{formId}?limit=1` (HubSpot returns `total` in the response). Run these in parallel with `Promise.all`, capped to a reasonable concurrency (e.g. 10 at a time) to stay under rate limits. If submission lookup fails for a form, return `submission_count: null` rather than failing the whole batch.
+  - Return an array shaped to stay backwards-compatible with the existing `CommsPulseCard` UI (which reads `requested_name`, `matched_name`, `member_count`):
+    ```ts
+    {
+      requested_name: form.name,        // shown as the label
+      matched_name: form.name,          // non-null = "found" styling
+      list_id: form.id ?? form.guid,
+      member_count: submissionCount,    // reused as "submissions"
+      processing_type: form.formType ?? null,
+      updated_at: form.updatedAt ?? null,
+    }
+    ```
+  - Keep `logHubspot(...)` calls for observability (rename event labels from `list_*` → `form_*`).
+- **Update** the call site at line 898 (`fetchHubspotLists` → `fetchHubspotForms`) and the variable name in the `Promise.all`.
+- Leave `buildTeamBriefingSummary` and the `lists` field on the response untouched — the UI will continue to read `signal.lists` and we'll just be feeding forms into it. (No frontend rename needed in this pass to keep the diff small; we can rename `lists` → `forms` end-to-end as a follow-up.)
 
-Only these two files. No DB changes — the RPC `public.get_company_integration_secret` and the Vault secrets already exist from the previous migration, and the GitHub + HubSpot rows were backfilled into Vault in that pass.
+### 2. `src/components/ceo/CommsPulseCard.tsx` (label only)
 
-### `supabase/functions/hubspot-api/index.ts`
+- Change the section heading "Marketing lists" → **"Marketing forms"** (line ~321).
+- Change the per-row count label so users understand the number is submissions, e.g. show `member_count` as "{n} submissions" instead of relying on the implicit "members" reading. (Inspect lines 315–360 and adjust the small caption above the number; the value rendering itself stays the same.)
 
-In `getStoredToken()` (lines ~167–304), replace the direct `select("encrypted_api_key, ...")` + `atob()` block with a service-role RPC call:
+No type changes, no other consumer updates.
 
-```ts
-const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+## Out of scope
 
-// Metadata row (status / last_sync / updated_at / integration_id) — no secret material.
-const { data: meta, error } = await supabase
-  .from("company_integrations")
-  .select("integration_id, status, last_sync, updated_at, encrypted_api_key")
-  .eq("integration_id", "hubspot")
-  .maybeSingle();
-
-// (existing error / not-found / no-token logging branches stay, but key off `meta` instead of `data`,
-//  and replace `encodedState` checks with "is encrypted_api_key non-empty?" — it now holds a Vault UUID.)
-
-// Plaintext via Vault RPC.
-const { data: token, error: vaultErr } = await supabase.rpc(
-  "get_company_integration_secret",
-  { p_integration_id: "hubspot" },
-);
-
-if (vaultErr || !token) {
-  // log as token_decode_failed-equivalent ("vault_lookup_failed") and return state with token: null.
-} else {
-  // return state: "token_found", token: token as string, decodeOk: true.
-}
-```
-
-Keep all the existing `logHubspot(...)` calls and the returned shape (`StoredTokenState`, `rowFound`, `integrationId`, `encodedToken`, `token`, `decodeOk`, `lastSync`, `storedStatus`, `updatedAt`, `queryError`) so downstream code in `hubspot-api` keeps compiling. `encodedToken` becomes the Vault UUID string (purely diagnostic — only its presence matters now). `decode_*` log fields get repurposed to `vault_*` equivalents.
-
-### `supabase/functions/github-api/index.ts`
-
-In `getStoredToken()` (lines 133–156), replace the body with:
-
-```ts
-const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-
-const { data: meta } = await supabase
-  .from("company_integrations")
-  .select("status, last_sync, encrypted_api_key")
-  .eq("integration_id", "github")
-  .maybeSingle();
-
-if (!meta?.encrypted_api_key) return null;
-
-const { data: token, error } = await supabase.rpc(
-  "get_company_integration_secret",
-  { p_integration_id: "github" },
-);
-
-if (error || !token) {
-  return { token: null, lastSync: meta.last_sync ?? null, storedStatus: meta.status ?? null };
-}
-
-return { token: token as string, lastSync: meta.last_sync ?? null, storedStatus: meta.status ?? null };
-```
-
-## Out of scope (not touched)
-
-- `nda-generate`, `nda-send-signature`, `docusign-webhook` — still call `atob(encrypted_api_key)` but are decommissioned dead code (per project memory). They will simply continue to be broken, which is fine since nothing invokes them.
-- `connect-integration/index.ts` line 76 — that's a *write* path that stores `api_key` raw (no `atob`). Worth flagging as a separate cleanup item but it isn't causing the chat failure, so I'll leave it alone in this pass.
-- `norman-chat/index.ts` — already clean. No edits.
-- The Vault RPCs and DB schema — unchanged.
+- Renaming the response field from `lists` to `forms` across the edge function + UI types — keeping the existing field name avoids a wider refactor. Flagged as a follow-up.
+- The Forms API requires the `forms` scope on the HubSpot Private App token. If it's missing the call will return 403; the function will log it and return an empty array (existing error path). I'll mention this in the verification step so you can grant the scope if needed.
 
 ## Verification after applying
 
-1. Open Duncan chat → send any message → should respond (no base64 error).
-2. Ask Duncan something HubSpot-flavoured (e.g. "What deals are in HubSpot this week?") → tool call should return real data, not "token_decode_failed".
-3. Same for GitHub.
-4. Check `supabase--edge_function_logs` for `hubspot-api` / `github-api` → look for `state: "token_found"` and absence of `Failed to decode base64`.
+1. Open CEO Briefing → "Marketing forms" section should list every form in HubSpot with its submission count.
+2. Check `supabase--edge_function_logs` for `hubspot-api` → look for `form_fetch_ok` with a non-zero count, no 403s.
+3. If 403: add the `forms` scope to the HubSpot Private App and retry.

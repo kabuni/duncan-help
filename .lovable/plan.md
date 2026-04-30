@@ -1,121 +1,34 @@
-## What's actually broken
+# Fix: Marketing Lists shows 0 on CEO Briefing
 
-Your diagnosis (one side uses `btoa`, the other uses Vault) is **not** what the code shows. Both sides are already on Vault:
+## Root cause (confirmed from code + DB)
 
-- `manage-company-integration/index.ts` line 281 calls `set_company_integration_secret` RPC.
-- `hubspot-api/index.ts` line 246 calls `get_company_integration_secret` RPC.
-- There is no `btoa()` anywhere in `manage-company-integration`.
+`hubspot-api` (action `team_briefing_summary`) successfully fetches forms via `/marketing/v3/forms` and `/form-integrations/v1/submissions/...`, and includes them in its response under the `lists` field (`buildTeamBriefingSummary`, `supabase/functions/hubspot-api/index.ts` line 810).
 
-The real problem is in the `set_company_integration_secret` SQL function, and I confirmed it from the database:
+However, when `ceo-briefing` consumes that response, it builds `parsed.payload.hubspot_signal` by **explicitly enumerating fields** at `supabase/functions/ceo-briefing/index.ts` lines 3749–3771 — and `lists` is **not in that allow-list**, so it gets dropped before the briefing row is written to `ceo_briefings.payload`.
 
-- `public.company_integrations` row for `hubspot` has `status = 'connected'`, `last_sync` updated today, but `encrypted_api_key IS NULL`.
-- A valid vault secret exists (`company_integration:hubspot:...`) from earlier today, but the row no longer points to it.
+Verification from the latest stored briefing row (DB query just now): the persisted `hubspot_signal` JSON has no `lists` key at all, even though every other field (key_contacts, active_deals, etc.) is present.
 
-### Why the RPC returns NULL
+The UI in `src/components/ceo/CommsPulseCard.tsx` (lines 314–322) reads `hubspotSignal.lists`, finds `undefined`, falls back to `[]`, and renders the "0" badge with the empty-state message. The frontend code is correct.
 
-Current `set_company_integration_secret`:
+It is also possible that `normalizeExternalSignal` (which produces `normalizedHubspotSignal`) strips `lists` even before the projection at line 3749. The fix needs to ensure both layers preserve it.
 
-```sql
-select encrypted_api_key into v_existing
-  from public.company_integrations
-  where integration_id = p_integration_id;
+## Change
 
-begin
-  v_secret_id := v_existing::uuid;                          -- v_existing is NULL  -> v_secret_id := NULL
-  perform vault.update_secret(v_secret_id, p_plaintext);    -- update with NULL id: no-op, no exception
-exception when others then
-  v_secret_id := vault.create_secret(...);                  -- never reached
-end;
+Single-file backend fix in `supabase/functions/ceo-briefing/index.ts`:
 
-return v_secret_id;                                         -- returns NULL
-```
+1. Add `lists: normalizedHubspotSignal.lists ?? hubspot_signal?.lists ?? []` to the `parsed.payload.hubspot_signal = { ... }` object at line 3749.
+2. Inspect `normalizeExternalSignal` (used at line 1338) and, if it doesn't already pass through unknown fields, ensure the raw `lists` array from the upstream `hubspot-api` response is forwarded onto the normalized signal (or read directly from `hubspot_signal.lists` in the projection as a fallback — option already covered by step 1's `?? hubspot_signal?.lists`).
 
-Once the column is ever NULL (which it is right now), every reconnect:
-1. RPC returns NULL.
-2. `manage-company-integration` upserts `encrypted_api_key = NULL`.
-3. `hubspot-api` sees `encrypted_api_key_state = "null"` -> returns `no_token_stored` -> UI shows "key is null / decode failed".
+No frontend changes. No DB migration. No changes to `hubspot-api`.
 
-This explains every symptom in your message without any storage mismatch.
+## Verification
 
-## Fix
-
-### 1. Patch the `set_company_integration_secret` RPC (migration)
-
-Treat a NULL or non-UUID `v_existing` as "no existing secret, create a new one." Also coerce `vault.update_secret`'s return so we never propagate NULL when the path "succeeded." New body:
-
-```sql
-declare
-  v_existing text;
-  v_secret_id uuid;
-begin
-  select encrypted_api_key into v_existing
-    from public.company_integrations
-    where integration_id = p_integration_id;
-
-  if v_existing is not null and v_existing <> '' then
-    begin
-      v_secret_id := v_existing::uuid;
-      perform vault.update_secret(v_secret_id, p_plaintext);
-    exception when others then
-      v_secret_id := null;  -- fall through to create
-    end;
-  end if;
-
-  if v_secret_id is null then
-    v_secret_id := vault.create_secret(
-      p_plaintext,
-      'company_integration:' || p_integration_id || ':' || gen_random_uuid()::text,
-      'API key for company integration ' || p_integration_id
-    );
-  end if;
-
-  return v_secret_id;
-end;
-```
-
-Net effect: the function can never return NULL on success. It will always either reuse the existing vault secret or create a new one and return its UUID.
-
-### 2. Defensive guard in `manage-company-integration/index.ts`
-
-Right after the RPC call (around line 284), if `vaultSecretId` is null/empty, throw a clear error instead of upserting NULL into the column:
-
-```ts
-if (!vaultSecretId || typeof vaultSecretId !== "string") {
-  console.error("[manage-company-integration] vault returned empty secret id", { vaultSecretId });
-  throw new Error("Failed to persist integration secret to vault");
-}
-```
-
-This prevents this class of bug from ever silently re-occurring.
-
-### 3. Re-link the existing orphaned vault secret (one-time data fix)
-
-The current row is broken right now. The migration above only fixes future reconnects — the row's `encrypted_api_key` is still NULL, so the next call to `hubspot-api` will keep failing until you reconnect once. Two options:
-
-- **Preferred (zero user action):** in the same migration, point the existing row at the orphaned vault secret already in `vault.secrets`:
-  ```sql
-  update public.company_integrations
-  set encrypted_api_key = (
-    select id::text from vault.secrets
-    where name like 'company_integration:hubspot:%'
-    order by updated_at desc limit 1
-  )
-  where integration_id = 'hubspot' and encrypted_api_key is null;
-  ```
-  This restores the connection without you needing to paste the token again, assuming the vault secret still holds the correct (and `forms`-scoped) token.
-
-- **Alternative:** skip the data fix; you reconnect HubSpot once after the migration deploys. The fixed RPC will create a fresh vault secret and write its UUID into the row correctly.
-
-I'll include the data fix in the migration since it costs nothing if the vault secret happens to be stale (you'd just reconnect anyway).
-
-## Verification after applying
-
-1. `select integration_id, status, encrypted_api_key from public.company_integrations where integration_id='hubspot';` — `encrypted_api_key` must now be a UUID, not NULL.
-2. Open CEO Briefing -> trigger any HubSpot card. `hubspot-api` logs should show `state: "token_found"`, `vault_lookup_ok: true`.
-3. Disconnect + reconnect HubSpot from the Integrations page. Re-run query in step 1 — `encrypted_api_key` should still be a non-null UUID.
-4. If still 403 on Forms, that's the separate `forms` scope issue from earlier — unrelated to this fix.
+1. Trigger a fresh briefing generation from the UI.
+2. Run `SELECT payload->'hubspot_signal'->'lists' FROM ceo_briefings ORDER BY briefing_date DESC LIMIT 1;` — should return the array of forms with `requested_name`, `member_count`, `processing_type`.
+3. Reload Team Briefing — Marketing forms section should show `N/N` badge and per-form submission counts instead of `0`.
 
 ## Out of scope
 
-- Changing the storage scheme (`btoa` vs Vault). Both sides are already on Vault and that's the right design.
-- Touching `hubspot-api` retrieval logic — the existing code already handles the happy path correctly once the column is populated.
+- HubSpot connection / vault wiring (already fixed in prior turn).
+- Renaming "Marketing forms" vs "Marketing Lists" copy.
+- Changes to which forms are fetched (currently up to 100 forms via `/marketing/v3/forms?limit=100`).

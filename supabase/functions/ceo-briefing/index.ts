@@ -3768,6 +3768,11 @@ ULTRA COMPACT MODE (LAST ATTEMPT, MANDATORY):
       signals: normalizedHubspotSignal.signals,
       summary: normalizedHubspotSignal.summary,
       degraded_reason: normalizedHubspotSignal.degraded_reason,
+      lists: Array.isArray((normalizedHubspotSignal as any)?.lists)
+        ? (normalizedHubspotSignal as any).lists
+        : Array.isArray((hubspot_signal as any)?.lists)
+        ? (hubspot_signal as any).lists
+        : [],
     };
     parsed.payload.azure_repos_signal = {
       status: normalizedAzureReposSignal.status,

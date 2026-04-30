@@ -23,7 +23,6 @@ import { format } from "date-fns";
 type ViewMode = "board" | "list";
 
 const Workstreams = () => {
-  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<ViewMode>("board");
   const [search, setSearch] = useState("");

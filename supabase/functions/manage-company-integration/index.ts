@@ -286,6 +286,10 @@ serve(async (req) => {
       console.error("[manage-company-integration] vault store failed", vaultError);
       throw vaultError;
     }
+    if (!vaultSecretId || typeof vaultSecretId !== "string") {
+      console.error("[manage-company-integration] vault returned empty secret id", { vaultSecretId });
+      throw new Error("Failed to persist integration secret to vault");
+    }
 
     const now = new Date().toISOString();
     const status = verify.status;

@@ -217,14 +217,88 @@ const Workstreams = () => {
   );
 };
 
-function StatCard({ label, value, icon, valueColor }: {
-  label: string; value: number; icon: React.ReactNode; valueColor?: string;
-}) {
+interface OverviewData {
+  totalCards: number;
+  totalTasks: number;
+  doneTasks: number;
+  completionPct: number;
+  taskTotals: { red: number; yellow: number; green: number; done: number };
+  cardCounts: { red: number; yellow: number; green: number; done: number };
+}
+
+function ProgressOverview({ overview }: { overview: OverviewData }) {
+  const { totalCards, totalTasks, doneTasks, completionPct, taskTotals, cardCounts } = overview;
+
+  const segments = [
+    { key: "red", label: "Red", count: taskTotals.red, bar: "bg-red-500", text: "text-red-500", dot: "bg-red-500" },
+    { key: "yellow", label: "Yellow", count: taskTotals.yellow, bar: "bg-amber-500", text: "text-amber-500", dot: "bg-amber-500" },
+    { key: "green", label: "Green", count: taskTotals.green, bar: "bg-emerald-500", text: "text-emerald-500", dot: "bg-emerald-500" },
+    { key: "done", label: "Done", count: taskTotals.done, bar: "bg-primary", text: "text-primary", dot: "bg-primary" },
+  ] as const;
+
   return (
-    <div className="rounded-xl border border-border bg-card/60 px-3 py-3 text-center">
-      <div className="flex items-center justify-center gap-1.5 mb-1">{icon}</div>
-      <span className={`text-lg font-bold ${valueColor || "text-foreground"}`}>{value}</span>
-      <p className="text-[10px] text-muted-foreground mt-0.5">{label}</p>
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.05 }}
+      className="mb-6 space-y-4"
+    >
+      {/* KPI Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <KpiBox label="Total Cards" value={String(totalCards)} />
+        <KpiBox label="Total Tasks" value={String(totalTasks)} />
+        <KpiBox label="Tasks Done" value={`${doneTasks} / ${totalTasks}`} />
+        <KpiBox label="Completion" value={`${completionPct}%`} valueColor="text-primary" />
+      </div>
+
+      {/* Stacked Progress Bar */}
+      <div className="rounded-xl border border-border bg-card/60 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Task Distribution</h3>
+          <span className="text-[10px] font-mono text-muted-foreground">{totalTasks} tasks · {totalCards} cards</span>
+        </div>
+
+        {totalTasks === 0 ? (
+          <div className="h-3 w-full rounded-full bg-secondary/60" />
+        ) : (
+          <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary/60">
+            {segments.map(s => {
+              const pct = (s.count / totalTasks) * 100;
+              if (pct <= 0) return null;
+              return (
+                <div
+                  key={s.key}
+                  className={`${s.bar} h-full flex items-center justify-center text-[9px] font-medium text-white/95 transition-all`}
+                  style={{ width: `${pct}%` }}
+                  title={`${s.label}: ${s.count} tasks (${Math.round(pct)}%)`}
+                >
+                  {pct >= 10 && <span className="px-1 truncate">{s.label} ({s.count})</span>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Legend */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+          {segments.map(s => (
+            <div key={s.key} className="flex items-center gap-2 text-[11px]">
+              <span className={`h-2 w-2 rounded-full ${s.dot}`} />
+              <span className={`font-medium ${s.text}`}>{s.label}</span>
+              <span className="text-muted-foreground">— {cardCounts[s.key as keyof typeof cardCounts]} cards, {s.count} tasks</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function KpiBox({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card/60 px-4 py-3">
+      <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={`mt-1 text-2xl font-bold tracking-tight ${valueColor || "text-foreground"}`}>{value}</p>
     </div>
   );
 }

@@ -232,8 +232,9 @@ function ProgressOverview({ overview }: { overview: OverviewData }) {
     { key: "red", label: "Red", count: taskTotals.red, bar: "bg-red-500", text: "text-red-500", dot: "bg-red-500" },
     { key: "yellow", label: "Yellow", count: taskTotals.yellow, bar: "bg-amber-500", text: "text-amber-500", dot: "bg-amber-500" },
     { key: "green", label: "Green", count: taskTotals.green, bar: "bg-emerald-500", text: "text-emerald-500", dot: "bg-emerald-500" },
-    { key: "done", label: "Done", count: taskTotals.done, bar: "bg-primary", text: "text-primary", dot: "bg-primary" },
   ] as const;
+
+  const activeTasks = taskTotals.red + taskTotals.yellow + taskTotals.green;
 
   return (
     <motion.div

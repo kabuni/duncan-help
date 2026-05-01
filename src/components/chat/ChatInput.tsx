@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Paperclip, X, FileText, Image as ImageIcon, Loader2, Mic } from "lucide-react";
+import { Send, Paperclip, X, FileText, Image as ImageIcon, Loader2, Mic, Square } from "lucide-react";
 import type { ChatAttachment } from "@/hooks/useNormanChat";
+import { invokeEdge } from "@/lib/edgeApi";
+import { toast } from "sonner";
 
 interface ChatInputProps {
   onSubmit: (input: string, attachments: ChatAttachment[]) => void;

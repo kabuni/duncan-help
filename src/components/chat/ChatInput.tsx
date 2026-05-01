@@ -151,8 +151,10 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress }: C
           }
           const base64 = btoa(binary);
           const data = await invokeEdge<{ text?: string; error?: string }>("transcribe-audio", {
-            audio: base64,
-            mimeType: recorder.mimeType || "audio/webm",
+            body: {
+              audio: base64,
+              mimeType: recorder.mimeType || "audio/webm",
+            },
           });
           const text = data?.text?.trim();
           if (text) {

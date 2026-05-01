@@ -3,6 +3,7 @@ import { Send, Paperclip, X, FileText, Image as ImageIcon, Loader2, Mic, Square 
 import type { ChatAttachment } from "@/hooks/useNormanChat";
 import { invokeEdge } from "@/lib/edgeApi";
 import { toast } from "sonner";
+import AudioWaveform from "@/components/chat/AudioWaveform";
 
 interface ChatInputProps {
   onSubmit: (input: string, attachments: ChatAttachment[]) => void;
@@ -40,6 +41,7 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress }: C
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [activeStream, setActiveStream] = useState<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -121,6 +123,7 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress }: C
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
+      setActiveStream(stream);
       audioChunksRef.current = [];
 
       const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"];
@@ -134,6 +137,7 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress }: C
 
       recorder.onstop = async () => {
         setIsRecording(false);
+        setActiveStream(null);
         mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
         mediaStreamRef.current = null;
 
@@ -219,6 +223,33 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress }: C
                 </button>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Live waveform while recording / transcribing */}
+        {(isRecording || isTranscribing) && (
+          <div className="mb-3 flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 animate-fade-in">
+            {isRecording ? (
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
+              </span>
+            ) : (
+              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+            )}
+            <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+              {isRecording ? "Listening" : "Transcribing"}
+            </span>
+            <AudioWaveform stream={activeStream} className="h-8 flex-1" />
+            {isRecording && (
+              <button
+                type="button"
+                onClick={stopRecording}
+                className="shrink-0 rounded-md bg-destructive px-2 py-1 text-[11px] font-medium text-destructive-foreground hover:bg-destructive/90 transition-colors"
+              >
+                Stop
+              </button>
+            )}
           </div>
         )}
 

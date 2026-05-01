@@ -102,6 +102,13 @@ const ChatHistory = ({
                       )}
                     >
                       <button
+                        onClick={() => handleSelect(chat.id)}
+                        className="flex-1 text-left truncate min-w-0"
+                        title={chat.title}
+                      >
+                        {chat.title}
+                      </button>
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           if (confirm(`Delete chat "${chat.title}"? This cannot be undone.`)) {
@@ -112,13 +119,6 @@ const ChatHistory = ({
                         title="Delete chat"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleSelect(chat.id)}
-                        className="flex-1 text-left truncate min-w-0"
-                        title={chat.title}
-                      >
-                        {chat.title}
                       </button>
                     </div>
                   ))}

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, lazy, Suspense, forwardRef } from "react";
+import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Trash2, Loader2, Download, Copy, Check,

@@ -126,9 +126,6 @@ verify_jwt = false
 [functions.create-hireflix-position]
 verify_jwt = false
 
-[functions.elevenlabs-conversation-token]
-verify_jwt = false
-
 [functions.daily-briefing]
 verify_jwt = false
 
@@ -166,4 +163,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.google-drive-api]
+verify_jwt = false
+
+[functions.transcribe-audio]
 verify_jwt = false

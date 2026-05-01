@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Paperclip, X, FileText, Image as ImageIcon, Loader2, Mic } from "lucide-react";
+import { Send, Paperclip, X, FileText, Image as ImageIcon, Loader2, Mic, Square } from "lucide-react";
 import type { ChatAttachment } from "@/hooks/useNormanChat";
+import { invokeEdge } from "@/lib/edgeApi";
+import { toast } from "sonner";
 
 interface ChatInputProps {
   onSubmit: (input: string, attachments: ChatAttachment[]) => void;
@@ -32,10 +34,15 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export default function ChatInput({ onSubmit, isLoading, extractionProgress, onVoiceToggle, isVoiceActive }: ChatInputProps) {
+export default function ChatInput({ onSubmit, isLoading, extractionProgress }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -103,6 +110,84 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress, onV
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    const rec = mediaRecorderRef.current;
+    if (rec && rec.state !== "inactive") rec.stop();
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      audioChunksRef.current = [];
+
+      const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"];
+      const mimeType = mimeCandidates.find((t) => (window as any).MediaRecorder?.isTypeSupported?.(t)) || "";
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        setIsRecording(false);
+        mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+        mediaStreamRef.current = null;
+
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        if (blob.size === 0) return;
+        setIsTranscribing(true);
+        try {
+          const buf = await blob.arrayBuffer();
+          // Chunked base64 to avoid stack overflow
+          let binary = "";
+          const bytes = new Uint8Array(buf);
+          const chunk = 0x8000;
+          for (let i = 0; i < bytes.length; i += chunk) {
+            binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)) as any);
+          }
+          const base64 = btoa(binary);
+          const data = await invokeEdge<{ text?: string; error?: string }>("transcribe-audio", {
+            body: {
+              audio: base64,
+              mimeType: recorder.mimeType || "audio/webm",
+            },
+          });
+          const text = data?.text?.trim();
+          if (text) {
+            setInput((prev) => (prev ? prev + (prev.endsWith(" ") ? "" : " ") + text : text));
+            requestAnimationFrame(() => textareaRef.current?.focus());
+          } else {
+            toast.error("No speech detected");
+          }
+        } catch (err: any) {
+          console.error("Transcription failed:", err);
+          toast.error(err?.message || "Transcription failed");
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      recorder.start();
+      setIsRecording(true);
+    } catch (err: any) {
+      console.error("Mic error:", err);
+      if (err?.name === "NotAllowedError") {
+        toast.error("Microphone access denied");
+      } else {
+        toast.error("Could not start recording");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      mediaRecorderRef.current?.state !== "inactive" && mediaRecorderRef.current?.stop();
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    };
   }, []);
 
   return (
@@ -183,23 +268,28 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress, onV
             <Send className="h-3.5 w-3.5" />
           </button>
 
-          {onVoiceToggle && (
-            <button
-              type="button"
-              onClick={onVoiceToggle}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all ${
-                isVoiceActive
-                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80"
-              }`}
-              title={isVoiceActive ? "End voice mode" : "Start voice mode"}
-            >
+          <button
+            type="button"
+            onClick={isRecording ? stopRecording : startRecording}
+            disabled={isLoading || isTranscribing}
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all ${
+              isRecording
+                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90 animate-pulse"
+                : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+            } disabled:opacity-30`}
+            title={isRecording ? "Stop & transcribe" : "Record voice"}
+          >
+            {isTranscribing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : isRecording ? (
+              <Square className="h-3.5 w-3.5" />
+            ) : (
               <Mic className="h-3.5 w-3.5" />
-            </button>
-          )}
+            )}
+          </button>
         </div>
         <p className="mt-2 text-center text-[10px] font-mono text-muted-foreground/40">
-          Shift+Enter for new line · Attach files for analysis · Powered by Duncan AI Engine
+          Shift+Enter for new line · Attach files for analysis · Tap mic to dictate · Powered by Duncan AI Engine
         </p>
       </div>
     </div>

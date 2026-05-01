@@ -95,7 +95,7 @@ const ChatHistory = ({
                     <div
                       key={chat.id}
                       className={cn(
-                        "group flex items-center gap-1 rounded-md px-3 py-1.5 text-xs cursor-pointer transition-colors",
+                        "group flex items-center gap-2 rounded-md px-2 py-1.5 text-xs cursor-pointer transition-colors",
                         activeChatId === chat.id
                           ? "bg-primary/10 text-primary font-medium"
                           : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -108,10 +108,11 @@ const ChatHistory = ({
                             onDeleteChat(chat.id);
                           }
                         }}
-                        className="shrink-0 h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        className="shrink-0 h-7 w-7 flex items-center justify-center rounded-md border border-destructive/25 bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors"
+                        aria-label={`Delete chat ${chat.title}`}
                         title="Delete chat"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleSelect(chat.id)}

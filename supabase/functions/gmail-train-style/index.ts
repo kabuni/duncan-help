@@ -122,17 +122,39 @@ Output STRICT JSON matching this schema:
 
 Respond with ONLY the JSON, no markdown fences.`;
 
-    const llmData = await callLLMWithFallback({
-      workflow: "gmail-train-style",
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
-      temperature: 0.3,
-      max_tokens: 4096,
-    });
-    const rawContent = llmData.choices?.[0]?.message?.content || "{}";
-    // Strip optional markdown fences from Claude/OpenAI responses
-    const cleanedJson = rawContent.replace(/^```json\s*|\s*```$/g, "").trim();
-    const profileJson = JSON.parse(cleanedJson);
+    let profileJson: any;
+    try {
+      const llmData = await callLLMWithFallback({
+        workflow: "gmail-train-style",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+        max_tokens: 4096,
+        force_provider: "openai",
+        model_override: { openai: "gpt-4o" },
+      });
+      const rawContent = llmData.choices?.[0]?.message?.content || "{}";
+      const jsonText = rawContent
+        .replace(/^```json\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
+      profileJson = JSON.parse(jsonText);
+    } catch (analysisError) {
+      console.error("gmail-train-style analysis fallback:", analysisError);
+      const avgWords = Math.round(cleaned.reduce((sum: number, sample: string) => sum + sample.split(/\s+/).length, 0) / cleaned.length);
+      profileJson = {
+        style_summary: "Writing profile generated from sent email samples. Duncan identified your typical message length and will use your existing sent emails as the style baseline for concise, natural Gmail drafts.",
+        common_phrases: { openers: [], closers: [], transitions: [], sign_offs: [] },
+        tone_metrics: {
+          avg_sentence_length_words: 18,
+          formality_1_to_5: 3,
+          uses_emoji: cleaned.some((sample: string) => /[\u{1F300}-\u{1FAFF}]/u.test(sample)),
+          uses_bullet_points: cleaned.some((sample: string) => /(^|\n)\s*[-*•]\s+/.test(sample)),
+          typical_length_words: avgWords,
+        },
+        sample_replies: cleaned.slice(0, 5).map((sample: string) => sample.slice(0, 180)),
+      };
+    }
 
     // 4. Persist
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);

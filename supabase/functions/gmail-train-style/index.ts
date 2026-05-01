@@ -131,8 +131,8 @@ Respond with ONLY the JSON, no markdown fences.`;
     });
     const rawContent = llmData.choices?.[0]?.message?.content || "{}";
     // Strip optional markdown fences from Claude/OpenAI responses
-    const cleaned = rawContent.replace(/^```json\s*|\s*```$/g, "").trim();
-    const profileJson = JSON.parse(cleaned);
+    const cleanedJson = rawContent.replace(/^```json\s*|\s*```$/g, "").trim();
+    const profileJson = JSON.parse(cleanedJson);
 
     // 4. Persist
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);

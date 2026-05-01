@@ -277,20 +277,22 @@ export default function ProjectWorkspace() {
                 {chats.map(chat => (
                   <div
                     key={chat.id}
-                    className={`group flex items-center gap-1 w-full min-w-0 rounded-md pr-1 text-xs font-medium transition-colors ${
+                    className={`group grid grid-cols-[minmax(0,1fr)_2rem] items-center w-full min-w-0 rounded-md text-xs font-medium transition-colors ${
                       activeChatId === chat.id
                         ? "bg-primary/10 text-primary"
                         : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
                     }`}
                   >
                     <button
+                      type="button"
                       onClick={() => setActiveChatId(chat.id)}
-                      className="flex items-center gap-2 flex-1 min-w-0 px-3 py-2 text-left"
+                      className="flex items-center gap-2 min-w-0 px-3 py-2 text-left"
                     >
                       <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{chat.title}</span>
+                      <span className="min-w-0 truncate">{chat.title}</span>
                     </button>
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         if (confirm(`Delete chat "${chat.title}"? This cannot be undone.`)) {
@@ -298,7 +300,7 @@ export default function ProjectWorkspace() {
                           if (activeChatId === chat.id) setActiveChatId(null);
                         }
                       }}
-                      className="shrink-0 h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      className="h-8 w-8 flex items-center justify-center rounded text-destructive hover:bg-destructive/10 transition-colors"
                       title="Delete chat"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
       console.error("RAG retrieval failed (non-fatal):", ragErr);
     }
 
-    // 6. Fetch last 20 messages for context
+    // 6. Fetch last 20 messages from the CURRENT chat for live conversation context
     const { data: history, error: historyError } = await supabase
       .from("chat_messages")
       .select("role, content")
@@ -160,6 +160,57 @@ Deno.serve(async (req) => {
 
     if (historyError) {
       console.error("Failed to fetch chat history:", historyError);
+    }
+
+    // 6b. Fetch summaries of OTHER chats in the same project (cross-chat memory)
+    let priorChatsBlock = "";
+    try {
+      const { data: otherChats } = await supabase
+        .from("project_chats")
+        .select("id, title, created_at")
+        .eq("project_id", chat.project_id)
+        .neq("id", chat_id)
+        .order("updated_at", { ascending: false })
+        .limit(10);
+
+      if (otherChats && otherChats.length > 0) {
+        const chatIds = otherChats.map((c: any) => c.id);
+        const { data: priorMessages } = await supabase
+          .from("chat_messages")
+          .select("chat_id, role, content, created_at")
+          .in("chat_id", chatIds)
+          .order("created_at", { ascending: true });
+
+        if (priorMessages && priorMessages.length > 0) {
+          // Group by chat_id
+          const grouped: Record<string, Array<{ role: string; content: string }>> = {};
+          for (const m of priorMessages) {
+            (grouped[m.chat_id] ||= []).push({ role: m.role, content: m.content });
+          }
+
+          const MAX_CHARS_PER_CHAT = 2000;
+          const sections: string[] = [];
+          for (const c of otherChats) {
+            const msgs = grouped[c.id];
+            if (!msgs || msgs.length === 0) continue;
+            // Take last 6 messages, truncate content
+            const recent = msgs.slice(-6).map((m) => {
+              const content = m.content.length > 400 ? m.content.slice(0, 400) + "…" : m.content;
+              return `${m.role.toUpperCase()}: ${content}`;
+            }).join("\n");
+            const trimmed = recent.length > MAX_CHARS_PER_CHAT ? recent.slice(0, MAX_CHARS_PER_CHAT) + "…" : recent;
+            sections.push(`### Chat: "${c.title}" (${new Date(c.created_at).toISOString().slice(0, 10)})\n${trimmed}`);
+          }
+
+          if (sections.length > 0) {
+            priorChatsBlock =
+              "\n\n## PRIOR CHAT HISTORY IN THIS PROJECT\nThe following are excerpts from other chat threads within this same project. Use them as background memory — do not assume the user is asking about them unless they reference them explicitly.\n\n" +
+              sections.join("\n\n---\n\n");
+          }
+        }
+      }
+    } catch (priorErr) {
+      console.error("Prior chats retrieval failed (non-fatal):", priorErr);
     }
 
     // 7. Save user message

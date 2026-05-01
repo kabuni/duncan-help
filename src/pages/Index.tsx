@@ -532,6 +532,7 @@ const Index = () => {
           isVoiceActive={voiceMode}
         />
       </main>
+      <FeatureRequestModal open={featureRequestOpen} onClose={() => setFeatureRequestOpen(false)} />
     </div>
   );
 };

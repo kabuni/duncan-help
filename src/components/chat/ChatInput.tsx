@@ -226,6 +226,33 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress }: C
           </div>
         )}
 
+        {/* Live waveform while recording / transcribing */}
+        {(isRecording || isTranscribing) && (
+          <div className="mb-3 flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 animate-fade-in">
+            {isRecording ? (
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
+              </span>
+            ) : (
+              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+            )}
+            <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+              {isRecording ? "Listening" : "Transcribing"}
+            </span>
+            <AudioWaveform stream={activeStream} className="h-8 flex-1" />
+            {isRecording && (
+              <button
+                type="button"
+                onClick={stopRecording}
+                className="shrink-0 rounded-md bg-destructive px-2 py-1 text-[11px] font-medium text-destructive-foreground hover:bg-destructive/90 transition-colors"
+              >
+                Stop
+              </button>
+            )}
+          </div>
+        )}
+
         <div
           className="flex items-end gap-3 rounded-xl border border-border bg-card px-4 py-3 focus-within:border-primary/40 focus-within:glow-primary-sm transition-all duration-300"
           onDrop={handleDrop}

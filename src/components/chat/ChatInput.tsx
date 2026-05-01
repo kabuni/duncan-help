@@ -3,6 +3,7 @@ import { Send, Paperclip, X, FileText, Image as ImageIcon, Loader2, Mic, Square 
 import type { ChatAttachment } from "@/hooks/useNormanChat";
 import { invokeEdge } from "@/lib/edgeApi";
 import { toast } from "sonner";
+import AudioWaveform from "@/components/chat/AudioWaveform";
 
 interface ChatInputProps {
   onSubmit: (input: string, attachments: ChatAttachment[]) => void;
@@ -40,6 +41,7 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress }: C
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [activeStream, setActiveStream] = useState<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -121,6 +123,7 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress }: C
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
+      setActiveStream(stream);
       audioChunksRef.current = [];
 
       const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"];
@@ -134,6 +137,7 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress }: C
 
       recorder.onstop = async () => {
         setIsRecording(false);
+        setActiveStream(null);
         mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
         mediaStreamRef.current = null;
 

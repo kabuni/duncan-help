@@ -148,7 +148,7 @@ const Index = () => {
 
   const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
   const [weather, setWeather] = useState<{ temp: number; description: string } | null>(null);
-  const [voiceMode, setVoiceMode] = useState(false);
+  const [mobileMenuOpen2_unused] = useState(false); // placeholder removed
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [featureRequestOpen, setFeatureRequestOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);

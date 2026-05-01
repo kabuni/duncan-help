@@ -112,6 +112,82 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress }: C
     e.preventDefault();
   }, []);
 
+  const stopRecording = useCallback(() => {
+    const rec = mediaRecorderRef.current;
+    if (rec && rec.state !== "inactive") rec.stop();
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      audioChunksRef.current = [];
+
+      const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"];
+      const mimeType = mimeCandidates.find((t) => (window as any).MediaRecorder?.isTypeSupported?.(t)) || "";
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        setIsRecording(false);
+        mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+        mediaStreamRef.current = null;
+
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        if (blob.size === 0) return;
+        setIsTranscribing(true);
+        try {
+          const buf = await blob.arrayBuffer();
+          // Chunked base64 to avoid stack overflow
+          let binary = "";
+          const bytes = new Uint8Array(buf);
+          const chunk = 0x8000;
+          for (let i = 0; i < bytes.length; i += chunk) {
+            binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)) as any);
+          }
+          const base64 = btoa(binary);
+          const data = await invokeEdge<{ text?: string; error?: string }>("transcribe-audio", {
+            audio: base64,
+            mimeType: recorder.mimeType || "audio/webm",
+          });
+          const text = data?.text?.trim();
+          if (text) {
+            setInput((prev) => (prev ? prev + (prev.endsWith(" ") ? "" : " ") + text : text));
+            requestAnimationFrame(() => textareaRef.current?.focus());
+          } else {
+            toast.error("No speech detected");
+          }
+        } catch (err: any) {
+          console.error("Transcription failed:", err);
+          toast.error(err?.message || "Transcription failed");
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      recorder.start();
+      setIsRecording(true);
+    } catch (err: any) {
+      console.error("Mic error:", err);
+      if (err?.name === "NotAllowedError") {
+        toast.error("Microphone access denied");
+      } else {
+        toast.error("Could not start recording");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      mediaRecorderRef.current?.state !== "inactive" && mediaRecorderRef.current?.stop();
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
   return (
     <div className="relative z-10 border-t border-border px-8 py-4">
       <div className="mx-auto max-w-3xl">

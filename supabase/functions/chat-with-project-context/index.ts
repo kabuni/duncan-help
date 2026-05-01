@@ -228,7 +228,7 @@ Deno.serve(async (req) => {
 
     // 8. Construct AI messages
     const baseSystemPrompt = project.system_prompt?.trim() || DEFAULT_SYSTEM_PROMPT;
-    const systemPrompt = baseSystemPrompt + fileContextBlock;
+    const systemPrompt = baseSystemPrompt + fileContextBlock + priorChatsBlock;
 
     const aiMessages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string }> = [
       { role: "system", content: systemPrompt },

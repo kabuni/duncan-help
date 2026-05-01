@@ -275,18 +275,35 @@ export default function ProjectWorkspace() {
             <ScrollArea className="flex-1">
               <div className="p-2 space-y-0.5">
                 {chats.map(chat => (
-                  <button
+                  <div
                     key={chat.id}
-                    onClick={() => setActiveChatId(chat.id)}
-                    className={`flex items-center gap-2 w-full rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                    className={`group flex items-center gap-1 w-full rounded-md pr-1 text-xs font-medium transition-colors ${
                       activeChatId === chat.id
                         ? "bg-primary/10 text-primary"
                         : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
                     }`}
                   >
-                    <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{chat.title}</span>
-                  </button>
+                    <button
+                      onClick={() => setActiveChatId(chat.id)}
+                      className="flex items-center gap-2 flex-1 min-w-0 px-3 py-2 text-left"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{chat.title}</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Delete chat "${chat.title}"? This cannot be undone.`)) {
+                          deleteChat(chat.id);
+                          if (activeChatId === chat.id) setActiveChatId(null);
+                        }
+                      }}
+                      className="shrink-0 opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive transition-all"
+                      title="Delete chat"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 ))}
                 {chats.length === 0 && !chatsLoading && (
                   <p className="px-3 py-4 text-[11px] text-muted-foreground text-center">
@@ -317,18 +334,35 @@ export default function ProjectWorkspace() {
                 <ScrollArea className="flex-1">
                   <div className="p-2 space-y-0.5">
                     {chats.map(chat => (
-                      <button
+                      <div
                         key={chat.id}
-                        onClick={() => { setActiveChatId(chat.id); setChatListOpen(false); }}
-                        className={`flex items-center gap-2 w-full rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                        className={`group flex items-center gap-1 w-full rounded-md pr-1 text-xs font-medium transition-colors ${
                           activeChatId === chat.id
                             ? "bg-primary/10 text-primary"
                             : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
                         }`}
                       >
-                        <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">{chat.title}</span>
-                      </button>
+                        <button
+                          onClick={() => { setActiveChatId(chat.id); setChatListOpen(false); }}
+                          className="flex items-center gap-2 flex-1 min-w-0 px-3 py-2 text-left"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{chat.title}</span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Delete chat "${chat.title}"? This cannot be undone.`)) {
+                              deleteChat(chat.id);
+                              if (activeChatId === chat.id) setActiveChatId(null);
+                            }
+                          }}
+                          className="shrink-0 h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-destructive transition-colors"
+                          title="Delete chat"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     ))}
                     {chats.length === 0 && !chatsLoading && (
                       <p className="px-3 py-4 text-[11px] text-muted-foreground text-center">

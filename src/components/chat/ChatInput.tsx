@@ -34,10 +34,15 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export default function ChatInput({ onSubmit, isLoading, extractionProgress, onVoiceToggle, isVoiceActive }: ChatInputProps) {
+export default function ChatInput({ onSubmit, isLoading, extractionProgress }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -185,23 +190,28 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress, onV
             <Send className="h-3.5 w-3.5" />
           </button>
 
-          {onVoiceToggle && (
-            <button
-              type="button"
-              onClick={onVoiceToggle}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all ${
-                isVoiceActive
-                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80"
-              }`}
-              title={isVoiceActive ? "End voice mode" : "Start voice mode"}
-            >
+          <button
+            type="button"
+            onClick={isRecording ? stopRecording : startRecording}
+            disabled={isLoading || isTranscribing}
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all ${
+              isRecording
+                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90 animate-pulse"
+                : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+            } disabled:opacity-30`}
+            title={isRecording ? "Stop & transcribe" : "Record voice"}
+          >
+            {isTranscribing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : isRecording ? (
+              <Square className="h-3.5 w-3.5" />
+            ) : (
               <Mic className="h-3.5 w-3.5" />
-            </button>
-          )}
+            )}
+          </button>
         </div>
         <p className="mt-2 text-center text-[10px] font-mono text-muted-foreground/40">
-          Shift+Enter for new line · Attach files for analysis · Powered by Duncan AI Engine
+          Shift+Enter for new line · Attach files for analysis · Tap mic to dictate · Powered by Duncan AI Engine
         </p>
       </div>
     </div>

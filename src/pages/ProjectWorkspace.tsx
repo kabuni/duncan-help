@@ -277,7 +277,7 @@ export default function ProjectWorkspace() {
                 {chats.map(chat => (
                   <div
                     key={chat.id}
-                    className={`group flex items-center gap-1 w-full rounded-md pr-1 text-xs font-medium transition-colors ${
+                    className={`group flex items-center gap-1 w-full min-w-0 rounded-md pr-1 text-xs font-medium transition-colors ${
                       activeChatId === chat.id
                         ? "bg-primary/10 text-primary"
                         : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"

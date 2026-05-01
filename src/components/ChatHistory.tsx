@@ -111,12 +111,14 @@ const ChatHistory = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onDeleteChat(chat.id);
+                          if (confirm(`Delete chat "${chat.title}"? This cannot be undone.`)) {
+                            onDeleteChat(chat.id);
+                          }
                         }}
-                        className="shrink-0 opacity-0 group-hover:opacity-100 h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-destructive transition-all"
+                        className="shrink-0 h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                         title="Delete chat"
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))}

@@ -165,13 +165,17 @@ Deno.serve(async (req) => {
     // 6b. Fetch summaries of OTHER chats in the same project (cross-chat memory)
     let priorChatsBlock = "";
     try {
-      const { data: otherChats } = await supabase
+      const { data: otherChats, error: otherChatsError } = await supabase
         .from("project_chats")
         .select("id, title, created_at")
         .eq("project_id", chat.project_id)
         .neq("id", chat_id)
-        .order("updated_at", { ascending: false })
-        .limit(10);
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (otherChatsError) {
+        console.error("Failed to fetch prior project chats:", otherChatsError);
+      }
 
       if (otherChats && otherChats.length > 0) {
         const chatIds = otherChats.map((c: any) => c.id);
@@ -188,14 +192,14 @@ Deno.serve(async (req) => {
             (grouped[m.chat_id] ||= []).push({ role: m.role, content: m.content });
           }
 
-          const MAX_CHARS_PER_CHAT = 2000;
+          const MAX_CHARS_PER_CHAT = 5000;
           const sections: string[] = [];
           for (const c of otherChats) {
             const msgs = grouped[c.id];
             if (!msgs || msgs.length === 0) continue;
-            // Take last 6 messages, truncate content
-            const recent = msgs.slice(-6).map((m) => {
-              const content = m.content.length > 400 ? m.content.slice(0, 400) + "…" : m.content;
+            // Take enough recent context from each thread for task extraction, while capping token usage.
+            const recent = msgs.slice(-20).map((m) => {
+              const content = m.content.length > 900 ? m.content.slice(0, 900) + "…" : m.content;
               return `${m.role.toUpperCase()}: ${content}`;
             }).join("\n");
             const trimmed = recent.length > MAX_CHARS_PER_CHAT ? recent.slice(0, MAX_CHARS_PER_CHAT) + "…" : recent;
@@ -204,7 +208,7 @@ Deno.serve(async (req) => {
 
           if (sections.length > 0) {
             priorChatsBlock =
-              "\n\n## PRIOR CHAT HISTORY IN THIS PROJECT\nThe following are excerpts from other chat threads within this same project. Use them as background memory — do not assume the user is asking about them unless they reference them explicitly.\n\n" +
+              "\n\n## PRIOR CHAT HISTORY IN THIS PROJECT\nThe following are excerpts from other chat threads within this same project. You have access to these prior project chats. When the user asks about previous chats, last chats, chat history, dates, or tasks mentioned before, answer from this context and do not say you lack chat-history access. If the provided excerpts are insufficient, say exactly what is missing from the available prior-chat excerpts.\n\n" +
               sections.join("\n\n---\n\n");
           }
         }

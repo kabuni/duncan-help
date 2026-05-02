@@ -88,6 +88,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
               <Select value={status} onValueChange={v => setStatus(v as CardStatus)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="not_started">⚪ Not started</SelectItem>
                   <SelectItem value="red">🔴 Red</SelectItem>
                   <SelectItem value="amber">🟡 Yellow</SelectItem>
                   <SelectItem value="green">🟢 Green</SelectItem>

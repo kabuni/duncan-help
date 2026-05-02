@@ -65,14 +65,29 @@ export default function KeyEventsDiary() {
       ? events.filter((e) => e.risk_level !== "green")
       : events;
 
+    const CAT_ICON: Record<string, string> = {
+      Travel: "✈️",
+      Holiday: "🏖️",
+      Marketing: "📣",
+      Launch: "🚀",
+      Investor: "💼",
+      Product: "🛠️",
+      Operations: "⚙️",
+      Event: "📌",
+    };
+
     const evItems: CalItem[] = filteredEvents
       .filter((e) => e.start_at)
       .map((e) => {
         const start = new Date(e.start_at!);
         const end = e.end_at ? new Date(e.end_at) : new Date(start.getTime() + 60 * 60 * 1000);
+        const name = e.event_name || e.title;
+        const icon = e.category ? (CAT_ICON[e.category] || "📌") : "📌";
+        const cat = e.category ? ` [${e.category}]` : "";
+        const owner = e.owner ? ` · ${e.owner}` : "";
         return {
           id: `event:${e.id}`,
-          title: e.event_name || e.title,
+          title: `${icon} ${name}${cat}${owner}`,
           start,
           end,
           allDay: e.all_day,

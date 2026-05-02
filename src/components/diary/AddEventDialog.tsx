@@ -67,8 +67,13 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     raw_description: "",
   });
   const [saving, setSaving] = useState(false);
-  const [owners, setOwners] = useState<{ user_id: string; display_name: string | null }[]>([]);
+  const [owners, setOwners] = useState<{ user_id: string; display_name: string | null; profile_id?: string }[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; display_name: string | null }[]>([]);
   const [files, setFiles] = useState<File[]>([]);
+  const [approvals, setApprovals] = useState<DraftApproval[]>([]);
+  const [appType, setAppType] = useState("Design");
+  const [appLabel, setAppLabel] = useState("");
+  const [appApprover, setAppApprover] = useState("none");
 
   useEffect(() => {
     if (!open) return;

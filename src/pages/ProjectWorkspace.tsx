@@ -521,7 +521,7 @@ export default function ProjectWorkspace() {
                     chatTitle={chats.find((c) => c.id === activeChatId)?.title}
                     projectName={project?.name}
                     members={members}
-                    currentUserId={currentProfile?.user_id || null}
+                    currentUserId={user?.id || null}
                   />
                 )}
                 {/* Messages */}

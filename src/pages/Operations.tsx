@@ -5,8 +5,9 @@ import {
   GitBranch, AlertTriangle,
   Clock, RefreshCw, Loader2, Activity, Search, X,
   BarChart3, Globe2, Users, MousePointerClick, PlugZap, Send,
-  GitPullRequest, GitCommit, FolderGit2,
+  GitPullRequest, GitCommit, FolderGit2, Building2,
 } from "lucide-react";
+import SuppliersDirectory from "@/components/suppliers/SuppliersDirectory";
 import AppLayout from "@/components/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";

@@ -431,7 +431,7 @@ export function EventApprovals({ eventId }: { eventId: string }) {
           disabled={adding || !currentUserId}
         >
           <Plus className="h-3 w-3 mr-1" />
-          {adding ? "Saving…" : "Save approver"}
+          {adding ? "Saving…" : rows.length > 0 ? "Update — add another approver" : "Add approver"}
         </Button>
       </div>
     </div>

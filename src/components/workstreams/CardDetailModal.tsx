@@ -803,7 +803,7 @@ function TaskStatusPicker({ status, onChange }: { status: CardStatus; onChange: 
 function CardCommentRow({
   comment, currentUserId, onDelete,
 }: {
-  comment: { id: string; card_id: string; user_id: string; user_name?: string; content: string; created_at: string };
+  comment: { id: string; card_id: string; user_id: string; user_name?: string; content: string; created_at: string; updated_at?: string };
   currentUserId?: string;
   onDelete: () => void;
 }) {
@@ -826,8 +826,9 @@ function CardCommentRow({
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs font-medium text-foreground">{comment.user_name || "Unknown"}</span>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground">
-            {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+          <span className="text-[10px] text-muted-foreground" title={format(new Date(comment.updated_at || comment.created_at), "MMM d, yyyy 'at' h:mm a")}>
+            {comment.updated_at && comment.updated_at !== comment.created_at ? "edited " : ""}
+            {formatDistanceToNow(new Date(comment.updated_at || comment.created_at), { addSuffix: true })}
           </span>
           {isOwner && !editing && (
             <>
@@ -880,7 +881,7 @@ function CardCommentRow({
 function TaskCommentRow({
   comment, isOwner, onSave, onDelete,
 }: {
-  comment: { id: string; user_id: string; user_name?: string; content: string; created_at: string };
+  comment: { id: string; user_id: string; user_name?: string; content: string; created_at: string; updated_at?: string };
   isOwner: boolean;
   onSave: (content: string) => void;
   onDelete: () => void;
@@ -900,8 +901,9 @@ function TaskCommentRow({
       <div className="flex items-center justify-between gap-2 mb-0.5">
         <span className="text-[10px] font-medium text-foreground">{comment.user_name || "Unknown"}</span>
         <div className="flex items-center gap-2">
-          <span className="text-[9px] text-muted-foreground">
-            {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+          <span className="text-[9px] text-muted-foreground" title={format(new Date(comment.updated_at || comment.created_at), "MMM d, yyyy 'at' h:mm a")}>
+            {comment.updated_at && comment.updated_at !== comment.created_at ? "edited " : ""}
+            {formatDistanceToNow(new Date(comment.updated_at || comment.created_at), { addSuffix: true })}
           </span>
           {isOwner && !editing && (
             <>

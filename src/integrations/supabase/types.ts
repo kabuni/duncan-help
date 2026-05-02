@@ -1674,7 +1674,22 @@ export type Database = {
           title?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "project_chat_plan_items_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "project_chats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_chat_plan_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       project_chats: {
         Row: {

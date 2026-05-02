@@ -174,6 +174,10 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       toast.error("Start date is required");
       return;
     }
+    if (!draft.owner.trim()) {
+      toast.error("Owner is required — every event needs an accountable owner");
+      return;
+    }
     setSaving(true);
 
     const startISO = draft.all_day
@@ -310,9 +314,9 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
           </div>
 
           <div className="space-y-1.5">
-            <Label>Owner</Label>
+            <Label>Owner *</Label>
             <Select value={draft.owner} onValueChange={(v) => setDraft({ ...draft, owner: v })}>
-              <SelectTrigger><SelectValue placeholder="Select owner" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select owner (required)" /></SelectTrigger>
               <SelectContent>
                 {owners.map((o) => (
                   <SelectItem key={o.user_id} value={o.display_name as string}>
@@ -549,7 +553,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving || !draft.event_name.trim()}>
+          <Button onClick={save} disabled={saving || !draft.event_name.trim() || !draft.owner.trim()}>
             {saving ? "Saving…" : "Add to diary"}
           </Button>
         </DialogFooter>

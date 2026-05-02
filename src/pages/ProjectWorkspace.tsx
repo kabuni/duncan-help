@@ -326,9 +326,9 @@ export default function ProjectWorkspace() {
   const extractedCount = files.filter(f => f.extracted_text).length;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-[100dvh] overflow-hidden bg-background">
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-      <main className="flex-1 lg:ml-64 flex flex-col min-h-0">
+      <main className="flex-1 lg:ml-64 flex flex-col min-h-0 overflow-hidden">
         {/* Header */}
         <header className="flex items-center gap-1.5 sm:gap-3 border-b border-border px-2 sm:px-4 py-3 shrink-0">
           <MobileMenuButton onClick={() => setMobileOpen(true)} />
@@ -374,7 +374,7 @@ export default function ProjectWorkspace() {
         </header>
 
         {/* Workspace */}
-        <div className="flex-1 flex min-h-0">
+        <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* LEFT: Chat list (desktop) */}
           <div className="w-56 shrink-0 border-r border-border flex-col bg-sidebar/50 hidden md:flex">
             <div className="p-3 border-b border-border">
@@ -489,7 +489,7 @@ export default function ProjectWorkspace() {
           )}
 
           {/* CENTER: Chat */}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
             {!activeChatId ? (
               <div className="flex-1 flex flex-col">
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-6">

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import type { KeyEvent, KeyEventGoal } from "@/hooks/useKeyEvents";
 import { Calendar as CalendarIcon, ExternalLink, AlertTriangle, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EventAttachments } from "./EventAttachments";
 
 const RISK_TONE: Record<string, string> = {
   red: "bg-destructive/15 text-destructive border-destructive/30",

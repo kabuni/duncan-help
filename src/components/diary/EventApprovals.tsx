@@ -184,7 +184,7 @@ export function EventApprovals({ eventId }: { eventId: string }) {
     setBusyId(row.id);
     // Update event date and approval
     const [{ error: evErr }, { error: apErr }] = await Promise.all([
-      supabase.from("key_events").update({ start_date: row.proposed_date }).eq("id", row.event_id),
+      supabase.from("key_events").update({ start_at: row.proposed_date }).eq("id", row.event_id),
       supabase
         .from("key_event_approvals" as any)
         .update({

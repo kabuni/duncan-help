@@ -8,7 +8,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Paperclip, X } from "lucide-react";
+import { Paperclip, X, Plus, ShieldCheck } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+
+const APPROVAL_TYPES = ["Design", "Legal", "Finance", "Marketing", "Operations", "Other"];
+
+interface DraftApproval {
+  approval_type: string;
+  label: string;
+  approver_profile_id: string | null;
+}
 
 const sanitizeFileName = (fileName: string) => {
   const ext = fileName.includes(".") ? fileName.split(".").pop()?.toLowerCase() ?? "" : "";

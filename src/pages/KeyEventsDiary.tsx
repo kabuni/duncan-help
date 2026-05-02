@@ -94,23 +94,8 @@ export default function KeyEventsDiary() {
         };
       });
 
-    const goalItems: CalItem[] = goals
-      .filter((g) => g.target_date && g.status === "active")
-      .map((g) => {
-        const start = new Date(g.target_date + "T00:00:00");
-        const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-        return {
-          id: `goal:${g.id}`,
-          title: `🎯 ${g.name}`,
-          start,
-          end,
-          allDay: true,
-          resource: { kind: "goal", data: g },
-        };
-      });
-
-    return [...goalItems, ...evItems];
-  }, [events, goals, riskFilter]);
+    return evItems;
+  }, [events, riskFilter]);
 
   const counts = useMemo(() => {
     const red = events.filter((e) => e.risk_level === "red").length;
@@ -120,30 +105,11 @@ export default function KeyEventsDiary() {
   }, [events]);
 
   function handleSelectItem(item: CalItem) {
-    if (item.resource.kind === "event") {
-      setSelectedEvent(item.resource.data);
-      setSelectedGoal(null);
-    } else {
-      setSelectedGoal(item.resource.data);
-      setSelectedEvent(null);
-    }
+    setSelectedEvent(item.resource.data);
     setDrawerOpen(true);
   }
-
-  function handleSelectGoal(g: KeyEventGoal) {
-    setSelectedGoal(g);
-    setSelectedEvent(null);
-    setDrawerOpen(true);
-    if (g.target_date) setDate(new Date(g.target_date + "T00:00:00"));
-  }
-
-  const goalEventsForSelected = useMemo(() => {
-    if (!selectedGoal) return [];
-    return events.filter((e) => e.linked_goal_ids.includes(selectedGoal.id));
-  }, [selectedGoal, events]);
 
   const eventPropGetter = (item: CalItem) => {
-    if (item.resource.kind === "goal") return { className: "evt-goal" };
     const lvl = item.resource.data.risk_level;
     return { className: `evt-${lvl}` };
   };

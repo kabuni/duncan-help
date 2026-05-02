@@ -244,16 +244,20 @@ export function PlanningChecklist({
             </span>
           )}
         </button>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1.5">
+          <span className="hidden sm:inline text-[10px] text-muted-foreground">
+            Saved to project tasks
+          </span>
           <Button
             size="sm"
-            variant="default"
+            variant="outline"
             className="h-7 text-xs"
             disabled={totalOpen === 0}
             onClick={() => setPromoteOpen(true)}
+            title="Optional: also create workstream cards from these tasks"
           >
             <Send className="h-3 w-3 mr-1" />
-            Send to Workstreams
+            Also send to Workstreams
           </Button>
         </div>
       </div>

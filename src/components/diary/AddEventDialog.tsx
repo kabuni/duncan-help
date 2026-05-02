@@ -382,6 +382,15 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
             </Select>
           </div>
 
+          <div className="col-span-2 space-y-1.5">
+            <Label>Time zone</Label>
+            <TimezonePicker
+              value={draft.start_tz}
+              onChange={(tz) => setDraft({ ...draft, start_tz: tz })}
+            />
+            <p className="text-[11px] text-muted-foreground">Times you enter below are interpreted in this zone.</p>
+          </div>
+
           <div className="col-span-2 flex items-center gap-2 pt-1">
             <Checkbox
               id="ev-allday"

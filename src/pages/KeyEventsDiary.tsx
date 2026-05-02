@@ -109,11 +109,6 @@ export default function KeyEventsDiary() {
     return evItems;
   }, [events, riskFilter, ownerFilter]);
 
-  const counts = useMemo(() => {
-    const red = events.filter((e) => e.risk_level === "red").length;
-    const amber = events.filter((e) => e.risk_level === "amber").length;
-    return { red, amber };
-  }, [events]);
 
   function handleSelectItem(item: CalItem) {
     setSelectedEvent(item.resource.data);

@@ -167,3 +167,12 @@ verify_jwt = false
 
 [functions.transcribe-audio]
 verify_jwt = false
+
+[functions.duncan-calendar-auth]
+verify_jwt = false
+
+[functions.duncan-calendar-callback]
+verify_jwt = false
+
+[functions.duncan-calendar-sync]
+verify_jwt = false

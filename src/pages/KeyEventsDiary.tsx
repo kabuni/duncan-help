@@ -173,18 +173,35 @@ export default function KeyEventsDiary() {
   }
 
   const eventPropGetter = (item: CalItem) => {
-    const lvl = item.resource.data.risk_level;
-    return { className: `evt-${lvl}` };
+    const ev = item.resource.data;
+    const lvl = ev.risk_level;
+    const meta = getCategoryMeta(ev.category);
+    return {
+      className: `evt-${lvl}`,
+      style: { ["--cat-color" as any]: meta.hsl } as React.CSSProperties,
+    };
   };
 
   const EventChip = ({ event }: { event: CalItem }) => {
     const ev = event.resource.data;
     const name = ev.event_name || ev.title;
     const isAllDay = ev.all_day;
+    const meta = getCategoryMeta(ev.category);
+    const Header = (
+      <div className="flex items-center gap-1 min-w-0">
+        <span
+          aria-hidden
+          className="inline-block h-1.5 w-1.5 rounded-full shrink-0"
+          style={{ background: `hsl(${meta.hsl})` }}
+        />
+        <span aria-hidden className="text-[10px] leading-none">{meta.icon}</span>
+        <span className="truncate font-medium">{name}</span>
+      </div>
+    );
     if (viewTz === "both") {
       return (
         <div className="leading-tight">
-          <div className="truncate font-medium">{name}</div>
+          {Header}
           {!isAllDay && (
             <div className="flex flex-col text-[10px] opacity-90 mt-0.5">
               <span>🇬🇧 {formatTimeInTz(ev.start_at, "Europe/London")}</span>
@@ -196,7 +213,7 @@ export default function KeyEventsDiary() {
     }
     return (
       <div className="leading-tight">
-        <div className="truncate font-medium">{name}</div>
+        {Header}
         {!isAllDay && (
           <div className="text-[10px] opacity-90">
             {formatTimeInTz(ev.start_at, viewTz)}

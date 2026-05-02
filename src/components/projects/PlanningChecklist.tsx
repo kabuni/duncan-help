@@ -244,16 +244,20 @@ export function PlanningChecklist({
             </span>
           )}
         </button>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1.5">
+          <span className="hidden sm:inline text-[10px] text-muted-foreground">
+            Saved to project tasks
+          </span>
           <Button
             size="sm"
-            variant="default"
+            variant="outline"
             className="h-7 text-xs"
             disabled={totalOpen === 0}
             onClick={() => setPromoteOpen(true)}
+            title="Optional: also create workstream cards from these tasks"
           >
             <Send className="h-3 w-3 mr-1" />
-            Send to Workstreams
+            Also send to Workstreams
           </Button>
         </div>
       </div>
@@ -264,7 +268,7 @@ export function PlanningChecklist({
             <p className="text-xs text-muted-foreground italic">Loading…</p>
           ) : open_items.length === 0 ? (
             <p className="text-xs text-muted-foreground italic">
-              Capture next steps as you brainstorm. Items live in this project's <strong>Tasks</strong> tab. Click <strong>Send to Workstreams</strong> to also push them as cards.
+              Capture next steps as you brainstorm. Items are saved to this project's <strong>Tasks</strong> tab automatically. Sending to Workstreams is optional — only do it when you want company-wide kanban cards.
             </p>
           ) : (
             <>

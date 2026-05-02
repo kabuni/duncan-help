@@ -85,9 +85,9 @@ export function PromoteToWorkstreamDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Send plan to Workstreams</DialogTitle>
+          <DialogTitle>Also send to Workstreams?</DialogTitle>
           <DialogDescription>
-            Turn {itemCount} item{itemCount === 1 ? "" : "s"} into workstream cards and tasks. Assignees and due dates set on each item are preserved.
+            These {itemCount} item{itemCount === 1 ? "" : "s"} are already saved as project tasks. This step <strong>additionally</strong> creates workstream cards so the wider team can track them on the kanban. Assignees and due dates are preserved.
           </DialogDescription>
         </DialogHeader>
 

@@ -28,7 +28,7 @@ type CalItem = {
   start: Date;
   end: Date;
   allDay: boolean;
-  resource: { kind: "event"; data: KeyEvent } | { kind: "goal"; data: KeyEventGoal };
+  resource: { kind: "event"; data: KeyEvent };
 };
 
 function fmtDateTime(iso: string | null) {
@@ -37,14 +37,13 @@ function fmtDateTime(iso: string | null) {
 }
 
 export default function KeyEventsDiary() {
-  const { events, goals, status, lastSync, loading, syncing, refresh, connect, sync } = useKeyEvents();
+  const { events, cards, status, lastSync, loading, syncing, refresh, connect, sync } = useKeyEvents();
   const { isAdmin } = useIsAdmin();
   const [params, setParams] = useSearchParams();
   const [view, setView] = useState<View>("month");
   const [date, setDate] = useState<Date>(new Date());
   const [riskFilter, setRiskFilter] = useState<"all" | "atrisk">("all");
   const [selectedEvent, setSelectedEvent] = useState<KeyEvent | null>(null);
-  const [selectedGoal, setSelectedGoal] = useState<KeyEventGoal | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<Date | null>(null);

@@ -188,7 +188,6 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
 
     const missing: string[] = [];
     if (!form.owner.trim()) missing.push("owner");
-    if (!form.next_action.trim()) missing.push("next_action");
     const isComplete = missing.length === 0;
 
     const { error } = await supabase
@@ -200,8 +199,6 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
         owner: form.owner.trim(),
         location: form.location.trim() || null,
         raw_description: form.raw_description.trim() || null,
-        objective: form.objective.trim() || null,
-        next_action: form.next_action.trim() || null,
         all_day: form.all_day,
         start_at: startISO,
         end_at: endISO,

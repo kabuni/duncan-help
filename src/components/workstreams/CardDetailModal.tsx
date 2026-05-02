@@ -626,11 +626,13 @@ function TaskRow({
   onUpdateDueDate: (date: string | null) => void;
   onSetStatus: (status: CardStatus) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const initialExpanded = (task.comments_count || 0) > 0;
+  const [expanded, setExpanded] = useState(initialExpanded);
   const [newComment, setNewComment] = useState("");
   const { data: taskComments = [] } = useTaskComments(expanded ? task.id : null);
   const addTaskComment = useAddTaskComment();
   const deleteTaskComment = useDeleteTaskComment();
+  const updateTaskComment = useUpdateTaskComment();
 
   const handleAddComment = () => {
     if (!newComment.trim()) return;

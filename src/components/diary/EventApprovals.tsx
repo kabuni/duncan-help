@@ -421,18 +421,18 @@ export function EventApprovals({ eventId }: { eventId: string }) {
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Optional note (e.g. 'Hero banner v2')"
-            className="h-7 text-xs flex-1"
+            className="h-8 text-xs flex-1"
           />
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs"
-            onClick={addApproval}
-            disabled={adding || !currentUserId}
-          >
-            <Plus className="h-3 w-3 mr-1" /> Add
-          </Button>
         </div>
+        <Button
+          size="sm"
+          className="h-8 text-xs w-full"
+          onClick={addApproval}
+          disabled={adding || !currentUserId}
+        >
+          <Plus className="h-3 w-3 mr-1" />
+          {adding ? "Saving…" : "Save approver"}
+        </Button>
       </div>
     </div>
   );

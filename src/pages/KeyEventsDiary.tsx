@@ -46,6 +46,8 @@ export default function KeyEventsDiary() {
   const [selectedEvent, setSelectedEvent] = useState<KeyEvent | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<KeyEventGoal | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addDate, setAddDate] = useState<Date | null>(null);
 
   useEffect(() => {
     const flag = params.get("duncan_calendar");

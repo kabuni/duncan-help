@@ -81,7 +81,7 @@ const ResetPassword = () => {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg overflow-hidden">
             <img src={duncanAvatar} alt="Duncan" className="h-full w-full object-cover object-[50%_30%] scale-150" />
           </div>
-          <h1 className="text-lg font-bold text-foreground">Norman</h1>
+          <h1 className="text-lg font-bold text-foreground">Duncan</h1>
         </div>
 
         {success ? (

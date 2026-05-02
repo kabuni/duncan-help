@@ -156,6 +156,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       owner: "",
       location: "",
       raw_description: "",
+      start_tz: DEFAULT_TZ,
     });
     setFiles([]);
     setApprovals([]);

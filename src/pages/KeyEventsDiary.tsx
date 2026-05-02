@@ -219,6 +219,12 @@ export default function KeyEventsDiary() {
                   onNavigate={setDate}
                   views={["month", "week", "day", "agenda"]}
                   popup
+                  selectable={isAdmin}
+                  onSelectSlot={(slot: any) => {
+                    if (!isAdmin) return;
+                    setAddDate(slot.start instanceof Date ? slot.start : new Date(slot.start));
+                    setAddOpen(true);
+                  }}
                   eventPropGetter={eventPropGetter as any}
                   onSelectEvent={handleSelectItem as any}
                   tooltipAccessor={(item: any) => {

@@ -222,7 +222,24 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     if (error) {
       toast.error(error.message);
       return;
+  }
+
+  async function deleteEvent() {
+    if (!event) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("key_events" as any)
+      .delete()
+      .eq("id", event.id);
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
     }
+    toast.success("Event deleted");
+    onOpenChange(false);
+    onChanged();
+  }
     toast.success("Event updated");
     setEditing(false);
     onChanged();

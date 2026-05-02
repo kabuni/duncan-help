@@ -42,11 +42,12 @@ const CATEGORIES = [
   "Product", "Operations", "Travel", "Releases", "Other",
 ];
 
-function fmt(iso: string | null, allDay = false) {
+function fmt(iso: string | null, allDay = false, tz?: string | null) {
   if (!iso) return "—";
   const d = new Date(iso);
-  if (allDay) return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-  return d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const timeZone = tz || undefined;
+  if (allDay) return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone });
+  return d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone, timeZoneName: tz ? "short" : undefined });
 }
 
 function isoToDate(iso: string | null): string {

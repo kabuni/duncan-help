@@ -187,6 +187,11 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       toast.error("Start date is required");
       return;
     }
+    const effectiveEndDate = draft.end_date || draft.start_date;
+    if (effectiveEndDate < draft.start_date) {
+      toast.error("End date must be on or after the start date");
+      return;
+    }
     if (!draft.owner.trim()) {
       toast.error("Owner is required — every event needs an accountable owner");
       return;
@@ -197,8 +202,14 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       ? new Date(`${draft.start_date}T00:00:00`).toISOString()
       : new Date(`${draft.start_date}T${draft.start_time || "09:00"}:00`).toISOString();
     const endISO = draft.all_day
-      ? new Date(`${draft.end_date || draft.start_date}T23:59:59`).toISOString()
-      : new Date(`${draft.end_date || draft.start_date}T${draft.end_time || draft.start_time || "10:00"}:00`).toISOString();
+      ? new Date(`${effectiveEndDate}T23:59:59`).toISOString()
+      : new Date(`${effectiveEndDate}T${draft.end_time || draft.start_time || "10:00"}:00`).toISOString();
+
+    if (new Date(endISO) <= new Date(startISO)) {
+      setSaving(false);
+      toast.error("End must be after the start");
+      return;
+    }
 
     const localId = `local:${crypto.randomUUID()}`;
     const title = `[${draft.category}] ${draft.event_name.trim()}`;
@@ -250,15 +261,27 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     }
 
     if (approvals.length > 0 && uid) {
-      await supabase.from("key_event_approvals" as any).insert(
-        approvals.map((a) => ({
-          event_id: (inserted as any).id,
-          approval_type: a.approval_type,
-          label: a.label.trim() || null,
-          approver_profile_id: a.approver_profile_id,
-          requested_by: uid,
-        })),
-      );
+      const { data: insertedApprovals } = await supabase
+        .from("key_event_approvals" as any)
+        .insert(
+          approvals.map((a) => ({
+            event_id: (inserted as any).id,
+            approval_type: a.approval_type,
+            label: a.label.trim() || null,
+            approver_profile_id: a.approver_profile_id,
+            requested_by: uid,
+          })),
+        )
+        .select("id");
+
+      // Fire-and-forget Slack DMs to each assigned approver
+      for (const row of (insertedApprovals as { id: string }[] | null) || []) {
+        supabase.functions
+          .invoke("notify-event-approval", {
+            body: { approval_id: row.id, kind: "requested" },
+          })
+          .catch((err) => console.warn("notify-event-approval failed:", err));
+      }
     }
 
     let personalSyncMsg: string | null = null;

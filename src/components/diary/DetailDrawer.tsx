@@ -363,14 +363,6 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                   <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Objective</Label>
-                  <Textarea rows={2} value={form.objective} onChange={(e) => setForm({ ...form, objective: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Next action</Label>
-                  <Input value={form.next_action} onChange={(e) => setForm({ ...form, next_action: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
                   <Label>Notes</Label>
                   <Textarea rows={3} value={form.raw_description} onChange={(e) => setForm({ ...form, raw_description: e.target.value })} />
                 </div>

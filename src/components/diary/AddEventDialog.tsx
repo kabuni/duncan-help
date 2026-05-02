@@ -8,6 +8,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Paperclip, X } from "lucide-react";
+
+const sanitizeFileName = (fileName: string) => {
+  const ext = fileName.includes(".") ? fileName.split(".").pop()?.toLowerCase() ?? "" : "";
+  const base = ext ? fileName.slice(0, -(ext.length + 1)) : fileName;
+  const safe = base
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9-_]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase() || "file";
+  return ext ? `${safe}.${ext}` : safe;
+};
 
 const CATEGORIES = [
   "Event",

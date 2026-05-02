@@ -99,8 +99,11 @@ export function zonedDateTimeToISO(dateStr: string, timeStr: string, tz: string)
   const [y, m, d] = dateStr.split("-").map(Number);
   const [hh, mm] = (timeStr || "00:00").split(":").map(Number);
   const utcGuess = Date.UTC(y, (m || 1) - 1, d || 1, hh || 0, mm || 0, 0);
+  // The tz offset = (wall clock seen in tz) - (wall clock seen in UTC) for the same instant.
+  // To convert a wall-clock time meant to be IN `tz` into the correct UTC instant,
+  // we subtract that offset from our utcGuess (which assumed the wall clock was UTC).
   const asTz = new Date(new Date(utcGuess).toLocaleString("en-US", { timeZone: tz }));
   const asUtc = new Date(new Date(utcGuess).toLocaleString("en-US", { timeZone: "UTC" }));
-  const offset = asUtc.getTime() - asTz.getTime();
-  return new Date(utcGuess + offset).toISOString();
+  const offset = asTz.getTime() - asUtc.getTime();
+  return new Date(utcGuess - offset).toISOString();
 }

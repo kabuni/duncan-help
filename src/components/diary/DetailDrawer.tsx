@@ -9,7 +9,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { KeyEvent, WorkstreamCard } from "@/hooks/useKeyEvents";
-import { Calendar as CalendarIcon, ExternalLink, AlertTriangle, Layers, Plus, X, Check, Pencil } from "lucide-react";
+import { Calendar as CalendarIcon, ExternalLink, AlertTriangle, Layers, Plus, X, Check, Pencil, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { EventAttachments } from "./EventAttachments";
 import { EventApprovals } from "./EventApprovals";
@@ -217,6 +228,23 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     onChanged();
   }
 
+  async function deleteEvent() {
+    if (!event) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("key_events" as any)
+      .delete()
+      .eq("id", event.id);
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Event deleted");
+    onOpenChange(false);
+    onChanged();
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
@@ -229,14 +257,45 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                 )}
                 <Badge className={cn("border text-[10px]", RISK_TONE[event.risk_level])}>{event.risk_level}</Badge>
                 {canEditFinal && !editing && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="ml-auto h-7 text-xs"
-                    onClick={() => setEditing(true)}
-                  >
-                    <Pencil className="h-3 w-3 mr-1" /> Edit
-                  </Button>
+                  <div className="ml-auto flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => setEditing(true)}
+                    >
+                      <Pencil className="h-3 w-3 mr-1" /> Edit
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/10"
+                          disabled={saving}
+                        >
+                          <Trash2 className="h-3 w-3 mr-1" /> Delete
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete this event?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This permanently removes "{event.event_name || event.title}" and any approvals or attachments tied to it. This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={deleteEvent}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete event
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 )}
               </div>
               <SheetTitle className="text-left">{event.event_name || event.title}</SheetTitle>
@@ -325,8 +384,8 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                   <Textarea rows={3} value={form.raw_description} onChange={(e) => setForm({ ...form, raw_description: e.target.value })} />
                 </div>
 
-                <div className="flex gap-2 pt-2">
-                  <Button onClick={saveEdits} disabled={saving || !form.event_name.trim() || !form.owner.trim()}>
+                <div className="sticky bottom-0 -mx-6 px-6 py-3 bg-background border-t border-border flex gap-2 mt-4">
+                  <Button onClick={saveEdits} disabled={saving || !form.event_name.trim() || !form.owner.trim()} className="flex-1">
                     {saving ? "Saving…" : "Save changes"}
                   </Button>
                   <Button variant="outline" onClick={() => setEditing(false)} disabled={saving}>

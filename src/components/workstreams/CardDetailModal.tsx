@@ -826,8 +826,9 @@ function CardCommentRow({
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs font-medium text-foreground">{comment.user_name || "Unknown"}</span>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground">
-            {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+          <span className="text-[10px] text-muted-foreground" title={format(new Date(comment.updated_at || comment.created_at), "MMM d, yyyy 'at' h:mm a")}>
+            {comment.updated_at && comment.updated_at !== comment.created_at ? "edited " : ""}
+            {formatDistanceToNow(new Date(comment.updated_at || comment.created_at), { addSuffix: true })}
           </span>
           {isOwner && !editing && (
             <>

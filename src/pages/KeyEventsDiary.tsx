@@ -54,7 +54,7 @@ export default function KeyEventsDiary() {
     const flag = params.get("duncan_calendar");
     if (!flag) return;
     if (flag === "connected") toast.success("Duncan calendar connected");
-    else if (flag === "connected_no_calendar") toast.warning("Connected, but 'Duncan | Key Events' calendar not found in this Google account");
+    else if (flag === "connected_no_calendar") toast.warning("Connected, but 'Duncan | Planner' calendar not found in this Google account");
     else toast.error(`Calendar connection failed: ${params.get("reason") || "unknown"}`);
     params.delete("duncan_calendar");
     params.delete("reason");

@@ -13,10 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import { useKeyEvents, type KeyEvent, type KeyEventGoal } from "@/hooks/useKeyEvents";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { toast } from "sonner";
-import { RefreshCw, AlertTriangle } from "lucide-react";
+import { RefreshCw, AlertTriangle, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GoalsPanel } from "@/components/diary/GoalsPanel";
 import { DetailDrawer } from "@/components/diary/DetailDrawer";
+import { AddEventDialog } from "@/components/diary/AddEventDialog";
 
 const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });

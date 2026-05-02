@@ -415,6 +415,13 @@ export default function ProjectWorkspace() {
               </div>
             ) : (
               <>
+                {projectId && activeChatId && (
+                  <PlanningChecklist
+                    chatId={activeChatId}
+                    projectId={projectId}
+                    chatTitle={chats.find((c) => c.id === activeChatId)?.title}
+                  />
+                )}
                 {/* Messages */}
                 <ScrollArea className="flex-1 p-4">
                   <div className="max-w-3xl mx-auto space-y-4">

@@ -314,9 +314,9 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
           </div>
 
           <div className="space-y-1.5">
-            <Label>Owner</Label>
+            <Label>Owner *</Label>
             <Select value={draft.owner} onValueChange={(v) => setDraft({ ...draft, owner: v })}>
-              <SelectTrigger><SelectValue placeholder="Select owner" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select owner (required)" /></SelectTrigger>
               <SelectContent>
                 {owners.map((o) => (
                   <SelectItem key={o.user_id} value={o.display_name as string}>

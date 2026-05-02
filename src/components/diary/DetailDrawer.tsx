@@ -67,9 +67,10 @@ interface DetailDrawerProps {
   cards: WorkstreamCard[];
   isAdmin: boolean;
   onChanged: () => void;
+  viewTz?: "Europe/London" | "Asia/Kolkata" | "both";
 }
 
-export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChanged }: DetailDrawerProps) {
+export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChanged, viewTz = "Europe/London" }: DetailDrawerProps) {
   const [linkedIds, setLinkedIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);

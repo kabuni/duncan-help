@@ -268,7 +268,7 @@ export function PlanningChecklist({
             <p className="text-xs text-muted-foreground italic">Loading…</p>
           ) : open_items.length === 0 ? (
             <p className="text-xs text-muted-foreground italic">
-              Capture next steps as you brainstorm. Items live in this project's <strong>Tasks</strong> tab. Click <strong>Send to Workstreams</strong> to also push them as cards.
+              Capture next steps as you brainstorm. Items are saved to this project's <strong>Tasks</strong> tab automatically. Sending to Workstreams is optional — only do it when you want company-wide kanban cards.
             </p>
           ) : (
             <>

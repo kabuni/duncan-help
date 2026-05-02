@@ -58,10 +58,8 @@ const Sidebar = ({
   useEffect(() => {
     const fetchConnected = async () => {
       try {
-        const { data: company } = await supabase
-          .from("company_integrations")
-          .select("integration_id")
-          .eq("status", "connected");
+        const { data: companyAll } = await supabase.rpc("get_company_integrations_status");
+        const company = (companyAll ?? []).filter((c: any) => c.status === "connected");
         
         const { data: userInt } = await supabase
           .from("user_integrations")

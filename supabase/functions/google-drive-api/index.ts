@@ -199,21 +199,30 @@ Deno.serve(async (req) => {
     if (action === "list") {
       const { folderId, query: searchQuery, pageToken, pageSize = 100 } = body;
 
+      const escapeDriveLiteral = (s: string) =>
+        s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+
       let q = "trashed = false";
       if (folderId) {
-        q += ` and '${folderId}' in parents`;
+        if (typeof folderId !== "string" || folderId.length > 100) {
+          return jsonResponse({ error: "Invalid folderId" }, 400);
+        }
+        q += ` and '${escapeDriveLiteral(folderId)}' in parents`;
       }
       if (searchQuery) {
-        q += ` and name contains '${searchQuery}'`;
+        if (typeof searchQuery !== "string" || searchQuery.length > 500) {
+          return jsonResponse({ error: "Search query too long (max 500 chars)" }, 400);
+        }
+        q += ` and name contains '${escapeDriveLiteral(searchQuery)}'`;
       }
 
       const params = new URLSearchParams({
         q,
         fields: "nextPageToken,files(id,name,mimeType,modifiedTime,size,parents)",
-        pageSize: String(pageSize),
+        pageSize: String(Math.min(Math.max(Number(pageSize) || 100, 1), 1000)),
         orderBy: "name",
       });
-      if (pageToken) params.set("pageToken", pageToken);
+      if (pageToken) params.set("pageToken", String(pageToken));
 
       const res = await fetch(
         `https://www.googleapis.com/drive/v3/files?${params}`,
@@ -233,11 +242,29 @@ Deno.serve(async (req) => {
     // ─── SEARCH by name (find folders/files) ───
     if (action === "search") {
       const { name, mimeType, parentId } = body;
-      
+
+      const escapeDriveLiteral = (s: string) =>
+        s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+
       let q = "trashed = false";
-      if (name) q += ` and name = '${name}'`;
-      if (mimeType) q += ` and mimeType = '${mimeType}'`;
-      if (parentId) q += ` and '${parentId}' in parents`;
+      if (name) {
+        if (typeof name !== "string" || name.length > 500) {
+          return jsonResponse({ error: "Invalid name (max 500 chars)" }, 400);
+        }
+        q += ` and name = '${escapeDriveLiteral(name)}'`;
+      }
+      if (mimeType) {
+        if (typeof mimeType !== "string" || !/^[a-zA-Z0-9.+\-/]+$/.test(mimeType)) {
+          return jsonResponse({ error: "Invalid mimeType" }, 400);
+        }
+        q += ` and mimeType = '${escapeDriveLiteral(mimeType)}'`;
+      }
+      if (parentId) {
+        if (typeof parentId !== "string" || parentId.length > 100) {
+          return jsonResponse({ error: "Invalid parentId" }, 400);
+        }
+        q += ` and '${escapeDriveLiteral(parentId)}' in parents`;
+      }
 
       const params = new URLSearchParams({
         q,

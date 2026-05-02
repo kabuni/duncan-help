@@ -16,9 +16,7 @@ export function useCompanyIntegrations() {
   return useQuery({
     queryKey: ["company-integrations"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("company_integrations")
-        .select("id, integration_id, status, last_sync, documents_ingested, created_at, updated_at");
+      const { data, error } = await supabase.rpc("get_company_integrations_status");
       if (error) throw error;
       return (data ?? []) as CompanyIntegration[];
     },

@@ -28,20 +28,18 @@ serve(async (req) => {
 
     if (contentType.includes("application/json")) {
       const body = await req.json();
-      console.log("DocuSign webhook (JSON):", JSON.stringify(body).substring(0, 500));
-
-      // DocuSign Connect JSON format
+      // Redacted log: only non-PII fields
       envelopeId = body.envelopeId || body.data?.envelopeId || body.EnvelopeStatus?.EnvelopeID;
       envelopeStatus = body.status || body.data?.envelopeSummary?.status || body.EnvelopeStatus?.Status;
+      console.log("DocuSign webhook (JSON) received:", { envelopeId, envelopeStatus });
     } else if (contentType.includes("text/xml") || contentType.includes("application/xml")) {
       const xmlText = await req.text();
-      console.log("DocuSign webhook (XML):", xmlText.substring(0, 500));
-
-      // Simple XML parsing for envelope ID and status
+      // Simple XML parsing for envelope ID and status (do not log raw XML — may contain PII)
       const envelopeIdMatch = xmlText.match(/<EnvelopeID>([^<]+)<\/EnvelopeID>/i);
       const statusMatch = xmlText.match(/<Status>([^<]+)<\/Status>/i);
       envelopeId = envelopeIdMatch?.[1] || null;
       envelopeStatus = statusMatch?.[1] || null;
+      console.log("DocuSign webhook (XML) received:", { envelopeId, envelopeStatus });
     } else {
       // Try as JSON
       try {

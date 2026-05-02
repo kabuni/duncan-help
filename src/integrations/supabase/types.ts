@@ -2784,6 +2784,19 @@ export type Database = {
         Args: { p_integration_id: string }
         Returns: string
       }
+      get_company_integrations_status: {
+        Args: never
+        Returns: {
+          created_at: string
+          documents_ingested: number
+          id: string
+          integration_id: string
+          last_sync: string
+          status: string
+          updated_at: string
+          updated_by: string
+        }[]
+      }
       get_duncan_calendar_status: {
         Args: never
         Returns: {

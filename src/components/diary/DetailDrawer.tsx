@@ -93,6 +93,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     start_time: "",
     end_date: "",
     end_time: "",
+    start_tz: DEFAULT_TZ,
   });
 
   useEffect(() => {

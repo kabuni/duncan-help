@@ -17,6 +17,7 @@ const CATEGORIES = [
   "Investor",
   "Product",
   "Operations",
+  "Travel",
   "Other",
 ];
 

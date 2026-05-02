@@ -112,8 +112,7 @@ export default function KeyEventsDiary() {
   const counts = useMemo(() => {
     const red = events.filter((e) => e.risk_level === "red").length;
     const amber = events.filter((e) => e.risk_level === "amber").length;
-    const missing = events.filter((e) => e.missing_fields.includes("owner") || e.missing_fields.includes("next_action")).length;
-    return { red, amber, missing };
+    return { red, amber };
   }, [events]);
 
   function handleSelectItem(item: CalItem) {
@@ -169,7 +168,7 @@ export default function KeyEventsDiary() {
                   ))}
                 </SelectContent>
               </Select>
-              {(counts.red > 0 || counts.amber > 0 || counts.missing > 0) && (
+              {(counts.red > 0 || counts.amber > 0) && (
                 <button
                   onClick={() => setRiskFilter(riskFilter === "atrisk" ? "all" : "atrisk")}
                   className={cn(
@@ -180,7 +179,7 @@ export default function KeyEventsDiary() {
                   )}
                 >
                   <AlertTriangle className="h-3 w-3" />
-                  {counts.red} red · {counts.amber} amber · {counts.missing} missing owner
+                  {counts.red} red · {counts.amber} amber
                   {riskFilter === "atrisk" && " (filter on)"}
                 </button>
               )}

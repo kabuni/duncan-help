@@ -262,6 +262,7 @@ const Sidebar = ({
             onMobileClose?.();
           }}
           onDeleteChat={chatOps.deleteChat}
+          onRenameChat={chatOps.updateTitle}
           onMobileClose={onMobileClose}
         />
       </nav>

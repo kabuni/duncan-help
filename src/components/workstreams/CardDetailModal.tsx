@@ -670,10 +670,13 @@ function TaskRow({
             )}
             <button
               onClick={() => setExpanded(e => !e)}
-              className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
+              className={`text-[10px] flex items-center gap-1 transition-colors ${
+                (task.comments_count || 0) > 0 ? "text-primary hover:text-primary/80 font-medium" : "text-muted-foreground hover:text-primary"
+              }`}
             >
               <MessageSquare className="h-2.5 w-2.5" />
               {expanded ? "Hide" : "Comments"}
+              {(task.comments_count || 0) > 0 && <span>({task.comments_count})</span>}
             </button>
           </div>
         </div>

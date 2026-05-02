@@ -15,7 +15,7 @@ import { useIsAdmin } from "@/hooks/useUserRoles";
 import { toast } from "sonner";
 import { RefreshCw, AlertTriangle, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { GoalsPanel } from "@/components/diary/GoalsPanel";
+
 import { DetailDrawer } from "@/components/diary/DetailDrawer";
 import { AddEventDialog } from "@/components/diary/AddEventDialog";
 

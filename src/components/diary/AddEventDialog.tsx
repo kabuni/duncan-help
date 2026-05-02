@@ -381,7 +381,15 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
             <Input
               type="date"
               value={draft.start_date}
-              onChange={(e) => setDraft({ ...draft, start_date: e.target.value })}
+              onChange={(e) => {
+                const newStart = e.target.value;
+                setDraft((d) => ({
+                  ...d,
+                  start_date: newStart,
+                  // Keep end_date >= start_date so we never send Google an inverted range
+                  end_date: !d.end_date || d.end_date < newStart ? newStart : d.end_date,
+                }));
+              }}
             />
           </div>
           <div className="space-y-1.5">
@@ -389,6 +397,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
             <Input
               type="date"
               value={draft.end_date}
+              min={draft.start_date}
               onChange={(e) => setDraft({ ...draft, end_date: e.target.value })}
             />
           </div>

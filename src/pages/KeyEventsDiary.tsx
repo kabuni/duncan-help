@@ -301,19 +301,21 @@ export default function KeyEventsDiary() {
           </div>
         </Card>
 
-        <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground px-1">
-          <span className="font-mono uppercase tracking-wider text-[10px]">Categories</span>
-          {Object.entries(CATEGORY_META).map(([key, meta]) => (
-            <span key={key} className="inline-flex items-center gap-1.5">
-              <span
-                aria-hidden
-                className="inline-block h-2 w-2 rounded-sm"
-                style={{ background: `hsl(${meta.hsl})` }}
-              />
-              <span aria-hidden>{meta.icon}</span>
-              <span>{meta.label}</span>
-            </span>
-          ))}
+        <div className="shrink-0 -mx-4 lg:mx-0 px-4 lg:px-1 overflow-x-auto scrollbar-thin">
+          <div className="flex items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground whitespace-nowrap min-w-max lg:flex-wrap lg:min-w-0 lg:whitespace-normal">
+            <span className="font-mono uppercase tracking-wider text-[10px] shrink-0">Categories</span>
+            {Object.entries(CATEGORY_META).map(([key, meta]) => (
+              <span key={key} className="inline-flex items-center gap-1.5 shrink-0">
+                <span
+                  aria-hidden
+                  className="inline-block h-2 w-2 rounded-sm"
+                  style={{ background: `hsl(${meta.hsl})` }}
+                />
+                <span aria-hidden>{meta.icon}</span>
+                <span>{meta.label}</span>
+              </span>
+            ))}
+          </div>
         </div>
 
         <Card className="p-3 flex-1 min-h-0 flex flex-col">

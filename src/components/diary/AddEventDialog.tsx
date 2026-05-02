@@ -291,16 +291,6 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
           </div>
 
           <div className="col-span-2 space-y-1.5">
-            <Label htmlFor="ev-obj">Objective</Label>
-            <Input
-              id="ev-obj"
-              value={draft.objective}
-              onChange={(e) => setDraft({ ...draft, objective: e.target.value })}
-              placeholder="What outcome does this drive?"
-            />
-          </div>
-
-          <div className="col-span-2 space-y-1.5">
             <Label htmlFor="ev-desc">Notes</Label>
             <Textarea
               id="ev-desc"
@@ -309,6 +299,52 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
               rows={3}
               placeholder="Optional context"
             />
+          </div>
+
+          <div className="col-span-2 space-y-1.5">
+            <Label>Attachments</Label>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => document.getElementById("ev-files")?.click()}
+                className="h-8"
+              >
+                <Paperclip className="h-3 w-3 mr-1.5" />
+                Choose files
+              </Button>
+              <input
+                id="ev-files"
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const list = Array.from(e.target.files || []);
+                  setFiles((prev) => [...prev, ...list]);
+                  e.target.value = "";
+                }}
+              />
+              <span className="text-xs text-muted-foreground">
+                {files.length === 0 ? "No files selected" : `${files.length} file(s)`}
+              </span>
+            </div>
+            {files.length > 0 && (
+              <ul className="space-y-1 mt-1">
+                {files.map((f, i) => (
+                  <li key={i} className="flex items-center justify-between gap-2 text-xs border border-border rounded-md px-2 py-1">
+                    <span className="truncate">{f.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="text-muted-foreground hover:text-destructive shrink-0"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 

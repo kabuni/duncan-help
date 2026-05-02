@@ -342,6 +342,7 @@ export default function KeyEventsDiary() {
           cards={cards}
           isAdmin={isAdmin}
           onChanged={refresh}
+          viewTz={viewTz}
         />
 
         <AddEventDialog

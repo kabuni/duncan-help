@@ -54,7 +54,7 @@ export default function KeyEventsDiary() {
     const flag = params.get("duncan_calendar");
     if (!flag) return;
     if (flag === "connected") toast.success("Duncan calendar connected");
-    else if (flag === "connected_no_calendar") toast.warning("Connected, but 'Duncan | Key Events' calendar not found in this Google account");
+    else if (flag === "connected_no_calendar") toast.warning("Connected, but 'Duncan | Planner' calendar not found in this Google account");
     else toast.error(`Calendar connection failed: ${params.get("reason") || "unknown"}`);
     params.delete("duncan_calendar");
     params.delete("reason");
@@ -131,11 +131,11 @@ export default function KeyEventsDiary() {
       <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-6 space-y-4">
         <header className="space-y-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">Duncan Key Events Diary</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Duncan Planner</h1>
             <Badge variant="outline" className="font-mono text-[10px] uppercase">execution system</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            Strategic events synced from <span className="font-semibold">Duncan | Key Events</span>. Goal target dates appear as pinned markers.
+            Strategic events synced from <span className="font-semibold">Duncan | Planner</span>. Goal target dates appear as pinned markers.
           </p>
         </header>
 
@@ -151,7 +151,7 @@ export default function KeyEventsDiary() {
                   {status?.calendar_id
                     ? <>Calendar: <span className="font-mono">{status.calendar_name}</span></>
                     : status?.connected
-                      ? <span className="text-amber-500">'Duncan | Key Events' calendar not found in this account.</span>
+                      ? <span className="text-amber-500">'Duncan | Planner' calendar not found in this account.</span>
                       : "Admin must connect Duncan's Google account"}
                   {lastSync && <> · Last sync: {fmtDateTime(lastSync.finished_at || lastSync.started_at)} ({lastSync.status})</>}
                 </div>

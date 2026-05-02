@@ -182,7 +182,7 @@ const Sidebar = ({
           }
         >
           <Calendar className="h-4 w-4" />
-          Key Events
+          Planner
         </RouterNavLink>
 
         {canViewBriefing(user?.email) && (

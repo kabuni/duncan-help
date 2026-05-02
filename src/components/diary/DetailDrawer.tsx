@@ -63,6 +63,17 @@ function isoToTime(iso: string | null): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+// Returns "HH:mm" one hour after the given "HH:mm" string. Caps at "23:59".
+function addOneHour(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return time;
+  const total = h * 60 + m + 60;
+  if (total >= 24 * 60) return "23:59";
+  const nh = Math.floor(total / 60);
+  const nm = total % 60;
+  return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
+}
+
 interface DetailDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -368,7 +379,22 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                     <>
                       <div className="space-y-1.5">
                         <Label>Start time</Label>
-                        <Input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
+                        <Input
+                          type="time"
+                          value={form.start_time}
+                          onChange={(e) => {
+                            const start_time = e.target.value;
+                            setForm((f) => {
+                              const shouldAutoEnd = !f.end_time || f.end_time === f.start_time;
+                              const next = { ...f, start_time };
+                              if (start_time && shouldAutoEnd) {
+                                next.end_time = addOneHour(start_time);
+                                if (!f.end_date) next.end_date = f.start_date;
+                              }
+                              return next;
+                            });
+                          }}
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <Label>End time</Label>

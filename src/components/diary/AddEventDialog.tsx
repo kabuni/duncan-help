@@ -77,6 +77,17 @@ function toLocalDateStr(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+// Returns "HH:mm" one hour after the given "HH:mm" string. Wraps past midnight to "23:59".
+function addOneHour(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return time;
+  const total = h * 60 + m + 60;
+  if (total >= 24 * 60) return "23:59";
+  const nh = Math.floor(total / 60);
+  const nm = total % 60;
+  return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
+}
+
 export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: Props) {
   const initial = toLocalDateStr(defaultDate ?? new Date());
   const [draft, setDraft] = useState({
@@ -433,7 +444,18 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
                 <Input
                   type="time"
                   value={draft.start_time}
-                  onChange={(e) => setDraft({ ...draft, start_time: e.target.value })}
+                  onChange={(e) => {
+                    const start_time = e.target.value;
+                    setDraft((d) => {
+                      const shouldAutoEnd = !d.end_time || d.end_time === d.start_time;
+                      const next = { ...d, start_time };
+                      if (start_time && shouldAutoEnd) {
+                        next.end_time = addOneHour(start_time);
+                        if (!d.end_date) next.end_date = d.start_date;
+                      }
+                      return next;
+                    });
+                  }}
                 />
               </div>
               <div className="space-y-1.5">

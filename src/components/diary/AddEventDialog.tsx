@@ -10,6 +10,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Paperclip, X, Plus, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { TimezonePicker, zonedDateTimeToISO } from "./TimezonePicker";
+
+const DEFAULT_TZ = (() => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London"; } catch { return "Europe/London"; }
+})();
 
 const APPROVAL_TYPES = [
   "Design",

@@ -379,7 +379,22 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                     <>
                       <div className="space-y-1.5">
                         <Label>Start time</Label>
-                        <Input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
+                        <Input
+                          type="time"
+                          value={form.start_time}
+                          onChange={(e) => {
+                            const start_time = e.target.value;
+                            setForm((f) => {
+                              const shouldAutoEnd = !f.end_time || f.end_time === f.start_time;
+                              const next = { ...f, start_time };
+                              if (start_time && shouldAutoEnd) {
+                                next.end_time = addOneHour(start_time);
+                                if (!f.end_date) next.end_date = f.start_date;
+                              }
+                              return next;
+                            });
+                          }}
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <Label>End time</Label>

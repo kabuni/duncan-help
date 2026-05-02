@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { useKeyEvents, type KeyEvent, type WorkstreamCard } from "@/hooks/useKeyEvents";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { toast } from "sonner";
-import { RefreshCw, AlertTriangle, Plus } from "lucide-react";
+import { RefreshCw, Plus } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
@@ -109,11 +109,6 @@ export default function KeyEventsDiary() {
     return evItems;
   }, [events, riskFilter, ownerFilter]);
 
-  const counts = useMemo(() => {
-    const red = events.filter((e) => e.risk_level === "red").length;
-    const amber = events.filter((e) => e.risk_level === "amber").length;
-    return { red, amber };
-  }, [events]);
 
   function handleSelectItem(item: CalItem) {
     setSelectedEvent(item.resource.data);
@@ -168,21 +163,6 @@ export default function KeyEventsDiary() {
                   ))}
                 </SelectContent>
               </Select>
-              {(counts.red > 0 || counts.amber > 0) && (
-                <button
-                  onClick={() => setRiskFilter(riskFilter === "atrisk" ? "all" : "atrisk")}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 text-xs border rounded-md px-2 py-1 transition-colors",
-                    riskFilter === "atrisk"
-                      ? "bg-destructive/10 border-destructive/40 text-destructive"
-                      : "border-border text-muted-foreground hover:bg-accent"
-                  )}
-                >
-                  <AlertTriangle className="h-3 w-3" />
-                  {counts.red} red · {counts.amber} amber
-                  {riskFilter === "atrisk" && " (filter on)"}
-                </button>
-              )}
               {isAdmin && status?.connected && (
                 <Button variant="outline" size="sm" onClick={sync} disabled={syncing}>
                   <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", syncing && "animate-spin")} />

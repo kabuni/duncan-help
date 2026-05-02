@@ -93,6 +93,7 @@ export default function ProjectWorkspace() {
   const { members, loading: membersLoading, addMember, removeMember } = useProjectMembers(projectId || null);
   const { data: userProfiles = [] } = useUserProfiles({ approvedOnly: false });
   const { profile: currentProfile } = useProfile();
+  const { user } = useAuth();
   const myDisplayName = currentProfile?.display_name || "You";
   const myAvatarUrl = currentProfile?.avatar_url || null;
 

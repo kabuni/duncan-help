@@ -532,6 +532,45 @@ export type Database = {
         }
         Relationships: []
       }
+      duncan_calendar_tokens: {
+        Row: {
+          access_token: string
+          calendar_id: string | null
+          calendar_name: string | null
+          connected_by: string
+          created_at: string
+          google_account_email: string | null
+          id: string
+          refresh_token: string
+          token_expiry: string
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          calendar_id?: string | null
+          calendar_name?: string | null
+          connected_by: string
+          created_at?: string
+          google_account_email?: string | null
+          id?: string
+          refresh_token: string
+          token_expiry: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          calendar_id?: string | null
+          calendar_name?: string | null
+          connected_by?: string
+          created_at?: string
+          google_account_email?: string | null
+          id?: string
+          refresh_token?: string
+          token_expiry?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       feature_requests: {
         Row: {
           admin_notes: string | null
@@ -1039,6 +1078,180 @@ export type Database = {
           id?: string
           jd_storage_path?: string | null
           status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      key_event_goals: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          sort_order: number
+          status: string
+          target_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          sort_order?: number
+          status?: string
+          target_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          sort_order?: number
+          status?: string
+          target_date?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      key_event_sync_log: {
+        Row: {
+          error: string | null
+          events_flagged: number
+          events_seen: number
+          events_upserted: number
+          finished_at: string | null
+          id: string
+          started_at: string
+          status: string
+        }
+        Insert: {
+          error?: string | null
+          events_flagged?: number
+          events_seen?: number
+          events_upserted?: number
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          error?: string | null
+          events_flagged?: number
+          events_seen?: number
+          events_upserted?: number
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      key_events: {
+        Row: {
+          all_day: boolean
+          attendees: Json
+          calendar_id: string
+          category: string | null
+          classification_confidence: number | null
+          created_at: string
+          decision_needed: string | null
+          deleted_in_google: boolean
+          end_at: string | null
+          event_name: string | null
+          google_event_id: string
+          html_link: string | null
+          id: string
+          is_complete: boolean
+          last_classified_at: string | null
+          linked_docs: Json
+          linked_goal_ids: string[]
+          location: string | null
+          missing_fields: string[]
+          next_action: string | null
+          objective: string | null
+          organizer_email: string | null
+          owner: string | null
+          raw_description: string | null
+          risk_level: string
+          risk_reason: string | null
+          risks: string | null
+          start_at: string | null
+          status: string | null
+          success_metric: string | null
+          synced_at: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          all_day?: boolean
+          attendees?: Json
+          calendar_id: string
+          category?: string | null
+          classification_confidence?: number | null
+          created_at?: string
+          decision_needed?: string | null
+          deleted_in_google?: boolean
+          end_at?: string | null
+          event_name?: string | null
+          google_event_id: string
+          html_link?: string | null
+          id?: string
+          is_complete?: boolean
+          last_classified_at?: string | null
+          linked_docs?: Json
+          linked_goal_ids?: string[]
+          location?: string | null
+          missing_fields?: string[]
+          next_action?: string | null
+          objective?: string | null
+          organizer_email?: string | null
+          owner?: string | null
+          raw_description?: string | null
+          risk_level?: string
+          risk_reason?: string | null
+          risks?: string | null
+          start_at?: string | null
+          status?: string | null
+          success_metric?: string | null
+          synced_at?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          all_day?: boolean
+          attendees?: Json
+          calendar_id?: string
+          category?: string | null
+          classification_confidence?: number | null
+          created_at?: string
+          decision_needed?: string | null
+          deleted_in_google?: boolean
+          end_at?: string | null
+          event_name?: string | null
+          google_event_id?: string
+          html_link?: string | null
+          id?: string
+          is_complete?: boolean
+          last_classified_at?: string | null
+          linked_docs?: Json
+          linked_goal_ids?: string[]
+          location?: string | null
+          missing_fields?: string[]
+          next_action?: string | null
+          objective?: string | null
+          organizer_email?: string | null
+          owner?: string | null
+          raw_description?: string | null
+          risk_level?: string
+          risk_reason?: string | null
+          risks?: string | null
+          start_at?: string | null
+          status?: string | null
+          success_metric?: string | null
+          synced_at?: string
           title?: string
           updated_at?: string
         }
@@ -2360,7 +2573,16 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      duncan_calendar_status: {
+        Row: {
+          calendar_id: string | null
+          calendar_name: string | null
+          connected: boolean | null
+          google_account_email: string | null
+          last_updated: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       call_edge_function_with_service_role: {

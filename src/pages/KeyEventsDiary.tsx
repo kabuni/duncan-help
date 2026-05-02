@@ -19,6 +19,19 @@ import { cn } from "@/lib/utils";
 
 import { DetailDrawer } from "@/components/diary/DetailDrawer";
 import { AddEventDialog } from "@/components/diary/AddEventDialog";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { formatTimeInTz } from "@/components/diary/TimezonePicker";
+
+type ViewTz = "Europe/London" | "Asia/Kolkata" | "both";
+const VIEW_TZ_KEY = "planner_view_tz";
+
+function detectDefaultViewTz(): ViewTz {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz === "Asia/Kolkata") return "Asia/Kolkata";
+  } catch {}
+  return "Europe/London";
+}
 
 const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });

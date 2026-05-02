@@ -101,6 +101,8 @@ export default function ProjectWorkspace() {
   const [showSettings, setShowSettings] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
   const [showCollaborate, setShowCollaborate] = useState(false);
+  const [showTasks, setShowTasks] = useState(false);
+  const [openTaskCount, setOpenTaskCount] = useState(0);
   const [editName, setEditName] = useState("");
   const [editPrompt, setEditPrompt] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("");

@@ -220,6 +220,23 @@ export default function KeyEventsDiary() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap md:flex-nowrap md:justify-end">
+              <ToggleGroup
+                type="single"
+                size="sm"
+                value={viewTz}
+                onValueChange={(v) => v && setViewTz(v as ViewTz)}
+                className="h-8 border border-border rounded-md p-0.5"
+              >
+                <ToggleGroupItem value="Europe/London" className="h-7 px-2 text-xs gap-1" aria-label="View in UK time">
+                  <span aria-hidden>🇬🇧</span> UK
+                </ToggleGroupItem>
+                <ToggleGroupItem value="Asia/Kolkata" className="h-7 px-2 text-xs gap-1" aria-label="View in India time">
+                  <span aria-hidden>🇮🇳</span> IN
+                </ToggleGroupItem>
+                <ToggleGroupItem value="both" className="h-7 px-2 text-xs" aria-label="View both time zones">
+                  Both
+                </ToggleGroupItem>
+              </ToggleGroup>
               <Select value={ownerFilter} onValueChange={setOwnerFilter}>
                 <SelectTrigger className="h-8 flex-1 min-w-[140px] md:flex-none md:w-[160px] text-xs">
                   <SelectValue placeholder="Filter by owner" />

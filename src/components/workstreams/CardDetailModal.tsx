@@ -763,12 +763,13 @@ function TaskRow({
 
 function TaskStatusPicker({ status, onChange }: { status: CardStatus; onChange: (s: CardStatus) => void }) {
   const opts: { value: CardStatus; label: string; emoji: string; dot: string }[] = [
+    { value: "not_started", label: "Not started", emoji: "⚪", dot: "bg-muted-foreground/60" },
     { value: "red", label: "Red", emoji: "🔴", dot: "bg-red-500" },
     { value: "amber", label: "Yellow", emoji: "🟡", dot: "bg-amber-500" },
     { value: "green", label: "Green", emoji: "🟢", dot: "bg-emerald-500" },
     { value: "done", label: "Done", emoji: "✅", dot: "bg-primary" },
   ];
-  const current = opts.find(o => o.value === status) || opts[2];
+  const current = opts.find(o => o.value === status) || opts[0];
   return (
     <Select value={status} onValueChange={(v) => onChange(v as CardStatus)}>
       <SelectTrigger

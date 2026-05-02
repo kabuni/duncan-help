@@ -174,6 +174,10 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       toast.error("Start date is required");
       return;
     }
+    if (!draft.owner.trim()) {
+      toast.error("Owner is required — every event needs an accountable owner");
+      return;
+    }
     setSaving(true);
 
     const startISO = draft.all_day

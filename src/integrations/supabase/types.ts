@@ -2773,39 +2773,7 @@ export type Database = {
       }
     }
     Views: {
-      company_integrations_status: {
-        Row: {
-          created_at: string | null
-          documents_ingested: number | null
-          id: string | null
-          integration_id: string | null
-          last_sync: string | null
-          status: string | null
-          updated_at: string | null
-          updated_by: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          documents_ingested?: number | null
-          id?: string | null
-          integration_id?: string | null
-          last_sync?: string | null
-          status?: string | null
-          updated_at?: string | null
-          updated_by?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          documents_ingested?: number | null
-          id?: string | null
-          integration_id?: string | null
-          last_sync?: string | null
-          status?: string | null
-          updated_at?: string | null
-          updated_by?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       call_edge_function_with_service_role: {
@@ -2815,6 +2783,19 @@ export type Database = {
       get_company_integration_secret: {
         Args: { p_integration_id: string }
         Returns: string
+      }
+      get_company_integrations_status: {
+        Args: never
+        Returns: {
+          created_at: string
+          documents_ingested: number
+          id: string
+          integration_id: string
+          last_sync: string
+          status: string
+          updated_at: string
+          updated_by: string
+        }[]
       }
       get_duncan_calendar_status: {
         Args: never

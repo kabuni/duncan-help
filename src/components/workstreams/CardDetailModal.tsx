@@ -496,6 +496,32 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
 
                   {/* Comments Tab */}
                   <TabsContent value="comments" className="space-y-3">
+                    {/* Tasks panel — visible & editable while reviewing comments */}
+                    {tasks.length > 0 && (
+                      <div className="rounded-lg border border-border/60 bg-secondary/20 p-2.5 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <CheckCircle2 className="h-3 w-3" /> Tasks ({tasks.length})
+                          </span>
+                        </div>
+                        <div className="space-y-1.5 max-h-[260px] overflow-y-auto pr-1">
+                          {tasks.map(task => (
+                            <TaskRow
+                              key={task.id}
+                              task={task}
+                              users={users || []}
+                              currentUserId={user?.id}
+                              onToggle={() => handleToggleTask(task)}
+                              onDelete={() => deleteTask.mutate({ id: task.id, card_id: task.card_id })}
+                              onUpdateAssignees={(ids) => updateTaskAssignees.mutate({ taskId: task.id, cardId: task.card_id, userIds: ids })}
+                              onUpdateDueDate={(d) => updateTask.mutate({ id: task.id, card_id: task.card_id, due_date: d })}
+                              onSetStatus={(s) => handleSetTaskStatus(task, s)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {comments.map(c => (
                       <div key={c.id} className="group rounded-lg border border-border/60 bg-card/50 p-3">
                         <div className="flex items-center justify-between mb-1.5">

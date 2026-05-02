@@ -368,7 +368,29 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
                 />
               </div>
             </>
-          )}
+
+          <div className="col-span-2 flex items-start gap-2 pt-1 border-t border-border mt-1">
+            <Checkbox
+              id="ev-sync-personal"
+              checked={syncToPersonal}
+              disabled={!personalCalConnected}
+              onCheckedChange={(v) => setSyncToPersonal(!!v)}
+              className="mt-0.5"
+            />
+            <div className="flex-1">
+              <Label
+                htmlFor="ev-sync-personal"
+                className={`cursor-pointer text-sm font-normal ${!personalCalConnected ? "text-muted-foreground" : ""}`}
+              >
+                Also add to my personal Google Calendar
+              </Label>
+              {!personalCalConnected && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Connect your Google Calendar in Settings → Integrations to enable.
+                </p>
+              )}
+            </div>
+          </div>
 
           <div className="col-span-2 space-y-1.5">
             <Label htmlFor="ev-loc">Location</Label>

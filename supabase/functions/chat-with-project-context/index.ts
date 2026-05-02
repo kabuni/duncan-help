@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { callLLMWithFallback } from "../_shared/llm.ts";
+import { streamLLM } from "../_shared/llm.ts";
 import { getEmbedding as getEmbeddingShared } from "../_shared/embeddings.ts";
 
 const corsHeaders = {
@@ -51,16 +51,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2. Parse input (selected_file_ids no longer used)
-    const { chat_id, message } = await req.json();
+    // 2. Parse input
+    const body = await req.json();
+    const { chat_id, message } = body;
+    const attachments: Array<{ name: string; type: string; base64?: string; extractedText?: string }> =
+      Array.isArray(body?.attachments) ? body.attachments : [];
+
     if (!chat_id || typeof chat_id !== "string") {
       return new Response(JSON.stringify({ error: "chat_id is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (!message || typeof message !== "string" || message.trim().length === 0) {
-      return new Response(JSON.stringify({ error: "message is required" }), {
+    if ((!message || typeof message !== "string" || message.trim().length === 0) && attachments.length === 0) {
+      return new Response(JSON.stringify({ error: "message or attachments required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

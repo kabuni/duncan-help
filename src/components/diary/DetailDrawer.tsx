@@ -222,6 +222,10 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     if (error) {
       toast.error(error.message);
       return;
+    }
+    toast.success("Event updated");
+    setEditing(false);
+    onChanged();
   }
 
   async function deleteEvent() {
@@ -238,10 +242,6 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     }
     toast.success("Event deleted");
     onOpenChange(false);
-    onChanged();
-  }
-    toast.success("Event updated");
-    setEditing(false);
     onChanged();
   }
 

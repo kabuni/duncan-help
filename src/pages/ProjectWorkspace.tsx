@@ -252,6 +252,25 @@ export default function ProjectWorkspace() {
     setManualDeselect(true);
   };
 
+  const startRenameChat = (chat: { id: string; title: string }) => {
+    setEditingChatId(chat.id);
+    setEditingChatTitle(chat.title);
+    setTimeout(() => editChatInputRef.current?.focus(), 0);
+  };
+  const cancelRenameChat = () => {
+    setEditingChatId(null);
+    setEditingChatTitle("");
+  };
+  const commitRenameChat = async () => {
+    if (!editingChatId) return;
+    const next = editingChatTitle.trim().slice(0, 80);
+    if (next) {
+      await updateChatTitle(editingChatId, next);
+      titledChatsRef.current.add(editingChatId);
+    }
+    cancelRenameChat();
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList) return;

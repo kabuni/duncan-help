@@ -2773,7 +2773,39 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      company_integrations_status: {
+        Row: {
+          created_at: string | null
+          documents_ingested: number | null
+          id: string | null
+          integration_id: string | null
+          last_sync: string | null
+          status: string | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          documents_ingested?: number | null
+          id?: string | null
+          integration_id?: string | null
+          last_sync?: string | null
+          status?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          documents_ingested?: number | null
+          id?: string | null
+          integration_id?: string | null
+          last_sync?: string | null
+          status?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       call_edge_function_with_service_role: {

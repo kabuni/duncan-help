@@ -64,11 +64,6 @@ function fmtDate(d?: string | null) {
   }
 }
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  // Polyfill in case `serve` import is missing
-});
-
 async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 

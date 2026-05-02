@@ -75,7 +75,8 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [owners, setOwners] = useState<{ display_name: string }[]>([]);
+  const [currentUserName, setCurrentUserName] = useState<string>("");
+  const [owners, setOwners] = useState<{ display_name: string; user_id?: string }[]>([]);
   const [form, setForm] = useState({
     event_name: "",
     category: "Event",

@@ -1,5 +1,4 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { streamLLM } from "../_shared/llm.ts";
 import { getEmbedding as getEmbeddingShared } from "../_shared/embeddings.ts";
 
 const corsHeaders = {
@@ -8,15 +7,25 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const DEFAULT_SYSTEM_PROMPT = `You are Duncan, an advanced reasoning and operating system for internal company operations.
-You are currently operating inside a Project workspace. Focus your responses on the context and instructions provided for this project.
-Be direct, precise, and efficient. Use structured output when presenting complex information.
+const PROJECT_CONTEXT_PROMPT = `You are operating inside a Project workspace inside Duncan. You have FULL access to every system Duncan is connected to (Workstreams, Planner/Key Events, Recruitment, Purchase Orders, Projects, Google Calendar, Gmail, Google Drive, Basecamp, Azure DevOps, Slack, Meetings, App Analytics, Google Analytics, etc.) via your existing tools. Use them freely to answer questions and to make changes the user asks for.
+
+PROJECT CHAT — WRITE SAFETY (HARD RULE):
+This chat surface is shared/collaborative, so you MUST use a "preview + confirm" pattern for ANY write operation (create, update, delete, send, approve). Never silently mutate data.
+1. When the user asks you to change, create, update, delete, send, or approve anything in any system, FIRST respond with a clear preview block:
+   - **Action:** what you will do (one line)
+   - **Target:** the system + record (e.g. "Workstream card 'Investor demo'", "Gmail to alex@…", "Planner event on 14 May")
+   - **Changes:** bullet list of fields/values that will change, with before → after where applicable
+   - End with: "Reply **Confirm** to apply, or tell me what to change."
+2. Do NOT call the underlying write tool until the user replies with an explicit confirmation ("confirm", "yes do it", "go ahead", "apply", etc.).
+3. After the user confirms, execute the tool, then post a short result summary.
+4. Read-only queries (lists, searches, summaries, analytics) do NOT require confirmation — answer them directly.
+5. If the user batches several writes, present ONE preview that lists all of them, and apply them only after a single confirm.
 
 PLANNING CHECKLIST:
 This project chat has a "Planning checklist" panel above the conversation. The user can capture to-do items there and one-click promote them to Workstream cards and tasks.
-- When the user asks you to draft a plan, list next steps, break down a workflow, or outline what needs to happen, ALWAYS render the actionable items as a markdown checklist using "- [ ] item" syntax (one per line, short imperative phrases). The user can copy these directly into the Planning checklist.
+- When the user asks you to draft a plan, list next steps, break down a workflow, or outline what needs to happen, ALWAYS render the actionable items as a markdown checklist using "- [ ] item" syntax (one per line, short imperative phrases).
 - If the work splits into themes, prefix each block with a markdown heading (e.g. "### Launch prep") so each theme can become its own workstream card.
-- Do not invent due dates or assignees unless the user has specified them — keep the items clean.
+- Do not invent due dates or assignees unless the user has specified them.
 - After the checklist, add a single sentence reminding the user they can hit "Send to Workstreams" to turn the plan into cards.`;
 
 async function getEmbedding(text: string, _apiKey?: string): Promise<number[]> {
@@ -243,12 +252,25 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 8. Construct AI messages (multimodal-aware)
-    const baseSystemPrompt = project.system_prompt?.trim() || DEFAULT_SYSTEM_PROMPT;
-    const systemPrompt = baseSystemPrompt + fileContextBlock + priorChatsBlock;
+    // 8. Construct AI messages — we delegate to norman-chat (which owns all
+    // system tools and integrations). The first system-style message is the
+    // project's context (custom prompt + RAG + cross-chat memory + write-safety
+    // rules); norman-chat will prepend its own SYSTEM_PROMPT, so the project
+    // context arrives as an additional `system` message.
+    const projectContextHeader = `## ACTIVE PROJECT WORKSPACE\nProject: ${project.name}\nProject ID: ${project.id}\nChat ID: ${chat_id}\n`;
+    const customProjectPrompt = project.system_prompt?.trim()
+      ? `\n\n## PROJECT-SPECIFIC INSTRUCTIONS\n${project.system_prompt.trim()}`
+      : "";
+    const projectSystemMessage =
+      PROJECT_CONTEXT_PROMPT +
+      "\n\n" +
+      projectContextHeader +
+      customProjectPrompt +
+      fileContextBlock +
+      priorChatsBlock;
 
     const aiMessages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: any }> = [
-      { role: "system", content: systemPrompt },
+      { role: "system", content: projectSystemMessage },
     ];
 
     if (history && history.length > 0) {
@@ -286,32 +308,58 @@ Deno.serve(async (req) => {
       aiMessages.push({ role: "user", content: parts });
     }
 
-    // 9. Stream from OpenAI; relay SSE bytes to client and persist final reply.
-    let openaiStream: ReadableStream<Uint8Array>;
+    // Pull profile so norman-chat can personalise (best-effort).
+    let userProfile: Record<string, unknown> | undefined;
     try {
-      openaiStream = await streamLLM({
-        workflow: "chat-with-project-context",
-        messages: aiMessages as any,
-        temperature: 0.7,
-        max_tokens: 4096,
+      const { data: profileRow } = await supabase
+        .from("profiles")
+        .select("display_name, role_title, department, bio, norman_context")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (profileRow) userProfile = profileRow as any;
+    } catch (_e) { /* non-fatal */ }
+
+    // 9. Delegate to norman-chat (owner of all integration tools). Forward the
+    // user's auth header so it can resolve identity, RBAC and per-user OAuth
+    // tokens. Stream the SSE response back unchanged, and tee a copy to persist
+    // the assistant reply on this project chat.
+    let upstream: Response;
+    try {
+      upstream = await fetch(`${supabaseUrl}/functions/v1/norman-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+        body: JSON.stringify({
+          messages: aiMessages,
+          mode: "general",
+          userProfile,
+        }),
       });
     } catch (err: any) {
-      console.error("AI stream error:", err?.status, err?.message);
-      const status = err?.status === 429 ? 429 : 502;
-      const msg = err?.status === 429
-        ? "Rate limit exceeded. Please try again shortly."
-        : "AI service error";
-      return new Response(JSON.stringify({ error: msg }), {
-        status,
+      console.error("Failed to reach norman-chat:", err?.message || err);
+      return new Response(JSON.stringify({ error: "AI service unreachable" }), {
+        status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Tee the stream so we can both forward to the client and accumulate the
-    // full reply for persistence.
-    const [forwardStream, captureStream] = openaiStream.tee();
+    if (!upstream.ok || !upstream.body) {
+      const errBody = await upstream.text().catch(() => "");
+      console.error("norman-chat upstream error:", upstream.status, errBody);
+      return new Response(
+        JSON.stringify({ error: upstream.status === 429 ? "Rate limit exceeded. Please try again shortly." : "AI service error" }),
+        {
+          status: upstream.status === 429 ? 429 : 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
 
-    // Persist the assistant message after the stream finishes.
+    // Tee so we can forward to client AND persist final reply.
+    const [forwardStream, captureStream] = upstream.body.tee();
+
     (async () => {
       try {
         const reader = captureStream.getReader();

@@ -459,6 +459,14 @@ export default function ProjectWorkspace() {
                                 <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                               )}
                             </div>
+                            {!isUser && activeChatId && projectId && hasChecklist(msg.content) && (
+                              <button
+                                onClick={() => captureChecklistToPlan(msg.content, activeChatId, projectId)}
+                                className="text-[10px] inline-flex items-center gap-1 text-primary hover:underline mt-1"
+                              >
+                                <Plus className="h-3 w-3" /> Add checklist to Planning
+                              </button>
+                            )}
                           </div>
                           {isUser && (
                             <Avatar className="h-7 w-7 shrink-0 border border-primary/20">

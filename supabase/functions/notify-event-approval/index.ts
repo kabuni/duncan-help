@@ -239,7 +239,7 @@ async function handler(req: Request): Promise<Response> {
         kind: n.kind,
         title: n.title,
         body: n.body,
-        link: "/diary",
+        link: linkPath,
         metadata: { approval_id: approvalId, event_id: approval.event_id },
       }));
       const { error: insErr } = await admin.from("notifications").insert(rows);

@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
           const fileIds = indexedFiles.map((f: any) => f.id);
 
           // Generate embedding for user query
-          const queryEmbedding = await getEmbedding(message.trim(), OPENAI_API_KEY);
+          const queryEmbedding = await getEmbedding(((message || "").trim() || "attached files"), OPENAI_API_KEY);
 
           // Use service client for vector similarity query (RPC)
           const serviceClient = createClient(

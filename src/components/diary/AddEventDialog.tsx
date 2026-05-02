@@ -132,12 +132,13 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
 
 
   function reset() {
+    const seed = toLocalDateStr(defaultDate ?? new Date());
     setDraft({
       event_name: "",
       category: "Event",
-      start_date: today,
+      start_date: seed,
       start_time: "",
-      end_date: today,
+      end_date: seed,
       end_time: "",
       all_day: true,
       owner: "",

@@ -140,6 +140,7 @@ const Workstreams = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="not_started">⚪ Not started</SelectItem>
                   <SelectItem value="red">🔴 Red</SelectItem>
                   <SelectItem value="amber">🟡 Yellow</SelectItem>
                   <SelectItem value="green">🟢 Green</SelectItem>

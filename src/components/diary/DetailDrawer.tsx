@@ -9,7 +9,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { KeyEvent, WorkstreamCard } from "@/hooks/useKeyEvents";
-import { Calendar as CalendarIcon, ExternalLink, AlertTriangle, Layers, Plus, X, Check, Pencil } from "lucide-react";
+import { Calendar as CalendarIcon, ExternalLink, AlertTriangle, Layers, Plus, X, Check, Pencil, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { EventAttachments } from "./EventAttachments";
 import { EventApprovals } from "./EventApprovals";

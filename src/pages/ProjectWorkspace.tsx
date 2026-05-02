@@ -179,9 +179,12 @@ export default function ProjectWorkspace() {
     };
   }, [projectId]);
 
-  // Scroll to bottom on new messages
+  // Scroll to bottom on new messages — use `block: "nearest"` so we only scroll
+  // the chat container, never the page/body. Without this, Safari (and some
+  // mobile browsers) scroll the whole document down and the user can't scroll
+  // back up because the body itself isn't scrollable.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [messages]);
 
   // Auto-resize textarea

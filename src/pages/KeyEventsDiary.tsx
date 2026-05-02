@@ -13,10 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import { useKeyEvents, type KeyEvent, type KeyEventGoal } from "@/hooks/useKeyEvents";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { toast } from "sonner";
-import { RefreshCw, AlertTriangle } from "lucide-react";
+import { RefreshCw, AlertTriangle, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GoalsPanel } from "@/components/diary/GoalsPanel";
 import { DetailDrawer } from "@/components/diary/DetailDrawer";
+import { AddEventDialog } from "@/components/diary/AddEventDialog";
 
 const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
@@ -45,6 +46,8 @@ export default function KeyEventsDiary() {
   const [selectedEvent, setSelectedEvent] = useState<KeyEvent | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<KeyEventGoal | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addDate, setAddDate] = useState<Date | null>(null);
 
   useEffect(() => {
     const flag = params.get("duncan_calendar");
@@ -185,6 +188,11 @@ export default function KeyEventsDiary() {
                 </Button>
               )}
               {isAdmin && (
+                <Button size="sm" variant="outline" onClick={() => { setAddDate(new Date()); setAddOpen(true); }}>
+                  <Plus className="h-3.5 w-3.5 mr-1.5" /> Add event
+                </Button>
+              )}
+              {isAdmin && (
                 <Button size="sm" onClick={connect}>
                   {status?.connected ? "Reconnect" : "Connect Duncan calendar"}
                 </Button>
@@ -211,6 +219,12 @@ export default function KeyEventsDiary() {
                   onNavigate={setDate}
                   views={["month", "week", "day", "agenda"]}
                   popup
+                  selectable={isAdmin}
+                  onSelectSlot={(slot: any) => {
+                    if (!isAdmin) return;
+                    setAddDate(slot.start instanceof Date ? slot.start : new Date(slot.start));
+                    setAddOpen(true);
+                  }}
                   eventPropGetter={eventPropGetter as any}
                   onSelectEvent={handleSelectItem as any}
                   tooltipAccessor={(item: any) => {
@@ -239,6 +253,13 @@ export default function KeyEventsDiary() {
           goal={selectedGoal}
           goalEvents={goalEventsForSelected}
           goals={goals}
+        />
+
+        <AddEventDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          defaultDate={addDate}
+          onCreated={refresh}
         />
       </div>
     </AppLayout>

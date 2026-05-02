@@ -48,24 +48,30 @@ export interface TaskBreakdown {
 export function getOverallStatus(
   tasks: Array<{ status?: CardStatus | string | null; completed?: boolean }> | undefined | null
 ): CardStatus {
-  if (!tasks || tasks.length === 0) return "red";
+  if (!tasks || tasks.length === 0) return "not_started";
 
   let hasRed = false;
   let hasAmber = false;
+  let hasActive = false; // any non not_started, non done
   let allDone = true;
+  let allNotStarted = true;
 
   for (const t of tasks) {
-    const raw = (t.completed ? "done" : (t.status || "red")) as string;
+    const raw = (t.completed ? "done" : (t.status || "not_started")) as string;
     const s: CardStatus = raw === "yellow" ? "amber" : (raw as CardStatus);
     if (s !== "done") allDone = false;
+    if (s !== "not_started") allNotStarted = false;
+    if (s !== "not_started" && s !== "done") hasActive = true;
     if (s === "red") hasRed = true;
     else if (s === "amber") hasAmber = true;
   }
 
+  if (allNotStarted) return "not_started";
   if (hasRed) return "red";
   if (hasAmber) return "amber";
   if (allDone) return "done";
-  return "green";
+  if (hasActive) return "green";
+  return "not_started";
 }
 
 export function getTaskBreakdown(
@@ -74,12 +80,13 @@ export function getTaskBreakdown(
   const out: TaskBreakdown = { red: 0, yellow: 0, green: 0, done: 0 };
   if (!tasks) return out;
   for (const t of tasks) {
-    const raw = (t.completed ? "done" : (t.status || "red")) as string;
+    const raw = (t.completed ? "done" : (t.status || "not_started")) as string;
     const s = raw === "amber" ? "yellow" : raw;
     if (s === "red") out.red++;
     else if (s === "yellow") out.yellow++;
     else if (s === "green") out.green++;
     else if (s === "done") out.done++;
+    // not_started excluded from RYG breakdown — neutral
   }
   return out;
 }

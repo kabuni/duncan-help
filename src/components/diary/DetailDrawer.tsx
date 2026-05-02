@@ -71,16 +71,19 @@ export function DetailDrawer({ open, onOpenChange, event, goal, goalEvents = [],
                 </div>
               )}
               <dl className="grid grid-cols-1 gap-y-2 leading-6 text-sm">
-                {event.owner && <Field label="Owner" value={event.owner} />}
-                {event.objective && <Field label="Objective" value={event.objective} />}
-                {event.success_metric && <Field label="Success metric" value={event.success_metric} />}
-                {event.decision_needed && <Field label="Decision needed" value={event.decision_needed} />}
-                {event.next_action && <Field label="Next action" value={event.next_action} />}
-                {event.risks && <Field label="Risks" value={event.risks} />}
+                <Field label="Owner" value={event.owner} />
+                <Field label="Category" value={event.category} />
+                <Field label="Location" value={event.location} />
+                <Field label="Objective" value={event.objective} />
+                <Field label="Success metric" value={event.success_metric} />
+                <Field label="Decision needed" value={event.decision_needed} />
+                <Field label="Next action" value={event.next_action} />
+                <Field label="Risks" value={event.risks} />
+                <Field label="Notes" value={event.raw_description} />
               </dl>
-              {event.linked_docs && event.linked_docs.length > 0 && (
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Linked docs</div>
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">Linked docs</div>
+                {event.linked_docs && event.linked_docs.length > 0 ? (
                   <ul className="space-y-1">
                     {event.linked_docs.map((d, i) => (
                       <li key={i}>
@@ -90,11 +93,13 @@ export function DetailDrawer({ open, onOpenChange, event, goal, goalEvents = [],
                       </li>
                     ))}
                   </ul>
-                </div>
-              )}
-              {event.linked_goal_ids?.length > 0 && (
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Linked goals</div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">None</p>
+                )}
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">Linked goals</div>
+                {event.linked_goal_ids?.length > 0 ? (
                   <div className="flex flex-wrap gap-1">
                     {goals.filter((g) => event.linked_goal_ids.includes(g.id)).map((g) => (
                       <Badge key={g.id} variant="outline" className="text-[10px]">
@@ -102,8 +107,10 @@ export function DetailDrawer({ open, onOpenChange, event, goal, goalEvents = [],
                       </Badge>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">None</p>
+                )}
+              </div>
               {event.html_link && (
                 <Button asChild variant="outline" size="sm" className="w-full">
                   <a href={event.html_link} target="_blank" rel="noreferrer">

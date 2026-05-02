@@ -192,12 +192,13 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     }
     setSaving(true);
 
+    const tz = form.start_tz || DEFAULT_TZ;
     const startISO = form.all_day
-      ? new Date(`${form.start_date}T00:00:00`).toISOString()
-      : new Date(`${form.start_date}T${form.start_time || "09:00"}:00`).toISOString();
+      ? zonedDateTimeToISO(form.start_date, "00:00", tz)
+      : zonedDateTimeToISO(form.start_date, form.start_time || "09:00", tz);
     const endISO = form.all_day
-      ? new Date(`${form.end_date || form.start_date}T23:59:59`).toISOString()
-      : new Date(`${form.end_date || form.start_date}T${form.end_time || form.start_time || "10:00"}:00`).toISOString();
+      ? zonedDateTimeToISO(form.end_date || form.start_date, "23:59", tz)
+      : zonedDateTimeToISO(form.end_date || form.start_date, form.end_time || form.start_time || "10:00", tz);
 
     const missing: string[] = [];
     if (!form.owner.trim()) missing.push("owner");
@@ -215,6 +216,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
         all_day: form.all_day,
         start_at: startISO,
         end_at: endISO,
+        start_tz: tz,
         missing_fields: missing,
         is_complete: isComplete,
         risk_level: isComplete ? "green" : "amber",

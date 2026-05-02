@@ -61,6 +61,19 @@ export default function KeyEventsDiary() {
     setParams(params, { replace: true });
   }, [params, setParams]);
 
+  // Deep-link: /diary?event=<id> opens the detail drawer for that event.
+  useEffect(() => {
+    const eventId = params.get("event");
+    if (!eventId || !events.length) return;
+    const found = events.find((e) => e.id === eventId);
+    if (found) {
+      setSelectedEvent(found);
+      setDrawerOpen(true);
+      params.delete("event");
+      setParams(params, { replace: true });
+    }
+  }, [params, events, setParams]);
+
   const owners = useMemo(() => {
     const set = new Set<string>();
     events.forEach((e) => { if (e.owner) set.add(e.owner); });

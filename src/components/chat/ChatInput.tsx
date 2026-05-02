@@ -11,6 +11,8 @@ interface ChatInputProps {
   extractionProgress?: string | null;
   onVoiceToggle?: () => void;
   isVoiceActive?: boolean;
+  placeholder?: string;
+  hideFooter?: boolean;
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB

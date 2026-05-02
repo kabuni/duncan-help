@@ -241,8 +241,35 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       );
     }
 
+    let personalSyncMsg: string | null = null;
+    if (syncToPersonal && personalCalConnected) {
+      const { error: syncErr } = await supabase.functions.invoke(
+        "add-event-to-personal-calendar",
+        {
+          body: {
+            event_name: draft.event_name.trim(),
+            category: draft.category,
+            start_at: startISO,
+            end_at: endISO,
+            all_day: draft.all_day,
+            location: draft.location.trim() || null,
+            notes: draft.raw_description.trim() || null,
+          },
+        },
+      );
+      if (syncErr) {
+        personalSyncMsg = `Saved to diary, but personal calendar sync failed: ${syncErr.message}`;
+      }
+    }
+
     setSaving(false);
-    toast.success("Event added to diary");
+    if (personalSyncMsg) {
+      toast.error(personalSyncMsg);
+    } else if (syncToPersonal && personalCalConnected) {
+      toast.success("Event added to diary and your personal calendar");
+    } else {
+      toast.success("Event added to diary");
+    }
     reset();
     onOpenChange(false);
     onCreated();

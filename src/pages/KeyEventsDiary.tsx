@@ -14,6 +14,7 @@ import { useKeyEvents, type KeyEvent, type WorkstreamCard } from "@/hooks/useKey
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { toast } from "sonner";
 import { RefreshCw, AlertTriangle, Plus } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 import { DetailDrawer } from "@/components/diary/DetailDrawer";
@@ -43,6 +44,7 @@ export default function KeyEventsDiary() {
   const [view, setView] = useState<View>("month");
   const [date, setDate] = useState<Date>(new Date());
   const [riskFilter, setRiskFilter] = useState<"all" | "atrisk">("all");
+  const [ownerFilter, setOwnerFilter] = useState<string>("all");
   const [selectedEvent, setSelectedEvent] = useState<KeyEvent | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -59,10 +61,19 @@ export default function KeyEventsDiary() {
     setParams(params, { replace: true });
   }, [params, setParams]);
 
+  const owners = useMemo(() => {
+    const set = new Set<string>();
+    events.forEach((e) => { if (e.owner) set.add(e.owner); });
+    return Array.from(set).sort();
+  }, [events]);
+
   const calItems = useMemo<CalItem[]>(() => {
-    const filteredEvents = riskFilter === "atrisk"
+    let filteredEvents = riskFilter === "atrisk"
       ? events.filter((e) => e.risk_level !== "green")
       : events;
+    if (ownerFilter !== "all") {
+      filteredEvents = filteredEvents.filter((e) => (e.owner || "") === ownerFilter);
+    }
 
     const CAT_ICON: Record<string, string> = {
       Travel: "✈️",
@@ -95,7 +106,7 @@ export default function KeyEventsDiary() {
       });
 
     return evItems;
-  }, [events, riskFilter]);
+  }, [events, riskFilter, ownerFilter]);
 
   const counts = useMemo(() => {
     const red = events.filter((e) => e.risk_level === "red").length;
@@ -146,6 +157,17 @@ export default function KeyEventsDiary() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                <SelectTrigger className="h-8 w-[160px] text-xs">
+                  <SelectValue placeholder="Filter by owner" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All owners</SelectItem>
+                  {owners.map((o) => (
+                    <SelectItem key={o} value={o}>{o}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {(counts.red > 0 || counts.amber > 0 || counts.missing > 0) && (
                 <button
                   onClick={() => setRiskFilter(riskFilter === "atrisk" ? "all" : "atrisk")}
@@ -197,6 +219,7 @@ export default function KeyEventsDiary() {
                 date={date}
                 onNavigate={setDate}
                 views={["month", "week", "day", "agenda"]}
+                messages={{ agenda: "Events" }}
                 popup
                 selectable={isAdmin}
                 onSelectSlot={(slot: any) => {

@@ -114,6 +114,7 @@ export interface WorkstreamTask {
   updated_at: string;
   assignee_name?: string;
   assignees?: AssigneeInfo[];
+  comments_count?: number;
 }
 
 export interface WorkstreamComment {
@@ -285,12 +286,17 @@ export function useWorkstreamCard(cardId: string | null) {
 
       // Fetch task assignees if there are tasks
       let taskAssigneeMap: Record<string, AssigneeInfo[]> = {};
+      let taskCommentCountMap: Record<string, number> = {};
       if (tasks.length > 0) {
         const taskIds = tasks.map(t => t.id);
-        const { data: taskAssignees } = await supabase
-          .from("workstream_task_assignees")
-          .select("task_id, user_id")
-          .in("task_id", taskIds);
+        const [taRes, tcRes] = await Promise.all([
+          supabase.from("workstream_task_assignees").select("task_id, user_id").in("task_id", taskIds),
+          supabase.from("workstream_task_comments").select("task_id").in("task_id", taskIds),
+        ]);
+        const taskAssignees = taRes.data || [];
+        (tcRes.data || []).forEach((row: any) => {
+          taskCommentCountMap[row.task_id] = (taskCommentCountMap[row.task_id] || 0) + 1;
+        });
 
         // Collect user IDs from task assignees
         const taUserIds = (taskAssignees || []).map(ta => ta.user_id);
@@ -325,6 +331,7 @@ export function useWorkstreamCard(cardId: string | null) {
           status: ((t as any).status || (t.completed ? "done" : "not_started")) as CardStatus,
           assignee_name: t.assignee_id ? profileMap[t.assignee_id] : undefined,
           assignees: taskAssigneeMap[t.id] || [],
+          comments_count: taskCommentCountMap[t.id] || 0,
         })) as WorkstreamTask[];
 
         return {
@@ -683,6 +690,40 @@ export function useDeleteTaskComment() {
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["workstream-task-comments", vars.task_id] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdateTaskComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, task_id, content }: { id: string; task_id: string; content: string }) => {
+      const { error } = await supabase
+        .from("workstream_task_comments")
+        .update({ content })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["workstream-task-comments", vars.task_id] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdateComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, card_id, content }: { id: string; card_id: string; content: string }) => {
+      const { error } = await supabase
+        .from("workstream_comments")
+        .update({ content })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["workstream-card", vars.card_id] });
     },
     onError: (e: Error) => toast.error(e.message),
   });

@@ -40,7 +40,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
   }, [open, prefillTag]);
 
   const reset = () => {
-    setTitle(""); setDescription(""); setStatus("amber");
+    setTitle(""); setDescription(""); setStatus("not_started");
     setAssigneeIds([]); setDueDate(""); setProjectTag("");
     setAddingNew(false); setNewTag("");
   };

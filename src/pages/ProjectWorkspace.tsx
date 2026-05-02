@@ -341,6 +341,15 @@ export default function ProjectWorkspace() {
             <FileText className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Files{files.length > 0 && ` (${files.length})`}</span>
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => setShowTasks(true)} className="gap-1.5 text-xs px-2 sm:px-3 relative" aria-label="Tasks">
+            <ListChecks className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Tasks{openTaskCount > 0 && ` (${openTaskCount})`}</span>
+            {openTaskCount > 0 && (
+              <span className="sm:hidden absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-medium px-1">
+                {openTaskCount}
+              </span>
+            )}
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => setShowCollaborate(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Collaborate">
             <Users className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Collaborate</span>

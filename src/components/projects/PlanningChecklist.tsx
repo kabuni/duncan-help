@@ -415,7 +415,6 @@ function PlanRow({
         members={members}
         value={item.assignee_profile_id}
         onChange={(uid) => onUpdateAssignee(item, uid)}
-        compact
       />
       {onAccept && (
         <button

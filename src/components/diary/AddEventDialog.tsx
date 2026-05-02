@@ -211,12 +211,13 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     }
     setSaving(true);
 
+    const tz = draft.start_tz || DEFAULT_TZ;
     const startISO = draft.all_day
-      ? new Date(`${draft.start_date}T00:00:00`).toISOString()
-      : new Date(`${draft.start_date}T${draft.start_time || "09:00"}:00`).toISOString();
+      ? zonedDateTimeToISO(draft.start_date, "00:00", tz)
+      : zonedDateTimeToISO(draft.start_date, draft.start_time || "09:00", tz);
     const endISO = draft.all_day
-      ? new Date(`${effectiveEndDate}T23:59:59`).toISOString()
-      : new Date(`${effectiveEndDate}T${draft.end_time || draft.start_time || "10:00"}:00`).toISOString();
+      ? zonedDateTimeToISO(effectiveEndDate, "23:59", tz)
+      : zonedDateTimeToISO(effectiveEndDate, draft.end_time || draft.start_time || "10:00", tz);
 
     if (new Date(endISO) <= new Date(startISO)) {
       setSaving(false);

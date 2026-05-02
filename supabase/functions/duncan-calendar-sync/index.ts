@@ -222,11 +222,15 @@ serve(async (req) => {
       .select("id, name, description")
       .eq("status", "active");
 
-    // Existing google ids
+    // Existing google ids (skip locally-created events, prefixed with "local:")
     const { data: existing } = await supaAdmin
       .from("key_events")
       .select("google_event_id");
-    const existingIds = new Set((existing || []).map((e: any) => e.google_event_id));
+    const existingIds = new Set(
+      (existing || [])
+        .map((e: any) => e.google_event_id as string)
+        .filter((id) => !id.startsWith("local:"))
+    );
     const seenIds = new Set<string>();
 
     let upserted = 0;

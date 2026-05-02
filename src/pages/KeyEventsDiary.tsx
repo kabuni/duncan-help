@@ -143,31 +143,19 @@ export default function KeyEventsDiary() {
       filteredEvents = filteredEvents.filter((e) => (e.owner || "") === ownerFilter);
     }
 
-    const CAT_ICON: Record<string, string> = {
-      Travel: "✈️",
-      Holiday: "🏖️",
-      Marketing: "📣",
-      Launch: "🚀",
-      Investor: "💼",
-      Product: "🛠️",
-      Operations: "⚙️",
-      Releases: "📦",
-      Event: "📌",
-    };
-
     const evItems: CalItem[] = filteredEvents
       .filter((e) => e.start_at)
       .map((e) => {
         const start = new Date(e.start_at!);
         const end = e.end_at ? new Date(e.end_at) : new Date(start.getTime() + 60 * 60 * 1000);
         const name = e.event_name || e.title;
-        const icon = e.category ? (CAT_ICON[e.category] || "📌") : "📌";
+        const meta = getCategoryMeta(e.category);
         const cat = e.category ? ` [${e.category}]` : "";
         const owner = e.owner ? ` · ${e.owner}` : "";
         const tz = e.start_tz && e.start_tz !== "Europe/London" ? ` · ${e.start_tz.split("/").pop()?.replace(/_/g, " ")}` : "";
         return {
           id: `event:${e.id}`,
-          title: `${icon} ${name}${cat}${owner}${tz}`,
+          title: `${meta.icon} ${name}${cat}${owner}${tz}`,
           start,
           end,
           allDay: e.all_day,

@@ -379,6 +379,17 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                 </div>
 
                 <div className="space-y-1.5">
+                  <Label>Time zone</Label>
+                  <TimezonePicker
+                    value={form.start_tz}
+                    onChange={(tz) => setForm({ ...form, start_tz: tz })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Date and time above are interpreted in this zone.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
                   <Label>Location</Label>
                   <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
                 </div>

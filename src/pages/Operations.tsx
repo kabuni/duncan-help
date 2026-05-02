@@ -676,6 +676,10 @@ const Operations = () => {
                 </div>
               )}
             </TabsContent>
+
+            <TabsContent value="suppliers">
+              <SuppliersDirectory />
+            </TabsContent>
           </Tabs>
         </div>
       </main>

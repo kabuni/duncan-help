@@ -379,6 +379,89 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
               </ul>
             )}
           </div>
+
+          <div className="col-span-2 space-y-1.5">
+            <Label className="flex items-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5" /> Approvals
+            </Label>
+            {approvals.length > 0 && (
+              <ul className="space-y-1">
+                {approvals.map((a, i) => (
+                  <li key={i} className="flex items-center gap-2 text-xs border border-border rounded-md px-2 py-1">
+                    <Badge variant="outline" className="text-[10px] uppercase font-mono">{a.approval_type}</Badge>
+                    {a.label && <span className="truncate">{a.label}</span>}
+                    <span className="text-muted-foreground ml-auto truncate">
+                      {a.approver_profile_id
+                        ? profiles.find((p) => p.id === a.approver_profile_id)?.display_name || "Unknown"
+                        : "No approver"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setApprovals((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="text-muted-foreground hover:text-destructive shrink-0"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="border border-dashed border-border rounded-md p-2 space-y-1.5">
+              <div className="flex gap-1.5">
+                <Select value={appType} onValueChange={setAppType}>
+                  <SelectTrigger className="h-8 text-xs flex-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {APPROVAL_TYPES.map((t) => (
+                      <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={appApprover} onValueChange={setAppApprover}>
+                  <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Approver" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none" className="text-xs">No approver yet</SelectItem>
+                    {profiles
+                      .slice()
+                      .sort((a, b) => (a.display_name || "").localeCompare(b.display_name || ""))
+                      .map((p) => (
+                        <SelectItem key={p.id} value={p.id} className="text-xs">
+                          {p.display_name || "Unnamed"}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-1.5">
+                <Input
+                  value={appLabel}
+                  onChange={(e) => setAppLabel(e.target.value)}
+                  placeholder="Optional note (e.g. 'Hero banner v2')"
+                  className="h-8 text-xs flex-1"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => {
+                    setApprovals((prev) => [
+                      ...prev,
+                      {
+                        approval_type: appType,
+                        label: appLabel,
+                        approver_profile_id: appApprover === "none" ? null : appApprover,
+                      },
+                    ]);
+                    setAppLabel("");
+                    setAppApprover("none");
+                    setAppType("Design");
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Add
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <DialogFooter>

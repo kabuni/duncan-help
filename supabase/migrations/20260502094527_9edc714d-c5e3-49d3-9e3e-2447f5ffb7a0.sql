@@ -1,0 +1,1 @@
+UPDATE notifications SET link = '/diary' WHERE link = '/planner';

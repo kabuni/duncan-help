@@ -131,11 +131,11 @@ export default function KeyEventsDiary() {
       <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-6 space-y-4">
         <header className="space-y-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">Duncan Key Events Diary</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Duncan Planner</h1>
             <Badge variant="outline" className="font-mono text-[10px] uppercase">execution system</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            Strategic events synced from <span className="font-semibold">Duncan | Key Events</span>. Goal target dates appear as pinned markers.
+            Strategic events synced from <span className="font-semibold">Duncan | Planner</span>. Goal target dates appear as pinned markers.
           </p>
         </header>
 

@@ -144,7 +144,8 @@ async function handler(req: Request): Promise<Response> {
 
     const eventTitle = event?.title || "Untitled event";
     const eventDate = fmtDate(event?.start_at);
-    const link = `${APP_URL}/diary`;
+    const linkPath = `/diary?event=${approval.event_id}`;
+    const link = `${APP_URL}${linkPath}`;
     const requesterName = requesterProfile?.display_name || "A teammate";
     const approverName = approverProfile?.display_name || "the approver";
     const typeLabel = approval.label ? `${approval.approval_type} — ${approval.label}` : approval.approval_type;

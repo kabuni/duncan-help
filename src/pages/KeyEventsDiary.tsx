@@ -168,21 +168,6 @@ export default function KeyEventsDiary() {
                   ))}
                 </SelectContent>
               </Select>
-              {(counts.red > 0 || counts.amber > 0) && (
-                <button
-                  onClick={() => setRiskFilter(riskFilter === "atrisk" ? "all" : "atrisk")}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 text-xs border rounded-md px-2 py-1 transition-colors",
-                    riskFilter === "atrisk"
-                      ? "bg-destructive/10 border-destructive/40 text-destructive"
-                      : "border-border text-muted-foreground hover:bg-accent"
-                  )}
-                >
-                  <AlertTriangle className="h-3 w-3" />
-                  {counts.red} red · {counts.amber} amber
-                  {riskFilter === "atrisk" && " (filter on)"}
-                </button>
-              )}
               {isAdmin && status?.connected && (
                 <Button variant="outline" size="sm" onClick={sync} disabled={syncing}>
                   <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", syncing && "animate-spin")} />

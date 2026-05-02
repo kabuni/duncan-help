@@ -3,7 +3,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import {
   X, CalendarDays, User, Flag, Tag, Plus, Trash2, CheckCircle2,
   Circle, Send, MessageSquare, Activity, Clock, Loader2, Users,
-  Check, XCircle,
+  Check, XCircle, Pencil,
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";

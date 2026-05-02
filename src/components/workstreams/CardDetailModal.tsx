@@ -799,3 +799,154 @@ function TaskStatusPicker({ status, onChange }: { status: CardStatus; onChange: 
     </Select>
   );
 }
+
+function CardCommentRow({
+  comment, currentUserId, onDelete,
+}: {
+  comment: { id: string; card_id: string; user_id: string; user_name?: string; content: string; created_at: string };
+  currentUserId?: string;
+  onDelete: () => void;
+}) {
+  const updateComment = useUpdateComment();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(comment.content);
+  const isOwner = comment.user_id === currentUserId;
+
+  const save = () => {
+    const v = value.trim();
+    if (!v || v === comment.content) { setEditing(false); setValue(comment.content); return; }
+    updateComment.mutate(
+      { id: comment.id, card_id: comment.card_id, content: v },
+      { onSuccess: () => setEditing(false) },
+    );
+  };
+
+  return (
+    <div className="group rounded-lg border border-border/60 bg-card/50 p-3">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-medium text-foreground">{comment.user_name || "Unknown"}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground">
+            {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+          </span>
+          {isOwner && !editing && (
+            <>
+              <button
+                onClick={() => { setValue(comment.content); setEditing(true); }}
+                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-all"
+                aria-label="Edit comment"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+              <button
+                onClick={onDelete}
+                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                aria-label="Delete comment"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {editing ? (
+        <div className="space-y-2">
+          <Textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="text-sm min-h-[60px]"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
+              if (e.key === "Escape") { setEditing(false); setValue(comment.content); }
+            }}
+          />
+          <div className="flex items-center gap-2 justify-end">
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditing(false); setValue(comment.content); }}>
+              Cancel
+            </Button>
+            <Button size="sm" className="h-7 text-xs" onClick={save} disabled={!value.trim() || updateComment.isPending}>
+              Save
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-foreground/80 whitespace-pre-wrap">{comment.content}</p>
+      )}
+    </div>
+  );
+}
+
+function TaskCommentRow({
+  comment, isOwner, onSave, onDelete,
+}: {
+  comment: { id: string; user_id: string; user_name?: string; content: string; created_at: string };
+  isOwner: boolean;
+  onSave: (content: string) => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(comment.content);
+
+  const save = () => {
+    const v = value.trim();
+    if (!v || v === comment.content) { setEditing(false); setValue(comment.content); return; }
+    onSave(v);
+    setEditing(false);
+  };
+
+  return (
+    <div className="rounded-md bg-secondary/40 px-2.5 py-1.5 group/c">
+      <div className="flex items-center justify-between gap-2 mb-0.5">
+        <span className="text-[10px] font-medium text-foreground">{comment.user_name || "Unknown"}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] text-muted-foreground">
+            {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+          </span>
+          {isOwner && !editing && (
+            <>
+              <button
+                onClick={() => { setValue(comment.content); setEditing(true); }}
+                className="opacity-0 group-hover/c:opacity-100 text-muted-foreground hover:text-primary transition-all"
+                aria-label="Edit comment"
+              >
+                <Pencil className="h-2.5 w-2.5" />
+              </button>
+              <button
+                onClick={onDelete}
+                className="opacity-0 group-hover/c:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                aria-label="Delete comment"
+              >
+                <Trash2 className="h-2.5 w-2.5" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {editing ? (
+        <div className="space-y-1.5 mt-1">
+          <Textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="text-xs min-h-[40px] py-1.5"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
+              if (e.key === "Escape") { setEditing(false); setValue(comment.content); }
+            }}
+          />
+          <div className="flex items-center gap-1.5 justify-end">
+            <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => { setEditing(false); setValue(comment.content); }}>
+              Cancel
+            </Button>
+            <Button size="sm" className="h-6 text-[10px] px-2" onClick={save} disabled={!value.trim()}>
+              Save
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-foreground/80 whitespace-pre-wrap">{comment.content}</p>
+      )}
+    </div>
+  );
+}

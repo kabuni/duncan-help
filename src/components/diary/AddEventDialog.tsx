@@ -86,6 +86,32 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       location: "",
       raw_description: "",
     });
+    setFiles([]);
+  }
+
+  async function uploadFiles(eventId: string, userId: string) {
+    for (const file of files) {
+      if (file.size > 20 * 1024 * 1024) {
+        toast.error(`${file.name} exceeds 20MB`);
+        continue;
+      }
+      const path = `${eventId}/${Date.now()}_${sanitizeFileName(file.name)}`;
+      const { error: upErr } = await supabase.storage
+        .from("key-event-attachments")
+        .upload(path, file, { contentType: file.type || undefined });
+      if (upErr) {
+        toast.error(`Upload failed: ${file.name}`);
+        continue;
+      }
+      await supabase.from("key_event_attachments" as any).insert({
+        event_id: eventId,
+        uploaded_by: userId,
+        file_name: file.name,
+        storage_path: path,
+        mime_type: file.type || null,
+        size_bytes: file.size,
+      });
+    }
   }
 
   async function save() {
@@ -109,38 +135,50 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     const localId = `local:${crypto.randomUUID()}`;
     const title = `[${draft.category}] ${draft.event_name.trim()}`;
 
-    const isComplete = !!(draft.owner.trim() && draft.objective.trim());
+    const isComplete = !!draft.owner.trim();
     const missing: string[] = [];
     if (!draft.owner.trim()) missing.push("owner");
-    if (!draft.objective.trim()) missing.push("objective");
 
-    const { error } = await supabase.from("key_events" as any).insert({
-      google_event_id: localId,
-      calendar_id: "local",
-      title,
-      event_name: draft.event_name.trim(),
-      category: draft.category,
-      start_at: startISO,
-      end_at: endISO,
-      all_day: draft.all_day,
-      location: draft.location.trim() || null,
-      raw_description: draft.raw_description.trim() || null,
-      owner: draft.owner.trim() || null,
-      objective: draft.objective.trim() || null,
-      missing_fields: missing,
-      is_complete: isComplete,
-      risk_level: isComplete ? "green" : "amber",
-      risk_reason: isComplete ? null : "Missing owner or objective",
-      linked_goal_ids: [],
-      linked_docs: [],
-      attendees: [],
-      deleted_in_google: false,
-    });
-    setSaving(false);
-    if (error) {
-      toast.error(error.message);
+    const { data: inserted, error } = await supabase
+      .from("key_events" as any)
+      .insert({
+        google_event_id: localId,
+        calendar_id: "local",
+        title,
+        event_name: draft.event_name.trim(),
+        category: draft.category,
+        start_at: startISO,
+        end_at: endISO,
+        all_day: draft.all_day,
+        location: draft.location.trim() || null,
+        raw_description: draft.raw_description.trim() || null,
+        owner: draft.owner.trim() || null,
+        missing_fields: missing,
+        is_complete: isComplete,
+        risk_level: isComplete ? "green" : "amber",
+        risk_reason: isComplete ? null : "Missing owner",
+        linked_goal_ids: [],
+        linked_docs: [],
+        attendees: [],
+        deleted_in_google: false,
+      })
+      .select("id")
+      .single();
+
+    if (error || !inserted) {
+      setSaving(false);
+      toast.error(error?.message || "Could not save event");
       return;
     }
+
+    if (files.length > 0) {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData.user?.id) {
+        await uploadFiles((inserted as any).id, userData.user.id);
+      }
+    }
+
+    setSaving(false);
     toast.success("Event added to diary");
     reset();
     onOpenChange(false);

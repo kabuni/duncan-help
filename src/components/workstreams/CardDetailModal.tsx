@@ -193,10 +193,11 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                           card.overall_status === "red" ? "bg-red-500"
                           : card.overall_status === "amber" ? "bg-amber-500"
                           : card.overall_status === "green" ? "bg-emerald-500"
-                          : "bg-primary"
+                          : card.overall_status === "done" ? "bg-primary"
+                          : "bg-muted-foreground/50"
                         }`} />
                         <span className="capitalize">
-                          {card.overall_status === "amber" ? "Yellow" : card.overall_status}
+                          {card.overall_status === "amber" ? "Yellow" : card.overall_status === "not_started" ? "Not started" : card.overall_status}
                         </span>
                         {card.task_breakdown && (tasks.length > 0) && (
                           <span className="text-muted-foreground/70 font-mono ml-1">

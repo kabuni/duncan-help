@@ -193,6 +193,11 @@ function OverallDot({ status }: { status: CardStatus }) {
     status === "red" ? "bg-red-500"
     : status === "amber" ? "bg-amber-500"
     : status === "green" ? "bg-emerald-500"
-    : "bg-primary";
-  return <span className={`h-2 w-2 rounded-full ${cls}`} title={`Overall: ${status}`} />;
+    : status === "done" ? "bg-primary"
+    : "bg-muted-foreground/50";
+  const label =
+    status === "not_started" ? "Not started"
+    : status === "amber" ? "Yellow"
+    : status.charAt(0).toUpperCase() + status.slice(1);
+  return <span className={`h-2 w-2 rounded-full ${cls}`} title={`Overall: ${label}`} />;
 }

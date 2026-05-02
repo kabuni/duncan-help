@@ -100,8 +100,6 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
         owner: event.owner || "",
         location: event.location || "",
         raw_description: event.raw_description || "",
-        objective: event.objective || "",
-        next_action: event.next_action || "",
         all_day: event.all_day,
         start_date: isoToDate(event.start_at),
         start_time: isoToTime(event.start_at),

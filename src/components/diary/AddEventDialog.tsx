@@ -80,10 +80,12 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     (async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("user_id, display_name")
+        .select("id, user_id, display_name")
         .eq("approval_status", "approved")
         .order("display_name");
-      setOwners((data || []).filter((p) => p.display_name));
+      const list = (data || []).filter((p) => p.display_name);
+      setOwners(list as any);
+      setProfiles(list.map((p: any) => ({ id: p.id, display_name: p.display_name })));
     })();
   }, [open]);
 

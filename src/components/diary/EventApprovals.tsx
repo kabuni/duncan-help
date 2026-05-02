@@ -96,8 +96,12 @@ export function EventApprovals({ eventId }: { eventId: string }) {
     ]);
     const uid = u.user?.id || null;
     setCurrentUserId(uid);
-    setProfiles((p as any[]) || []);
-    setCurrentProfileId(((p as any[]) || []).find((x) => x.user_id === uid)?.id || null);
+    const profileList = (p as any[]) || [];
+    setProfiles(profileList);
+    const myProfileId = profileList.find((x) => x.user_id === uid)?.id || null;
+    setCurrentProfileId(myProfileId);
+    // Default approver to current user so the picker isn't blank.
+    setApproverId((prev) => (prev === "none" && myProfileId ? myProfileId : prev));
     setRows((r as any[]) || []);
     setLoading(false);
   }
@@ -113,7 +117,10 @@ export function EventApprovals({ eventId }: { eventId: string }) {
   }
 
   async function addApproval() {
-    if (!currentUserId) return;
+    if (!currentUserId) {
+      toast.error("Not signed in — please refresh");
+      return;
+    }
     setAdding(true);
     const { data, error } = await supabase
       .from("key_event_approvals" as any)
@@ -127,11 +134,15 @@ export function EventApprovals({ eventId }: { eventId: string }) {
       .select("id")
       .maybeSingle();
     setAdding(false);
-    if (error) return toast.error(error.message);
+    if (error) {
+      console.error("Approval insert failed:", error);
+      toast.error(`Couldn't save approver: ${error.message}`);
+      return;
+    }
     setLabel("");
-    setApproverId("none");
+    setApproverId(currentProfileId || "none");
     setType("Design");
-    toast.success("Approval requested");
+    toast.success("Approver saved");
     if ((data as any)?.id) notify((data as any).id, "requested");
     load();
   }

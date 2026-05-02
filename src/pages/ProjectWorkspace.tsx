@@ -520,7 +520,7 @@ export default function ProjectWorkspace() {
                   />
                 )}
                 {/* Messages */}
-                <ScrollArea className="flex-1 p-4">
+                <div ref={messagesScrollerRef} className="flex-1 overflow-y-auto p-4 overscroll-contain">
                   <div className="max-w-3xl mx-auto space-y-4">
                     {msgsLoading && (
                       <div className="flex justify-center py-8">
@@ -586,9 +586,8 @@ export default function ProjectWorkspace() {
                         </div>
                       </div>
                     )}
-                    <div ref={messagesEndRef} />
                   </div>
-                </ScrollArea>
+                </div>
 
                 {/* Input — same composer as the main dashboard (attachments, voice, streaming) */}
                 <ChatInput

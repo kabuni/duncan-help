@@ -23,7 +23,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
   const { isAdmin } = useIsAdmin();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [status, setStatus] = useState<CardStatus>("amber");
+  const [status, setStatus] = useState<CardStatus>("not_started");
   const [priority] = useState<CardPriority>("medium");
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState("");

@@ -4,12 +4,14 @@ import { useReleases, Release } from "@/hooks/useReleases";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Rocket, Sparkles, Bug, FileText, Mail, Send } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Loader2, Rocket, Sparkles, Bug, FileText, Mail, Send, Eye, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { fastApi, withFastApi } from "@/lib/fastApiClient";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 
 const changeTypeConfig: Record<string, { icon: React.ReactNode; label: string; className: string }> = {
   feature: { icon: <Rocket className="h-3.5 w-3.5" />, label: "Feature", className: "bg-primary/10 text-primary" },

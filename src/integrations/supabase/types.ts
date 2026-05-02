@@ -1083,6 +1083,63 @@ export type Database = {
         }
         Relationships: []
       }
+      key_event_approvals: {
+        Row: {
+          approval_type: string
+          approver_profile_id: string | null
+          created_at: string
+          decided_at: string | null
+          decision_note: string | null
+          event_id: string
+          id: string
+          label: string | null
+          requested_by: string
+          status: Database["public"]["Enums"]["event_approval_status"]
+          updated_at: string
+        }
+        Insert: {
+          approval_type: string
+          approver_profile_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decision_note?: string | null
+          event_id: string
+          id?: string
+          label?: string | null
+          requested_by: string
+          status?: Database["public"]["Enums"]["event_approval_status"]
+          updated_at?: string
+        }
+        Update: {
+          approval_type?: string
+          approver_profile_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decision_note?: string | null
+          event_id?: string
+          id?: string
+          label?: string | null
+          requested_by?: string
+          status?: Database["public"]["Enums"]["event_approval_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "key_event_approvals_approver_profile_id_fkey"
+            columns: ["approver_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "key_event_approvals_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "key_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       key_event_attachments: {
         Row: {
           created_at: string
@@ -2663,6 +2720,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
+      event_approval_status: "pending" | "approved" | "rejected"
       po_category:
         | "software"
         | "hardware"
@@ -2805,6 +2863,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
+      event_approval_status: ["pending", "approved", "rejected"],
       po_category: [
         "software",
         "hardware",

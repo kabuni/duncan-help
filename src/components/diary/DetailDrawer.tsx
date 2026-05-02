@@ -8,6 +8,7 @@ import type { KeyEvent, WorkstreamCard } from "@/hooks/useKeyEvents";
 import { Calendar as CalendarIcon, ExternalLink, AlertTriangle, Layers, Plus, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EventAttachments } from "./EventAttachments";
+import { EventApprovals } from "./EventApprovals";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -122,6 +123,8 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
               </dl>
 
               <EventAttachments eventId={event.id} />
+
+              <EventApprovals eventId={event.id} />
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">

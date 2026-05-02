@@ -15,7 +15,7 @@ import { useIsAdmin } from "@/hooks/useUserRoles";
 import { toast } from "sonner";
 import { RefreshCw, AlertTriangle, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { GoalsPanel } from "@/components/diary/GoalsPanel";
+
 import { DetailDrawer } from "@/components/diary/DetailDrawer";
 import { AddEventDialog } from "@/components/diary/AddEventDialog";
 
@@ -216,50 +216,40 @@ export default function KeyEventsDiary() {
           </div>
         </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-          <Card className="p-3">
-            {loading ? (
-              <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
-            ) : (
-              <div style={{ height: "calc(100vh - 280px)", minHeight: 560 }}>
-                <RBCalendar
-                  localizer={localizer}
-                  events={calItems}
-                  startAccessor="start"
-                  endAccessor="end"
-                  allDayAccessor="allDay"
-                  view={view}
-                  onView={setView}
-                  date={date}
-                  onNavigate={setDate}
-                  views={["month", "week", "day", "agenda"]}
-                  popup
-                  selectable={isAdmin}
-                  onSelectSlot={(slot: any) => {
-                    if (!isAdmin) return;
-                    setAddDate(slot.start instanceof Date ? slot.start : new Date(slot.start));
-                    setAddOpen(true);
-                  }}
-                  eventPropGetter={eventPropGetter as any}
-                  onSelectEvent={handleSelectItem as any}
-                  tooltipAccessor={(item: any) => {
-                    if (item.resource?.kind === "goal") return `Goal target: ${item.resource.data.name}`;
-                    const ev = item.resource?.data as KeyEvent;
-                    return `${ev.event_name || ev.title}${ev.owner ? ` · ${ev.owner}` : ""}${ev.risk_reason ? ` · ${ev.risk_reason}` : ""}`;
-                  }}
-                />
-              </div>
-            )}
-          </Card>
-
-          <GoalsPanel
-            goals={goals}
-            events={events}
-            isAdmin={isAdmin}
-            onChange={refresh}
-            onSelectGoal={handleSelectGoal}
-          />
-        </div>
+        <Card className="p-3">
+          {loading ? (
+            <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
+          ) : (
+            <div style={{ height: "calc(100vh - 280px)", minHeight: 560 }}>
+              <RBCalendar
+                localizer={localizer}
+                events={calItems}
+                startAccessor="start"
+                endAccessor="end"
+                allDayAccessor="allDay"
+                view={view}
+                onView={setView}
+                date={date}
+                onNavigate={setDate}
+                views={["month", "week", "day", "agenda"]}
+                popup
+                selectable={isAdmin}
+                onSelectSlot={(slot: any) => {
+                  if (!isAdmin) return;
+                  setAddDate(slot.start instanceof Date ? slot.start : new Date(slot.start));
+                  setAddOpen(true);
+                }}
+                eventPropGetter={eventPropGetter as any}
+                onSelectEvent={handleSelectItem as any}
+                tooltipAccessor={(item: any) => {
+                  if (item.resource?.kind === "goal") return `Goal target: ${item.resource.data.name}`;
+                  const ev = item.resource?.data as KeyEvent;
+                  return `${ev.event_name || ev.title}${ev.owner ? ` · ${ev.owner}` : ""}${ev.risk_reason ? ` · ${ev.risk_reason}` : ""}`;
+                }}
+              />
+            </div>
+          )}
+        </Card>
 
         <DetailDrawer
           open={drawerOpen}

@@ -32,6 +32,7 @@ export interface TaskBreakdown {
   yellow: number;
   green: number;
   done: number;
+  not_started: number;
 }
 
 /**
@@ -77,7 +78,7 @@ export function getOverallStatus(
 export function getTaskBreakdown(
   tasks: Array<{ status?: CardStatus | string | null; completed?: boolean }> | undefined | null
 ): TaskBreakdown {
-  const out: TaskBreakdown = { red: 0, yellow: 0, green: 0, done: 0 };
+  const out: TaskBreakdown = { red: 0, yellow: 0, green: 0, done: 0, not_started: 0 };
   if (!tasks) return out;
   for (const t of tasks) {
     const raw = (t.completed ? "done" : (t.status || "not_started")) as string;
@@ -86,7 +87,7 @@ export function getTaskBreakdown(
     else if (s === "yellow") out.yellow++;
     else if (s === "green") out.green++;
     else if (s === "done") out.done++;
-    // not_started excluded from RYG breakdown — neutral
+    else if (s === "not_started") out.not_started++;
   }
   return out;
 }

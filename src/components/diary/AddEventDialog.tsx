@@ -90,6 +90,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     owner: "",
     location: "",
     raw_description: "",
+    start_tz: DEFAULT_TZ,
   });
   const [saving, setSaving] = useState(false);
   const [owners, setOwners] = useState<{ user_id: string; display_name: string | null; profile_id?: string }[]>([]);

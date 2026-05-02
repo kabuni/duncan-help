@@ -282,7 +282,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg sm:max-w-xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add diary entry</DialogTitle>
           <DialogDescription>

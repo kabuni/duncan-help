@@ -122,21 +122,21 @@ export default function KeyEventsDiary() {
 
   return (
     <AppLayout>
-      <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-6 space-y-4">
-        <header className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">Duncan Planner</h1>
+      <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-4 md:py-6 flex flex-col gap-4 h-[calc(100dvh-3.5rem)]">
+        <header className="space-y-1 shrink-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight">Duncan Planner</h1>
             <Badge variant="outline" className="font-mono text-[10px] uppercase">execution system</Badge>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs md:text-sm text-muted-foreground">
             Strategic events synced from <span className="font-semibold">Duncan | Planner</span>. Goal target dates appear as pinned markers.
           </p>
         </header>
 
-        <Card className="p-3">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
+        <Card className="p-3 shrink-0">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className={cn("h-2 w-2 rounded-full", status?.connected ? "bg-emerald-500" : "bg-muted-foreground/40")} />
+              <div className={cn("h-2 w-2 rounded-full shrink-0", status?.connected ? "bg-emerald-500" : "bg-muted-foreground/40")} />
               <div className="min-w-0">
                 <div className="text-sm font-semibold truncate">
                   {status?.connected ? `Connected as ${status.google_account_email || "Duncan"}` : "Not connected"}
@@ -151,9 +151,9 @@ export default function KeyEventsDiary() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap md:flex-nowrap md:justify-end">
               <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-                <SelectTrigger className="h-8 w-[160px] text-xs">
+                <SelectTrigger className="h-8 flex-1 min-w-[140px] md:flex-none md:w-[160px] text-xs">
                   <SelectValue placeholder="Filter by owner" />
                 </SelectTrigger>
                 <SelectContent>
@@ -181,11 +181,11 @@ export default function KeyEventsDiary() {
           </div>
         </Card>
 
-        <Card className="p-3">
+        <Card className="p-3 flex-1 min-h-0 flex flex-col">
           {loading ? (
             <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
           ) : (
-            <div style={{ height: "calc(100vh - 280px)", minHeight: 560 }}>
+            <div className="flex-1 min-h-[420px]">
               <RBCalendar
                 localizer={localizer}
                 events={calItems}

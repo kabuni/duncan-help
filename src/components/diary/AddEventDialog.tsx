@@ -65,14 +65,21 @@ interface Props {
   onCreated: () => void;
 }
 
+function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: Props) {
-  const today = (defaultDate ?? new Date()).toISOString().slice(0, 10);
+  const initial = toLocalDateStr(defaultDate ?? new Date());
   const [draft, setDraft] = useState({
     event_name: "",
     category: "Event",
-    start_date: today,
+    start_date: initial,
     start_time: "",
-    end_date: today,
+    end_date: initial,
     end_time: "",
     all_day: true,
     owner: "",
@@ -89,6 +96,13 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
   const [appApprover, setAppApprover] = useState("none");
   const [personalCalConnected, setPersonalCalConnected] = useState(false);
   const [syncToPersonal, setSyncToPersonal] = useState(false);
+
+  // Re-seed start/end dates whenever the dialog re-opens with a (possibly new) default date.
+  useEffect(() => {
+    if (!open) return;
+    const seed = toLocalDateStr(defaultDate ?? new Date());
+    setDraft((d) => ({ ...d, start_date: seed, end_date: seed }));
+  }, [open, defaultDate]);
 
   useEffect(() => {
     if (!open) return;

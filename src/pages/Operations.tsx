@@ -250,6 +250,9 @@ const Operations = () => {
               <TabsTrigger value="sync-logs" className="gap-1.5 whitespace-nowrap">
                 <Clock className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Sync Logs</span><span className="sm:hidden">Logs</span>
               </TabsTrigger>
+              <TabsTrigger value="suppliers" className="gap-1.5 whitespace-nowrap">
+                <Building2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Suppliers</span><span className="sm:hidden">Supp.</span>
+              </TabsTrigger>
             </TabsList>
 
             {/* Work Items */}

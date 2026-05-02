@@ -252,12 +252,25 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 8. Construct AI messages (multimodal-aware)
-    const baseSystemPrompt = project.system_prompt?.trim() || DEFAULT_SYSTEM_PROMPT;
-    const systemPrompt = baseSystemPrompt + fileContextBlock + priorChatsBlock;
+    // 8. Construct AI messages — we delegate to norman-chat (which owns all
+    // system tools and integrations). The first system-style message is the
+    // project's context (custom prompt + RAG + cross-chat memory + write-safety
+    // rules); norman-chat will prepend its own SYSTEM_PROMPT, so the project
+    // context arrives as an additional `system` message.
+    const projectContextHeader = `## ACTIVE PROJECT WORKSPACE\nProject: ${project.name}\nProject ID: ${project.id}\nChat ID: ${chat_id}\n`;
+    const customProjectPrompt = project.system_prompt?.trim()
+      ? `\n\n## PROJECT-SPECIFIC INSTRUCTIONS\n${project.system_prompt.trim()}`
+      : "";
+    const projectSystemMessage =
+      PROJECT_CONTEXT_PROMPT +
+      "\n\n" +
+      projectContextHeader +
+      customProjectPrompt +
+      fileContextBlock +
+      priorChatsBlock;
 
     const aiMessages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: any }> = [
-      { role: "system", content: systemPrompt },
+      { role: "system", content: projectSystemMessage },
     ];
 
     if (history && history.length > 0) {
@@ -295,32 +308,58 @@ Deno.serve(async (req) => {
       aiMessages.push({ role: "user", content: parts });
     }
 
-    // 9. Stream from OpenAI; relay SSE bytes to client and persist final reply.
-    let openaiStream: ReadableStream<Uint8Array>;
+    // Pull profile so norman-chat can personalise (best-effort).
+    let userProfile: Record<string, unknown> | undefined;
     try {
-      openaiStream = await streamLLM({
-        workflow: "chat-with-project-context",
-        messages: aiMessages as any,
-        temperature: 0.7,
-        max_tokens: 4096,
+      const { data: profileRow } = await supabase
+        .from("profiles")
+        .select("display_name, role_title, department, bio, norman_context")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (profileRow) userProfile = profileRow as any;
+    } catch (_e) { /* non-fatal */ }
+
+    // 9. Delegate to norman-chat (owner of all integration tools). Forward the
+    // user's auth header so it can resolve identity, RBAC and per-user OAuth
+    // tokens. Stream the SSE response back unchanged, and tee a copy to persist
+    // the assistant reply on this project chat.
+    let upstream: Response;
+    try {
+      upstream = await fetch(`${supabaseUrl}/functions/v1/norman-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+        body: JSON.stringify({
+          messages: aiMessages,
+          mode: "general",
+          userProfile,
+        }),
       });
     } catch (err: any) {
-      console.error("AI stream error:", err?.status, err?.message);
-      const status = err?.status === 429 ? 429 : 502;
-      const msg = err?.status === 429
-        ? "Rate limit exceeded. Please try again shortly."
-        : "AI service error";
-      return new Response(JSON.stringify({ error: msg }), {
-        status,
+      console.error("Failed to reach norman-chat:", err?.message || err);
+      return new Response(JSON.stringify({ error: "AI service unreachable" }), {
+        status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Tee the stream so we can both forward to the client and accumulate the
-    // full reply for persistence.
-    const [forwardStream, captureStream] = openaiStream.tee();
+    if (!upstream.ok || !upstream.body) {
+      const errBody = await upstream.text().catch(() => "");
+      console.error("norman-chat upstream error:", upstream.status, errBody);
+      return new Response(
+        JSON.stringify({ error: upstream.status === 429 ? "Rate limit exceeded. Please try again shortly." : "AI service error" }),
+        {
+          status: upstream.status === 429 ? 429 : 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
 
-    // Persist the assistant message after the stream finishes.
+    // Tee so we can forward to client AND persist final reply.
+    const [forwardStream, captureStream] = upstream.body.tee();
+
     (async () => {
       try {
         const reader = captureStream.getReader();

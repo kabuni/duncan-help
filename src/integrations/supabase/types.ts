@@ -1255,6 +1255,7 @@ export type Database = {
           category: string | null
           classification_confidence: number | null
           created_at: string
+          created_by: string | null
           decision_needed: string | null
           deleted_in_google: boolean
           end_at: string | null
@@ -1290,6 +1291,7 @@ export type Database = {
           category?: string | null
           classification_confidence?: number | null
           created_at?: string
+          created_by?: string | null
           decision_needed?: string | null
           deleted_in_google?: boolean
           end_at?: string | null
@@ -1325,6 +1327,7 @@ export type Database = {
           category?: string | null
           classification_confidence?: number | null
           created_at?: string
+          created_by?: string | null
           decision_needed?: string | null
           deleted_in_google?: boolean
           end_at?: string | null

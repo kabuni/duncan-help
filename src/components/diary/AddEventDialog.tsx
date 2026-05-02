@@ -275,7 +275,8 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
         .select("id");
 
       // Fire-and-forget Slack DMs to each assigned approver
-      for (const row of (insertedApprovals as { id: string }[] | null) || []) {
+      const approvalRows = (insertedApprovals as unknown as { id: string }[] | null) || [];
+      for (const row of approvalRows) {
         supabase.functions
           .invoke("notify-event-approval", {
             body: { approval_id: row.id, kind: "requested" },

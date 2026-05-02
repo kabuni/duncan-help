@@ -192,11 +192,23 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       return;
     }
 
-    if (files.length > 0) {
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData.user?.id) {
-        await uploadFiles((inserted as any).id, userData.user.id);
-      }
+    const { data: userData } = await supabase.auth.getUser();
+    const uid = userData.user?.id;
+
+    if (files.length > 0 && uid) {
+      await uploadFiles((inserted as any).id, uid);
+    }
+
+    if (approvals.length > 0 && uid) {
+      await supabase.from("key_event_approvals" as any).insert(
+        approvals.map((a) => ({
+          event_id: (inserted as any).id,
+          approval_type: a.approval_type,
+          label: a.label.trim() || null,
+          approver_profile_id: a.approver_profile_id,
+          requested_by: uid,
+        })),
+      );
     }
 
     setSaving(false);

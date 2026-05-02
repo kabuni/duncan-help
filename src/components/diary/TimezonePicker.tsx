@@ -76,6 +76,22 @@ export function formatInTz(iso: string | null | undefined, tz: string, opts?: In
   }
 }
 
+/** Time-only in tz, e.g. "14:00 BST". */
+export function formatTimeInTz(iso: string | null | undefined, tz: string): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      timeZone: tz,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZoneName: "short",
+    });
+  } catch {
+    return "";
+  }
+}
+
 /** Convert a local date+time entered AS the chosen timezone into a UTC ISO string. */
 export function zonedDateTimeToISO(dateStr: string, timeStr: string, tz: string): string {
   // Build the "wall clock" target date, then offset by the difference between

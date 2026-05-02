@@ -245,6 +245,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
         start_at: startISO,
         end_at: endISO,
         all_day: draft.all_day,
+        start_tz: draft.start_tz || DEFAULT_TZ,
         location: draft.location.trim() || null,
         raw_description: draft.raw_description.trim() || null,
         owner: draft.owner.trim() || null,

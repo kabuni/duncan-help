@@ -312,7 +312,7 @@ export default function KeyEventsDiary() {
                 onNavigate={setDate}
                 views={["month", "week", "day", "agenda"]}
                 messages={{ agenda: "Events" }}
-                components={{ toolbar: PlannerToolbar }}
+                components={{ toolbar: PlannerToolbar, event: EventChip as any }}
                 popup
                 selectable={isAdmin}
                 onSelectSlot={(slot: any) => {
@@ -325,7 +325,10 @@ export default function KeyEventsDiary() {
                 tooltipAccessor={(item: any) => {
                   if (item.resource?.kind === "goal") return `Goal target: ${item.resource.data.name}`;
                   const ev = item.resource?.data as KeyEvent;
-                  return `${ev.event_name || ev.title}${ev.owner ? ` · ${ev.owner}` : ""}${ev.risk_reason ? ` · ${ev.risk_reason}` : ""}`;
+                  const uk = formatTimeInTz(ev.start_at, "Europe/London");
+                  const ind = formatTimeInTz(ev.start_at, "Asia/Kolkata");
+                  const times = ev.all_day ? "All day" : `UK ${uk} · IN ${ind}`;
+                  return `${ev.event_name || ev.title} · ${times}${ev.owner ? ` · ${ev.owner}` : ""}`;
                 }}
               />
             </div>

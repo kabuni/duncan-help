@@ -1758,6 +1758,128 @@ const WORKSTREAM_TOOLS = [
   },
 ];
 
+// ==================== PLANNER (KEY EVENTS DIARY) TOOLS ====================
+const PLANNER_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "list_planner_events",
+      description: "List Planner / Key Events Diary entries (synced from Google Calendar). Returns title, start/end, owner, category, risk level, missing fields, and Duncan metadata. Use when the user asks about the planner, upcoming events, key events, what's coming up, risks in the diary, or which events are incomplete.",
+      parameters: {
+        type: "object",
+        properties: {
+          range: { type: "string", enum: ["upcoming", "past", "this_week", "next_week", "this_month", "all"], description: "Time range (default: upcoming)" },
+          limit: { type: "number", description: "Max events to return (default 20, max 100)" },
+          risk_level: { type: "string", enum: ["red", "amber", "green"], description: "Filter by risk level" },
+          incomplete_only: { type: "boolean", description: "If true, return only events with missing fields" },
+          search: { type: "string", description: "Case-insensitive title/objective search" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_planner_event_meta",
+      description: "Update Duncan's Planner metadata for a key event (category, owner, objective, success metric, decision needed, risks, next action, risk level). Does NOT change the underlying Google Calendar event — for date/time/attendee changes use update_calendar_event. Always show a preview and get explicit user confirmation before calling for write operations.",
+      parameters: {
+        type: "object",
+        properties: {
+          event_id: { type: "string", description: "key_events.id (UUID)" },
+          category: { type: "string", description: "Event category (e.g. 'Investor', 'Product', 'Internal')" },
+          event_name: { type: "string" },
+          owner: { type: "string", description: "Owner name or email" },
+          objective: { type: "string" },
+          success_metric: { type: "string" },
+          decision_needed: { type: "string" },
+          risks: { type: "string" },
+          next_action: { type: "string" },
+          risk_level: { type: "string", enum: ["red", "amber", "green"] },
+          risk_reason: { type: "string" },
+          is_complete: { type: "boolean" },
+        },
+        required: ["event_id"],
+      },
+    },
+  },
+];
+
+async function executePlannerTool(
+  toolName: string,
+  args: any,
+  supabaseAdmin: any,
+): Promise<any> {
+  switch (toolName) {
+    case "list_planner_events": {
+      const limit = Math.min(Math.max(args.limit ?? 20, 1), 100);
+      let q = supabaseAdmin
+        .from("key_events")
+        .select("id, title, start_at, end_at, all_day, location, owner, category, event_name, objective, success_metric, decision_needed, risks, next_action, risk_level, risk_reason, missing_fields, is_complete, organizer_email, html_link, start_tz")
+        .eq("deleted_in_google", false);
+
+      const now = new Date().toISOString();
+      const range = args.range ?? "upcoming";
+      const startOfWeek = (offset = 0) => {
+        const d = new Date();
+        const day = d.getUTCDay() || 7; // Mon=1..Sun=7
+        d.setUTCHours(0, 0, 0, 0);
+        d.setUTCDate(d.getUTCDate() - day + 1 + offset * 7);
+        return d.toISOString();
+      };
+      const endOfWeek = (offset = 0) => {
+        const d = new Date(startOfWeek(offset));
+        d.setUTCDate(d.getUTCDate() + 7);
+        return d.toISOString();
+      };
+
+      if (range === "upcoming") q = q.gte("start_at", now).order("start_at", { ascending: true });
+      else if (range === "past") q = q.lt("start_at", now).order("start_at", { ascending: false });
+      else if (range === "this_week") q = q.gte("start_at", startOfWeek(0)).lt("start_at", endOfWeek(0)).order("start_at", { ascending: true });
+      else if (range === "next_week") q = q.gte("start_at", startOfWeek(1)).lt("start_at", endOfWeek(1)).order("start_at", { ascending: true });
+      else if (range === "this_month") {
+        const d = new Date(); d.setUTCDate(1); d.setUTCHours(0, 0, 0, 0);
+        const next = new Date(d); next.setUTCMonth(next.getUTCMonth() + 1);
+        q = q.gte("start_at", d.toISOString()).lt("start_at", next.toISOString()).order("start_at", { ascending: true });
+      } else q = q.order("start_at", { ascending: true });
+
+      if (args.risk_level) q = q.eq("risk_level", args.risk_level);
+      if (args.search) q = q.ilike("title", `%${args.search}%`);
+
+      q = q.limit(limit);
+      const { data, error } = await q;
+      if (error) throw new Error(`Failed to list planner events: ${error.message}`);
+
+      let rows = data || [];
+      if (args.incomplete_only) rows = rows.filter((r: any) => !r.is_complete || (r.missing_fields?.length ?? 0) > 0);
+
+      return { count: rows.length, range, events: rows };
+    }
+
+    case "update_planner_event_meta": {
+      if (!args.event_id) throw new Error("event_id is required");
+      const allowed = ["category", "event_name", "owner", "objective", "success_metric", "decision_needed", "risks", "next_action", "risk_level", "risk_reason", "is_complete"];
+      const patch: Record<string, unknown> = {};
+      for (const k of allowed) if (args[k] !== undefined) patch[k] = args[k];
+      if (Object.keys(patch).length === 0) return { error: "No fields to update" };
+      patch.updated_at = new Date().toISOString();
+
+      const { data, error } = await supabaseAdmin
+        .from("key_events")
+        .update(patch)
+        .eq("id", args.event_id)
+        .select("id, title, category, owner, objective, success_metric, decision_needed, risks, next_action, risk_level, is_complete")
+        .maybeSingle();
+      if (error) throw new Error(`Failed to update planner event: ${error.message}`);
+      if (!data) return { error: "Event not found" };
+      return { success: true, event: data };
+    }
+
+    default:
+      throw new Error(`Unknown planner tool: ${toolName}`);
+  }
+}
+
 async function executeWorkstreamTool(
   toolName: string,
   args: any,

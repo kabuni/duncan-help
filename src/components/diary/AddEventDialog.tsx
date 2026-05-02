@@ -8,7 +8,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Paperclip, X } from "lucide-react";
+import { Paperclip, X, Plus, ShieldCheck } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+
+const APPROVAL_TYPES = ["Design", "Legal", "Finance", "Marketing", "Operations", "Other"];
+
+interface DraftApproval {
+  approval_type: string;
+  label: string;
+  approver_profile_id: string | null;
+}
 
 const sanitizeFileName = (fileName: string) => {
   const ext = fileName.includes(".") ? fileName.split(".").pop()?.toLowerCase() ?? "" : "";
@@ -58,18 +67,25 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     raw_description: "",
   });
   const [saving, setSaving] = useState(false);
-  const [owners, setOwners] = useState<{ user_id: string; display_name: string | null }[]>([]);
+  const [owners, setOwners] = useState<{ user_id: string; display_name: string | null; profile_id?: string }[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; display_name: string | null }[]>([]);
   const [files, setFiles] = useState<File[]>([]);
+  const [approvals, setApprovals] = useState<DraftApproval[]>([]);
+  const [appType, setAppType] = useState("Design");
+  const [appLabel, setAppLabel] = useState("");
+  const [appApprover, setAppApprover] = useState("none");
 
   useEffect(() => {
     if (!open) return;
     (async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("user_id, display_name")
+        .select("id, user_id, display_name")
         .eq("approval_status", "approved")
         .order("display_name");
-      setOwners((data || []).filter((p) => p.display_name));
+      const list = (data || []).filter((p) => p.display_name);
+      setOwners(list as any);
+      setProfiles(list.map((p: any) => ({ id: p.id, display_name: p.display_name })));
     })();
   }, [open]);
 
@@ -88,6 +104,10 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       raw_description: "",
     });
     setFiles([]);
+    setApprovals([]);
+    setAppType("Design");
+    setAppLabel("");
+    setAppApprover("none");
   }
 
   async function uploadFiles(eventId: string, userId: string) {
@@ -172,11 +192,23 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       return;
     }
 
-    if (files.length > 0) {
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData.user?.id) {
-        await uploadFiles((inserted as any).id, userData.user.id);
-      }
+    const { data: userData } = await supabase.auth.getUser();
+    const uid = userData.user?.id;
+
+    if (files.length > 0 && uid) {
+      await uploadFiles((inserted as any).id, uid);
+    }
+
+    if (approvals.length > 0 && uid) {
+      await supabase.from("key_event_approvals" as any).insert(
+        approvals.map((a) => ({
+          event_id: (inserted as any).id,
+          approval_type: a.approval_type,
+          label: a.label.trim() || null,
+          approver_profile_id: a.approver_profile_id,
+          requested_by: uid,
+        })),
+      );
     }
 
     setSaving(false);
@@ -346,6 +378,89 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
                 ))}
               </ul>
             )}
+          </div>
+
+          <div className="col-span-2 space-y-1.5">
+            <Label className="flex items-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5" /> Approvals
+            </Label>
+            {approvals.length > 0 && (
+              <ul className="space-y-1">
+                {approvals.map((a, i) => (
+                  <li key={i} className="flex items-center gap-2 text-xs border border-border rounded-md px-2 py-1">
+                    <Badge variant="outline" className="text-[10px] uppercase font-mono">{a.approval_type}</Badge>
+                    {a.label && <span className="truncate">{a.label}</span>}
+                    <span className="text-muted-foreground ml-auto truncate">
+                      {a.approver_profile_id
+                        ? profiles.find((p) => p.id === a.approver_profile_id)?.display_name || "Unknown"
+                        : "No approver"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setApprovals((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="text-muted-foreground hover:text-destructive shrink-0"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="border border-dashed border-border rounded-md p-2 space-y-1.5">
+              <div className="flex gap-1.5">
+                <Select value={appType} onValueChange={setAppType}>
+                  <SelectTrigger className="h-8 text-xs flex-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {APPROVAL_TYPES.map((t) => (
+                      <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={appApprover} onValueChange={setAppApprover}>
+                  <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Approver" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none" className="text-xs">No approver yet</SelectItem>
+                    {profiles
+                      .slice()
+                      .sort((a, b) => (a.display_name || "").localeCompare(b.display_name || ""))
+                      .map((p) => (
+                        <SelectItem key={p.id} value={p.id} className="text-xs">
+                          {p.display_name || "Unnamed"}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-1.5">
+                <Input
+                  value={appLabel}
+                  onChange={(e) => setAppLabel(e.target.value)}
+                  placeholder="Optional note (e.g. 'Hero banner v2')"
+                  className="h-8 text-xs flex-1"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => {
+                    setApprovals((prev) => [
+                      ...prev,
+                      {
+                        approval_type: appType,
+                        label: appLabel,
+                        approver_profile_id: appApprover === "none" ? null : appApprover,
+                      },
+                    ]);
+                    setAppLabel("");
+                    setAppApprover("none");
+                    setAppType("Design");
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Add
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
 

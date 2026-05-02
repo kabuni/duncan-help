@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, forwardRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -391,11 +391,23 @@ function PlanRow({
 
   return (
     <div className="flex items-center gap-1.5 group">
-      <Checkbox
-        checked={item.status === "done"}
-        onCheckedChange={() => onToggleDone(item)}
-        className="h-3.5 w-3.5"
-      />
+      <label
+        className="shrink-0 inline-flex items-center justify-center p-1.5 -m-1 rounded cursor-pointer hover:bg-muted/60 active:bg-muted touch-manipulation"
+        title={item.status === "done" ? "Mark as not done" : "Mark as done"}
+        onClick={(e) => {
+          // Ensure tap toggles even if the checkbox button doesn't receive the event
+          e.preventDefault();
+          e.stopPropagation();
+          onToggleDone(item);
+        }}
+      >
+        <Checkbox
+          checked={item.status === "done"}
+          onCheckedChange={() => onToggleDone(item)}
+          className="h-4 w-4 pointer-events-none"
+          tabIndex={-1}
+        />
+      </label>
       <Input
         value={draftTitle}
         onChange={(e) => setDraftTitle(e.target.value)}
@@ -440,17 +452,15 @@ function PlanRow({
   );
 }
 
-function AssigneePicker({
-  members,
-  value,
-  onChange,
-  compact,
-}: {
-  members: ProjectMember[];
-  value: string | null;
-  onChange: (userId: string | null) => void;
-  compact?: boolean;
-}) {
+const AssigneePicker = forwardRef<
+  HTMLButtonElement,
+  {
+    members: ProjectMember[];
+    value: string | null;
+    onChange: (userId: string | null) => void;
+    compact?: boolean;
+  }
+>(function AssigneePicker({ members, value, onChange, compact }, _ref) {
   const selected = value ? members.find((m) => m.user_id === value) : null;
   return (
     <Popover>

@@ -444,7 +444,18 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
                 <Input
                   type="time"
                   value={draft.start_time}
-                  onChange={(e) => setDraft({ ...draft, start_time: e.target.value })}
+                  onChange={(e) => {
+                    const start_time = e.target.value;
+                    setDraft((d) => {
+                      const shouldAutoEnd = !d.end_time || d.end_time === d.start_time;
+                      const next = { ...d, start_time };
+                      if (start_time && shouldAutoEnd) {
+                        next.end_time = addOneHour(start_time);
+                        if (!d.end_date) next.end_date = d.start_date;
+                      }
+                      return next;
+                    });
+                  }}
                 />
               </div>
               <div className="space-y-1.5">

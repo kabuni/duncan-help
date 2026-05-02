@@ -399,8 +399,6 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                   <Field label="Owner" value={event.owner} />
                   <Field label="Category" value={event.category} />
                   <Field label="Location" value={event.location} />
-                  <Field label="Objective" value={event.objective} />
-                  <Field label="Next action" value={event.next_action} />
                   <Field label="Notes" value={event.raw_description} />
                 </dl>
 

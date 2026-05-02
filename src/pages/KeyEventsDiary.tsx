@@ -23,6 +23,39 @@ import { AddEventDialog } from "@/components/diary/AddEventDialog";
 const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
 
+function PlannerToolbar(props: any) {
+  const { label, onNavigate, onView, view, views } = props;
+  return (
+    <div className="rbc-toolbar">
+      <div className="flex items-center gap-1">
+        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onNavigate("PREV")} aria-label="Previous">
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span className="rbc-toolbar-label px-2 min-w-[140px] text-center">{label}</span>
+        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onNavigate("NEXT")} aria-label="Next">
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="sm" className="h-7 ml-1 text-xs" onClick={() => onNavigate("TODAY")}>
+          Today
+        </Button>
+      </div>
+      <div className="flex items-center gap-1">
+        {(views as string[]).map((v) => (
+          <Button
+            key={v}
+            variant={view === v ? "default" : "outline"}
+            size="sm"
+            className="h-7 text-xs capitalize"
+            onClick={() => onView(v)}
+          >
+            {v}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 type CalItem = {
   id: string;
   title: string;

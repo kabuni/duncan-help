@@ -82,8 +82,6 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     owner: "",
     location: "",
     raw_description: "",
-    objective: "",
-    next_action: "",
     all_day: false,
     start_date: "",
     start_time: "",

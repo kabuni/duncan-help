@@ -27,6 +27,7 @@ import Gmail from "./pages/Gmail";
 import ReleaseManager from "./pages/ReleaseManager";
 import WhatsNew from "./pages/WhatsNew";
 import CEOBriefing from "./pages/CEOBriefing";
+import KeyEventsDiary from "./pages/KeyEventsDiary";
 import SlackCallback from "./pages/SlackCallback";
 import NotFound from "./pages/NotFound";
 
@@ -61,6 +62,7 @@ const AppContent = () => {
           <Route path="/releases" element={<ProtectedRoute><ReleaseManager /></ProtectedRoute>} />
           <Route path="/whats-new" element={<ProtectedRoute><WhatsNew /></ProtectedRoute>} />
           <Route path="/team-briefing" element={<ProtectedRoute><CEOBriefing /></ProtectedRoute>} />
+          <Route path="/diary" element={<ProtectedRoute><KeyEventsDiary /></ProtectedRoute>} />
           <Route path="/ceo" element={<Navigate to="/team-briefing" replace />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

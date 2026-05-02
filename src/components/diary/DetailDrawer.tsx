@@ -35,8 +35,6 @@ const RISK_TONE: Record<string, string> = {
 
 const FIELD_LABELS: Record<string, string> = {
   owner: "Owner",
-  objective: "Objective",
-  next_action: "Next action",
 };
 
 const CATEGORIES = [
@@ -84,8 +82,6 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     owner: "",
     location: "",
     raw_description: "",
-    objective: "",
-    next_action: "",
     all_day: false,
     start_date: "",
     start_time: "",
@@ -104,8 +100,6 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
         owner: event.owner || "",
         location: event.location || "",
         raw_description: event.raw_description || "",
-        objective: event.objective || "",
-        next_action: event.next_action || "",
         all_day: event.all_day,
         start_date: isoToDate(event.start_at),
         start_time: isoToTime(event.start_at),
@@ -194,7 +188,6 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
 
     const missing: string[] = [];
     if (!form.owner.trim()) missing.push("owner");
-    if (!form.next_action.trim()) missing.push("next_action");
     const isComplete = missing.length === 0;
 
     const { error } = await supabase
@@ -206,8 +199,6 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
         owner: form.owner.trim(),
         location: form.location.trim() || null,
         raw_description: form.raw_description.trim() || null,
-        objective: form.objective.trim() || null,
-        next_action: form.next_action.trim() || null,
         all_day: form.all_day,
         start_at: startISO,
         end_at: endISO,
@@ -372,14 +363,6 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                   <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Objective</Label>
-                  <Textarea rows={2} value={form.objective} onChange={(e) => setForm({ ...form, objective: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Next action</Label>
-                  <Input value={form.next_action} onChange={(e) => setForm({ ...form, next_action: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
                   <Label>Notes</Label>
                   <Textarea rows={3} value={form.raw_description} onChange={(e) => setForm({ ...form, raw_description: e.target.value })} />
                 </div>
@@ -416,8 +399,6 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                   <Field label="Owner" value={event.owner} />
                   <Field label="Category" value={event.category} />
                   <Field label="Location" value={event.location} />
-                  <Field label="Objective" value={event.objective} />
-                  <Field label="Next action" value={event.next_action} />
                   <Field label="Notes" value={event.raw_description} />
                 </dl>
 

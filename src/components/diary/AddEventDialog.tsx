@@ -76,7 +76,6 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     end_time: "",
     all_day: true,
     owner: "",
-    objective: "",
     location: "",
     raw_description: "",
   });
@@ -128,7 +127,6 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       end_time: "",
       all_day: true,
       owner: "",
-      objective: "",
       location: "",
       raw_description: "",
     });

@@ -407,39 +407,78 @@ export default function ProjectWorkspace() {
             </div>
             <ScrollArea className="flex-1">
               <div className="p-2 space-y-0.5">
-                {chats.map(chat => (
+                {chats.map(chat => {
+                  const isEditing = editingChatId === chat.id;
+                  return (
                   <div
                     key={chat.id}
-                    className={`group grid grid-cols-[minmax(0,1fr)_2rem] items-center w-full min-w-0 rounded-md text-xs font-medium transition-colors ${
+                    className={`group flex items-center gap-0.5 w-full min-w-0 rounded-md pr-1 text-xs font-medium transition-colors ${
                       activeChatId === chat.id
                         ? "bg-primary/10 text-primary"
                         : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
                     }`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => setActiveChatId(chat.id)}
-                      className="flex items-center gap-2 min-w-0 px-3 py-2 text-left"
-                    >
-                      <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-                      <span className="min-w-0 truncate">{chat.title}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm(`Delete chat "${chat.title}"? This cannot be undone.`)) {
-                          deleteChat(chat.id);
-                          if (activeChatId === chat.id) setActiveChatId(null);
-                        }
-                      }}
-                      className="h-8 w-8 flex items-center justify-center rounded text-destructive hover:bg-destructive/10 transition-colors"
-                      title="Delete chat"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {isEditing ? (
+                      <>
+                        <input
+                          ref={editChatInputRef}
+                          value={editingChatTitle}
+                          onChange={(e) => setEditingChatTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); void commitRenameChat(); }
+                            else if (e.key === "Escape") { e.preventDefault(); cancelRenameChat(); }
+                          }}
+                          maxLength={80}
+                          className="flex-1 min-w-0 mx-1 my-1 bg-background border border-border rounded px-2 py-1 text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
+                          aria-label="Rename chat"
+                        />
+                        <button type="button" onClick={(e) => { e.stopPropagation(); void commitRenameChat(); }} className="shrink-0 h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-primary" title="Save">
+                          <Check className="h-3.5 w-3.5" />
+                        </button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); cancelRenameChat(); }} className="shrink-0 h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground" title="Cancel">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setActiveChatId(chat.id)}
+                          onDoubleClick={(e) => { e.stopPropagation(); startRenameChat(chat); }}
+                          className="flex items-center gap-2 flex-1 min-w-0 px-3 py-2 text-left"
+                          title={`${chat.title} (double-click to rename)`}
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                          <span className="min-w-0 truncate">{chat.title}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); startRenameChat(chat); }}
+                          className="shrink-0 h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-secondary opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                          title="Rename chat"
+                          aria-label="Rename chat"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Delete chat "${chat.title}"? This cannot be undone.`)) {
+                              deleteChat(chat.id);
+                              if (activeChatId === chat.id) setActiveChatId(null);
+                            }
+                          }}
+                          className="shrink-0 h-7 w-7 flex items-center justify-center rounded text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                          title="Delete chat"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
                 {chats.length === 0 && !chatsLoading && (
                   <p className="px-3 py-4 text-[11px] text-muted-foreground text-center">
                     No chats yet

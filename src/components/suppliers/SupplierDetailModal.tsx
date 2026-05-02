@@ -12,7 +12,6 @@ import {
   useLinkWorkstream, useUnlinkWorkstream, useWorkstreamCardOptions,
   type SupplierType, type ContractStatus,
 } from "@/hooks/useSuppliers";
-import { useIsAdmin } from "@/hooks/useUserRoles";
 import { toast } from "sonner";
 
 interface Props {
@@ -23,7 +22,7 @@ interface Props {
 }
 
 export default function SupplierDetailModal({ supplierId, isNew, open, onClose }: Props) {
-  const { isAdmin } = useIsAdmin();
+  const isAdmin = true;
   const { data } = useSupplierDetail(isNew ? null : supplierId);
   const upsert = useUpsertSupplier();
   const upsertContact = useUpsertContact();

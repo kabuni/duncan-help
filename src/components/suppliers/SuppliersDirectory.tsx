@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useSuppliers } from "@/hooks/useSuppliers";
-import { useIsAdmin } from "@/hooks/useUserRoles";
 import SupplierDetailModal from "./SupplierDetailModal";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -20,7 +19,6 @@ export default function SuppliersDirectory() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [isNew, setIsNew] = useState(false);
   const { data: suppliers = [], isLoading } = useSuppliers(search);
-  const { isAdmin } = useIsAdmin();
 
   const filtered = suppliers.filter(s => typeFilter === "all" || s.type === typeFilter);
 
@@ -46,11 +44,9 @@ export default function SuppliersDirectory() {
             ))}
           </div>
         </div>
-        {isAdmin && (
-          <Button onClick={() => { setIsNew(true); setOpenId(null); }}>
-            <Plus className="h-4 w-4 mr-1.5" /> Add supplier
-          </Button>
-        )}
+        <Button onClick={() => { setIsNew(true); setOpenId(null); }}>
+          <Plus className="h-4 w-4 mr-1.5" /> Add supplier
+        </Button>
       </div>
 
       {isLoading ? (
@@ -59,7 +55,7 @@ export default function SuppliersDirectory() {
         <div className="text-center py-12 border border-dashed rounded-lg">
           <Building2 className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-40" />
           <p className="text-sm text-muted-foreground">No suppliers yet.</p>
-          {isAdmin && <p className="text-xs text-muted-foreground mt-1">Click "Add supplier" to create the first one.</p>}
+          <p className="text-xs text-muted-foreground mt-1">Click "Add supplier" to create the first one.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

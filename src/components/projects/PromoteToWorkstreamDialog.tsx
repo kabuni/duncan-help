@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 
@@ -46,6 +47,7 @@ export function PromoteToWorkstreamDialog({
 }) {
   const navigate = useNavigate();
   const [tag, setTag] = useState<string>("none");
+  const [mode, setMode] = useState<"single_card" | "by_group">("single_card");
   const [cardTitle, setCardTitle] = useState(defaultCardTitle || "");
   const [dueDate, setDueDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -56,6 +58,7 @@ export function PromoteToWorkstreamDialog({
       const { data, error } = await supabase.functions.invoke("promote-plan-to-workstream", {
         body: {
           chat_id: chatId,
+          mode,
           default_card_title: cardTitle.trim() || defaultCardTitle || "Plan",
           project_tag: tag === "none" ? null : tag,
           default_due_date: dueDate || null,
@@ -70,7 +73,6 @@ export function PromoteToWorkstreamDialog({
           : `Created ${cards.length} card${cards.length === 1 ? "" : "s"} with ${totalTasks} task${totalTasks === 1 ? "" : "s"}`,
       );
       onOpenChange(false);
-      // Offer quick navigate
       setTimeout(() => navigate("/workstreams"), 250);
     } catch (e: any) {
       toast.error(e?.message || "Couldn't promote plan");
@@ -85,13 +87,35 @@ export function PromoteToWorkstreamDialog({
         <DialogHeader>
           <DialogTitle>Send plan to Workstreams</DialogTitle>
           <DialogDescription>
-            Turn {itemCount} item{itemCount === 1 ? "" : "s"} into workstream cards and tasks. Items grouped under the same heading become tasks on one card.
+            Turn {itemCount} item{itemCount === 1 ? "" : "s"} into workstream cards and tasks. Assignees and due dates set on each item are preserved.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-2">
           <div className="space-y-1">
-            <Label htmlFor="card-title" className="text-xs">Default card title (used for un-grouped items)</Label>
+            <Label className="text-xs">Card structure</Label>
+            <RadioGroup value={mode} onValueChange={(v) => setMode(v as any)} className="space-y-1">
+              <div className="flex items-start gap-2 rounded-md border border-border px-2.5 py-2">
+                <RadioGroupItem value="single_card" id="m-single" className="mt-0.5" />
+                <label htmlFor="m-single" className="text-xs leading-snug cursor-pointer">
+                  <span className="font-medium">One card for the project</span>
+                  <span className="block text-muted-foreground">All items become tasks under a single card. Best when working on one initiative.</span>
+                </label>
+              </div>
+              <div className="flex items-start gap-2 rounded-md border border-border px-2.5 py-2">
+                <RadioGroupItem value="by_group" id="m-group" className="mt-0.5" />
+                <label htmlFor="m-group" className="text-xs leading-snug cursor-pointer">
+                  <span className="font-medium">One card per group</span>
+                  <span className="block text-muted-foreground">Items grouped under the same heading become tasks on their own card.</span>
+                </label>
+              </div>
+            </RadioGroup>
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="card-title" className="text-xs">
+              {mode === "single_card" ? "Card title" : "Default card title (for un-grouped items)"}
+            </Label>
             <Input
               id="card-title"
               value={cardTitle}
@@ -117,7 +141,7 @@ export function PromoteToWorkstreamDialog({
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="due" className="text-xs">Default due date (optional)</Label>
+            <Label htmlFor="due" className="text-xs">Default due date (used for items without one)</Label>
             <Input
               id="due"
               type="date"

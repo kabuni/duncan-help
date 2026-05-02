@@ -368,6 +368,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
                 />
               </div>
             </>
+          )}
 
           <div className="col-span-2 flex items-start gap-2 pt-1 border-t border-border mt-1">
             <Checkbox

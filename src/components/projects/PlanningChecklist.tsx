@@ -3,6 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   ChevronDown,
   ChevronRight,
@@ -10,11 +14,13 @@ import {
   Plus,
   Send,
   Trash2,
-  X,
   Sparkles,
+  UserCircle2,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import type { ProjectMember } from "@/hooks/useProjects";
 import { PromoteToWorkstreamDialog } from "./PromoteToWorkstreamDialog";
 
 export interface PlanItem {
@@ -38,18 +44,30 @@ export function PlanningChecklist({
   chatId,
   projectId,
   chatTitle,
+  projectName,
+  members,
+  currentUserId,
 }: {
   chatId: string;
   projectId: string;
   chatTitle?: string;
+  projectName?: string;
+  members: ProjectMember[];
+  currentUserId: string | null;
 }) {
   const [items, setItems] = useState<PlanItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(true);
   const [newTitle, setNewTitle] = useState("");
   const [newGroup, setNewGroup] = useState("");
+  const [newAssignee, setNewAssignee] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [promoteOpen, setPromoteOpen] = useState(false);
+
+  // Default new-item assignee to current user
+  useEffect(() => {
+    if (!newAssignee && currentUserId) setNewAssignee(currentUserId);
+  }, [currentUserId, newAssignee]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,6 +127,7 @@ export function PlanningChecklist({
       created_by: user.id,
       title,
       group_title: newGroup.trim() || null,
+      assignee_profile_id: newAssignee || user.id,
       status: "accepted",
       position: maxPos + 1,
     });
@@ -132,7 +151,7 @@ export function PlanningChecklist({
   async function acceptItem(item: PlanItem) {
     const { error } = await supabase
       .from("project_chat_plan_items" as any)
-      .update({ status: "accepted" })
+      .update({ status: "accepted", assignee_profile_id: item.assignee_profile_id || currentUserId })
       .eq("id", item.id);
     if (error) toast.error(error.message);
   }
@@ -151,6 +170,10 @@ export function PlanningChecklist({
   async function updateGroup(item: PlanItem, group: string) {
     const g = group.trim() || null;
     await supabase.from("project_chat_plan_items" as any).update({ group_title: g }).eq("id", item.id);
+  }
+
+  async function updateAssignee(item: PlanItem, userId: string | null) {
+    await supabase.from("project_chat_plan_items" as any).update({ assignee_profile_id: userId }).eq("id", item.id);
   }
 
   const totalOpen = accepted.length;
@@ -196,7 +219,7 @@ export function PlanningChecklist({
             <p className="text-xs text-muted-foreground italic">Loading…</p>
           ) : open_items.length === 0 ? (
             <p className="text-xs text-muted-foreground italic">
-              Capture next steps as you brainstorm. Click <strong>Send to Workstreams</strong> when you're ready to turn them into cards and tasks.
+              Capture next steps as you brainstorm. Items live in this project's <strong>Tasks</strong> tab. Click <strong>Send to Workstreams</strong> to also push them as cards.
             </p>
           ) : (
             <>
@@ -210,10 +233,12 @@ export function PlanningChecklist({
                     <PlanRow
                       key={it.id}
                       item={it}
+                      members={members}
                       onToggleDone={toggleDone}
                       onRemove={removeItem}
                       onUpdateTitle={updateTitle}
                       onUpdateGroup={updateGroup}
+                      onUpdateAssignee={updateAssignee}
                       onAccept={acceptItem}
                     />
                   ))}
@@ -232,10 +257,12 @@ export function PlanningChecklist({
                     <PlanRow
                       key={it.id}
                       item={it}
+                      members={members}
                       onToggleDone={toggleDone}
                       onRemove={removeItem}
                       onUpdateTitle={updateTitle}
                       onUpdateGroup={updateGroup}
+                      onUpdateAssignee={updateAssignee}
                     />
                   ))}
                 </div>
@@ -244,7 +271,7 @@ export function PlanningChecklist({
           )}
 
           {/* Quick-add */}
-          <div className="flex gap-1.5 pt-1">
+          <div className="flex flex-wrap gap-1.5 pt-1">
             <Input
               value={newGroup}
               onChange={(e) => setNewGroup(e.target.value)}
@@ -261,7 +288,12 @@ export function PlanningChecklist({
                 }
               }}
               placeholder="Add a to-do…"
-              className="h-7 text-xs flex-1"
+              className="h-7 text-xs flex-1 min-w-[140px]"
+            />
+            <AssigneePicker
+              members={members}
+              value={newAssignee}
+              onChange={setNewAssignee}
             />
             <Button size="sm" className="h-7 text-xs" onClick={addItem} disabled={adding || !newTitle.trim()}>
               <Plus className="h-3 w-3 mr-1" />
@@ -276,7 +308,7 @@ export function PlanningChecklist({
         onOpenChange={setPromoteOpen}
         chatId={chatId}
         projectId={projectId}
-        defaultCardTitle={chatTitle}
+        defaultCardTitle={projectName || chatTitle}
         itemCount={totalOpen}
       />
     </div>
@@ -285,17 +317,21 @@ export function PlanningChecklist({
 
 function PlanRow({
   item,
+  members,
   onToggleDone,
   onRemove,
   onUpdateTitle,
   onUpdateGroup,
+  onUpdateAssignee,
   onAccept,
 }: {
   item: PlanItem;
+  members: ProjectMember[];
   onToggleDone: (item: PlanItem) => void;
   onRemove: (id: string) => void;
   onUpdateTitle: (item: PlanItem, title: string) => void;
   onUpdateGroup: (item: PlanItem, group: string) => void;
+  onUpdateAssignee: (item: PlanItem, userId: string | null) => void;
   onAccept?: (item: PlanItem) => void;
 }) {
   const [draftTitle, setDraftTitle] = useState(item.title);
@@ -330,6 +366,12 @@ function PlanRow({
         placeholder="group"
         className="h-6 text-[11px] w-24 border-0 bg-transparent px-1 text-muted-foreground focus-visible:ring-1 focus-visible:bg-background opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
       />
+      <AssigneePicker
+        members={members}
+        value={item.assignee_profile_id}
+        onChange={(uid) => onUpdateAssignee(item, uid)}
+        compact
+      />
       {onAccept && (
         <button
           onClick={() => onAccept(item)}
@@ -347,5 +389,77 @@ function PlanRow({
         <Trash2 className="h-3 w-3" />
       </button>
     </div>
+  );
+}
+
+function AssigneePicker({
+  members,
+  value,
+  onChange,
+  compact,
+}: {
+  members: ProjectMember[];
+  value: string | null;
+  onChange: (userId: string | null) => void;
+  compact?: boolean;
+}) {
+  const selected = value ? members.find((m) => m.user_id === value) : null;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "flex items-center gap-1 rounded-md border border-transparent hover:border-border hover:bg-background transition-colors",
+            compact ? "h-6 px-1" : "h-7 px-1.5",
+          )}
+          title={selected?.display_name || "Assign"}
+        >
+          {selected ? (
+            <Avatar className={compact ? "h-5 w-5" : "h-5 w-5"}>
+              <AvatarImage src={selected.avatar_url || undefined} alt={selected.display_name || ""} />
+              <AvatarFallback className="text-[9px]">
+                {(selected.display_name || "?").slice(0, 1).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+          ) : (
+            <UserCircle2 className="h-4 w-4 text-muted-foreground" />
+          )}
+          {!compact && (
+            <span className="text-[11px] text-muted-foreground max-w-[80px] truncate">
+              {selected?.display_name || "Assign"}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-1" align="end">
+        <div className="max-h-64 overflow-y-auto space-y-0.5">
+          <button
+            onClick={() => onChange(null)}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-secondary/60 text-left"
+          >
+            <UserCircle2 className="h-4 w-4 text-muted-foreground" />
+            <span className="flex-1 text-muted-foreground">Unassigned</span>
+            {!value && <Check className="h-3 w-3 text-primary" />}
+          </button>
+          {members.map((m) => (
+            <button
+              key={m.user_id}
+              onClick={() => onChange(m.user_id)}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-secondary/60 text-left"
+            >
+              <Avatar className="h-5 w-5">
+                <AvatarImage src={m.avatar_url || undefined} alt={m.display_name || ""} />
+                <AvatarFallback className="text-[9px]">
+                  {(m.display_name || "?").slice(0, 1).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="flex-1 truncate">{m.display_name || "Unnamed"}</span>
+              {value === m.user_id && <Check className="h-3 w-3 text-primary" />}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

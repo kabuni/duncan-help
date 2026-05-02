@@ -8,11 +8,12 @@ const corsHeaders = {
 
 interface PromoteBody {
   chat_id: string;
+  mode?: "single_card" | "by_group";
   default_card_title?: string;
   project_tag?: string | null;
   default_due_date?: string | null;
   default_assignee_user_ids?: string[];
-  item_ids?: string[]; // optional whitelist; if omitted, promote all non-promoted, non-suggested items
+  item_ids?: string[];
 }
 
 Deno.serve(async (req) => {
@@ -43,7 +44,15 @@ Deno.serve(async (req) => {
     }
 
     const body = (await req.json().catch(() => ({}))) as PromoteBody;
-    const { chat_id, default_card_title, project_tag, default_due_date, default_assignee_user_ids, item_ids } = body;
+    const {
+      chat_id,
+      mode = "single_card",
+      default_card_title,
+      project_tag,
+      default_due_date,
+      default_assignee_user_ids,
+      item_ids,
+    } = body;
     if (!chat_id) {
       return new Response(JSON.stringify({ error: "chat_id is required" }), {
         status: 400,
@@ -53,7 +62,6 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey);
 
-    // Resolve chat + project (RLS through user client to enforce membership).
     const { data: chat, error: chatErr } = await userClient
       .from("project_chats")
       .select("id, project_id, title")
@@ -72,7 +80,6 @@ Deno.serve(async (req) => {
       .eq("id", chat.project_id)
       .maybeSingle();
 
-    // Load plan items via user client (RLS enforced).
     let q = userClient
       .from("project_chat_plan_items")
       .select("*")
@@ -83,7 +90,6 @@ Deno.serve(async (req) => {
     if (item_ids && item_ids.length > 0) {
       q = q.in("id", item_ids);
     } else {
-      // Default: skip suggested (un-accepted) items
       q = q.in("status", ["accepted", "done"]);
     }
 
@@ -101,19 +107,23 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Group by group_title (null grouped under default).
-    const fallbackTitle = (default_card_title?.trim() || chat.title || project?.name || "Plan").slice(0, 200);
+    // Decide grouping
+    const fallbackTitle = (default_card_title?.trim() || project?.name || chat.title || "Plan").slice(0, 200);
     const groups = new Map<string, any[]>();
-    for (const it of items) {
-      const key = (it.group_title?.trim() || fallbackTitle);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(it);
+
+    if (mode === "single_card") {
+      groups.set(fallbackTitle, items);
+    } else {
+      for (const it of items) {
+        const key = (it.group_title?.trim() || fallbackTitle);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(it);
+      }
     }
 
     const cardsCreated: Array<{ id: string; title: string; tasks: number }> = [];
 
     for (const [cardTitle, groupItems] of groups.entries()) {
-      // Dedup: existing card with same title + project_tag for creator.
       const dedupQ = admin
         .from("workstream_cards")
         .select("id, title")
@@ -153,14 +163,21 @@ Deno.serve(async (req) => {
           user_id: user.id,
         });
 
-        // Additional assignees
-        if (default_assignee_user_ids && default_assignee_user_ids.length > 0) {
-          const extraRows = default_assignee_user_ids
-            .filter((uid) => uid && uid !== user.id)
-            .map((uid) => ({ card_id: cardId, user_id: uid }));
-          if (extraRows.length > 0) {
-            await admin.from("workstream_card_assignees").insert(extraRows);
+        // Add per-item assignees as card-level assignees too (deduped)
+        const itemAssignees = new Set<string>();
+        for (const it of groupItems) {
+          if (it.assignee_profile_id && it.assignee_profile_id !== user.id) {
+            itemAssignees.add(it.assignee_profile_id);
           }
+        }
+        if (default_assignee_user_ids) {
+          for (const uid of default_assignee_user_ids) {
+            if (uid && uid !== user.id) itemAssignees.add(uid);
+          }
+        }
+        if (itemAssignees.size > 0) {
+          const rows = Array.from(itemAssignees).map((uid) => ({ card_id: cardId, user_id: uid }));
+          await admin.from("workstream_card_assignees").insert(rows);
         }
 
         await admin.from("workstream_activity").insert({
@@ -182,8 +199,7 @@ Deno.serve(async (req) => {
       for (let i = 0; i < groupItems.length; i++) {
         const it = groupItems[i];
         if (existingTitles.has(it.title.toLowerCase())) {
-          // Still mark item promoted so it doesn't re-promote next time
-          await admin.from("project_chat_plan_items").update({ status: "promoted" }).eq("id", it.id);
+          await admin.from("project_chat_plan_items").update({ status: "promoted", promoted_card_id: cardId }).eq("id", it.id);
           continue;
         }
 
@@ -193,6 +209,7 @@ Deno.serve(async (req) => {
             card_id: cardId,
             title: it.title,
             description: it.notes || "",
+            assignee_id: it.assignee_profile_id || null,
             due_date: it.due_date || default_due_date || null,
             sort_order: i,
             completed: it.status === "done",
@@ -204,7 +221,6 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Mark plan item promoted with link
         await admin
           .from("project_chat_plan_items")
           .update({
@@ -221,7 +237,6 @@ Deno.serve(async (req) => {
       cardsCreated.push({ id: cardId, title: cardTitle, tasks: taskCount });
     }
 
-    // Post a summary message into the chat so there's a record.
     const summaryLines = cardsCreated.map(
       (c) => `- **${c.title}** — ${c.tasks} task${c.tasks === 1 ? "" : "s"} ([open](/workstreams?card=${c.id}))`,
     );

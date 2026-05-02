@@ -5,8 +5,9 @@ import {
   GitBranch, AlertTriangle,
   Clock, RefreshCw, Loader2, Activity, Search, X,
   BarChart3, Globe2, Users, MousePointerClick, PlugZap, Send,
-  GitPullRequest, GitCommit, FolderGit2,
+  GitPullRequest, GitCommit, FolderGit2, Building2,
 } from "lucide-react";
+import SuppliersDirectory from "@/components/suppliers/SuppliersDirectory";
 import AppLayout from "@/components/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -248,6 +249,9 @@ const Operations = () => {
               </TabsTrigger>
               <TabsTrigger value="sync-logs" className="gap-1.5 whitespace-nowrap">
                 <Clock className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Sync Logs</span><span className="sm:hidden">Logs</span>
+              </TabsTrigger>
+              <TabsTrigger value="suppliers" className="gap-1.5 whitespace-nowrap">
+                <Building2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Suppliers</span><span className="sm:hidden">Supp.</span>
               </TabsTrigger>
             </TabsList>
 
@@ -671,6 +675,10 @@ const Operations = () => {
                   ))}
                 </div>
               )}
+            </TabsContent>
+
+            <TabsContent value="suppliers">
+              <SuppliersDirectory />
             </TabsContent>
           </Tabs>
         </div>

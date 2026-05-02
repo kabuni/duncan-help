@@ -21,6 +21,7 @@ import { DetailDrawer } from "@/components/diary/DetailDrawer";
 import { AddEventDialog } from "@/components/diary/AddEventDialog";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatTimeInTz } from "@/components/diary/TimezonePicker";
+import { CATEGORY_META, getCategoryMeta } from "@/components/diary/categoryMeta";
 
 type ViewTz = "Europe/London" | "Asia/Kolkata" | "both";
 const VIEW_TZ_KEY = "planner_view_tz";

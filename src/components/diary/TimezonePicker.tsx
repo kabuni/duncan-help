@@ -107,3 +107,40 @@ export function zonedDateTimeToISO(dateStr: string, timeStr: string, tz: string)
   const offset = asTz.getTime() - asUtc.getTime();
   return new Date(utcGuess - offset).toISOString();
 }
+
+/** Extract YYYY-MM-DD as it appears in the given timezone. */
+export function isoToDateInTz(iso: string | null | undefined, tz: string): string {
+  if (!iso) return "";
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date(iso));
+    const y = parts.find((p) => p.type === "year")?.value ?? "";
+    const m = parts.find((p) => p.type === "month")?.value ?? "";
+    const d = parts.find((p) => p.type === "day")?.value ?? "";
+    return `${y}-${m}-${d}`;
+  } catch {
+    return "";
+  }
+}
+
+/** Extract HH:mm as it appears in the given timezone. */
+export function isoToTimeInTz(iso: string | null | undefined, tz: string): string {
+  if (!iso) return "";
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date(iso));
+    const h = parts.find((p) => p.type === "hour")?.value ?? "00";
+    const m = parts.find((p) => p.type === "minute")?.value ?? "00";
+    return `${h}:${m}`;
+  } catch {
+    return "";
+  }
+}

@@ -64,6 +64,20 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+    const startDate = new Date(body.start_at);
+    const endDate = new Date(body.end_at);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return new Response(
+        JSON.stringify({ error: "start_at and end_at must be valid ISO datetimes" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (endDate <= startDate) {
+      return new Response(
+        JSON.stringify({ error: "end_at must be after start_at", code: "INVERTED_RANGE" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     const { data: tokenData, error: tokenError } = await supabaseAdmin

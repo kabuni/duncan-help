@@ -65,14 +65,21 @@ interface Props {
   onCreated: () => void;
 }
 
+function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: Props) {
-  const today = (defaultDate ?? new Date()).toISOString().slice(0, 10);
+  const initial = toLocalDateStr(defaultDate ?? new Date());
   const [draft, setDraft] = useState({
     event_name: "",
     category: "Event",
-    start_date: today,
+    start_date: initial,
     start_time: "",
-    end_date: today,
+    end_date: initial,
     end_time: "",
     all_day: true,
     owner: "",
@@ -89,6 +96,13 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
   const [appApprover, setAppApprover] = useState("none");
   const [personalCalConnected, setPersonalCalConnected] = useState(false);
   const [syncToPersonal, setSyncToPersonal] = useState(false);
+
+  // Re-seed start/end dates whenever the dialog re-opens with a (possibly new) default date.
+  useEffect(() => {
+    if (!open) return;
+    const seed = toLocalDateStr(defaultDate ?? new Date());
+    setDraft((d) => ({ ...d, start_date: seed, end_date: seed }));
+  }, [open, defaultDate]);
 
   useEffect(() => {
     if (!open) return;
@@ -118,12 +132,13 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
 
 
   function reset() {
+    const seed = toLocalDateStr(defaultDate ?? new Date());
     setDraft({
       event_name: "",
       category: "Event",
-      start_date: today,
+      start_date: seed,
       start_time: "",
-      end_date: today,
+      end_date: seed,
       end_time: "",
       all_day: true,
       owner: "",
@@ -172,6 +187,11 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       toast.error("Start date is required");
       return;
     }
+    const effectiveEndDate = draft.end_date || draft.start_date;
+    if (effectiveEndDate < draft.start_date) {
+      toast.error("End date must be on or after the start date");
+      return;
+    }
     if (!draft.owner.trim()) {
       toast.error("Owner is required — every event needs an accountable owner");
       return;
@@ -182,8 +202,14 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       ? new Date(`${draft.start_date}T00:00:00`).toISOString()
       : new Date(`${draft.start_date}T${draft.start_time || "09:00"}:00`).toISOString();
     const endISO = draft.all_day
-      ? new Date(`${draft.end_date || draft.start_date}T23:59:59`).toISOString()
-      : new Date(`${draft.end_date || draft.start_date}T${draft.end_time || draft.start_time || "10:00"}:00`).toISOString();
+      ? new Date(`${effectiveEndDate}T23:59:59`).toISOString()
+      : new Date(`${effectiveEndDate}T${draft.end_time || draft.start_time || "10:00"}:00`).toISOString();
+
+    if (new Date(endISO) <= new Date(startISO)) {
+      setSaving(false);
+      toast.error("End must be after the start");
+      return;
+    }
 
     const localId = `local:${crypto.randomUUID()}`;
     const title = `[${draft.category}] ${draft.event_name.trim()}`;
@@ -235,15 +261,28 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     }
 
     if (approvals.length > 0 && uid) {
-      await supabase.from("key_event_approvals" as any).insert(
-        approvals.map((a) => ({
-          event_id: (inserted as any).id,
-          approval_type: a.approval_type,
-          label: a.label.trim() || null,
-          approver_profile_id: a.approver_profile_id,
-          requested_by: uid,
-        })),
-      );
+      const { data: insertedApprovals } = await supabase
+        .from("key_event_approvals" as any)
+        .insert(
+          approvals.map((a) => ({
+            event_id: (inserted as any).id,
+            approval_type: a.approval_type,
+            label: a.label.trim() || null,
+            approver_profile_id: a.approver_profile_id,
+            requested_by: uid,
+          })),
+        )
+        .select("id");
+
+      // Fire-and-forget Slack DMs to each assigned approver
+      const approvalRows = (insertedApprovals as unknown as { id: string }[] | null) || [];
+      for (const row of approvalRows) {
+        supabase.functions
+          .invoke("notify-event-approval", {
+            body: { approval_id: row.id, kind: "requested" },
+          })
+          .catch((err) => console.warn("notify-event-approval failed:", err));
+      }
     }
 
     let personalSyncMsg: string | null = null;
@@ -342,7 +381,15 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
             <Input
               type="date"
               value={draft.start_date}
-              onChange={(e) => setDraft({ ...draft, start_date: e.target.value })}
+              onChange={(e) => {
+                const newStart = e.target.value;
+                setDraft((d) => ({
+                  ...d,
+                  start_date: newStart,
+                  // Keep end_date >= start_date so we never send Google an inverted range
+                  end_date: !d.end_date || d.end_date < newStart ? newStart : d.end_date,
+                }));
+              }}
             />
           </div>
           <div className="space-y-1.5">
@@ -350,6 +397,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
             <Input
               type="date"
               value={draft.end_date}
+              min={draft.start_date}
               onChange={(e) => setDraft({ ...draft, end_date: e.target.value })}
             />
           </div>

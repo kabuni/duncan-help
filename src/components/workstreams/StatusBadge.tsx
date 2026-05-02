@@ -32,6 +32,7 @@ export function StatusDot({ status }: { status: CardStatus }) {
 
 export function getStatusBorderClass(status: CardStatus): string {
   const map: Record<CardStatus, string> = {
+    not_started: "border-l-muted-foreground/40",
     red: "border-l-red-500",
     amber: "border-l-amber-500",
     green: "border-l-emerald-500",

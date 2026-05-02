@@ -390,7 +390,7 @@ export function useCreateCard() {
       const { assignee_ids, ...cardInput } = input;
       const { data, error } = await supabase
         .from("workstream_cards")
-        .insert({ status: "red", ...cardInput, created_by: user.id })
+        .insert({ status: "not_started", ...cardInput, created_by: user.id })
         .select("id")
         .single();
       if (error) throw error;

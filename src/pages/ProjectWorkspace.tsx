@@ -586,29 +586,13 @@ export default function ProjectWorkspace() {
                   </div>
                 </ScrollArea>
 
-                {/* Input */}
-                <div className="border-t border-border px-4 py-3">
-                  <div className="max-w-3xl mx-auto flex items-end gap-3 rounded-xl border border-border bg-card px-4 py-3 focus-within:border-primary/40 transition-all">
-                    <textarea
-                      ref={textareaRef}
-                      placeholder="Message Duncan..."
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                      disabled={sending}
-                      rows={1}
-                      className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none disabled:opacity-50 resize-none overflow-y-auto"
-                      style={{ maxHeight: 160 }}
-                    />
-                    <button
-                      onClick={handleSend}
-                      disabled={!input.trim() || sending}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-30"
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
+                {/* Input — same composer as the main dashboard (attachments, voice, streaming) */}
+                <ChatInput
+                  onSubmit={handleSend}
+                  isLoading={sending}
+                  placeholder="Message Duncan…"
+                  hideFooter
+                />
               </>
             )}
           </div>

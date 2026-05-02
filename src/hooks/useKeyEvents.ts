@@ -33,6 +33,7 @@ export interface KeyEvent {
 
   deleted_in_google: boolean;
   synced_at: string;
+  created_by: string | null;
 }
 
 export interface WorkstreamCard {

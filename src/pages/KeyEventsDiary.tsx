@@ -10,7 +10,7 @@ import AppLayout from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useKeyEvents, type KeyEvent, type KeyEventGoal } from "@/hooks/useKeyEvents";
+import { useKeyEvents, type KeyEvent, type WorkstreamCard } from "@/hooks/useKeyEvents";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { toast } from "sonner";
 import { RefreshCw, AlertTriangle, Plus } from "lucide-react";
@@ -28,7 +28,7 @@ type CalItem = {
   start: Date;
   end: Date;
   allDay: boolean;
-  resource: { kind: "event"; data: KeyEvent } | { kind: "goal"; data: KeyEventGoal };
+  resource: { kind: "event"; data: KeyEvent };
 };
 
 function fmtDateTime(iso: string | null) {
@@ -37,14 +37,13 @@ function fmtDateTime(iso: string | null) {
 }
 
 export default function KeyEventsDiary() {
-  const { events, goals, status, lastSync, loading, syncing, refresh, connect, sync } = useKeyEvents();
+  const { events, cards, status, lastSync, loading, syncing, refresh, connect, sync } = useKeyEvents();
   const { isAdmin } = useIsAdmin();
   const [params, setParams] = useSearchParams();
   const [view, setView] = useState<View>("month");
   const [date, setDate] = useState<Date>(new Date());
   const [riskFilter, setRiskFilter] = useState<"all" | "atrisk">("all");
   const [selectedEvent, setSelectedEvent] = useState<KeyEvent | null>(null);
-  const [selectedGoal, setSelectedGoal] = useState<KeyEventGoal | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<Date | null>(null);
@@ -95,23 +94,8 @@ export default function KeyEventsDiary() {
         };
       });
 
-    const goalItems: CalItem[] = goals
-      .filter((g) => g.target_date && g.status === "active")
-      .map((g) => {
-        const start = new Date(g.target_date + "T00:00:00");
-        const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-        return {
-          id: `goal:${g.id}`,
-          title: `🎯 ${g.name}`,
-          start,
-          end,
-          allDay: true,
-          resource: { kind: "goal", data: g },
-        };
-      });
-
-    return [...goalItems, ...evItems];
-  }, [events, goals, riskFilter]);
+    return evItems;
+  }, [events, riskFilter]);
 
   const counts = useMemo(() => {
     const red = events.filter((e) => e.risk_level === "red").length;
@@ -121,30 +105,11 @@ export default function KeyEventsDiary() {
   }, [events]);
 
   function handleSelectItem(item: CalItem) {
-    if (item.resource.kind === "event") {
-      setSelectedEvent(item.resource.data);
-      setSelectedGoal(null);
-    } else {
-      setSelectedGoal(item.resource.data);
-      setSelectedEvent(null);
-    }
+    setSelectedEvent(item.resource.data);
     setDrawerOpen(true);
   }
-
-  function handleSelectGoal(g: KeyEventGoal) {
-    setSelectedGoal(g);
-    setSelectedEvent(null);
-    setDrawerOpen(true);
-    if (g.target_date) setDate(new Date(g.target_date + "T00:00:00"));
-  }
-
-  const goalEventsForSelected = useMemo(() => {
-    if (!selectedGoal) return [];
-    return events.filter((e) => e.linked_goal_ids.includes(selectedGoal.id));
-  }, [selectedGoal, events]);
 
   const eventPropGetter = (item: CalItem) => {
-    if (item.resource.kind === "goal") return { className: "evt-goal" };
     const lvl = item.resource.data.risk_level;
     return { className: `evt-${lvl}` };
   };
@@ -255,9 +220,9 @@ export default function KeyEventsDiary() {
           open={drawerOpen}
           onOpenChange={setDrawerOpen}
           event={selectedEvent}
-          goal={selectedGoal}
-          goalEvents={goalEventsForSelected}
-          goals={goals}
+          cards={cards}
+          isAdmin={isAdmin}
+          onChanged={refresh}
         />
 
         <AddEventDialog

@@ -2502,6 +2502,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          updated_at: string
           user_id: string
         }
         Insert: {
@@ -2509,6 +2510,7 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          updated_at?: string
           user_id: string
         }
         Update: {
@@ -2516,6 +2518,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: [
@@ -2563,6 +2566,7 @@ export type Database = {
           created_at: string
           id: string
           task_id: string
+          updated_at: string
           user_id: string
         }
         Insert: {
@@ -2570,6 +2574,7 @@ export type Database = {
           created_at?: string
           id?: string
           task_id: string
+          updated_at?: string
           user_id: string
         }
         Update: {
@@ -2577,6 +2582,7 @@ export type Database = {
           created_at?: string
           id?: string
           task_id?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: [

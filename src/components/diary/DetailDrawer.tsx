@@ -384,8 +384,8 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                   <Textarea rows={3} value={form.raw_description} onChange={(e) => setForm({ ...form, raw_description: e.target.value })} />
                 </div>
 
-                <div className="flex gap-2 pt-2">
-                  <Button onClick={saveEdits} disabled={saving || !form.event_name.trim() || !form.owner.trim()}>
+                <div className="sticky bottom-0 -mx-6 px-6 py-3 bg-background border-t border-border flex gap-2 mt-4">
+                  <Button onClick={saveEdits} disabled={saving || !form.event_name.trim() || !form.owner.trim()} className="flex-1">
                     {saving ? "Saving…" : "Save changes"}
                   </Button>
                   <Button variant="outline" onClick={() => setEditing(false)} disabled={saving}>

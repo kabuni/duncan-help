@@ -75,7 +75,8 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [owners, setOwners] = useState<{ display_name: string }[]>([]);
+  const [currentUserName, setCurrentUserName] = useState<string>("");
+  const [owners, setOwners] = useState<{ display_name: string; user_id?: string }[]>([]);
   const [form, setForm] = useState({
     event_name: "",
     category: "Event",
@@ -113,13 +114,17 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     if (!open) return;
     (async () => {
       const { data: u } = await supabase.auth.getUser();
-      setCurrentUserId(u.user?.id || null);
+      const uid = u.user?.id || null;
+      setCurrentUserId(uid);
       const { data } = await supabase
         .from("profiles")
-        .select("display_name")
+        .select("display_name, user_id")
         .eq("approval_status", "approved")
         .order("display_name");
-      setOwners(((data || []) as any).filter((p: any) => p.display_name));
+      const list = ((data || []) as any).filter((p: any) => p.display_name);
+      setOwners(list);
+      const me = list.find((p: any) => p.user_id === uid);
+      setCurrentUserName(me?.display_name || "");
     })();
   }, [open]);
 
@@ -253,7 +258,12 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                       size="sm"
                       variant="outline"
                       className="h-7 text-xs"
-                      onClick={() => setEditing(true)}
+                      onClick={() => {
+                        if (!form.owner && currentUserName) {
+                          setForm((f) => ({ ...f, owner: currentUserName }));
+                        }
+                        setEditing(true);
+                      }}
                     >
                       <Pencil className="h-3 w-3 mr-1" /> Edit
                     </Button>

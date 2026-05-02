@@ -127,6 +127,12 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       setOwners(list as any);
       setProfiles(list.map((p: any) => ({ id: p.id, display_name: p.display_name })));
       setPersonalCalConnected(!!(calRes as any)?.data);
+
+      // Default the owner to the current user (they can change it).
+      const me = list.find((p: any) => p.user_id === uid);
+      if (me?.display_name) {
+        setDraft((d) => (d.owner ? d : { ...d, owner: me.display_name as string }));
+      }
     })();
   }, [open]);
 

@@ -10,7 +10,7 @@ import AppLayout from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useKeyEvents, type KeyEvent, type KeyEventGoal } from "@/hooks/useKeyEvents";
+import { useKeyEvents, type KeyEvent, type WorkstreamCard } from "@/hooks/useKeyEvents";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { toast } from "sonner";
 import { RefreshCw, AlertTriangle, Plus } from "lucide-react";

@@ -58,6 +58,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
   });
   const [saving, setSaving] = useState(false);
   const [owners, setOwners] = useState<{ user_id: string; display_name: string | null }[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (!open) return;

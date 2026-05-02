@@ -201,7 +201,7 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                         </span>
                         {card.task_breakdown && (tasks.length > 0) && (
                           <span className="text-muted-foreground/70 font-mono ml-1">
-                            · {card.task_breakdown.red}R/{card.task_breakdown.yellow}Y/{card.task_breakdown.green}G/{card.task_breakdown.done}✓
+                            · {card.task_breakdown.not_started}NS/{card.task_breakdown.red}R/{card.task_breakdown.yellow}Y/{card.task_breakdown.green}G/{card.task_breakdown.done}✓
                           </span>
                         )}
                       </span>

@@ -131,6 +131,7 @@ function KanbanCard({ card, onClick, onDragStart }: {
           <span className="text-muted-foreground">Overall</span>
           <OverallDot status={card.overall_status} />
           <span className="text-muted-foreground/80 font-mono">
+            {card.task_breakdown.not_started > 0 && <span className="text-muted-foreground">{card.task_breakdown.not_started}NS </span>}
             {card.task_breakdown.red > 0 && <span className="text-red-500">{card.task_breakdown.red}R </span>}
             {card.task_breakdown.yellow > 0 && <span className="text-amber-500">{card.task_breakdown.yellow}Y </span>}
             {card.task_breakdown.green > 0 && <span className="text-emerald-500">{card.task_breakdown.green}G </span>}

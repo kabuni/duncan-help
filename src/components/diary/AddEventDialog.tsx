@@ -190,6 +190,8 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     const missing: string[] = [];
     if (!draft.owner.trim()) missing.push("owner");
 
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+
     const { data: inserted, error } = await supabase
       .from("key_events" as any)
       .insert({
@@ -212,6 +214,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
         linked_docs: [],
         attendees: [],
         deleted_in_google: false,
+        created_by: authUser?.id ?? null,
       })
       .select("id")
       .single();

@@ -159,3 +159,27 @@
   .rbc-date-cell { font-size: 0.7rem; padding: 0.2rem 0.3rem; }
   .rbc-header { font-size: 0.62rem; padding: 0.35rem 0.2rem; }
 }
+
+/* Phone (≤640px) — compact toolbar, smaller chrome, agenda becomes the comfortable view */
+@media (max-width: 640px) {
+  .rbc-toolbar button {
+    padding: 0.3rem 0.55rem;
+    font-size: 0.7rem;
+  }
+  .rbc-toolbar-label { font-size: 0.8rem; min-width: 100px; }
+  .rbc-event {
+    padding: 0.05rem 0.25rem;
+    font-size: 0.6rem;
+    line-height: 0.85rem;
+    border-left-width: 2px;
+  }
+  .rbc-date-cell { font-size: 0.62rem; padding: 0.15rem 0.25rem; }
+  .rbc-header { font-size: 0.55rem; padding: 0.3rem 0.15rem; letter-spacing: 0.02em; }
+  .rbc-month-view, .rbc-time-view, .rbc-agenda-view { border-radius: 0.4rem; }
+  .rbc-show-more { font-size: 0.6rem; }
+  /* Agenda view: full-width rows, comfortable tap targets */
+  .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
+    padding: 0.5rem 0.4rem;
+    font-size: 0.72rem;
+  }
+}

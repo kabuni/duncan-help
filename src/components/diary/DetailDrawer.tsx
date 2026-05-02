@@ -35,8 +35,6 @@ const RISK_TONE: Record<string, string> = {
 
 const FIELD_LABELS: Record<string, string> = {
   owner: "Owner",
-  objective: "Objective",
-  next_action: "Next action",
 };
 
 const CATEGORIES = [

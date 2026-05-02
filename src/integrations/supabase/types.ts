@@ -1093,6 +1093,8 @@ export type Database = {
           event_id: string
           id: string
           label: string | null
+          proposed_date: string | null
+          proposed_note: string | null
           requested_by: string
           status: Database["public"]["Enums"]["event_approval_status"]
           updated_at: string
@@ -1106,6 +1108,8 @@ export type Database = {
           event_id: string
           id?: string
           label?: string | null
+          proposed_date?: string | null
+          proposed_note?: string | null
           requested_by: string
           status?: Database["public"]["Enums"]["event_approval_status"]
           updated_at?: string
@@ -1119,6 +1123,8 @@ export type Database = {
           event_id?: string
           id?: string
           label?: string | null
+          proposed_date?: string | null
+          proposed_note?: string | null
           requested_by?: string
           status?: Database["public"]["Enums"]["event_approval_status"]
           updated_at?: string
@@ -1526,6 +1532,42 @@ export type Database = {
           submitter_email?: string | null
           submitter_id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          kind: string
+          link: string | null
+          metadata: Json
+          read_at: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          link?: string | null
+          metadata?: Json
+          read_at?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          link?: string | null
+          metadata?: Json
+          read_at?: string | null
+          title?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -2723,7 +2765,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
-      event_approval_status: "pending" | "approved" | "rejected"
+      event_approval_status: "pending" | "approved" | "rejected" | "proposed"
       po_category:
         | "software"
         | "hardware"
@@ -2866,7 +2908,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
-      event_approval_status: ["pending", "approved", "rejected"],
+      event_approval_status: ["pending", "approved", "rejected", "proposed"],
       po_category: [
         "software",
         "hardware",

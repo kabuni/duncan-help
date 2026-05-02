@@ -148,6 +148,33 @@ export default function ProjectWorkspace() {
     }
   }, [chats, activeChatId, manualDeselect]);
 
+  // Project-wide open task count (badge on Tasks button) + realtime
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    const fetchCount = async () => {
+      const { count } = await supabase
+        .from("project_chat_plan_items" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", projectId)
+        .in("status", ["accepted", "suggested"]);
+      if (!cancelled) setOpenTaskCount(count || 0);
+    };
+    fetchCount();
+    const channel = supabase
+      .channel(`project_task_count:${projectId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "project_chat_plan_items", filter: `project_id=eq.${projectId}` },
+        () => fetchCount(),
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [projectId]);
+
   // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

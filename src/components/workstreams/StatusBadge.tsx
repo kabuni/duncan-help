@@ -1,6 +1,7 @@
 import type { CardStatus } from "@/hooks/useWorkstreams";
 
 const statusConfig: Record<CardStatus, { label: string; bg: string; text: string; dot: string; border: string }> = {
+  not_started: { label: "Not started", bg: "bg-muted", text: "text-muted-foreground", dot: "bg-muted-foreground/60", border: "border-border" },
   red: { label: "Red", bg: "bg-red-500/10", text: "text-red-500", dot: "bg-red-500", border: "border-red-500/30" },
   amber: { label: "Yellow", bg: "bg-amber-500/10", text: "text-amber-500", dot: "bg-amber-500", border: "border-amber-500/30" },
   green: { label: "Green", bg: "bg-emerald-500/10", text: "text-emerald-500", dot: "bg-emerald-500", border: "border-emerald-500/30" },

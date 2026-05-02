@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { callLLMWithFallback } from "../_shared/llm.ts";
+import { streamLLM } from "../_shared/llm.ts";
 import { getEmbedding as getEmbeddingShared } from "../_shared/embeddings.ts";
 
 const corsHeaders = {
@@ -51,16 +51,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2. Parse input (selected_file_ids no longer used)
-    const { chat_id, message } = await req.json();
+    // 2. Parse input
+    const body = await req.json();
+    const { chat_id, message } = body;
+    const attachments: Array<{ name: string; type: string; base64?: string; extractedText?: string }> =
+      Array.isArray(body?.attachments) ? body.attachments : [];
+
     if (!chat_id || typeof chat_id !== "string") {
       return new Response(JSON.stringify({ error: "chat_id is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (!message || typeof message !== "string" || message.trim().length === 0) {
-      return new Response(JSON.stringify({ error: "message is required" }), {
+    if ((!message || typeof message !== "string" || message.trim().length === 0) && attachments.length === 0) {
+      return new Response(JSON.stringify({ error: "message or attachments required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -122,7 +126,7 @@ Deno.serve(async (req) => {
           const fileIds = indexedFiles.map((f: any) => f.id);
 
           // Generate embedding for user query
-          const queryEmbedding = await getEmbedding(message.trim(), OPENAI_API_KEY);
+          const queryEmbedding = await getEmbedding(((message || "").trim() || "attached files"), OPENAI_API_KEY);
 
           // Use service client for vector similarity query (RPC)
           const serviceClient = createClient(
@@ -224,10 +228,12 @@ Deno.serve(async (req) => {
       console.error("Prior chats retrieval failed (non-fatal):", priorErr);
     }
 
-    // 7. Save user message
+    const userText = (message || "").trim() || "Analyze the attached file(s)";
+
+    // 7. Save user message (persist visible text only — attachment text lives in the prompt)
     const { error: insertUserError } = await supabase
       .from("chat_messages")
-      .insert({ chat_id, role: "user", content: message.trim(), user_id: user.id });
+      .insert({ chat_id, role: "user", content: userText, user_id: user.id });
 
     if (insertUserError) {
       console.error("Failed to save user message:", insertUserError);
@@ -237,11 +243,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 8. Construct AI messages
+    // 8. Construct AI messages (multimodal-aware)
     const baseSystemPrompt = project.system_prompt?.trim() || DEFAULT_SYSTEM_PROMPT;
     const systemPrompt = baseSystemPrompt + fileContextBlock + priorChatsBlock;
 
-    const aiMessages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string }> = [
+    const aiMessages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: any }> = [
       { role: "system", content: systemPrompt },
     ];
 
@@ -254,45 +260,103 @@ Deno.serve(async (req) => {
       }
     }
 
-    aiMessages.push({ role: "user", content: message.trim() });
+    // Build current user content: text + image_url parts + extracted text from docs
+    if (attachments.length === 0) {
+      aiMessages.push({ role: "user", content: userText });
+    } else {
+      const parts: any[] = [{ type: "text", text: userText }];
+      for (const att of attachments) {
+        if (att.type?.startsWith("image/") && att.base64) {
+          parts.push({
+            type: "image_url",
+            image_url: { url: `data:${att.type};base64,${att.base64}`, detail: "auto" },
+          });
+        } else if (att.extractedText) {
+          parts.push({
+            type: "text",
+            text: `\n\n--- Attached file: ${att.name} ---\n${att.extractedText}\n--- End of file ---`,
+          });
+        } else {
+          parts.push({
+            type: "text",
+            text: `\n\n[Attached file: ${att.name} (could not be processed)]`,
+          });
+        }
+      }
+      aiMessages.push({ role: "user", content: parts });
+    }
 
-    // 9. Call LLM via router (Claude primary, OpenAI fallback)
-    let aiData: any;
+    // 9. Stream from OpenAI; relay SSE bytes to client and persist final reply.
+    let openaiStream: ReadableStream<Uint8Array>;
     try {
-      aiData = await callLLMWithFallback({
+      openaiStream = await streamLLM({
         workflow: "chat-with-project-context",
-        messages: aiMessages,
+        messages: aiMessages as any,
         temperature: 0.7,
         max_tokens: 4096,
       });
     } catch (err: any) {
-      console.error("AI error:", err?.status, err?.message);
-      if (err?.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again shortly." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ error: "AI service error" }), {
-        status: 502,
+      console.error("AI stream error:", err?.status, err?.message);
+      const status = err?.status === 429 ? 429 : 502;
+      const msg = err?.status === 429
+        ? "Rate limit exceeded. Please try again shortly."
+        : "AI service error";
+      return new Response(JSON.stringify({ error: msg }), {
+        status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const reply = aiData.choices?.[0]?.message?.content || "I couldn't generate a response.";
+    // Tee the stream so we can both forward to the client and accumulate the
+    // full reply for persistence.
+    const [forwardStream, captureStream] = openaiStream.tee();
 
-    // 10. Save assistant message
-    const { error: insertAssistantError } = await supabase
-      .from("chat_messages")
-      .insert({ chat_id, role: "assistant", content: reply });
+    // Persist the assistant message after the stream finishes.
+    (async () => {
+      try {
+        const reader = captureStream.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let full = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let idx;
+          while ((idx = buffer.indexOf("\n")) !== -1) {
+            let line = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 1);
+            if (line.endsWith("\r")) line = line.slice(0, -1);
+            if (!line.startsWith("data: ")) continue;
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(data);
+              const c = parsed.choices?.[0]?.delta?.content;
+              if (c) full += c;
+            } catch { /* skip */ }
+          }
+        }
+        if (full.trim().length > 0) {
+          const { error: insertAssistantError } = await supabase
+            .from("chat_messages")
+            .insert({ chat_id, role: "assistant", content: full });
+          if (insertAssistantError) {
+            console.error("Failed to save assistant message:", insertAssistantError);
+          }
+        }
+      } catch (persistErr) {
+        console.error("Failed to capture/persist streamed reply:", persistErr);
+      }
+    })();
 
-    if (insertAssistantError) {
-      console.error("Failed to save assistant message:", insertAssistantError);
-    }
-
-    // 11. Return response
-    return new Response(JSON.stringify({ reply }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return new Response(forwardStream, {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
     });
 
   } catch (err: any) {

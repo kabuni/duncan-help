@@ -1,60 +1,66 @@
-## Goal
+## Two issues, two fixes
 
-Inside a Project workspace chat, let you build up a working to-do list as you brainstorm with Duncan, then hand it over to Duncan with one click to turn the items into proper workstream cards and tasks.
+### 1. Project chat composer is missing dashboard-chat features
 
-## How it will work (user-facing)
+**What you have today on the main dashboard ("New Chat" on Home):**
+- Inline paperclip → attach up to 5 files (images, PDFs, docx, xlsx, csv, txt, md, json) with chip previews and 10MB cap
+- Multimodal: images and documents are sent to Duncan as part of the message (vision + doc reasoning)
+- Voice mic → press-to-talk, transcribe, drop into the input
+- Streaming responses (Duncan's reply types out live)
 
-1. **A new "Planning checklist" panel** appears at the top of the project chat (collapsible, sticky).
-   - Add items by typing + Enter, or via a small "+ Add to plan" button on any of Duncan's bullet points in the chat.
-   - Each item has: title, optional notes, optional due date, optional assignee, and a checkbox.
-   - Items can be reordered, edited, and grouped under a heading (becomes the card title).
+**What the project chat has today:**
+- Plain textarea, send button. That's it.
+- File uploads only via the separate "Files" drawer (RAG ingestion, not multimodal in-message attachments).
+- Non-streaming reply (full response appears at once after a spinner).
+- No voice input.
 
-2. **Duncan can populate it from chat.** When you say things like "draft a plan for the launch", Duncan will both reply normally AND emit suggested checklist items — these appear in the panel as "suggested" (greyed) until you accept them.
+**Plan: reuse the existing `<ChatInput />` component inside Projects.**
 
-3. **"Send to Workstreams" button** at the bottom of the panel.
-   - Opens a small confirm dialog: pick the project tag (Lightning Strike Event / Website / K10 App / School Integrations), pick assignees, optional due date.
-   - Click Create → Duncan creates one workstream card per heading (or one card with all items as tasks if there are no headings), assigns them, and posts a confirmation message in the chat with links to the new cards.
+```text
+ProjectWorkspace.tsx
+  └── replace inline <textarea>+send button block (both the empty-state and active-chat versions)
+      with <ChatInput onSubmit={handleSend} isLoading={sending} ... />
+```
 
-4. The checklist persists with the chat (per-chat, per-project), so you can come back to it.
+Backend changes to `chat-with-project-context` edge function:
+- Accept `attachments: ChatAttachment[]` (same shape as `norman-chat`)
+- For images → pass as multimodal `image_url` content parts to gpt-4o
+- For documents → extract text via existing `_shared/document parsing` helper (same one norman-chat uses) and inject as quoted context before the user message
+- Switch the response to **SSE streaming** (mirror norman-chat's `streamAssistantResponse` pattern) so replies stream into the UI
 
-## Technical changes
+`useProjectChat.sendMessage(msg, chatId, attachments?)` updated to:
+- POST attachments alongside `message`
+- Read the SSE stream and surface incremental text to the UI (same hook contract as `useNormanChat`)
 
-### Database (1 migration)
-- New table `project_chat_plan_items`:
-  - `chat_id` (FK to chats), `project_id`, `user_id`
-  - `group_title` (nullable — becomes card title)
-  - `title`, `notes`, `due_date`, `assignee_profile_id`
-  - `status`: `suggested` | `accepted` | `done` | `promoted`
-  - `position` (int, for ordering)
-  - `promoted_card_id`, `promoted_task_id` (set once items become workstream entries)
-- RLS: only chat owner + project members can read/write items for that chat.
+Scope guardrails:
+- Voice transcription uses the same edge function the dashboard already calls — no new infra.
+- Files drawer / RAG pipeline stays exactly as-is. Inline attachments are *additional*, not a replacement.
+- Planning checklist stays where it is.
 
-### Edge Functions
-- **Update `chat-with-project-context`**:
-  - Add tool calling support (currently has none) using OpenAI function-calling.
-  - Tool 1 — `suggest_plan_items`: lets Duncan add suggested items to the checklist while replying. Items are inserted with `status='suggested'`.
-  - Tool 2 — `promote_plan_to_workstream`: triggered when user clicks the button. Reads accepted items from the table, creates workstream cards + tasks (reusing the same logic already in `norman-chat`), updates each item with `promoted_card_id`/`promoted_task_id`, and returns a summary.
-  - System prompt addition: "When a user describes a workflow or list of next steps, call `suggest_plan_items` to add them to the planning checklist for review."
+### 2. "Adding Simon to a project task won't do it"
 
-### Frontend (`src/pages/ProjectWorkspace.tsx` + new components)
-- New `src/components/projects/PlanningChecklist.tsx`:
-  - Collapsible panel above the message list.
-  - Shows live list (Supabase realtime on `project_chat_plan_items`).
-  - Inline add, edit, delete, drag-to-reorder, mark-done, accept/reject suggested items.
-  - Group separator rows (becomes card title).
-  - "Send to Workstreams" button → opens `PromoteToWorkstreamDialog`.
-- New `src/components/projects/PromoteToWorkstreamDialog.tsx`:
-  - Pick project tag, default assignee, optional default due date.
-  - Calls the `promote_plan_to_workstream` edge function.
-  - On success: toast "Created N cards with M tasks" + link to /workstreams.
-- Add small "+ Add to plan" affordance next to bullet points in Duncan's markdown replies (parses `- ` / `* ` lines from the most recent assistant message and offers a one-click capture).
+I checked the database for the project you're on right now. Both items in the Planning checklist (`Test` and the daily-update task) **are already assigned to Simon Wood** (`assignee_profile_id` matches Simon's user id, last updated a few minutes ago). The save is working — the UX just doesn't tell you so.
 
-### Reuse, not rebuild
-- Card/task creation reuses the exact insert logic from `norman-chat` (`workstream_cards`, `workstream_tasks`, `workstream_card_assignees`, `workstream_activity`) so deduplication, RYG defaults (amber), and assignment behaviour stay consistent.
+What's confusing:
+- No toast or visual confirmation when you pick an assignee
+- The picker closes and the row only shows a tiny avatar circle — easy to miss
+- No error is shown if a save *did* fail silently
 
-## Out of scope (for this round)
-- No editing of cards/tasks from inside the chat after promotion (use the Workstreams board for that).
-- No cross-chat plan merging.
-- Items are owned by the chat — deleting the chat deletes its plan items.
+**Fix:**
+- Show a brief "Assigned to {name}" toast on successful change (and a clear error toast on failure — currently `updateAssignee` swallows errors)
+- Add a visible name label next to the assignee avatar in each row (today the name only shows in the quick-add bar, not on existing rows — only the avatar shows on saved rows)
+- Optimistic UI: update the local row immediately so the avatar+name reflect the choice without waiting for the realtime round-trip
+- Add error logging + toast inside `updateAssignee`, `updateTitle`, `updateGroup`, `toggleDone`, `acceptItem`
 
-Ready to build this when you approve.
+### Files I'll touch
+
+- `src/pages/ProjectWorkspace.tsx` — swap inline composer for `<ChatInput />` (both empty-state and active-chat)
+- `src/hooks/useProjectChat.ts` — accept attachments, consume SSE stream
+- `src/components/projects/PlanningChecklist.tsx` — visible assignee name on rows, toast confirmations, optimistic update, error surfacing
+- `supabase/functions/chat-with-project-context/index.ts` — accept attachments (multimodal + doc extraction), stream SSE response
+
+### Out of scope (ask if you want it)
+
+- Changing the Files drawer behaviour
+- Changing how Planning checklist items promote to Workstreams
+- Adding voice to the empty-state composer (will add only if you want — currently empty-state on dashboard also lacks it)

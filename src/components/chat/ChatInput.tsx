@@ -11,6 +11,8 @@ interface ChatInputProps {
   extractionProgress?: string | null;
   onVoiceToggle?: () => void;
   isVoiceActive?: boolean;
+  placeholder?: string;
+  hideFooter?: boolean;
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -35,7 +37,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export default function ChatInput({ onSubmit, isLoading, extractionProgress }: ChatInputProps) {
+export default function ChatInput({ onSubmit, isLoading, extractionProgress, placeholder, hideFooter }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -280,7 +282,7 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress }: C
 
           <textarea
             ref={textareaRef}
-            placeholder="Ask Duncan anything…"
+            placeholder={placeholder ?? "Ask Duncan anything…"}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -319,9 +321,11 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress }: C
             )}
           </button>
         </div>
-        <p className="mt-2 text-center text-[10px] font-mono text-muted-foreground/40">
-          Shift+Enter for new line · Attach files for analysis · Tap mic to dictate · Powered by Duncan AI Engine
-        </p>
+        {!hideFooter && (
+          <p className="mt-2 text-center text-[10px] font-mono text-muted-foreground/40">
+            Shift+Enter for new line · Attach files for analysis · Tap mic to dictate · Powered by Duncan AI Engine
+          </p>
+        )}
       </div>
     </div>
   );

@@ -112,8 +112,7 @@ export default function KeyEventsDiary() {
   const counts = useMemo(() => {
     const red = events.filter((e) => e.risk_level === "red").length;
     const amber = events.filter((e) => e.risk_level === "amber").length;
-    const missing = events.filter((e) => e.missing_fields.includes("owner") || e.missing_fields.includes("next_action")).length;
-    return { red, amber, missing };
+    return { red, amber };
   }, [events]);
 
   function handleSelectItem(item: CalItem) {

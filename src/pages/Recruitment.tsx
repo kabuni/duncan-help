@@ -179,13 +179,10 @@ const Recruitment = () => {
   const { data: gmailStatus } = useQuery({
     queryKey: ["gmail-status"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("company_integrations")
-        .select("status, last_sync")
-        .eq("integration_id", "gmail")
-        .maybeSingle();
+      const { data, error } = await supabase.rpc("get_company_integrations_status");
       if (error) throw error;
-      return data;
+      const row = (data ?? []).find((r: any) => r.integration_id === "gmail");
+      return row ? { status: row.status, last_sync: row.last_sync } : null;
     },
   });
 

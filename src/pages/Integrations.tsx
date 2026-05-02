@@ -282,8 +282,9 @@ const Integrations = () => {
   const checkAzureBlobConnection = async () => {
     try {
       const { supabase } = await import("@/integrations/supabase/client");
-      const { data } = await supabase.from("company_integrations").select("status").eq("integration_id", "azure-blob").maybeSingle();
-      setIsAzureBlobConnected(data?.status === "connected");
+      const { data } = await supabase.rpc("get_company_integrations_status");
+      const row = (data ?? []).find((r: any) => r.integration_id === "azure-blob");
+      setIsAzureBlobConnected(row?.status === "connected");
     } catch {
       setIsAzureBlobConnected(false);
     }
@@ -314,8 +315,9 @@ const Integrations = () => {
   const checkAzureDevOpsConnection = async () => {
     try {
       const { supabase } = await import("@/integrations/supabase/client");
-      const { data } = await supabase.from("company_integrations").select("status").eq("integration_id", "azure-devops").maybeSingle();
-      setIsAzureDevOpsConnected(data?.status === "connected");
+      const { data } = await supabase.rpc("get_company_integrations_status");
+      const row = (data ?? []).find((r: any) => r.integration_id === "azure-devops");
+      setIsAzureDevOpsConnected(row?.status === "connected");
     } catch {
       setIsAzureDevOpsConnected(false);
     }

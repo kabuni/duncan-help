@@ -220,9 +220,9 @@ export default function KeyEventsDiary() {
           open={drawerOpen}
           onOpenChange={setDrawerOpen}
           event={selectedEvent}
-          goal={selectedGoal}
-          goalEvents={goalEventsForSelected}
-          goals={goals}
+          cards={cards}
+          isAdmin={isAdmin}
+          onChanged={refresh}
         />
 
         <AddEventDialog

@@ -141,39 +141,84 @@ export function PlanningChecklist({
 
   async function toggleDone(item: PlanItem) {
     const next = item.status === "done" ? "accepted" : "done";
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, status: next as PlanItem["status"] } : i)));
     const { error } = await supabase
       .from("project_chat_plan_items" as any)
       .update({ status: next })
       .eq("id", item.id);
-    if (error) toast.error(error.message);
+    if (error) {
+      toast.error(`Couldn't update: ${error.message}`);
+      // Revert
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, status: item.status } : i)));
+    }
   }
 
   async function acceptItem(item: PlanItem) {
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, status: "accepted" } : i)));
     const { error } = await supabase
       .from("project_chat_plan_items" as any)
       .update({ status: "accepted", assignee_profile_id: item.assignee_profile_id || currentUserId })
       .eq("id", item.id);
-    if (error) toast.error(error.message);
+    if (error) {
+      toast.error(`Couldn't accept: ${error.message}`);
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, status: item.status } : i)));
+    } else {
+      toast.success("Added to your task list");
+    }
   }
 
   async function removeItem(id: string) {
+    const prev = items;
+    setItems((cur) => cur.filter((i) => i.id !== id));
     const { error } = await supabase.from("project_chat_plan_items" as any).delete().eq("id", id);
-    if (error) toast.error(error.message);
+    if (error) {
+      toast.error(`Couldn't remove: ${error.message}`);
+      setItems(prev);
+    }
   }
 
   async function updateTitle(item: PlanItem, title: string) {
     const t = title.trim();
     if (!t || t === item.title) return;
-    await supabase.from("project_chat_plan_items" as any).update({ title: t }).eq("id", item.id);
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, title: t } : i)));
+    const { error } = await supabase.from("project_chat_plan_items" as any).update({ title: t }).eq("id", item.id);
+    if (error) {
+      toast.error(`Couldn't rename: ${error.message}`);
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, title: item.title } : i)));
+    }
   }
 
   async function updateGroup(item: PlanItem, group: string) {
     const g = group.trim() || null;
-    await supabase.from("project_chat_plan_items" as any).update({ group_title: g }).eq("id", item.id);
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, group_title: g } : i)));
+    const { error } = await supabase.from("project_chat_plan_items" as any).update({ group_title: g }).eq("id", item.id);
+    if (error) {
+      toast.error(`Couldn't update group: ${error.message}`);
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, group_title: item.group_title } : i)));
+    }
   }
 
   async function updateAssignee(item: PlanItem, userId: string | null) {
-    await supabase.from("project_chat_plan_items" as any).update({ assignee_profile_id: userId }).eq("id", item.id);
+    if (item.assignee_profile_id === userId) return;
+    // Optimistic update
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, assignee_profile_id: userId } : i)));
+    const { error } = await supabase
+      .from("project_chat_plan_items" as any)
+      .update({ assignee_profile_id: userId })
+      .eq("id", item.id);
+    if (error) {
+      console.error("Failed to update assignee:", error);
+      toast.error(`Couldn't assign: ${error.message}`);
+      // Revert
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, assignee_profile_id: item.assignee_profile_id } : i)));
+      return;
+    }
+    if (userId) {
+      const member = members.find((m) => m.user_id === userId);
+      toast.success(`Assigned to ${member?.display_name || "team member"}`);
+    } else {
+      toast.success("Unassigned");
+    }
   }
 
   const totalOpen = accepted.length;

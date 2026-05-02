@@ -188,6 +188,35 @@ export default function KeyEventsDiary() {
     return { className: `evt-${lvl}` };
   };
 
+  const EventChip = ({ event }: { event: CalItem }) => {
+    const ev = event.resource.data;
+    const name = ev.event_name || ev.title;
+    const isAllDay = ev.all_day;
+    if (viewTz === "both") {
+      return (
+        <div className="leading-tight">
+          <div className="truncate font-medium">{name}</div>
+          {!isAllDay && (
+            <div className="flex flex-col text-[10px] opacity-90 mt-0.5">
+              <span>🇬🇧 {formatTimeInTz(ev.start_at, "Europe/London")}</span>
+              <span>🇮🇳 {formatTimeInTz(ev.start_at, "Asia/Kolkata")}</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+    return (
+      <div className="leading-tight">
+        <div className="truncate font-medium">{name}</div>
+        {!isAllDay && (
+          <div className="text-[10px] opacity-90">
+            {formatTimeInTz(ev.start_at, viewTz)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <AppLayout>
       <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-4 md:py-6 flex flex-col gap-4 h-[calc(100dvh-3.5rem)]">

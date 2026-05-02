@@ -239,46 +239,135 @@ export function useProjectChat(chatId: string | null) {
 
   useEffect(() => { fetchMessages(); }, [fetchMessages]);
 
-  const sendMessage = useCallback(async (message: string, overrideChatId?: string) => {
+  const sendMessage = useCallback(async (
+    message: string,
+    overrideChatId?: string,
+    attachments: import("@/hooks/useNormanChat").ChatAttachment[] = [],
+  ) => {
     const targetChatId = overrideChatId || chatId;
-    if (!targetChatId || !message.trim()) return null;
+    if (!targetChatId || (!message.trim() && attachments.length === 0)) return null;
     setSending(true);
 
     const displayName = await currentUserDisplayName();
+    const userText = message.trim() || "Analyze the attached file(s)";
 
     // Optimistically add user message
     const tempUserMsg: ChatMessage = {
-      id: `temp-${Date.now()}`,
+      id: `temp-user-${Date.now()}`,
       chat_id: targetChatId,
       role: "user",
-      content: message.trim(),
+      content: userText,
       created_at: new Date().toISOString(),
       user_id: null,
       sender_name: displayName,
       sender_avatar_url: null,
     };
-    setMessages(prev => [...prev, tempUserMsg]);
+    // Optimistic streaming assistant placeholder
+    const tempAssistantId = `temp-assistant-${Date.now()}`;
+    const tempAssistantMsg: ChatMessage = {
+      id: tempAssistantId,
+      chat_id: targetChatId,
+      role: "assistant",
+      content: "",
+      created_at: new Date().toISOString(),
+      user_id: null,
+      sender_name: null,
+      sender_avatar_url: null,
+    };
+    setMessages(prev => [...prev, tempUserMsg, tempAssistantMsg]);
+
+    let assistantSoFar = "";
+    const upsertAssistant = (chunk: string) => {
+      assistantSoFar += chunk;
+      setMessages(prev => prev.map(m => m.id === tempAssistantId ? { ...m, content: assistantSoFar } : m));
+    };
 
     try {
-      const data = await withFastApi<{ reply?: string }>(
-        async () => {
-          const { data, error } = await supabase.functions.invoke("chat-with-project-context", {
-            body: { chat_id: targetChatId, message: message.trim() },
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
+      const url = `${supabaseUrl}/functions/v1/chat-with-project-context`;
+
+      // Extract text from non-image attachments via shared edge function
+      const extractUrl = `${supabaseUrl}/functions/v1/extract-chat-file`;
+      const enriched = await Promise.all(attachments.map(async (att) => {
+        if (att.type.startsWith("image/")) return att;
+        if (att.extractedText) return att;
+        try {
+          const resp = await fetch(extractUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ file_name: att.name, file_type: att.type, base64: att.base64 }),
           });
-          if (error) throw error;
-          return data;
-        },
-        () => fastApi("POST", "/chats/message", { chat_id: targetChatId, message: message.trim() }),
-      );
+          if (resp.ok) {
+            const data = await resp.json();
+            return { ...att, extractedText: data.text || "" };
+          }
+        } catch (err) {
+          console.warn("Project chat: extraction failed for", att.name, err);
+        }
+        return att;
+      }));
 
-      // Refetch messages from DB to sync real IDs
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          chat_id: targetChatId,
+          message: userText,
+          attachments: enriched.map((a) => ({
+            name: a.name,
+            type: a.type,
+            base64: a.type.startsWith("image/") ? a.base64 : undefined,
+            extractedText: a.extractedText,
+          })),
+        }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `Request failed (${resp.status})`);
+      }
+
+      // Stream SSE chunks
+      const contentType = resp.headers.get("content-type") || "";
+      if (contentType.includes("text/event-stream") && resp.body) {
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let done = false;
+        while (!done) {
+          const { done: d, value } = await reader.read();
+          if (d) break;
+          buffer += decoder.decode(value, { stream: true });
+          let idx;
+          while ((idx = buffer.indexOf("\n")) !== -1) {
+            let line = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 1);
+            if (line.endsWith("\r")) line = line.slice(0, -1);
+            if (!line.startsWith("data: ")) continue;
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") { done = true; break; }
+            try {
+              const parsed = JSON.parse(data);
+              const c = parsed.choices?.[0]?.delta?.content;
+              if (c) upsertAssistant(c);
+            } catch { /* skip */ }
+          }
+        }
+      } else {
+        // Fallback: legacy JSON response
+        const data = await resp.json().catch(() => ({}));
+        if (data?.reply) upsertAssistant(data.reply);
+      }
+
+      // Refetch from DB to get real ids and persisted state
       await fetchAndSetMessages(targetChatId);
-
-      return data?.reply;
+      return assistantSoFar || null;
     } catch (err: any) {
       toast({ title: "Error", description: err.message || "Failed to get response", variant: "destructive" });
-      // Remove optimistic message
-      setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
+      // Remove optimistic messages on failure
+      setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id && m.id !== tempAssistantId));
       return null;
     } finally {
       setSending(false);

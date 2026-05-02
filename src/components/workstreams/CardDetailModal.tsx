@@ -803,7 +803,7 @@ function TaskStatusPicker({ status, onChange }: { status: CardStatus; onChange: 
 function CardCommentRow({
   comment, currentUserId, onDelete,
 }: {
-  comment: { id: string; card_id: string; user_id: string; user_name?: string; content: string; created_at: string };
+  comment: { id: string; card_id: string; user_id: string; user_name?: string; content: string; created_at: string; updated_at?: string };
   currentUserId?: string;
   onDelete: () => void;
 }) {

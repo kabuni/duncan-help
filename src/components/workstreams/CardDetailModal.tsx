@@ -881,7 +881,7 @@ function CardCommentRow({
 function TaskCommentRow({
   comment, isOwner, onSave, onDelete,
 }: {
-  comment: { id: string; user_id: string; user_name?: string; content: string; created_at: string };
+  comment: { id: string; user_id: string; user_name?: string; content: string; created_at: string; updated_at?: string };
   isOwner: boolean;
   onSave: (content: string) => void;
   onDelete: () => void;

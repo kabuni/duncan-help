@@ -188,6 +188,11 @@ export default function KeyEventsDiary() {
                 </Button>
               )}
               {isAdmin && (
+                <Button size="sm" variant="outline" onClick={() => { setAddDate(new Date()); setAddOpen(true); }}>
+                  <Plus className="h-3.5 w-3.5 mr-1.5" /> Add event
+                </Button>
+              )}
+              {isAdmin && (
                 <Button size="sm" onClick={connect}>
                   {status?.connected ? "Reconnect" : "Connect Duncan calendar"}
                 </Button>

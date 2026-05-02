@@ -244,6 +244,7 @@ export default function KeyEventsDiary() {
                 onNavigate={setDate}
                 views={["month", "week", "day", "agenda"]}
                 messages={{ agenda: "Events" }}
+                components={{ toolbar: PlannerToolbar }}
                 popup
                 selectable={isAdmin}
                 onSelectSlot={(slot: any) => {

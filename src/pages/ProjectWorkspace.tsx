@@ -111,7 +111,7 @@ export default function ProjectWorkspace() {
   const [editPrompt, setEditPrompt] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [manualDeselect, setManualDeselect] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cleanedUpRef = useRef(false);
@@ -179,12 +179,13 @@ export default function ProjectWorkspace() {
     };
   }, [projectId]);
 
-  // Scroll to bottom on new messages — use `block: "nearest"` so we only scroll
-  // the chat container, never the page/body. Without this, Safari (and some
-  // mobile browsers) scroll the whole document down and the user can't scroll
-  // back up because the body itself isn't scrollable.
+  // Scroll only the messages panel. Avoid scrollIntoView here: on mobile Safari
+  // it can move the whole fixed-height workspace and leave the user trapped at
+  // the bottom of the project page.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const scroller = messagesScrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
   // Auto-resize textarea
@@ -325,9 +326,9 @@ export default function ProjectWorkspace() {
   const extractedCount = files.filter(f => f.extracted_text).length;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-[100dvh] overflow-hidden bg-background">
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-      <main className="flex-1 lg:ml-64 flex flex-col min-h-0">
+      <main className="flex-1 lg:ml-64 flex flex-col min-h-0 overflow-hidden">
         {/* Header */}
         <header className="flex items-center gap-1.5 sm:gap-3 border-b border-border px-2 sm:px-4 py-3 shrink-0">
           <MobileMenuButton onClick={() => setMobileOpen(true)} />
@@ -373,7 +374,7 @@ export default function ProjectWorkspace() {
         </header>
 
         {/* Workspace */}
-        <div className="flex-1 flex min-h-0">
+        <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* LEFT: Chat list (desktop) */}
           <div className="w-56 shrink-0 border-r border-border flex-col bg-sidebar/50 hidden md:flex">
             <div className="p-3 border-b border-border">
@@ -488,7 +489,7 @@ export default function ProjectWorkspace() {
           )}
 
           {/* CENTER: Chat */}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
             {!activeChatId ? (
               <div className="flex-1 flex flex-col">
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
@@ -519,7 +520,7 @@ export default function ProjectWorkspace() {
                   />
                 )}
                 {/* Messages */}
-                <ScrollArea className="flex-1 p-4">
+                <div ref={messagesScrollerRef} className="flex-1 overflow-y-auto p-4 overscroll-contain">
                   <div className="max-w-3xl mx-auto space-y-4">
                     {msgsLoading && (
                       <div className="flex justify-center py-8">
@@ -585,9 +586,8 @@ export default function ProjectWorkspace() {
                         </div>
                       </div>
                     )}
-                    <div ref={messagesEndRef} />
                   </div>
-                </ScrollArea>
+                </div>
 
                 {/* Input — same composer as the main dashboard (attachments, voice, streaming) */}
                 <ChatInput

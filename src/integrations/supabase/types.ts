@@ -1619,6 +1619,60 @@ export type Database = {
         }
         Relationships: []
       }
+      project_chat_plan_items: {
+        Row: {
+          assignee_profile_id: string | null
+          chat_id: string
+          created_at: string
+          created_by: string
+          due_date: string | null
+          group_title: string | null
+          id: string
+          notes: string | null
+          position: number
+          project_id: string
+          promoted_card_id: string | null
+          promoted_task_id: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_profile_id?: string | null
+          chat_id: string
+          created_at?: string
+          created_by: string
+          due_date?: string | null
+          group_title?: string | null
+          id?: string
+          notes?: string | null
+          position?: number
+          project_id: string
+          promoted_card_id?: string | null
+          promoted_task_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_profile_id?: string | null
+          chat_id?: string
+          created_at?: string
+          created_by?: string
+          due_date?: string | null
+          group_title?: string | null
+          id?: string
+          notes?: string | null
+          position?: number
+          project_id?: string
+          promoted_card_id?: string | null
+          promoted_task_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       project_chats: {
         Row: {
           created_at: string

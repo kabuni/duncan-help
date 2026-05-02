@@ -28,19 +28,20 @@ export interface KeyEvent {
   is_complete: boolean;
   risk_level: "green" | "amber" | "red";
   risk_reason: string | null;
+  /** UUIDs of workstream_cards (column repurposed from goals). */
   linked_goal_ids: string[];
 
   deleted_in_google: boolean;
   synced_at: string;
 }
 
-export interface KeyEventGoal {
+export interface WorkstreamCard {
   id: string;
-  name: string;
-  description: string | null;
-  target_date: string | null;
-  status: string;
-  sort_order: number;
+  title: string;
+  status: string | null;
+  priority: string | null;
+  due_date: string | null;
+  project_tag: string | null;
 }
 
 export interface DuncanCalendarStatus {
@@ -64,7 +65,7 @@ export interface SyncLog {
 
 export function useKeyEvents() {
   const [events, setEvents] = useState<KeyEvent[]>([]);
-  const [goals, setGoals] = useState<KeyEventGoal[]>([]);
+  const [cards, setCards] = useState<WorkstreamCard[]>([]);
   const [status, setStatus] = useState<DuncanCalendarStatus | null>(null);
   const [lastSync, setLastSync] = useState<SyncLog | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,16 +74,17 @@ export function useKeyEvents() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: ev }, { data: gl }, { data: st }, { data: log }] = await Promise.all([
+      const [{ data: ev }, { data: wc }, { data: st }, { data: log }] = await Promise.all([
         supabase
           .from("key_events" as any)
           .select("*")
           .eq("deleted_in_google", false)
           .order("start_at", { ascending: true }),
         supabase
-          .from("key_event_goals" as any)
-          .select("*")
-          .order("sort_order", { ascending: true }),
+          .from("workstream_cards" as any)
+          .select("id, title, status, priority, due_date, project_tag")
+          .is("archived_at", null)
+          .order("updated_at", { ascending: false }),
         supabase.rpc("get_duncan_calendar_status" as any),
         supabase
           .from("key_event_sync_log" as any)
@@ -92,7 +94,7 @@ export function useKeyEvents() {
           .maybeSingle(),
       ]);
       setEvents((ev as any[]) || []);
-      setGoals((gl as any[]) || []);
+      setCards((wc as any[]) || []);
       const stRow = Array.isArray(st) ? (st[0] as any) : (st as any);
       setStatus(stRow ? (stRow as DuncanCalendarStatus) : { connected: false, google_account_email: null, calendar_id: null, calendar_name: null, last_updated: null });
       setLastSync((log as any) || null);
@@ -121,5 +123,5 @@ export function useKeyEvents() {
     }
   }, [refresh]);
 
-  return { events, goals, status, lastSync, loading, syncing, refresh, connect, sync, setGoals };
+  return { events, cards, status, lastSync, loading, syncing, refresh, connect, sync };
 }

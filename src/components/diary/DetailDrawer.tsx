@@ -258,7 +258,12 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                       size="sm"
                       variant="outline"
                       className="h-7 text-xs"
-                      onClick={() => setEditing(true)}
+                      onClick={() => {
+                        if (!form.owner && currentUserName) {
+                          setForm((f) => ({ ...f, owner: currentUserName }));
+                        }
+                        setEditing(true);
+                      }}
                     >
                       <Pencil className="h-3 w-3 mr-1" /> Edit
                     </Button>

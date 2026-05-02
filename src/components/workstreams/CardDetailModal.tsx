@@ -217,7 +217,7 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
               {/* Status selector */}
               <div className="flex items-center gap-2 mt-4">
                 <Label className="text-xs text-muted-foreground">Status:</Label>
-                {(["red", "amber", "green", "done"] as CardStatus[]).map(s => (
+                {(["not_started", "red", "amber", "green", "done"] as CardStatus[]).map(s => (
                   <button
                     key={s}
                     onClick={() => updateCard.mutate({ id: card.id, status: s })}
@@ -226,11 +226,12 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                         ? s === "red" ? "bg-red-500/15 text-red-500 border-red-500/30"
                           : s === "amber" ? "bg-amber-500/15 text-amber-500 border-amber-500/30"
                           : s === "green" ? "bg-emerald-500/15 text-emerald-500 border-emerald-500/30"
-                          : "bg-primary/15 text-primary border-primary/30"
+                          : s === "done" ? "bg-primary/15 text-primary border-primary/30"
+                          : "bg-muted text-foreground border-border"
                         : "bg-secondary/50 text-muted-foreground border-border hover:bg-secondary"
                     }`}
                   >
-                    {s === "red" ? "🔴" : s === "amber" ? "🟡" : s === "green" ? "🟢" : "✅"} {s === "amber" ? "Yellow" : s.charAt(0).toUpperCase() + s.slice(1)}
+                    {s === "red" ? "🔴" : s === "amber" ? "🟡" : s === "green" ? "🟢" : s === "done" ? "✅" : "⚪"} {s === "amber" ? "Yellow" : s === "not_started" ? "Not started" : s.charAt(0).toUpperCase() + s.slice(1)}
                   </button>
                 ))}
               </div>
@@ -762,12 +763,13 @@ function TaskRow({
 
 function TaskStatusPicker({ status, onChange }: { status: CardStatus; onChange: (s: CardStatus) => void }) {
   const opts: { value: CardStatus; label: string; emoji: string; dot: string }[] = [
+    { value: "not_started", label: "Not started", emoji: "⚪", dot: "bg-muted-foreground/60" },
     { value: "red", label: "Red", emoji: "🔴", dot: "bg-red-500" },
     { value: "amber", label: "Yellow", emoji: "🟡", dot: "bg-amber-500" },
     { value: "green", label: "Green", emoji: "🟢", dot: "bg-emerald-500" },
     { value: "done", label: "Done", emoji: "✅", dot: "bg-primary" },
   ];
-  const current = opts.find(o => o.value === status) || opts[2];
+  const current = opts.find(o => o.value === status) || opts[0];
   return (
     <Select value={status} onValueChange={(v) => onChange(v as CardStatus)}>
       <SelectTrigger

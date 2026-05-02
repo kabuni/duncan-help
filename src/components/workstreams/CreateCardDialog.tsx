@@ -23,7 +23,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
   const { isAdmin } = useIsAdmin();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [status, setStatus] = useState<CardStatus>("amber");
+  const [status, setStatus] = useState<CardStatus>("not_started");
   const [priority] = useState<CardPriority>("medium");
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState("");
@@ -40,7 +40,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
   }, [open, prefillTag]);
 
   const reset = () => {
-    setTitle(""); setDescription(""); setStatus("amber");
+    setTitle(""); setDescription(""); setStatus("not_started");
     setAssigneeIds([]); setDueDate(""); setProjectTag("");
     setAddingNew(false); setNewTag("");
   };
@@ -88,6 +88,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
               <Select value={status} onValueChange={v => setStatus(v as CardStatus)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="not_started">⚪ Not started</SelectItem>
                   <SelectItem value="red">🔴 Red</SelectItem>
                   <SelectItem value="amber">🟡 Yellow</SelectItem>
                   <SelectItem value="green">🟢 Green</SelectItem>

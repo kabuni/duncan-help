@@ -7,6 +7,7 @@ import { useUpdateCard } from "@/hooks/useWorkstreams";
 import { StatusBadge, getStatusBorderClass, priorityConfig } from "./StatusBadge";
 
 const COLUMNS: { status: CardStatus; label: string; emoji: string }[] = [
+  { status: "not_started", label: "Not started", emoji: "⚪" },
   { status: "red", label: "Red", emoji: "🔴" },
   { status: "amber", label: "Yellow", emoji: "🟡" },
   { status: "green", label: "Green", emoji: "🟢" },

@@ -43,6 +43,19 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     raw_description: "",
   });
   const [saving, setSaving] = useState(false);
+  const [owners, setOwners] = useState<{ user_id: string; display_name: string | null }[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("user_id, display_name")
+        .eq("approval_status", "approved")
+        .order("display_name");
+      setOwners((data || []).filter((p) => p.display_name));
+    })();
+  }, [open]);
 
   function reset() {
     setDraft({

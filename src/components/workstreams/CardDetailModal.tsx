@@ -523,25 +523,12 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                     )}
 
                     {comments.map(c => (
-                      <div key={c.id} className="group rounded-lg border border-border/60 bg-card/50 p-3">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-medium text-foreground">{c.user_name || "Unknown"}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-muted-foreground">
-                              {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}
-                            </span>
-                            {c.user_id === user?.id && (
-                              <button
-                                onClick={() => deleteComment.mutate({ id: c.id, card_id: c.card_id })}
-                                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <p className="text-sm text-foreground/80 whitespace-pre-wrap">{c.content}</p>
-                      </div>
+                      <CardCommentRow
+                        key={c.id}
+                        comment={c}
+                        currentUserId={user?.id}
+                        onDelete={() => deleteComment.mutate({ id: c.id, card_id: c.card_id })}
+                      />
                     ))}
 
                     {comments.length === 0 && (

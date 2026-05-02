@@ -88,20 +88,35 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
   const [appType, setAppType] = useState("Design");
   const [appLabel, setAppLabel] = useState("");
   const [appApprover, setAppApprover] = useState("none");
+  const [personalCalConnected, setPersonalCalConnected] = useState(false);
+  const [syncToPersonal, setSyncToPersonal] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     (async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, user_id, display_name")
-        .eq("approval_status", "approved")
-        .order("display_name");
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      const [{ data }, calRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, user_id, display_name")
+          .eq("approval_status", "approved")
+          .order("display_name"),
+        uid
+          ? supabase
+              .from("google_calendar_tokens")
+              .select("user_id")
+              .eq("user_id", uid)
+              .maybeSingle()
+          : Promise.resolve({ data: null } as any),
+      ]);
       const list = (data || []).filter((p) => p.display_name);
       setOwners(list as any);
       setProfiles(list.map((p: any) => ({ id: p.id, display_name: p.display_name })));
+      setPersonalCalConnected(!!(calRes as any)?.data);
     })();
   }, [open]);
+
 
   function reset() {
     setDraft({

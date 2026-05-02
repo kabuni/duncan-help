@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
-export type CardStatus = "red" | "amber" | "green" | "done";
+export type CardStatus = "not_started" | "red" | "amber" | "green" | "done";
 export type CardPriority = "low" | "medium" | "high" | "critical";
 
 export interface WorkstreamCard {

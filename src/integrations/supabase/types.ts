@@ -2573,16 +2573,7 @@ export type Database = {
       }
     }
     Views: {
-      duncan_calendar_status: {
-        Row: {
-          calendar_id: string | null
-          calendar_name: string | null
-          connected: boolean | null
-          google_account_email: string | null
-          last_updated: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       call_edge_function_with_service_role: {
@@ -2592,6 +2583,16 @@ export type Database = {
       get_company_integration_secret: {
         Args: { p_integration_id: string }
         Returns: string
+      }
+      get_duncan_calendar_status: {
+        Args: never
+        Returns: {
+          calendar_id: string
+          calendar_name: string
+          connected: boolean
+          google_account_email: string
+          last_updated: string
+        }[]
       }
       has_role: {
         Args: {

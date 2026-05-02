@@ -137,6 +137,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     setAppType("Design");
     setAppLabel("");
     setAppApprover("none");
+    setSyncToPersonal(false);
   }
 
   async function uploadFiles(eventId: string, userId: string) {

@@ -144,7 +144,7 @@ async function handler(req: Request): Promise<Response> {
 
     const eventTitle = event?.title || "Untitled event";
     const eventDate = fmtDate(event?.start_at);
-    const link = `${APP_URL}/planner`;
+    const link = `${APP_URL}/diary`;
     const requesterName = requesterProfile?.display_name || "A teammate";
     const approverName = approverProfile?.display_name || "the approver";
     const typeLabel = approval.label ? `${approval.approval_type} — ${approval.label}` : approval.approval_type;
@@ -238,7 +238,7 @@ async function handler(req: Request): Promise<Response> {
         kind: n.kind,
         title: n.title,
         body: n.body,
-        link: "/planner",
+        link: "/diary",
         metadata: { approval_id: approvalId, event_id: approval.event_id },
       }));
       const { error: insErr } = await admin.from("notifications").insert(rows);

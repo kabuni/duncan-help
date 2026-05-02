@@ -10,6 +10,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Paperclip, X, Plus, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { TimezonePicker, zonedDateTimeToISO } from "./TimezonePicker";
+
+const DEFAULT_TZ = (() => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London"; } catch { return "Europe/London"; }
+})();
 
 const APPROVAL_TYPES = [
   "Design",
@@ -85,6 +90,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     owner: "",
     location: "",
     raw_description: "",
+    start_tz: DEFAULT_TZ,
   });
   const [saving, setSaving] = useState(false);
   const [owners, setOwners] = useState<{ user_id: string; display_name: string | null; profile_id?: string }[]>([]);
@@ -150,6 +156,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       owner: "",
       location: "",
       raw_description: "",
+      start_tz: DEFAULT_TZ,
     });
     setFiles([]);
     setApprovals([]);
@@ -204,12 +211,13 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     }
     setSaving(true);
 
+    const tz = draft.start_tz || DEFAULT_TZ;
     const startISO = draft.all_day
-      ? new Date(`${draft.start_date}T00:00:00`).toISOString()
-      : new Date(`${draft.start_date}T${draft.start_time || "09:00"}:00`).toISOString();
+      ? zonedDateTimeToISO(draft.start_date, "00:00", tz)
+      : zonedDateTimeToISO(draft.start_date, draft.start_time || "09:00", tz);
     const endISO = draft.all_day
-      ? new Date(`${effectiveEndDate}T23:59:59`).toISOString()
-      : new Date(`${effectiveEndDate}T${draft.end_time || draft.start_time || "10:00"}:00`).toISOString();
+      ? zonedDateTimeToISO(effectiveEndDate, "23:59", tz)
+      : zonedDateTimeToISO(effectiveEndDate, draft.end_time || draft.start_time || "10:00", tz);
 
     if (new Date(endISO) <= new Date(startISO)) {
       setSaving(false);
@@ -237,6 +245,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
         start_at: startISO,
         end_at: endISO,
         all_day: draft.all_day,
+        start_tz: draft.start_tz || DEFAULT_TZ,
         location: draft.location.trim() || null,
         raw_description: draft.raw_description.trim() || null,
         owner: draft.owner.trim() || null,
@@ -371,6 +380,15 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
                 )}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="col-span-2 space-y-1.5">
+            <Label>Time zone</Label>
+            <TimezonePicker
+              value={draft.start_tz}
+              onChange={(tz) => setDraft({ ...draft, start_tz: tz })}
+            />
+            <p className="text-[11px] text-muted-foreground">Times you enter below are interpreted in this zone.</p>
           </div>
 
           <div className="col-span-2 flex items-center gap-2 pt-1">

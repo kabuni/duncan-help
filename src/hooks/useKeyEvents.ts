@@ -10,6 +10,7 @@ export interface KeyEvent {
   raw_description: string | null;
   start_at: string | null;
   end_at: string | null;
+  start_tz: string | null;
   all_day: boolean;
   location: string | null;
   html_link: string | null;

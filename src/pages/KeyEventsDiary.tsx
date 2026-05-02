@@ -142,9 +142,10 @@ export default function KeyEventsDiary() {
         const icon = e.category ? (CAT_ICON[e.category] || "📌") : "📌";
         const cat = e.category ? ` [${e.category}]` : "";
         const owner = e.owner ? ` · ${e.owner}` : "";
+        const tz = e.start_tz && e.start_tz !== "Europe/London" ? ` · ${e.start_tz.split("/").pop()?.replace(/_/g, " ")}` : "";
         return {
           id: `event:${e.id}`,
-          title: `${icon} ${name}${cat}${owner}`,
+          title: `${icon} ${name}${cat}${owner}${tz}`,
           start,
           end,
           allDay: e.all_day,

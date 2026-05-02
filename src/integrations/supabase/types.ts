@@ -1284,6 +1284,7 @@ export type Database = {
           risk_reason: string | null
           risks: string | null
           start_at: string | null
+          start_tz: string
           status: string | null
           success_metric: string | null
           synced_at: string
@@ -1320,6 +1321,7 @@ export type Database = {
           risk_reason?: string | null
           risks?: string | null
           start_at?: string | null
+          start_tz?: string
           status?: string | null
           success_metric?: string | null
           synced_at?: string
@@ -1356,6 +1358,7 @@ export type Database = {
           risk_reason?: string | null
           risks?: string | null
           start_at?: string | null
+          start_tz?: string
           status?: string | null
           success_metric?: string | null
           synced_at?: string

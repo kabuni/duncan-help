@@ -11,7 +11,21 @@ import { toast } from "sonner";
 import { Paperclip, X, Plus, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-const APPROVAL_TYPES = ["Design", "Legal", "Finance", "Marketing", "Operations", "Other"];
+const APPROVAL_TYPES = [
+  "Design",
+  "Legal",
+  "Finance",
+  "Marketing",
+  "Operations",
+  "Product",
+  "Launch",
+  "Investor",
+  "Travel",
+  "Releases",
+  "Event",
+  "Holiday",
+  "Other",
+];
 
 interface DraftApproval {
   approval_type: string;

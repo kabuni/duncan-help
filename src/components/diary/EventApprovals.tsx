@@ -8,7 +8,21 @@ import { Plus, X, Check, ShieldCheck, Clock, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-const APPROVAL_TYPES = ["Design", "Legal", "Finance", "Marketing", "Operations", "Other"];
+const APPROVAL_TYPES = [
+  "Design",
+  "Legal",
+  "Finance",
+  "Marketing",
+  "Operations",
+  "Product",
+  "Launch",
+  "Investor",
+  "Travel",
+  "Releases",
+  "Event",
+  "Holiday",
+  "Other",
+];
 
 const STATUS_TONE: Record<string, string> = {
   pending: "bg-amber-500/15 text-amber-600 border-amber-500/30 dark:text-amber-400",

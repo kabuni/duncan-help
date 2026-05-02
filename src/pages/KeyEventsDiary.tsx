@@ -254,6 +254,13 @@ export default function KeyEventsDiary() {
           goalEvents={goalEventsForSelected}
           goals={goals}
         />
+
+        <AddEventDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          defaultDate={addDate}
+          onCreated={refresh}
+        />
       </div>
     </AppLayout>
   );

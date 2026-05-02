@@ -141,3 +141,20 @@
   color: hsl(var(--muted-foreground));
   font-size: 0.75rem;
 }
+
+/* Tablet (iPad portrait & landscape) — denser cells, better tap targets */
+@media (max-width: 1024px) {
+  .rbc-toolbar { gap: 0.4rem; }
+  .rbc-toolbar button {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.78rem;
+  }
+  .rbc-toolbar-label { font-size: 0.9rem; }
+  .rbc-event {
+    padding: 0.08rem 0.3rem;
+    font-size: 0.65rem;
+    line-height: 1rem;
+  }
+  .rbc-date-cell { font-size: 0.7rem; padding: 0.2rem 0.3rem; }
+  .rbc-header { font-size: 0.62rem; padding: 0.35rem 0.2rem; }
+}

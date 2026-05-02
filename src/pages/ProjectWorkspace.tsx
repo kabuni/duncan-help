@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Plus, MessageSquare, Send, Loader2, Settings2, Users,
-  Upload, FileText, Sparkles, Trash2, RefreshCw, PanelRightOpen, X, Menu,
+  Upload, FileText, Sparkles, Trash2, RefreshCw, PanelRightOpen, X, Menu, ListChecks,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";

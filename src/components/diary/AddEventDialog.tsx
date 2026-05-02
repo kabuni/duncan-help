@@ -88,20 +88,35 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
   const [appType, setAppType] = useState("Design");
   const [appLabel, setAppLabel] = useState("");
   const [appApprover, setAppApprover] = useState("none");
+  const [personalCalConnected, setPersonalCalConnected] = useState(false);
+  const [syncToPersonal, setSyncToPersonal] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     (async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, user_id, display_name")
-        .eq("approval_status", "approved")
-        .order("display_name");
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      const [{ data }, calRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, user_id, display_name")
+          .eq("approval_status", "approved")
+          .order("display_name"),
+        uid
+          ? supabase
+              .from("google_calendar_tokens")
+              .select("user_id")
+              .eq("user_id", uid)
+              .maybeSingle()
+          : Promise.resolve({ data: null } as any),
+      ]);
       const list = (data || []).filter((p) => p.display_name);
       setOwners(list as any);
       setProfiles(list.map((p: any) => ({ id: p.id, display_name: p.display_name })));
+      setPersonalCalConnected(!!(calRes as any)?.data);
     })();
   }, [open]);
+
 
   function reset() {
     setDraft({
@@ -122,6 +137,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     setAppType("Design");
     setAppLabel("");
     setAppApprover("none");
+    setSyncToPersonal(false);
   }
 
   async function uploadFiles(eventId: string, userId: string) {
@@ -225,8 +241,35 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       );
     }
 
+    let personalSyncMsg: string | null = null;
+    if (syncToPersonal && personalCalConnected) {
+      const { error: syncErr } = await supabase.functions.invoke(
+        "add-event-to-personal-calendar",
+        {
+          body: {
+            event_name: draft.event_name.trim(),
+            category: draft.category,
+            start_at: startISO,
+            end_at: endISO,
+            all_day: draft.all_day,
+            location: draft.location.trim() || null,
+            notes: draft.raw_description.trim() || null,
+          },
+        },
+      );
+      if (syncErr) {
+        personalSyncMsg = `Saved to diary, but personal calendar sync failed: ${syncErr.message}`;
+      }
+    }
+
     setSaving(false);
-    toast.success("Event added to diary");
+    if (personalSyncMsg) {
+      toast.error(personalSyncMsg);
+    } else if (syncToPersonal && personalCalConnected) {
+      toast.success("Event added to diary and your personal calendar");
+    } else {
+      toast.success("Event added to diary");
+    }
     reset();
     onOpenChange(false);
     onCreated();
@@ -326,6 +369,29 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
               </div>
             </>
           )}
+
+          <div className="col-span-2 flex items-start gap-2 pt-1 border-t border-border mt-1">
+            <Checkbox
+              id="ev-sync-personal"
+              checked={syncToPersonal}
+              disabled={!personalCalConnected}
+              onCheckedChange={(v) => setSyncToPersonal(!!v)}
+              className="mt-0.5"
+            />
+            <div className="flex-1">
+              <Label
+                htmlFor="ev-sync-personal"
+                className={`cursor-pointer text-sm font-normal ${!personalCalConnected ? "text-muted-foreground" : ""}`}
+              >
+                Also add to my personal Google Calendar
+              </Label>
+              {!personalCalConnected && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Connect your Google Calendar in Settings → Integrations to enable.
+                </p>
+              )}
+            </div>
+          </div>
 
           <div className="col-span-2 space-y-1.5">
             <Label htmlFor="ev-loc">Location</Label>

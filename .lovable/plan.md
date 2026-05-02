@@ -1,88 +1,57 @@
-## Goal
+# Sync diary events to personal Google Calendar
 
-Redesign `/diary` from a list-of-sections dashboard into a true **Google-Calendar-style** view (Month / Week / Day) that displays events from "Duncan | Key Events" plus a sidebar of company **Goals**. Also fix the newly-added goal not surfacing on the dashboard.
+## Background
 
-## Why your goal "didn't go through"
+The `/diary` page writes to a **shared company calendar** (Duncan | Key Events) connected once by an admin. It is not per-user. Users separately connect their own Google Calendar in Settings → Integrations for personal calendar features (briefing, availability checks, chat scheduling).
 
-It actually saved correctly — the row `Simon tesr` (target 2026-05-13) is in the database. The dashboard only renders **events**, never **goals**, so a new goal silently disappears unless you switch to the Goals tab (admin only). The redesign fixes this by giving goals first-class real estate.
+These two stay decoupled today. We'll add an opt-in bridge so a user can copy a diary entry into their own personal calendar at the moment of creation.
 
-## What we'll build
+## What changes for the user
 
-### 1. Calendar grid as the primary view
+In **Add diary entry** dialog:
 
-Use **react-big-calendar** (mature, lightweight, Google-style) with `date-fns` localizer.
+- New checkbox: **"Also add to my personal Google Calendar"**
+  - Hidden if the user has not connected their personal Google Calendar
+  - Shown but disabled with a helper line ("Connect your Google Calendar in Settings to enable") if not connected
+  - Off by default
+- When checked, after the diary event is saved, an event is also created in the user's personal Google Calendar with the same title, dates, time, location, and notes.
+- A toast confirms: "Event added to diary and your personal calendar".
 
-```text
-┌──────────────────────────────────────────────┬──────────────┐
-│  Duncan Key Events Diary    [Today][<][>]    │   GOALS      │
-│  May 2026             [Month][Week][Day]     │  ─────────   │
-├──────────────────────────────────────────────┤ June 7 launch│
-│ Sun  Mon  Tue  Wed  Thu  Fri  Sat            │ 1M K10 regs  │
-│  …    …   ●Launch prep    …                  │ 100k preord  │
-│                                              │ Fundraising  │
-│                                              │ Product del. │
-│                                              │ + add goal   │
-└──────────────────────────────────────────────┴──────────────┘
-        Connection bar + Sync now (admin)
-```
+No change to viewing, approvals, attachments, or the shared diary itself.
 
-- Month / Week / Day toggle (Agenda view also free).
-- Today, prev, next navigation.
-- Events colored by `risk_level` (green / amber / red).
-- Goal `target_date` markers shown as full-day pinned events with a distinct style (e.g. dashed border + `Target` icon) so goal deadlines appear directly on the calendar — this is what makes the new goal visible.
-- Click an event → opens a side drawer with the existing event detail (objective, owner, missing fields, risks, html_link).
-- Click a goal marker → drawer with goal detail and linked events.
+## Technical implementation
 
-### 2. Goals panel (always visible)
+### 1. New edge function: `add-event-to-personal-calendar`
 
-Right-hand sidebar (collapses to a tab on mobile):
-- Lists every goal with name, target date, status, and a tiny count of linked events.
-- Inline "Add goal" form available to **all authenticated users** (not just admins) — see permissions note below — with name, description, optional date.
-- Edit / delete remain admin-only.
+- `verify_jwt = false`, validates JWT in code via `supabase.auth.getUser()` (project standard).
+- Input: `{ event_name, category, start_at, end_at, all_day, location, notes }`.
+- Loads the caller's row from `google_calendar_tokens`; if missing → 400 "personal calendar not connected".
+- Refreshes the access token using `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` (same OAuth app used for personal Gmail/Calendar — see `useGoogleCalendar` / `google-calendar-api` for the existing refresh pattern).
+- POSTs to `https://www.googleapis.com/calendar/v3/calendars/primary/events` with:
+  - `summary`: `[Category] Event name`
+  - `description`: notes (optional)
+  - `location` (optional)
+  - `start` / `end`: either `{ date }` (all-day) or `{ dateTime, timeZone: 'UTC' }`
+- Returns `{ id, htmlLink }`.
 
-### 3. Events at risk strip
+### 2. Frontend changes — `src/components/diary/AddEventDialog.tsx`
 
-Above the calendar: a single compact strip showing the count of red / amber events and "missing owner" — clickable to filter the calendar to only those.
+- New state `syncToPersonal: boolean` and `personalCalendarConnected: boolean`.
+- On dialog open, in addition to loading owners, query `google_calendar_tokens` filtered to the current user (RLS already restricts to `auth.uid() = user_id`) to determine if connected.
+- Render the checkbox under the date/time block. Disabled + helper text when not connected.
+- After the existing `key_events` insert + attachments + approvals block, if `syncToPersonal` is true call `supabase.functions.invoke('add-event-to-personal-calendar', { body: {...} })`. On error show a non-blocking toast ("Saved to diary, but personal calendar sync failed: …") — the diary event still succeeds.
 
-### 4. Remove the old categorized dashboard
+### 3. No schema changes
 
-The old "Today / This week / Launch milestones / India / Investor / Missing / Upcoming" cards go away. Replaced by:
-- Calendar (default view, primary)
-- "All events" tab kept as a searchable list (useful for triage)
-- "Goals" tab kept for bulk admin management
+We do not store a link between the diary event and the personal calendar event. Sync is a one-time push at creation time. Future edits in `/diary` will not propagate (called out below as a known limit).
 
-### 5. Permissions tweak (small)
+## Out of scope (call out, don't build)
 
-Currently `key_event_goals` insert is admin-only. We'll leave that policy in place but the in-app "Add goal" affordance is also admin-only (matching DB rules) so non-admins don't get a silent failure. (Your account is admin so this works for you.)
+- Two-way sync, edits, or deletes propagating from diary → personal calendar.
+- Bulk "sync all existing events to my calendar" action.
+- Per-user mirror of the entire shared diary into their primary calendar (would clutter personal calendars and is rarely wanted).
 
-## Technical notes
+## Files touched
 
-**New dependencies**
-- `react-big-calendar`
-- `date-fns` (likely already present via shadcn — will reuse if so)
-
-**New / changed files**
-- `src/pages/KeyEventsDiary.tsx` — full rewrite around `<Calendar/>`
-- `src/components/diary/EventDrawer.tsx` — click-to-open event detail
-- `src/components/diary/GoalsPanel.tsx` — right sidebar with inline add
-- `src/components/diary/calendar.css` — minimal overrides to match theme tokens (`--background`, `--border`, `--primary`, risk colors)
-
-**Data shape**
-- Events come from existing `useKeyEvents` hook unchanged.
-- Goals with a `target_date` are converted into synthetic full-day calendar items: `{ id: goal:<id>, title: "🎯 " + name, allDay: true, kind: "goal" }`.
-- Filtering works in-memory; no schema changes.
-
-**No DB migrations.** Schema and sync function are unchanged.
-
-**What stays the same**
-- Sync, OAuth flow, `key_events` / `key_event_goals` / `key_event_sync_log` tables.
-- Connection card and "Sync now" admin action.
-- All-events list and Goals admin tab (kept as secondary tabs).
-
-## Out of scope (ask if you want them)
-
-- Creating events directly from the calendar (would need a Google Calendar write flow back to Duncan's account).
-- Holidays overlay (would need a public-holidays calendar import — can add as a follow-up).
-- Drag-to-reschedule.
-
-Approve and I'll implement.
+- **New**: `supabase/functions/add-event-to-personal-calendar/index.ts`
+- **Edited**: `src/components/diary/AddEventDialog.tsx`

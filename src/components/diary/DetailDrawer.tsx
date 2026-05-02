@@ -162,11 +162,13 @@ export function DetailDrawer({ open, onOpenChange, event, goal, goalEvents = [],
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{value}</dd>
+      <dd className={cn("text-sm whitespace-pre-wrap", !value && "text-muted-foreground italic")}>
+        {value || "Not set"}
+      </dd>
     </div>
   );
 }

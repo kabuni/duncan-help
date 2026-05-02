@@ -57,6 +57,7 @@ export default function WhatsNew() {
 
 function DraftBanner({ draft }: { draft: Release }) {
   const [publishing, setPublishing] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const qc = useQueryClient();
   const changeCount = Array.isArray(draft.changes) ? draft.changes.length : 0;
 
@@ -81,7 +82,7 @@ function DraftBanner({ draft }: { draft: Release }) {
   };
 
   return (
-    <div className="mb-6 rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center justify-between gap-4">
+    <div className="mb-6 rounded-lg border border-primary/30 bg-primary/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div className="flex items-center gap-3 min-w-0">
         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
           <Sparkles className="h-4 w-4 text-primary" />
@@ -95,10 +96,57 @@ function DraftBanner({ draft }: { draft: Release }) {
           </p>
         </div>
       </div>
-      <Button size="sm" onClick={handlePublish} disabled={publishing || changeCount === 0} className="shrink-0">
-        {publishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-        Publish
-      </Button>
+      <div className="flex items-center gap-2 shrink-0 flex-wrap">
+        <Button size="sm" variant="outline" onClick={() => setPreviewOpen(true)} className="gap-1.5">
+          <Eye className="h-3.5 w-3.5" />
+          Review
+        </Button>
+        <Button size="sm" variant="outline" asChild className="gap-1.5">
+          <Link to="/releases">
+            <Pencil className="h-3.5 w-3.5" />
+            Edit
+          </Link>
+        </Button>
+        <Button size="sm" onClick={handlePublish} disabled={publishing || changeCount === 0} className="gap-1.5">
+          {publishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+          Publish
+        </Button>
+      </div>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Draft Preview</DialogTitle>
+          </DialogHeader>
+          <DraftPreview release={draft} />
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function DraftPreview({ release }: { release: Release }) {
+  const features = release.changes.filter((c) => c.type === "feature");
+  const improvements = release.changes.filter((c) => c.type === "improvement");
+  const fixes = release.changes.filter((c) => c.type === "fix");
+  const other = release.changes.filter((c) => !["feature", "improvement", "fix"].includes(c.type));
+
+  return (
+    <div className="space-y-6 mt-4">
+      <div className="rounded-lg bg-gradient-to-r from-primary to-primary/80 p-6 text-primary-foreground">
+        <h2 className="text-xl font-bold">Duncan v{release.version}</h2>
+        {release.title && <p className="text-sm opacity-85 mt-1">{release.title}</p>}
+        {!release.title && <p className="text-sm opacity-75 mt-1 italic">Title auto-generated on publish</p>}
+      </div>
+      {release.summary ? (
+        <p className="text-sm text-muted-foreground leading-relaxed">{release.summary}</p>
+      ) : (
+        <p className="text-sm text-muted-foreground italic">Summary auto-generated on publish</p>
+      )}
+      <ChangeSection title="New Features" type="feature" items={features} />
+      <ChangeSection title="Improvements" type="improvement" items={improvements} />
+      <ChangeSection title="Bug Fixes" type="fix" items={fixes} />
+      <ChangeSection title="Other" type="other" items={other} />
     </div>
   );
 }

@@ -2095,6 +2095,130 @@ export type Database = {
           },
         ]
       }
+      supplier_contacts: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          is_primary: boolean
+          name: string
+          phone: string | null
+          role: string | null
+          supplier_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_primary?: boolean
+          name: string
+          phone?: string | null
+          role?: string | null
+          supplier_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_primary?: boolean
+          name?: string
+          phone?: string | null
+          role?: string | null
+          supplier_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_contacts_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_workstreams: {
+        Row: {
+          created_at: string
+          id: string
+          supplier_id: string
+          workstream_card_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          supplier_id: string
+          workstream_card_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          supplier_id?: string
+          workstream_card_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_workstreams_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          contract_status: string | null
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          notes: string | null
+          rate: string | null
+          renewal_date: string | null
+          services: string[]
+          type: string
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          contract_status?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          id?: string
+          logo_url?: string | null
+          name: string
+          notes?: string | null
+          rate?: string | null
+          renewal_date?: string | null
+          services?: string[]
+          type?: string
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          contract_status?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          id?: string
+          logo_url?: string | null
+          name?: string
+          notes?: string | null
+          rate?: string | null
+          renewal_date?: string | null
+          services?: string[]
+          type?: string
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
       sync_logs: {
         Row: {
           completed_at: string | null

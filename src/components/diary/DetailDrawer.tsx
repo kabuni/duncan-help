@@ -24,8 +24,11 @@ import {
 import { cn } from "@/lib/utils";
 import { EventAttachments } from "./EventAttachments";
 import { EventApprovals } from "./EventApprovals";
+import { TimezonePicker, zonedDateTimeToISO, isoToDateInTz, isoToTimeInTz } from "./TimezonePicker";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+
+const DEFAULT_TZ = "Europe/London";
 
 const RISK_TONE: Record<string, string> = {
   red: "bg-destructive/15 text-destructive border-destructive/30",

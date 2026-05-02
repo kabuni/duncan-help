@@ -24,8 +24,11 @@ import {
 import { cn } from "@/lib/utils";
 import { EventAttachments } from "./EventAttachments";
 import { EventApprovals } from "./EventApprovals";
+import { TimezonePicker, zonedDateTimeToISO, isoToDateInTz, isoToTimeInTz } from "./TimezonePicker";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+
+const DEFAULT_TZ = "Europe/London";
 
 const RISK_TONE: Record<string, string> = {
   red: "bg-destructive/15 text-destructive border-destructive/30",
@@ -90,6 +93,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     start_time: "",
     end_date: "",
     end_time: "",
+    start_tz: DEFAULT_TZ,
   });
 
   useEffect(() => {
@@ -97,6 +101,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     setSearch("");
     setEditing(false);
     if (event) {
+      const tz = (event as any).start_tz || DEFAULT_TZ;
       setForm({
         event_name: event.event_name || "",
         category: event.category || "Event",
@@ -104,10 +109,11 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
         location: event.location || "",
         raw_description: event.raw_description || "",
         all_day: event.all_day,
-        start_date: isoToDate(event.start_at),
-        start_time: isoToTime(event.start_at),
-        end_date: isoToDate(event.end_at),
-        end_time: isoToTime(event.end_at),
+        start_date: isoToDateInTz(event.start_at, tz),
+        start_time: isoToTimeInTz(event.start_at, tz),
+        end_date: isoToDateInTz(event.end_at, tz),
+        end_time: isoToTimeInTz(event.end_at, tz),
+        start_tz: tz,
       });
     }
   }, [event?.id]);
@@ -186,12 +192,13 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     }
     setSaving(true);
 
+    const tz = form.start_tz || DEFAULT_TZ;
     const startISO = form.all_day
-      ? new Date(`${form.start_date}T00:00:00`).toISOString()
-      : new Date(`${form.start_date}T${form.start_time || "09:00"}:00`).toISOString();
+      ? zonedDateTimeToISO(form.start_date, "00:00", tz)
+      : zonedDateTimeToISO(form.start_date, form.start_time || "09:00", tz);
     const endISO = form.all_day
-      ? new Date(`${form.end_date || form.start_date}T23:59:59`).toISOString()
-      : new Date(`${form.end_date || form.start_date}T${form.end_time || form.start_time || "10:00"}:00`).toISOString();
+      ? zonedDateTimeToISO(form.end_date || form.start_date, "23:59", tz)
+      : zonedDateTimeToISO(form.end_date || form.start_date, form.end_time || form.start_time || "10:00", tz);
 
     const missing: string[] = [];
     if (!form.owner.trim()) missing.push("owner");
@@ -209,6 +216,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
         all_day: form.all_day,
         start_at: startISO,
         end_at: endISO,
+        start_tz: tz,
         missing_fields: missing,
         is_complete: isComplete,
         risk_level: isComplete ? "green" : "amber",
@@ -368,6 +376,17 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                       </div>
                     </>
                   )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Time zone</Label>
+                  <TimezonePicker
+                    value={form.start_tz}
+                    onChange={(tz) => setForm({ ...form, start_tz: tz })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Date and time above are interpreted in this zone.
+                  </p>
                 </div>
 
                 <div className="space-y-1.5">

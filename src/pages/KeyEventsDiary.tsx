@@ -168,7 +168,7 @@ export default function KeyEventsDiary() {
                   ))}
                 </SelectContent>
               </Select>
-              {(counts.red > 0 || counts.amber > 0 || counts.missing > 0) && (
+              {(counts.red > 0 || counts.amber > 0) && (
                 <button
                   onClick={() => setRiskFilter(riskFilter === "atrisk" ? "all" : "atrisk")}
                   className={cn(
@@ -179,7 +179,7 @@ export default function KeyEventsDiary() {
                   )}
                 >
                   <AlertTriangle className="h-3 w-3" />
-                  {counts.red} red · {counts.amber} amber · {counts.missing} missing owner
+                  {counts.red} red · {counts.amber} amber
                   {riskFilter === "atrisk" && " (filter on)"}
                 </button>
               )}

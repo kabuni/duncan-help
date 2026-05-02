@@ -8,6 +8,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Paperclip, X } from "lucide-react";
+
+const sanitizeFileName = (fileName: string) => {
+  const ext = fileName.includes(".") ? fileName.split(".").pop()?.toLowerCase() ?? "" : "";
+  const base = ext ? fileName.slice(0, -(ext.length + 1)) : fileName;
+  const safe = base
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9-_]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase() || "file";
+  return ext ? `${safe}.${ext}` : safe;
+};
 
 const CATEGORIES = [
   "Event",
@@ -45,6 +58,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
   });
   const [saving, setSaving] = useState(false);
   const [owners, setOwners] = useState<{ user_id: string; display_name: string | null }[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -72,6 +86,32 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       location: "",
       raw_description: "",
     });
+    setFiles([]);
+  }
+
+  async function uploadFiles(eventId: string, userId: string) {
+    for (const file of files) {
+      if (file.size > 20 * 1024 * 1024) {
+        toast.error(`${file.name} exceeds 20MB`);
+        continue;
+      }
+      const path = `${eventId}/${Date.now()}_${sanitizeFileName(file.name)}`;
+      const { error: upErr } = await supabase.storage
+        .from("key-event-attachments")
+        .upload(path, file, { contentType: file.type || undefined });
+      if (upErr) {
+        toast.error(`Upload failed: ${file.name}`);
+        continue;
+      }
+      await supabase.from("key_event_attachments" as any).insert({
+        event_id: eventId,
+        uploaded_by: userId,
+        file_name: file.name,
+        storage_path: path,
+        mime_type: file.type || null,
+        size_bytes: file.size,
+      });
+    }
   }
 
   async function save() {
@@ -95,38 +135,50 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     const localId = `local:${crypto.randomUUID()}`;
     const title = `[${draft.category}] ${draft.event_name.trim()}`;
 
-    const isComplete = !!(draft.owner.trim() && draft.objective.trim());
+    const isComplete = !!draft.owner.trim();
     const missing: string[] = [];
     if (!draft.owner.trim()) missing.push("owner");
-    if (!draft.objective.trim()) missing.push("objective");
 
-    const { error } = await supabase.from("key_events" as any).insert({
-      google_event_id: localId,
-      calendar_id: "local",
-      title,
-      event_name: draft.event_name.trim(),
-      category: draft.category,
-      start_at: startISO,
-      end_at: endISO,
-      all_day: draft.all_day,
-      location: draft.location.trim() || null,
-      raw_description: draft.raw_description.trim() || null,
-      owner: draft.owner.trim() || null,
-      objective: draft.objective.trim() || null,
-      missing_fields: missing,
-      is_complete: isComplete,
-      risk_level: isComplete ? "green" : "amber",
-      risk_reason: isComplete ? null : "Missing owner or objective",
-      linked_goal_ids: [],
-      linked_docs: [],
-      attendees: [],
-      deleted_in_google: false,
-    });
-    setSaving(false);
-    if (error) {
-      toast.error(error.message);
+    const { data: inserted, error } = await supabase
+      .from("key_events" as any)
+      .insert({
+        google_event_id: localId,
+        calendar_id: "local",
+        title,
+        event_name: draft.event_name.trim(),
+        category: draft.category,
+        start_at: startISO,
+        end_at: endISO,
+        all_day: draft.all_day,
+        location: draft.location.trim() || null,
+        raw_description: draft.raw_description.trim() || null,
+        owner: draft.owner.trim() || null,
+        missing_fields: missing,
+        is_complete: isComplete,
+        risk_level: isComplete ? "green" : "amber",
+        risk_reason: isComplete ? null : "Missing owner",
+        linked_goal_ids: [],
+        linked_docs: [],
+        attendees: [],
+        deleted_in_google: false,
+      })
+      .select("id")
+      .single();
+
+    if (error || !inserted) {
+      setSaving(false);
+      toast.error(error?.message || "Could not save event");
       return;
     }
+
+    if (files.length > 0) {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData.user?.id) {
+        await uploadFiles((inserted as any).id, userData.user.id);
+      }
+    }
+
+    setSaving(false);
     toast.success("Event added to diary");
     reset();
     onOpenChange(false);
@@ -239,16 +291,6 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
           </div>
 
           <div className="col-span-2 space-y-1.5">
-            <Label htmlFor="ev-obj">Objective</Label>
-            <Input
-              id="ev-obj"
-              value={draft.objective}
-              onChange={(e) => setDraft({ ...draft, objective: e.target.value })}
-              placeholder="What outcome does this drive?"
-            />
-          </div>
-
-          <div className="col-span-2 space-y-1.5">
             <Label htmlFor="ev-desc">Notes</Label>
             <Textarea
               id="ev-desc"
@@ -257,6 +299,52 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
               rows={3}
               placeholder="Optional context"
             />
+          </div>
+
+          <div className="col-span-2 space-y-1.5">
+            <Label>Attachments</Label>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => document.getElementById("ev-files")?.click()}
+                className="h-8"
+              >
+                <Paperclip className="h-3 w-3 mr-1.5" />
+                Choose files
+              </Button>
+              <input
+                id="ev-files"
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const list = Array.from(e.target.files || []);
+                  setFiles((prev) => [...prev, ...list]);
+                  e.target.value = "";
+                }}
+              />
+              <span className="text-xs text-muted-foreground">
+                {files.length === 0 ? "No files selected" : `${files.length} file(s)`}
+              </span>
+            </div>
+            {files.length > 0 && (
+              <ul className="space-y-1 mt-1">
+                {files.map((f, i) => (
+                  <li key={i} className="flex items-center justify-between gap-2 text-xs border border-border rounded-md px-2 py-1">
+                    <span className="truncate">{f.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="text-muted-foreground hover:text-destructive shrink-0"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 

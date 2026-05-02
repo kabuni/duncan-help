@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import type { KeyEvent, KeyEventGoal } from "@/hooks/useKeyEvents";
 import { Calendar as CalendarIcon, ExternalLink, AlertTriangle, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EventAttachments } from "./EventAttachments";
 
 const RISK_TONE: Record<string, string> = {
   red: "bg-destructive/15 text-destructive border-destructive/30",
@@ -74,29 +75,9 @@ export function DetailDrawer({ open, onOpenChange, event, goal, goalEvents = [],
                 <Field label="Owner" value={event.owner} />
                 <Field label="Category" value={event.category} />
                 <Field label="Location" value={event.location} />
-                <Field label="Objective" value={event.objective} />
-                <Field label="Success metric" value={event.success_metric} />
-                <Field label="Decision needed" value={event.decision_needed} />
-                <Field label="Next action" value={event.next_action} />
-                <Field label="Risks" value={event.risks} />
                 <Field label="Notes" value={event.raw_description} />
               </dl>
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Linked docs</div>
-                {event.linked_docs && event.linked_docs.length > 0 ? (
-                  <ul className="space-y-1">
-                    {event.linked_docs.map((d, i) => (
-                      <li key={i}>
-                        <a href={d} target="_blank" rel="noreferrer" className="text-xs text-primary inline-flex items-center gap-1 break-all">
-                          {d} <ExternalLink className="h-3 w-3 shrink-0" />
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">None</p>
-                )}
-              </div>
+              <EventAttachments eventId={event.id} />
               <div>
                 <div className="text-xs text-muted-foreground mb-1">Linked goals</div>
                 {event.linked_goal_ids?.length > 0 ? (

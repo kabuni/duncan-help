@@ -114,6 +114,7 @@ export interface WorkstreamTask {
   updated_at: string;
   assignee_name?: string;
   assignees?: AssigneeInfo[];
+  comments_count?: number;
 }
 
 export interface WorkstreamComment {

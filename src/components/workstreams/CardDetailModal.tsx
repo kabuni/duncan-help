@@ -19,7 +19,7 @@ import {
   useWorkstreamCard, useUpdateCard, useUpdateCardAssignees, useCreateTask,
   useUpdateTask, useUpdateTaskAssignees, useDeleteTask,
   useAddComment, useDeleteComment, useDeleteCard, useUserProfiles,
-  useRespondToAssignment, useTaskComments, useAddTaskComment, useDeleteTaskComment,
+  useRespondToAssignment, useTaskComments, useAddTaskComment, useDeleteTaskComment, useUpdateTaskComment, useUpdateComment,
   useProjectTags,
   type CardStatus, type CardPriority, type WorkstreamTask, type UserProfile,
 } from "@/hooks/useWorkstreams";

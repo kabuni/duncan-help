@@ -104,6 +104,10 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       raw_description: "",
     });
     setFiles([]);
+    setApprovals([]);
+    setAppType("Design");
+    setAppLabel("");
+    setAppApprover("none");
   }
 
   async function uploadFiles(eventId: string, userId: string) {

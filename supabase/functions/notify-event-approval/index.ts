@@ -111,7 +111,7 @@ async function handler(req: Request): Promise<Response> {
 
     const { data: event } = await admin
       .from("key_events")
-      .select("id, title, start_date, end_date")
+      .select("id, title, start_at, end_at")
       .eq("id", approval.event_id)
       .maybeSingle();
 
@@ -143,7 +143,7 @@ async function handler(req: Request): Promise<Response> {
     }
 
     const eventTitle = event?.title || "Untitled event";
-    const eventDate = fmtDate(event?.start_date);
+    const eventDate = fmtDate(event?.start_at);
     const link = `${APP_URL}/planner`;
     const requesterName = requesterProfile?.display_name || "A teammate";
     const approverName = approverProfile?.display_name || "the approver";

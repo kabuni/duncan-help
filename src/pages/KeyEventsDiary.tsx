@@ -151,7 +151,7 @@ export default function KeyEventsDiary() {
                   {status?.calendar_id
                     ? <>Calendar: <span className="font-mono">{status.calendar_name}</span></>
                     : status?.connected
-                      ? <span className="text-amber-500">'Duncan | Key Events' calendar not found in this account.</span>
+                      ? <span className="text-amber-500">'Duncan | Planner' calendar not found in this account.</span>
                       : "Admin must connect Duncan's Google account"}
                   {lastSync && <> · Last sync: {fmtDateTime(lastSync.finished_at || lastSync.started_at)} ({lastSync.status})</>}
                 </div>

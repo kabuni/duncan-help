@@ -31,6 +31,7 @@ const CATEGORIES = [
   "Product",
   "Operations",
   "Travel",
+  "Releases",
   "Other",
 ];
 

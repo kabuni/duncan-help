@@ -520,4 +520,4 @@ const AssigneePicker = forwardRef<
       </PopoverContent>
     </Popover>
   );
-}
+});

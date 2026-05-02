@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useKeyEvents, type KeyEvent, type KeyEventGoal } from "@/hooks/useKeyEvents";
-import { useUserRoles } from "@/hooks/useUserRoles";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Calendar, ExternalLink, RefreshCw, AlertTriangle, CheckCircle2, ChevronRight, Plus, Trash2, Save, Target } from "lucide-react";
@@ -214,7 +214,7 @@ function GoalsAdmin({ goals, onChange }: { goals: KeyEventGoal[]; onChange: () =
 
 export default function KeyEventsDiary() {
   const { events, goals, status, lastSync, loading, syncing, refresh, connect, sync } = useKeyEvents();
-  const { isAdmin } = useUserRoles();
+  const { isAdmin } = useIsAdmin();
   const [params, setParams] = useSearchParams();
 
   useEffect(() => {

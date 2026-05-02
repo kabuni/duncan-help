@@ -101,6 +101,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     setSearch("");
     setEditing(false);
     if (event) {
+      const tz = (event as any).start_tz || DEFAULT_TZ;
       setForm({
         event_name: event.event_name || "",
         category: event.category || "Event",
@@ -108,10 +109,11 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
         location: event.location || "",
         raw_description: event.raw_description || "",
         all_day: event.all_day,
-        start_date: isoToDate(event.start_at),
-        start_time: isoToTime(event.start_at),
-        end_date: isoToDate(event.end_at),
-        end_time: isoToTime(event.end_at),
+        start_date: isoToDateInTz(event.start_at, tz),
+        start_time: isoToTimeInTz(event.start_at, tz),
+        end_date: isoToDateInTz(event.end_at, tz),
+        end_time: isoToTimeInTz(event.end_at, tz),
+        start_tz: tz,
       });
     }
   }, [event?.id]);

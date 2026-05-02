@@ -688,6 +688,40 @@ export function useDeleteTaskComment() {
   });
 }
 
+export function useUpdateTaskComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, task_id, content }: { id: string; task_id: string; content: string }) => {
+      const { error } = await supabase
+        .from("workstream_task_comments")
+        .update({ content })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["workstream-task-comments", vars.task_id] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdateComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, card_id, content }: { id: string; card_id: string; content: string }) => {
+      const { error } = await supabase
+        .from("workstream_comments")
+        .update({ content })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["workstream-card", vars.card_id] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
 // Accept or decline an assignment
 export function useRespondToAssignment() {
   const qc = useQueryClient();

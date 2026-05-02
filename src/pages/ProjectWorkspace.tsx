@@ -111,7 +111,7 @@ export default function ProjectWorkspace() {
   const [editPrompt, setEditPrompt] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [manualDeselect, setManualDeselect] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cleanedUpRef = useRef(false);
@@ -179,12 +179,13 @@ export default function ProjectWorkspace() {
     };
   }, [projectId]);
 
-  // Scroll to bottom on new messages — use `block: "nearest"` so we only scroll
-  // the chat container, never the page/body. Without this, Safari (and some
-  // mobile browsers) scroll the whole document down and the user can't scroll
-  // back up because the body itself isn't scrollable.
+  // Scroll only the messages panel. Avoid scrollIntoView here: on mobile Safari
+  // it can move the whole fixed-height workspace and leave the user trapped at
+  // the bottom of the project page.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const scroller = messagesScrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
   // Auto-resize textarea

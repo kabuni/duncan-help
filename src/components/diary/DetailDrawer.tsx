@@ -120,12 +120,11 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
 
   const canEdit = useMemo(() => {
     if (!event) return false;
-    if (isAdmin) return true;
-    return !!currentUserId && (event as any).created_by === currentUserId;
-  }, [event, isAdmin, currentUserId]);
+    // Strict ownership: only the original creator can edit, even admins cannot.
+    return !!currentUserId && event.created_by === currentUserId;
+  }, [event, currentUserId]);
 
-  // The hook may not expose created_by; fall back to admin-only if unknown.
-  const canEditFinal = isAdmin || canEdit;
+  const canEditFinal = canEdit;
 
   const linkedCards = cards.filter((c) => linkedIds.includes(c.id));
   const availableCards = cards.filter(

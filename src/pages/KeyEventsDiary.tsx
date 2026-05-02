@@ -301,6 +301,21 @@ export default function KeyEventsDiary() {
           </div>
         </Card>
 
+        <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground px-1">
+          <span className="font-mono uppercase tracking-wider text-[10px]">Categories</span>
+          {Object.entries(CATEGORY_META).map(([key, meta]) => (
+            <span key={key} className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden
+                className="inline-block h-2 w-2 rounded-sm"
+                style={{ background: `hsl(${meta.hsl})` }}
+              />
+              <span aria-hidden>{meta.icon}</span>
+              <span>{meta.label}</span>
+            </span>
+          ))}
+        </div>
+
         <Card className="p-3 flex-1 min-h-0 flex flex-col">
           {loading ? (
             <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>

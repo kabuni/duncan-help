@@ -164,13 +164,20 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="ev-owner">Owner</Label>
-            <Input
-              id="ev-owner"
-              value={draft.owner}
-              onChange={(e) => setDraft({ ...draft, owner: e.target.value })}
-              placeholder="Name"
-            />
+            <Label>Owner</Label>
+            <Select value={draft.owner} onValueChange={(v) => setDraft({ ...draft, owner: v })}>
+              <SelectTrigger><SelectValue placeholder="Select owner" /></SelectTrigger>
+              <SelectContent>
+                {owners.map((o) => (
+                  <SelectItem key={o.user_id} value={o.display_name as string}>
+                    {o.display_name}
+                  </SelectItem>
+                ))}
+                {owners.length === 0 && (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">No team members</div>
+                )}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="col-span-2 flex items-center gap-2 pt-1">

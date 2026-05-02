@@ -728,25 +728,13 @@ function TaskRow({
               <p className="text-[10px] text-muted-foreground italic">No comments yet</p>
             ) : (
               taskComments.map(c => (
-                <div key={c.id} className="rounded-md bg-secondary/40 px-2.5 py-1.5 group/c">
-                  <div className="flex items-center justify-between gap-2 mb-0.5">
-                    <span className="text-[10px] font-medium text-foreground">{c.user_name || "Unknown"}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] text-muted-foreground">
-                        {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}
-                      </span>
-                      {c.user_id === currentUserId && (
-                        <button
-                          onClick={() => deleteTaskComment.mutate({ id: c.id, task_id: task.id })}
-                          className="opacity-0 group-hover/c:opacity-100 text-muted-foreground hover:text-destructive transition-all"
-                        >
-                          <Trash2 className="h-2.5 w-2.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-xs text-foreground/80 whitespace-pre-wrap">{c.content}</p>
-                </div>
+                <TaskCommentRow
+                  key={c.id}
+                  comment={c}
+                  isOwner={c.user_id === currentUserId}
+                  onSave={(content) => updateTaskComment.mutate({ id: c.id, task_id: task.id, content })}
+                  onDelete={() => deleteTaskComment.mutate({ id: c.id, task_id: task.id })}
+                />
               ))
             )}
           </div>

@@ -21,6 +21,7 @@ import { DetailDrawer } from "@/components/diary/DetailDrawer";
 import { AddEventDialog } from "@/components/diary/AddEventDialog";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatTimeInTz } from "@/components/diary/TimezonePicker";
+import { CATEGORY_META, getCategoryMeta } from "@/components/diary/categoryMeta";
 
 type ViewTz = "Europe/London" | "Asia/Kolkata" | "both";
 const VIEW_TZ_KEY = "planner_view_tz";
@@ -142,31 +143,19 @@ export default function KeyEventsDiary() {
       filteredEvents = filteredEvents.filter((e) => (e.owner || "") === ownerFilter);
     }
 
-    const CAT_ICON: Record<string, string> = {
-      Travel: "✈️",
-      Holiday: "🏖️",
-      Marketing: "📣",
-      Launch: "🚀",
-      Investor: "💼",
-      Product: "🛠️",
-      Operations: "⚙️",
-      Releases: "📦",
-      Event: "📌",
-    };
-
     const evItems: CalItem[] = filteredEvents
       .filter((e) => e.start_at)
       .map((e) => {
         const start = new Date(e.start_at!);
         const end = e.end_at ? new Date(e.end_at) : new Date(start.getTime() + 60 * 60 * 1000);
         const name = e.event_name || e.title;
-        const icon = e.category ? (CAT_ICON[e.category] || "📌") : "📌";
+        const meta = getCategoryMeta(e.category);
         const cat = e.category ? ` [${e.category}]` : "";
         const owner = e.owner ? ` · ${e.owner}` : "";
         const tz = e.start_tz && e.start_tz !== "Europe/London" ? ` · ${e.start_tz.split("/").pop()?.replace(/_/g, " ")}` : "";
         return {
           id: `event:${e.id}`,
-          title: `${icon} ${name}${cat}${owner}${tz}`,
+          title: `${meta.icon} ${name}${cat}${owner}${tz}`,
           start,
           end,
           allDay: e.all_day,
@@ -184,18 +173,35 @@ export default function KeyEventsDiary() {
   }
 
   const eventPropGetter = (item: CalItem) => {
-    const lvl = item.resource.data.risk_level;
-    return { className: `evt-${lvl}` };
+    const ev = item.resource.data;
+    const lvl = ev.risk_level;
+    const meta = getCategoryMeta(ev.category);
+    return {
+      className: `evt-${lvl}`,
+      style: { ["--cat-color" as any]: meta.hsl } as React.CSSProperties,
+    };
   };
 
   const EventChip = ({ event }: { event: CalItem }) => {
     const ev = event.resource.data;
     const name = ev.event_name || ev.title;
     const isAllDay = ev.all_day;
+    const meta = getCategoryMeta(ev.category);
+    const Header = (
+      <div className="flex items-center gap-1 min-w-0">
+        <span
+          aria-hidden
+          className="inline-block h-1.5 w-1.5 rounded-full shrink-0"
+          style={{ background: `hsl(${meta.hsl})` }}
+        />
+        <span aria-hidden className="text-[10px] leading-none">{meta.icon}</span>
+        <span className="truncate font-medium">{name}</span>
+      </div>
+    );
     if (viewTz === "both") {
       return (
         <div className="leading-tight">
-          <div className="truncate font-medium">{name}</div>
+          {Header}
           {!isAllDay && (
             <div className="flex flex-col text-[10px] opacity-90 mt-0.5">
               <span>🇬🇧 {formatTimeInTz(ev.start_at, "Europe/London")}</span>
@@ -207,7 +213,7 @@ export default function KeyEventsDiary() {
     }
     return (
       <div className="leading-tight">
-        <div className="truncate font-medium">{name}</div>
+        {Header}
         {!isAllDay && (
           <div className="text-[10px] opacity-90">
             {formatTimeInTz(ev.start_at, viewTz)}
@@ -294,6 +300,21 @@ export default function KeyEventsDiary() {
             </div>
           </div>
         </Card>
+
+        <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground px-1">
+          <span className="font-mono uppercase tracking-wider text-[10px]">Categories</span>
+          {Object.entries(CATEGORY_META).map(([key, meta]) => (
+            <span key={key} className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden
+                className="inline-block h-2 w-2 rounded-sm"
+                style={{ background: `hsl(${meta.hsl})` }}
+              />
+              <span aria-hidden>{meta.icon}</span>
+              <span>{meta.label}</span>
+            </span>
+          ))}
+        </div>
 
         <Card className="p-3 flex-1 min-h-0 flex flex-col">
           {loading ? (

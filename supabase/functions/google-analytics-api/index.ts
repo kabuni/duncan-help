@@ -184,6 +184,81 @@ async function getDashboard(accessToken: string, propertyId: string) {
   };
 }
 
+async function getHomeSummary(accessToken: string, propertyId: string) {
+  const last30 = [{ startDate: "30daysAgo", endDate: "today" }];
+  const prev30 = [{ startDate: "60daysAgo", endDate: "31daysAgo" }];
+  const last7 = [{ startDate: "7daysAgo", endDate: "today" }];
+  const today = [{ startDate: "today", endDate: "today" }];
+
+  const [playLast30, playPrev30, countriesToday, dailyPlay, web7d, topPage7d] = await Promise.all([
+    runReport(accessToken, propertyId, {
+      dateRanges: last30,
+      metrics: [{ name: "userEngagementDuration" }, { name: "activeUsers" }],
+    }).catch(() => ({ rows: [] })),
+    runReport(accessToken, propertyId, {
+      dateRanges: prev30,
+      metrics: [{ name: "userEngagementDuration" }],
+    }).catch(() => ({ rows: [] })),
+    runReport(accessToken, propertyId, {
+      dateRanges: today,
+      dimensions: [{ name: "country" }],
+      metrics: [{ name: "activeUsers" }],
+      limit: 250,
+    }).catch(() => ({ rows: [] })),
+    runReport(accessToken, propertyId, {
+      dateRanges: last30,
+      dimensions: [{ name: "date" }],
+      metrics: [{ name: "userEngagementDuration" }],
+      orderBys: [{ dimension: { dimensionName: "date" } }],
+      limit: 30,
+    }).catch(() => ({ rows: [] })),
+    runReport(accessToken, propertyId, {
+      dateRanges: last7,
+      metrics: [{ name: "activeUsers" }, { name: "sessions" }, { name: "screenPageViews" }],
+    }).catch(() => ({ rows: [] })),
+    runReport(accessToken, propertyId, {
+      dateRanges: last7,
+      dimensions: [{ name: "pagePath" }],
+      metrics: [{ name: "screenPageViews" }],
+      orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
+      limit: 1,
+    }).catch(() => ({ rows: [] })),
+  ]);
+
+  const secondsLast30 = metricValue(playLast30.rows?.[0], 0);
+  const secondsPrev30 = metricValue(playPrev30.rows?.[0], 0);
+  const hoursLast30 = secondsLast30 / 3600;
+  const hoursPrev30 = secondsPrev30 / 3600;
+  const deltaPct = hoursPrev30 > 0 ? ((hoursLast30 - hoursPrev30) / hoursPrev30) * 100 : null;
+
+  const sparkline = (dailyPlay.rows ?? []).map((row: any) => ({
+    date: dimensionValue(row, 0),
+    hours: Math.round((metricValue(row, 0) / 3600) * 10) / 10,
+  }));
+
+  const countries = (countriesToday.rows ?? []).filter((r: any) => metricValue(r, 0) > 0);
+
+  const webRow = web7d.rows?.[0];
+  const topPagePath = topPage7d.rows?.[0]?.dimensionValues?.[0]?.value ?? null;
+
+  return {
+    play: {
+      hoursLast30: Math.round(hoursLast30),
+      hoursPrev30: Math.round(hoursPrev30),
+      deltaPct: deltaPct !== null ? Math.round(deltaPct * 10) / 10 : null,
+      countriesToday: countries.length,
+      sparkline,
+    },
+    website: {
+      activeUsers7d: metricValue(webRow, 0),
+      sessions7d: metricValue(webRow, 1),
+      pageViews7d: metricValue(webRow, 2),
+      topPage: topPagePath,
+    },
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 async function answerQuestion(question: string, dashboard: any) {
   const data = await callLLMWithFallback({
     workflow: "google-analytics",

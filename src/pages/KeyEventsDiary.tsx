@@ -42,25 +42,25 @@ function PlannerToolbar(props: any) {
   const { label, onNavigate, onView, view, views } = props;
   return (
     <div className="rbc-toolbar">
-      <div className="flex items-center gap-1">
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onNavigate("PREV")} aria-label="Previous">
+      <div className="flex items-center gap-1 min-w-0">
+        <Button variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={() => onNavigate("PREV")} aria-label="Previous">
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="rbc-toolbar-label px-2 min-w-[140px] text-center">{label}</span>
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onNavigate("NEXT")} aria-label="Next">
+        <span className="rbc-toolbar-label px-1 sm:px-2 min-w-[100px] sm:min-w-[140px] text-center truncate">{label}</span>
+        <Button variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={() => onNavigate("NEXT")} aria-label="Next">
           <ChevronRight className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="sm" className="h-7 ml-1 text-xs" onClick={() => onNavigate("TODAY")}>
+        <Button variant="ghost" size="sm" className="h-7 ml-1 text-xs shrink-0" onClick={() => onNavigate("TODAY")}>
           Today
         </Button>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 flex-wrap">
         {(views as string[]).map((v) => (
           <Button
             key={v}
             variant={view === v ? "default" : "outline"}
             size="sm"
-            className="h-7 text-xs capitalize"
+            className="h-7 text-xs capitalize px-2"
             onClick={() => onView(v)}
           >
             {v}

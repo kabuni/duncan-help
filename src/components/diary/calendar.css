@@ -12,6 +12,7 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.75rem;
+  width: 100%;
 }
 
 .rbc-toolbar button {

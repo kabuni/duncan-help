@@ -5,7 +5,7 @@
     "": {
       "name": "vite_react_shadcn_ts",
       "dependencies": {
-        "@elevenlabs/react": "^0.15.0",
+        "@elevenlabs/react": "^1.3.0",
         "@hookform/resolvers": "^3.10.0",
         "@radix-ui/react-accordion": "^1.2.11",
         "@radix-ui/react-alert-dialog": "^1.1.14",
@@ -134,11 +134,11 @@
 
     "@bufbuild/protobuf": ["@bufbuild/protobuf@1.10.1", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@bufbuild/protobuf/-/protobuf-1.10.1.tgz", {}, "sha512-wJ8ReQbHxsAfXhrf9ixl0aYbZorRuOWpBNzm8pL8ftmSxQx/wnJD5Eg861NwJU/czy2VXFIebCeZnZrI9rktIQ=="],
 
-    "@elevenlabs/client": ["@elevenlabs/client@0.16.0", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@elevenlabs/client/-/client-0.16.0.tgz", { "dependencies": { "@elevenlabs/types": "0.7.0", "livekit-client": "^2.11.4" } }, "sha512-OI+BM2x5FUH0TTlmRgbvdCKpYFWc8buRHHY/nm2KJ7xxKd9BS1Y9dpCcrrgU8p+jrORq+mgmTgYchBhcgOYj0A=="],
+    "@elevenlabs/client": ["@elevenlabs/client@1.4.0", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@elevenlabs/client/-/client-1.4.0.tgz", { "dependencies": { "@elevenlabs/types": "0.10.0", "livekit-client": "^2.11.4" } }, "sha512-oYiljab12Ql+X5GMNWlGky/gR5063052mQrn2vY3j/HeMsVU3OXxRTjQ24A8CaNWnUz/Ix2mbErFnLtobjp5zA=="],
 
-    "@elevenlabs/react": ["@elevenlabs/react@0.15.0", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@elevenlabs/react/-/react-0.15.0.tgz", { "dependencies": { "@elevenlabs/client": "0.16.0" }, "peerDependencies": { "react": ">=16.8.0" } }, "sha512-Lx0YrVxpEG4t5HoAoZrsn+XhfqdmVnUj9/Yo2BbaWsy0AcNvSOShTm807MR+UKRKlTBw+rqajZXAjOXPujdcxQ=="],
+    "@elevenlabs/react": ["@elevenlabs/react@1.3.0", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@elevenlabs/react/-/react-1.3.0.tgz", { "dependencies": { "@elevenlabs/client": "1.4.0" }, "peerDependencies": { "react": ">=16.8.0" } }, "sha512-aE0qrrFQMtEPTtYqr4yyBFBgprk5VmVLIscHQh5F6FqqdsNREv3vmPWOKQmQGmYq8TmFtUuInbE9CYHMrgAcyQ=="],
 
-    "@elevenlabs/types": ["@elevenlabs/types@0.7.0", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@elevenlabs/types/-/types-0.7.0.tgz", {}, "sha512-9cbAK/00l3Hl2LDwEFcEvFM+rA30v0EsGOtRO3G43UveAXkacmc7blXbLsfStzddJdzzRERhcGzfUi7PezZvQA=="],
+    "@elevenlabs/types": ["@elevenlabs/types@0.10.0", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@elevenlabs/types/-/types-0.10.0.tgz", {}, "sha512-oSbugtVksz1L2mUSCYDtNf9SBWu/HUdX44z0oGKOWHnwTFVwbDP63L+E+4DGYQ5tz329saHfJZsRinzGPrktWQ=="],
 
     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.25.0", "", { "os": "aix", "cpu": "ppc64" }, "sha512-O7vun9Sf8DFjH2UtqK8Ku3LkquL9SZL8OLY1T5NZkA34+wG3OQF7cl4Ql8vdNzM6fzBbYfLaiRLIOZ+2FOCgBQ=="],
 

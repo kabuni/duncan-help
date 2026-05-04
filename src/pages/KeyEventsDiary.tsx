@@ -331,13 +331,13 @@ export default function KeyEventsDiary() {
 
   return (
     <AppLayout>
-      <div className="max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 min-h-[calc(100dvh-3.5rem)]">
+      <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 min-h-[calc(100dvh-3.5rem)] overflow-x-hidden">
         <header className="space-y-1 shrink-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight">Duncan Planner</h1>
-            <Badge variant="outline" className="font-mono text-[10px] uppercase">execution system</Badge>
+            <Badge variant="outline" className="hidden sm:inline-flex font-mono text-[10px] uppercase">execution system</Badge>
           </div>
-          <p className="text-xs md:text-sm text-muted-foreground">
+          <p className="text-xs md:text-sm text-muted-foreground break-words">
             Strategic events synced from <span className="font-semibold">Duncan | Planner</span>. Goal target dates appear as pinned markers.
           </p>
         </header>
@@ -350,7 +350,7 @@ export default function KeyEventsDiary() {
                 <div className="text-sm font-semibold truncate">
                   {status?.connected ? `Connected as ${status.google_account_email || "Duncan"}` : "Not connected"}
                 </div>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-[11px] text-muted-foreground break-words [overflow-wrap:anywhere]">
                   {status?.calendar_id
                     ? <>Calendar: <span className="font-mono">{status.calendar_name}</span></>
                     : status?.connected
@@ -360,13 +360,13 @@ export default function KeyEventsDiary() {
                 </div>
               </div>
             </div>
-             <div className="flex items-stretch gap-2 flex-wrap w-full lg:w-auto lg:justify-end">
+             <div className="flex items-stretch gap-2 flex-wrap w-full min-w-0 lg:w-auto lg:justify-end">
               <ToggleGroup
                 type="single"
                 size="sm"
                 value={viewTz}
                 onValueChange={(v) => v && setViewTz(v as ViewTz)}
-                className="h-8 w-full sm:w-auto border border-border rounded-md p-0.5"
+                className="h-8 w-full min-w-0 sm:w-auto border border-border rounded-md p-0.5"
               >
                 <ToggleGroupItem value="Europe/London" className="h-7 flex-1 sm:flex-none px-2 text-xs gap-1" aria-label="View in UK time">
                   <span aria-hidden>🇬🇧</span> UK

@@ -106,7 +106,7 @@ export function useWorkstreamsStats() {
           .from("workstream_card_assignees")
           .select("card_id", { count: "exact", head: true })
           .eq("user_id", user!.id)
-          .eq("acceptance_status", "accepted"),
+          .eq("assignment_status", "accepted"),
       ]);
 
       const all = (allRes.data ?? []) as Array<{ id: string; status: string }>;

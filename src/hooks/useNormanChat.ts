@@ -226,9 +226,10 @@ export function useNormanChat() {
         const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const controller = new AbortController();
         const timeoutId = window.setTimeout(() => controller.abort(), CHAT_REQUEST_TIMEOUT_MS);
+        const safeAttachments = Array.isArray(attachments) ? attachments : [];
 
         // --- Extract text from non-image attachments server-side ---
-        const nonImageAtts = attachments.filter((a) => !a.type.startsWith("image/"));
+        const nonImageAtts = safeAttachments.filter((a) => !a.type.startsWith("image/"));
         if (nonImageAtts.length > 0) {
           setExtractionProgress(`Extracting text from ${nonImageAtts.length} file(s)…`);
           await Promise.all(
@@ -240,7 +241,7 @@ export function useNormanChat() {
         }
 
         // Build the messages array for the API
-        const userContent = buildUserContent(input, attachments);
+        const userContent = buildUserContent(input, safeAttachments);
         const apiMessages = [
           ...messages.map((m) => ({ role: m.role, content: m.content })),
           { role: "user", content: userContent },

@@ -324,7 +324,7 @@ export default function KeyEventsDiary() {
           {loading ? (
             <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
           ) : (
-            <div className="flex-1 min-h-[420px]">
+            <div className="flex-1 min-h-[60vh] md:min-h-[420px]">
               <RBCalendar
                 localizer={localizer}
                 events={calItems}

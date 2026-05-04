@@ -227,7 +227,7 @@ export default function KeyEventsDiary() {
 
   return (
     <AppLayout>
-      <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-4 md:py-6 flex flex-col gap-4 h-[calc(100dvh-3.5rem)]">
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 min-h-[calc(100dvh-3.5rem)]">
         <header className="space-y-1 shrink-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight">Duncan Planner</h1>

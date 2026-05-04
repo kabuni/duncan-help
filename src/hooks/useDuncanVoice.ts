@@ -160,7 +160,8 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
       lastAssistantMsgIdRef.current = -1;
       setState("thinking");
       try {
-        chat.send(text, "general", []);
+        const safeAttachments: any[] = [];
+        chat.send(text, "general", safeAttachments);
       } catch (e) {
         console.error("[Duncan voice] send failed", e);
         toast.error("Couldn't send your message to Duncan.");

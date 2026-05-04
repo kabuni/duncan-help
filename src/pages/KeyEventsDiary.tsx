@@ -85,6 +85,110 @@ function fmtDateTime(iso: string | null) {
   return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+function startOfDayLocal(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function addDaysLocal(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function formatMobileTime(item: CalItem, viewTz: ViewTz) {
+  const ev = item.resource.data;
+  if (ev.all_day) return "All day";
+  if (viewTz === "both") {
+    return `UK ${formatTimeInTz(ev.start_at, "Europe/London")} · IN ${formatTimeInTz(ev.start_at, "Asia/Kolkata")}`;
+  }
+  return formatTimeInTz(ev.start_at, viewTz);
+}
+
+function MobileAgenda({
+  items,
+  date,
+  onNavigate,
+  onSelectItem,
+  viewTz,
+}: {
+  items: CalItem[];
+  date: Date;
+  onNavigate: (date: Date) => void;
+  onSelectItem: (item: CalItem) => void;
+  viewTz: ViewTz;
+}) {
+  const rangeStart = startOfDayLocal(date);
+  const rangeEnd = addDaysLocal(rangeStart, 30);
+  const visibleItems = items
+    .filter((item) => item.end >= rangeStart && item.start < rangeEnd)
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+  const groupedItems = visibleItems.reduce<Record<string, CalItem[]>>((acc, item) => {
+    const key = format(item.start, "yyyy-MM-dd");
+    acc[key] = acc[key] || [];
+    acc[key].push(item);
+    return acc;
+  }, {});
+
+  return (
+    <div className="flex h-full min-h-[58vh] flex-col overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-border pb-3">
+        <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => onNavigate(addDaysLocal(date, -30))} aria-label="Previous 30 days">
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="min-w-0 flex-1 text-center">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Events</div>
+          <div className="truncate text-sm font-semibold">{format(rangeStart, "MMM d")} – {format(addDaysLocal(rangeStart, 29), "MMM d, yyyy")}</div>
+        </div>
+        <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => onNavigate(addDaysLocal(date, 30))} aria-label="Next 30 days">
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="sm" className="h-10 shrink-0 px-3" onClick={() => onNavigate(new Date())}>
+          Today
+        </Button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto pt-3">
+        {visibleItems.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No events in this window.</div>
+        ) : (
+          <div className="space-y-3">
+            {Object.entries(groupedItems).map(([day, dayItems]) => (
+              <section key={day} className="overflow-hidden rounded-md border border-border bg-card">
+                <div className="border-b border-border bg-muted/40 px-3 py-2 text-sm font-semibold text-muted-foreground">
+                  {format(dayItems[0].start, "EEE MMM dd")}
+                </div>
+                <div className="divide-y divide-border">
+                  {dayItems.map((item) => {
+                    const ev = item.resource.data;
+                    const meta = getCategoryMeta(ev.category);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => onSelectItem(item)}
+                        className="flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: `hsl(${meta.hsl})` }} aria-hidden />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold leading-snug text-foreground break-words">{meta.icon} {ev.event_name || ev.title}</span>
+                          <span className="mt-1 block text-xs leading-snug text-muted-foreground break-words">{formatMobileTime(item, viewTz)}</span>
+                          {ev.owner && <span className="mt-1 block text-xs leading-snug text-muted-foreground break-words">{ev.owner}</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function KeyEventsDiary() {
   const { events, cards, status, lastSync, loading, syncing, refresh, connect, sync } = useKeyEvents();
   const { isAdmin } = useIsAdmin();

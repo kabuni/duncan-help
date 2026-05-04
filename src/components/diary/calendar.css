@@ -3,6 +3,8 @@
   font-family: inherit;
   color: hsl(var(--foreground));
   background: hsl(var(--background));
+  min-width: 0;
+  max-width: 100%;
 }
 
 .rbc-toolbar {
@@ -13,6 +15,15 @@
   justify-content: space-between;
   margin-bottom: 0.75rem;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.planner-toolbar-nav,
+.planner-toolbar-views,
+.rbc-toolbar > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .rbc-toolbar button {
@@ -177,7 +188,7 @@
   .rbc-toolbar { margin-bottom: 0.5rem; }
   .planner-toolbar-nav,
   .planner-toolbar-views { justify-content: space-between; }
-  .planner-toolbar-nav .rbc-toolbar-label { flex: 1 1 auto; min-width: 0; }
+  .planner-toolbar-nav .rbc-toolbar-label { flex: 1 1 0; min-width: 0; width: auto; }
   .planner-toolbar-views button { flex: 1 1 0; min-width: 0; }
   .rbc-toolbar button {
     padding: 0.3rem 0.55rem;

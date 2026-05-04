@@ -65,7 +65,7 @@ export function useHiresStats() {
       weekStart.setHours(0, 0, 0, 0);
 
       const [rolesRes, candidatesRes, interviewsRes] = await Promise.all([
-        supabase.from("job_roles").select("id", { count: "exact", head: true }).eq("status", "open"),
+        supabase.from("job_roles").select("id", { count: "exact", head: true }).eq("status", "active"),
         supabase.from("candidates").select("id", { count: "exact", head: true }),
         supabase
           .from("candidates")

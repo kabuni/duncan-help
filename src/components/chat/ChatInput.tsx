@@ -4,6 +4,7 @@ import type { ChatAttachment } from "@/hooks/useNormanChat";
 import { invokeEdge } from "@/lib/edgeApi";
 import { toast } from "sonner";
 import AudioWaveform from "@/components/chat/AudioWaveform";
+import VoiceModeButton from "@/components/chat/VoiceModeButton";
 
 interface ChatInputProps {
   onSubmit: (input: string, attachments: ChatAttachment[]) => void;
@@ -37,7 +38,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export default function ChatInput({ onSubmit, isLoading, extractionProgress, placeholder, hideFooter }: ChatInputProps) {
+export default function ChatInput({ onSubmit, isLoading, extractionProgress, placeholder, hideFooter, onVoiceToggle, isVoiceActive }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -320,6 +321,9 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress, pla
               <Mic className="h-3.5 w-3.5" />
             )}
           </button>
+          {onVoiceToggle && (
+            <VoiceModeButton onClick={onVoiceToggle} active={isVoiceActive} />
+          )}
         </div>
         {!hideFooter && (
           <p className="mt-2 text-center text-[10px] font-mono text-muted-foreground/40">

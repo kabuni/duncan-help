@@ -1,76 +1,131 @@
+
 ## Goal
 
-When a user lands on `/` (Duncan home), they should see a personalised, at-a-glance operating picture of Kabuni — not the two duplicate "Recruitment / Operations" buttons that already exist in the sidebar. The AI daily briefing and chat input stay, but move below the dashboard.
+Add a dedicated **"Voice Mode"** to Duncan that:
+1. Listens to the user via **ElevenLabs Scribe Realtime** (STT)
+2. Sends the transcript through the **existing** `useNormanChat` pipeline (no logic changes — Duncan still answers in text in chat)
+3. Speaks the assistant reply aloud via **ElevenLabs TTS** using the Jack/John voice already configured
 
-## What the new home looks like
+The current Whisper mic button, text typing, attachments, and SSE streaming stay 100% intact and act as the fallback when voice mode is off or fails.
+
+## What changes vs. what stays
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│ Header: Good morning, {name}.  Duncan is operational. 21°C ☁    │
-│                                          [Feature] [What's New] │
-├─────────────────────────────────────────────────────────────────┤
-│  HERO — HOURS OF PLAY AROUND THE WORLD                          │
-│   1,284,506 hrs   ▲ 4.2% WoW   • 28 countries today             │
-│   sparkline (last 30 days)                                      │
-├─────────────────────────────────────────────────────────────────┤
-│  WEBSITE (kabuni.com · last 7d)        SOCIAL (last 7d)         │
-│   Users  12.4k  ▲6%                     LinkedIn  +218 followers│
-│   Sessions 18.1k                        Instagram +96 followers │
-│   Top page  /play                       Posts this week  4      │
-├─────────────────────────────────────────────────────────────────┤
-│  HIRES              WORKSTREAMS              PROJECTS           │
-│   3 open roles       12 active  • 2 🔴       7 active           │
-│   18 candidates      4 overdue              42 files indexed    │
-│   2 interviews wk    On-track 67%           3 updated today     │
-├─────────────────────────────────────────────────────────────────┤
-│  TODAY'S BRIEFING   (collapsible, the existing AI stream)       │
-│  …                                                              │
-├─────────────────────────────────────────────────────────────────┤
-│  Chat input (existing)                                          │
-└─────────────────────────────────────────────────────────────────┘
+KEEP (untouched fallback)
+  ChatInput Whisper mic ─► transcribe-audio (Whisper) ─► textarea
+  Textarea + Send       ─► useNormanChat.send() ─► norman-chat SSE ─► chat bubble
+
+ADD (new, parallel layer)
+  Voice Mode toggle ─► VoiceModeOverlay
+    ├─ ElevenLabs Scribe Realtime (mic ► live transcript)
+    ├─ on committed transcript ─► useNormanChat.send()  ← reuses existing brain
+    ├─ watches messages[] for new assistant text
+    └─ streams sentence-by-sentence ─► elevenlabs-tts edge fn ─► <audio> playback
 ```
 
-All numbers are real, fetched on mount with React Query, with skeleton loaders and graceful "—" fallbacks if a source isn't connected. RYG colours follow our Red/Yellow/Green convention.
+If anything in the voice layer fails, we toast the error, close the overlay, and the user still has the existing Whisper button + textarea.
 
-## Data sources
+## User experience
 
-| Tile | Source | How |
-|---|---|---|
-| Hours of Play (hero) | Google Analytics 4 (kabuni.com) | New action `play_hours` in `google-analytics-api` edge function — sum of a chosen GA event (`session_start` or a custom `play_time` event, whichever the property exposes) for last 30d + 7d delta + country count. |
-| Website tile | Google Analytics 4 | New action `website_summary` — `activeUsers`, `sessions`, top page (last 7d). |
-| Social tile | New LinkedIn + Instagram connectors | Separate follow-up — see "Phased delivery". v1 ships the tile with skeleton + "Connect LinkedIn / Instagram" CTA. |
-| Hires tile | Existing tables `job_roles`, `candidates` | Direct Supabase query (RLS already in place). |
-| Workstreams tile | `workstream_cards` | Count by status, count overdue (`due_date < now()` and not done), % on track (Green/total). |
-| Projects tile | `projects`, `project_files` | Count of projects user can see, files indexed, count updated in last 24h. |
+- New **microphone-circle button** next to the existing mic in `ChatInput` (clearly labelled "Voice mode" on hover) and a matching entry point on the home dashboard "Talk to Duncan".
+- Tapping it opens a full-screen **VoiceModeOverlay**:
+  - Pulsing Duncan avatar (idle / listening / thinking / speaking states)
+  - Live partial transcript shown as the user speaks
+  - Duncan's reply appears as text inside the overlay AND in the underlying chat (because we reuse `useNormanChat`)
+  - Duncan's voice plays automatically using Jack/John
+  - Buttons: **Mute Duncan**, **Stop speaking** (interrupt), **End voice mode**
+- Closing the overlay always: stops Scribe, stops audio playback, releases mic.
 
-## Phased delivery
+## Architecture
 
-**Phase 1 — Personalised dashboard shell + real Kabuni data (this build)**
-1. New `src/components/home/` directory with: `HoursOfPlayHero.tsx`, `WebsiteCard.tsx`, `SocialCard.tsx` (placeholder + connect CTA), `HiresCard.tsx`, `WorkstreamsCard.tsx`, `ProjectsCard.tsx`, `DashboardSkeleton.tsx`.
-2. New hook `src/hooks/useHomeDashboard.ts` orchestrating React Query calls for each tile.
-3. Extend `supabase/functions/google-analytics-api/index.ts` with two actions: `play_hours` and `website_summary`. Reuses existing token + refresh logic.
-4. Refactor `src/pages/Index.tsx`:
-   - Remove the duplicate "Recruitment / Operations" quick-nav row (lines 440–447).
-   - When `!hasMessages`, render `<HomeDashboard />` instead of the two-card stub.
-   - Move the daily briefing into a `<details>` "Today's briefing" card that auto-expands the first time per day, then collapses on subsequent visits.
-   - Keep chat input pinned at the bottom; sending a message pushes the dashboard up and reveals the chat thread (as today).
-5. Personalisation: greet by `profile.display_name`, surface "Your open workstreams: N" and "Your interviews this week: N" inside the relevant tiles when the user has them.
+### 1. Edge functions (2 new, both `verify_jwt = false` with in-code JWT validation)
 
-**Phase 2 — Social connectors (separate ticket once Phase 1 is approved)**
-- Add LinkedIn connector + edge function `linkedin-api` (org page followers + post count).
-- Add Instagram (Graph API via Meta) connector + edge function `instagram-api`.
-- Replace `SocialCard` placeholder with live data; until connected, the tile shows a "Connect" CTA that routes to `/integrations`.
+**`supabase/functions/elevenlabs-scribe-token/index.ts`**
+- POST, requires Supabase auth.
+- Calls `POST https://api.elevenlabs.io/v1/single-use-token/realtime_scribe` with `xi-api-key: ELEVENLABS_API_KEY`.
+- Returns `{ token }` (15-min single-use token) — never exposes the API key to the browser.
 
-## Technical notes
+**`supabase/functions/elevenlabs-tts/index.ts`**
+- POST `{ text, voiceId? }`, requires Supabase auth.
+- Server-side text sanitiser strips markdown, code fences, table pipes, emojis → plain spoken sentence.
+- Calls `https://api.elevenlabs.io/v1/text-to-speech/{voiceId}/stream?output_format=mp3_44100_128` with `eleven_turbo_v2_5` for low latency.
+- Pipes the MP3 stream straight back to the client (`Content-Type: audio/mpeg`).
+- `voiceId` defaults to a new `ELEVENLABS_VOICE_ID` env var (set to the Jack/John voice ID from the existing agent). If unset, falls back to a hardcoded ID we can edit.
 
-- All edge function changes follow our standard inline CORS + `verify_jwt = false` + in-code `getUser()` pattern.
-- New GA actions cache-keyed by `user_id + action` in React Query for 5 min; manual refresh button on each tile.
-- Mobile-first: hero spans full width, then 1-col stack < `sm`, 2-col on `sm`, 3-col on `lg`. Reuses `StatusCard` style tokens.
-- No new tables required for Phase 1.
-- Briefing logic in `runBriefing()` is preserved verbatim — only its DOM placement changes.
+No DB migrations required.
 
-## Out of scope
+### 2. Client hook: `src/hooks/useDuncanVoice.ts`
 
-- Investor / external view (gated behind a separate role; can layer on later).
-- Manual KPI overrides (no admin form for hardcoding numbers — everything is sourced).
-- Replacing the chat surface.
+Wraps `@elevenlabs/react`'s `useScribe` hook and orchestrates the loop. Exposes:
+
+```ts
+{
+  state: "idle" | "listening" | "thinking" | "speaking",
+  partialTranscript: string,
+  muted: boolean,
+  start(): Promise<void>,    // fetch scribe token, mic permission, connect
+  stop(): Promise<void>,      // disconnect scribe, stop audio, release mic
+  toggleMute(): void,
+  interrupt(): void,          // stop current TTS audio
+}
+```
+
+Internal flow:
+1. `start()` → calls `elevenlabs-scribe-token`, requests mic, `scribe.connect({ token, microphone: { echoCancellation, noiseSuppression } })` with `commitStrategy: "vad"`.
+2. `onPartialTranscript` updates `partialTranscript` for live UI.
+3. `onCommittedTranscript` → calls `chat.send(text)` from a passed-in `useNormanChat` instance, sets state to `"thinking"`.
+4. A `useEffect` watches `messages[messages.length-1]` while role === `"assistant"`, buffers new tokens, and when a sentence boundary appears (`. ! ? \n\n`) enqueues that sentence to the **TTS playback queue**.
+5. TTS queue: serial `<audio>` element. While `audio.playing`, set state `"speaking"`. On `ended`, play next. On final assistant message complete (`isLoading` flips false), drain remaining buffer.
+6. **Barge-in**: when Scribe reports a non-empty partial transcript while we're `"speaking"`, pause + clear the audio queue (state → `"listening"`).
+7. `muted` skips enqueueing TTS but Duncan still replies in text.
+
+### 3. UI components
+
+**`src/components/chat/VoiceModeButton.tsx`** — small circular button used inside `ChatInput` (added next to the existing Whisper mic, not replacing it) and on the home dashboard. Opens the overlay.
+
+**`src/components/chat/VoiceModeOverlay.tsx`** — full-screen modal:
+- Pulsing Duncan avatar (uses existing dog focal-zoom asset, animation tied to `state`)
+- Live partial transcript line
+- Last assistant message rendered with markdown (read-only; canonical version is in chat)
+- Controls: Mute / Interrupt / End
+
+The overlay is mounted at the page level (Index, ProjectWorkspace) and is given the **same `useNormanChat` instance** the page already uses, so messages still appear in the regular chat list — exactly one source of truth.
+
+### 4. Settings (small, optional)
+
+Add a "Voice" tab in `SettingsPanel` with:
+- Default voice (text input for ElevenLabs voice ID, prefilled with Jack/John)
+- Speaking speed (0.8 – 1.2 slider)
+- "Speak Duncan's replies in voice mode" toggle
+
+Stored on `profiles.preferences.voice` (JSON column already exists — no migration).
+
+## Fallback & safety
+
+- If `elevenlabs-scribe-token` returns 4xx/5xx, overlay shows an inline error and a **"Use text chat instead"** button that closes the overlay. Existing Whisper + text input still work.
+- If TTS fetch fails, we silently skip playback for that sentence; the assistant text still shows in chat.
+- If mic permission is denied, overlay shows the standard permission-required message and closes.
+- ElevenLabs key/quota errors are surfaced via toast with a clear reason.
+
+## Files
+
+**New**
+- `supabase/functions/elevenlabs-scribe-token/index.ts`
+- `supabase/functions/elevenlabs-tts/index.ts`
+- `src/hooks/useDuncanVoice.ts`
+- `src/lib/ttsTextSanitizer.ts` (strip markdown for natural speech)
+- `src/components/chat/VoiceModeButton.tsx`
+- `src/components/chat/VoiceModeOverlay.tsx`
+- `src/components/settings/SettingsVoice.tsx` (optional but recommended)
+
+**Edited (additive only)**
+- `src/components/chat/ChatInput.tsx` — add `<VoiceModeButton />` next to the existing mic; no changes to Whisper / text logic.
+- `src/pages/Index.tsx` and `src/pages/ProjectWorkspace.tsx` — mount `<VoiceModeOverlay chat={chat} />` so it shares the page's chat instance.
+- `src/components/SettingsPanel.tsx` — add the new Voice tab entry.
+- `package.json` — add `@elevenlabs/react`.
+
+**Memory** — add `mem://features/voice-mode-elevenlabs` describing the architecture, default voice ID, and that Whisper remains the fallback.
+
+## Open question (one)
+
+You mentioned "Jack John" — please confirm the **exact ElevenLabs voice ID** from your agent (e.g. `pNInz6obpgDQGcFmaJgB`). I'll set it as the default in `ELEVENLABS_VOICE_ID` and the Settings → Voice prefill. If you'd rather I just use a sensible default (e.g. Liam `TX3LPaxmHKxFdv7VOQHJ`) and let you swap it in Settings, say the word.

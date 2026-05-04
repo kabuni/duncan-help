@@ -431,37 +431,47 @@ export default function KeyEventsDiary() {
             <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
           ) : (
             <div className="flex-1 min-h-[60vh] md:min-h-[420px] min-w-0 overflow-hidden">
-              <RBCalendar
-                localizer={localizer}
-                events={calItems}
-                startAccessor="start"
-                endAccessor="end"
-                allDayAccessor="allDay"
-                view={view}
-                onView={setView}
-                date={date}
-                onNavigate={setDate}
-                views={isMobile ? ["agenda", "day", "month"] : ["month", "week", "day", "agenda"]}
-                messages={{ agenda: "Events" }}
-                components={{ toolbar: PlannerToolbar, event: EventChip as any }}
-                popup
-                selectable={isAdmin}
-                onSelectSlot={(slot: any) => {
-                  if (!isAdmin) return;
-                  setAddDate(slot.start instanceof Date ? slot.start : new Date(slot.start));
-                  setAddOpen(true);
-                }}
-                eventPropGetter={eventPropGetter as any}
-                onSelectEvent={handleSelectItem as any}
-                tooltipAccessor={(item: any) => {
-                  if (item.resource?.kind === "goal") return `Goal target: ${item.resource.data.name}`;
-                  const ev = item.resource?.data as KeyEvent;
-                  const uk = formatTimeInTz(ev.start_at, "Europe/London");
-                  const ind = formatTimeInTz(ev.start_at, "Asia/Kolkata");
-                  const times = ev.all_day ? "All day" : `UK ${uk} · IN ${ind}`;
-                  return `${ev.event_name || ev.title} · ${times}${ev.owner ? ` · ${ev.owner}` : ""}`;
-                }}
-              />
+              {isMobile ? (
+                <MobileAgenda
+                  items={calItems}
+                  date={date}
+                  onNavigate={setDate}
+                  onSelectItem={handleSelectItem}
+                  viewTz={viewTz}
+                />
+              ) : (
+                <RBCalendar
+                  localizer={localizer}
+                  events={calItems}
+                  startAccessor="start"
+                  endAccessor="end"
+                  allDayAccessor="allDay"
+                  view={view}
+                  onView={setView}
+                  date={date}
+                  onNavigate={setDate}
+                  views={["month", "week", "day", "agenda"]}
+                  messages={{ agenda: "Events" }}
+                  components={{ toolbar: PlannerToolbar, event: EventChip as any }}
+                  popup
+                  selectable={isAdmin}
+                  onSelectSlot={(slot: any) => {
+                    if (!isAdmin) return;
+                    setAddDate(slot.start instanceof Date ? slot.start : new Date(slot.start));
+                    setAddOpen(true);
+                  }}
+                  eventPropGetter={eventPropGetter as any}
+                  onSelectEvent={handleSelectItem as any}
+                  tooltipAccessor={(item: any) => {
+                    if (item.resource?.kind === "goal") return `Goal target: ${item.resource.data.name}`;
+                    const ev = item.resource?.data as KeyEvent;
+                    const uk = formatTimeInTz(ev.start_at, "Europe/London");
+                    const ind = formatTimeInTz(ev.start_at, "Asia/Kolkata");
+                    const times = ev.all_day ? "All day" : `UK ${uk} · IN ${ind}`;
+                    return `${ev.event_name || ev.title} · ${times}${ev.owner ? ` · ${ev.owner}` : ""}`;
+                  }}
+                />
+              )}
             </div>
           )}
         </Card>

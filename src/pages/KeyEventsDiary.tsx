@@ -42,11 +42,11 @@ function PlannerToolbar(props: any) {
   const { label, onNavigate, onView, view, views } = props;
   return (
     <div className="rbc-toolbar">
-      <div className="flex items-center gap-1 min-w-0">
+      <div className="planner-toolbar-nav flex items-center gap-1 min-w-0">
         <Button variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={() => onNavigate("PREV")} aria-label="Previous">
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="rbc-toolbar-label px-1 sm:px-2 min-w-[100px] sm:min-w-[140px] text-center truncate">{label}</span>
+        <span className="rbc-toolbar-label px-1 sm:px-2 w-[8.75rem] sm:w-auto sm:min-w-[140px] text-center truncate">{label}</span>
         <Button variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={() => onNavigate("NEXT")} aria-label="Next">
           <ChevronRight className="h-4 w-4" />
         </Button>
@@ -54,7 +54,7 @@ function PlannerToolbar(props: any) {
           Today
         </Button>
       </div>
-      <div className="flex items-center gap-1 flex-wrap">
+      <div className="planner-toolbar-views flex items-center gap-1 flex-wrap">
         {(views as string[]).map((v) => (
           <Button
             key={v}
@@ -238,8 +238,8 @@ export default function KeyEventsDiary() {
           </p>
         </header>
 
-        <Card className="p-3 shrink-0">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <Card className="p-3 shrink-0 overflow-hidden">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <div className={cn("h-2 w-2 rounded-full shrink-0", status?.connected ? "bg-emerald-500" : "bg-muted-foreground/40")} />
               <div className="min-w-0">
@@ -256,46 +256,48 @@ export default function KeyEventsDiary() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-wrap md:flex-nowrap md:justify-end">
+             <div className="flex items-stretch gap-2 flex-wrap w-full lg:w-auto lg:justify-end">
               <ToggleGroup
                 type="single"
                 size="sm"
                 value={viewTz}
                 onValueChange={(v) => v && setViewTz(v as ViewTz)}
-                className="h-8 border border-border rounded-md p-0.5"
+                className="h-8 w-full sm:w-auto border border-border rounded-md p-0.5"
               >
-                <ToggleGroupItem value="Europe/London" className="h-7 px-2 text-xs gap-1" aria-label="View in UK time">
+                <ToggleGroupItem value="Europe/London" className="h-7 flex-1 sm:flex-none px-2 text-xs gap-1" aria-label="View in UK time">
                   <span aria-hidden>🇬🇧</span> UK
                 </ToggleGroupItem>
-                <ToggleGroupItem value="Asia/Kolkata" className="h-7 px-2 text-xs gap-1" aria-label="View in India time">
+                <ToggleGroupItem value="Asia/Kolkata" className="h-7 flex-1 sm:flex-none px-2 text-xs gap-1" aria-label="View in India time">
                   <span aria-hidden>🇮🇳</span> IN
                 </ToggleGroupItem>
-                <ToggleGroupItem value="both" className="h-7 px-2 text-xs" aria-label="View both time zones">
+                <ToggleGroupItem value="both" className="h-7 flex-1 sm:flex-none px-2 text-xs" aria-label="View both time zones">
                   Both
                 </ToggleGroupItem>
               </ToggleGroup>
-              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-                <SelectTrigger className="h-8 flex-1 min-w-[140px] md:flex-none md:w-[160px] text-xs">
-                  <SelectValue placeholder="Filter by owner" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All owners</SelectItem>
-                  {owners.map((o) => (
-                    <SelectItem key={o} value={o}>{o}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="w-full sm:w-[160px]">
+                <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                  <SelectTrigger className="h-8 w-full text-xs">
+                    <SelectValue placeholder="Filter by owner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All owners</SelectItem>
+                    {owners.map((o) => (
+                      <SelectItem key={o} value={o}>{o}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               {isAdmin && status?.connected && (
-                <Button variant="outline" size="sm" onClick={sync} disabled={syncing}>
+                <Button className="flex-1 sm:flex-none whitespace-nowrap" variant="outline" size="sm" onClick={sync} disabled={syncing}>
                   <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", syncing && "animate-spin")} />
                   {syncing ? "Syncing…" : "Sync"}
                 </Button>
               )}
-              <Button size="sm" variant="outline" onClick={() => { setAddDate(new Date()); setAddOpen(true); }}>
+              <Button className="flex-1 sm:flex-none whitespace-nowrap" size="sm" variant="outline" onClick={() => { setAddDate(new Date()); setAddOpen(true); }}>
                 <Plus className="h-3.5 w-3.5 mr-1.5" /> Add event
               </Button>
               {isAdmin && (
-                <Button size="sm" onClick={connect}>
+                <Button className="flex-1 sm:flex-none whitespace-nowrap" size="sm" onClick={connect}>
                   {status?.connected ? "Reconnect" : "Connect Duncan calendar"}
                 </Button>
               )}
@@ -320,11 +322,11 @@ export default function KeyEventsDiary() {
           </div>
         </div>
 
-        <Card className="p-2 sm:p-3 flex-1 min-h-0 flex flex-col">
+        <Card className="p-2 sm:p-3 flex-1 min-h-0 flex flex-col overflow-hidden">
           {loading ? (
             <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
           ) : (
-            <div className="flex-1 min-h-[60vh] md:min-h-[420px]">
+            <div className="flex-1 min-h-[60vh] md:min-h-[420px] min-w-0 overflow-hidden">
               <RBCalendar
                 localizer={localizer}
                 events={calItems}

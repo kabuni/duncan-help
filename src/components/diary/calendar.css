@@ -137,6 +137,8 @@
 
 .rbc-agenda-view table.rbc-agenda-table {
   background: hsl(var(--card));
+  table-layout: fixed;
+  width: 100%;
 }
 .rbc-agenda-time-cell,
 .rbc-agenda-date-cell {
@@ -144,9 +146,17 @@
   font-size: 0.75rem;
 }
 
+.rbc-agenda-date-cell { width: 7.5rem; }
+.rbc-agenda-time-cell { width: 11rem; }
+.rbc-agenda-event-cell { word-break: break-word; }
+
 /* Tablet (iPad portrait & landscape) — denser cells, better tap targets */
 @media (max-width: 1024px) {
-  .rbc-toolbar { gap: 0.4rem; }
+  .rbc-toolbar { gap: 0.4rem; align-items: stretch; }
+  .planner-toolbar-nav,
+  .planner-toolbar-views { width: 100%; }
+  .planner-toolbar-nav { justify-content: flex-start; }
+  .planner-toolbar-views { justify-content: flex-end; }
   .rbc-toolbar button {
     padding: 0.4rem 0.7rem;
     font-size: 0.78rem;
@@ -163,11 +173,17 @@
 
 /* Phone (≤640px) — compact toolbar, smaller chrome, agenda becomes the comfortable view */
 @media (max-width: 640px) {
+  .rbc-calendar { overflow: hidden; }
+  .rbc-toolbar { margin-bottom: 0.5rem; }
+  .planner-toolbar-nav,
+  .planner-toolbar-views { justify-content: space-between; }
+  .planner-toolbar-nav .rbc-toolbar-label { flex: 1 1 auto; min-width: 0; }
+  .planner-toolbar-views button { flex: 1 1 0; min-width: 0; }
   .rbc-toolbar button {
     padding: 0.3rem 0.55rem;
     font-size: 0.7rem;
   }
-  .rbc-toolbar-label { font-size: 0.8rem; min-width: 100px; }
+  .rbc-toolbar-label { font-size: 0.8rem; }
   .rbc-event {
     padding: 0.05rem 0.25rem;
     font-size: 0.6rem;
@@ -179,8 +195,23 @@
   .rbc-month-view, .rbc-time-view, .rbc-agenda-view { border-radius: 0.4rem; }
   .rbc-show-more { font-size: 0.6rem; }
   /* Agenda view: full-width rows, comfortable tap targets */
+  .rbc-agenda-view { overflow: hidden; }
+  .rbc-agenda-view table.rbc-agenda-table,
+  .rbc-agenda-view table.rbc-agenda-table tbody,
+  .rbc-agenda-view table.rbc-agenda-table tr,
+  .rbc-agenda-view table.rbc-agenda-table td { display: block; width: 100% !important; }
+  .rbc-agenda-view table.rbc-agenda-table thead { display: none; }
+  .rbc-agenda-view table.rbc-agenda-table tbody > tr {
+    border-bottom: 1px solid hsl(var(--border));
+    padding: 0.55rem 0.6rem;
+  }
   .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
-    padding: 0.5rem 0.4rem;
+    border: 0 !important;
+    padding: 0.05rem 0;
     font-size: 0.72rem;
   }
+  .rbc-agenda-time-cell,
+  .rbc-agenda-date-cell { font-size: 0.72rem; line-height: 1.2rem; }
+  .rbc-agenda-time-cell { color: hsl(var(--foreground)); }
+  .rbc-agenda-event-cell { font-size: 0.78rem; line-height: 1.15rem; padding-top: 0.25rem !important; }
 }

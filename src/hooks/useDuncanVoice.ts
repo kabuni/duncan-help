@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useScribe } from "@elevenlabs/react";
+import { useScribe, CommitStrategy } from "@elevenlabs/react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { extractSentences, sanitizeForSpeech } from "@/lib/ttsTextSanitizer";
@@ -142,7 +142,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
   // Scribe (ElevenLabs realtime STT) -------------------------------------
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
-    commitStrategy: "vad",
+    commitStrategy: CommitStrategy.VAD,
     onPartialTranscript: (data: any) => {
       const text = (data?.text || "").trim();
       if (!text) return;

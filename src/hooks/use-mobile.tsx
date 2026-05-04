@@ -1,7 +1,7 @@
 import * as React from "react";
 
 const MOBILE_BREAKPOINT = 768;
-const PHONE_LANDSCAPE_QUERY = "(pointer: coarse) and (max-height: 520px) and (max-width: 950px)";
+const PHONE_LANDSCAPE_QUERY = "(pointer: coarse) and (max-height: 520px) and (max-width: 1100px)";
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined);

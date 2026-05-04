@@ -462,24 +462,7 @@ const Index = () => {
         {/* Content area */}
         <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 sm:px-8 py-4 sm:py-6">
           {!hasMessages ? (
-            <div className="mx-auto max-w-3xl flex flex-col items-center justify-center h-full">
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex h-14 w-14 items-center justify-center rounded-2xl overflow-hidden border border-primary/20 glow-primary mb-6">
-                <img src={duncanAvatar} alt="Duncan" className="h-full w-full object-cover object-[50%_30%] scale-150" />
-              </motion.div>
-              <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="text-sm text-muted-foreground mb-8 text-center max-w-md px-4">
-                Ask Duncan anything, or use a quick action below.
-              </motion.p>
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="grid grid-cols-2 gap-2 sm:gap-3 w-full max-w-lg px-2">
-                {quickActions.map((action) => (
-                  <button key={action.label} onClick={() => navigate(action.link)} className="flex flex-col items-center gap-1.5 sm:gap-2 rounded-xl border border-border bg-card/60 px-3 sm:px-4 py-4 sm:py-5 text-center hover:bg-card hover:border-primary/20 transition-all duration-200 group">
-                    <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 group-hover:glow-primary-sm transition-all">
-                      <action.icon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                    </div>
-                    <span className="text-[11px] sm:text-xs font-medium text-foreground">{action.label}</span>
-                  </button>
-                ))}
-              </motion.div>
-            </div>
+            <HomeDashboard userName={userDisplayName.split(" ")[0] || "you"} />
           ) : (
             <div className="mx-auto max-w-3xl space-y-6 sm:space-y-8">
               <AnimatePresence initial={false}>

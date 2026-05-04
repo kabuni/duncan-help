@@ -88,8 +88,9 @@ function fmtDateTime(iso: string | null) {
 export default function KeyEventsDiary() {
   const { events, cards, status, lastSync, loading, syncing, refresh, connect, sync } = useKeyEvents();
   const { isAdmin } = useIsAdmin();
+  const isMobile = useIsMobile();
   const [params, setParams] = useSearchParams();
-  const [view, setView] = useState<View>("month");
+  const [view, setView] = useState<View>(() => (typeof window !== "undefined" && window.innerWidth < 768) ? "agenda" : "month");
   const [date, setDate] = useState<Date>(new Date());
   const [riskFilter, setRiskFilter] = useState<"all" | "atrisk">("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");

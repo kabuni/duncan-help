@@ -139,12 +139,12 @@ function MobileAgenda({
         </Button>
         <div className="min-w-0 flex-1 text-center">
           <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Events</div>
-          <div className="truncate text-sm font-semibold">{format(rangeStart, "MMM d")} – {format(addDaysLocal(rangeStart, 29), "MMM d, yyyy")}</div>
+          <div className="truncate text-sm font-semibold"><span className="sm:hidden">{format(rangeStart, "MMM d")} – {format(addDaysLocal(rangeStart, 29), "MMM d")}</span><span className="hidden sm:inline">{format(rangeStart, "MMM d")} – {format(addDaysLocal(rangeStart, 29), "MMM d, yyyy")}</span></div>
         </div>
         <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => onNavigate(addDaysLocal(date, 30))} aria-label="Next 30 days">
           <ChevronRight className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="sm" className="h-10 shrink-0 px-3" onClick={() => onNavigate(new Date())}>
+        <Button variant="ghost" size="sm" className="h-10 shrink-0 px-2 sm:px-3 text-xs sm:text-sm" onClick={() => onNavigate(new Date())}>
           Today
         </Button>
       </div>

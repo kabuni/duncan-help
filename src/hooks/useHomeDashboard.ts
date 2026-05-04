@@ -102,7 +102,7 @@ export function useWorkstreamsStats() {
           .select("id", { count: "exact", head: true })
           .lt("due_date", nowIso)
           .neq("status", "done"),
-        supabase
+        (supabase as any)
           .from("workstream_card_assignees")
           .select("card_id", { count: "exact", head: true })
           .eq("user_id", user!.id)

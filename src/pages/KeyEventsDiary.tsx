@@ -409,8 +409,8 @@ export default function KeyEventsDiary() {
           </div>
         </Card>
 
-        <div className="shrink-0 -mx-4 lg:mx-0 px-4 lg:px-1 overflow-x-auto scrollbar-thin">
-          <div className="flex items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground whitespace-nowrap min-w-max lg:flex-wrap lg:min-w-0 lg:whitespace-normal">
+        <div className="shrink-0 min-w-0 overflow-hidden lg:px-1">
+          <div className="flex items-center gap-x-2 gap-y-1.5 text-[10px] sm:text-[11px] text-muted-foreground overflow-x-auto pb-1 whitespace-nowrap scrollbar-thin lg:flex-wrap lg:overflow-visible lg:pb-0 lg:whitespace-normal">
             <span className="font-mono uppercase tracking-wider text-[10px] shrink-0">Categories</span>
             {Object.entries(CATEGORY_META).map(([key, meta]) => (
               <span key={key} className="inline-flex items-center gap-1.5 shrink-0">
@@ -426,7 +426,7 @@ export default function KeyEventsDiary() {
           </div>
         </div>
 
-        <Card className="p-2 sm:p-3 flex-1 min-h-0 flex flex-col overflow-hidden">
+        <Card className="p-2 sm:p-3 flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
           {loading ? (
             <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
           ) : (

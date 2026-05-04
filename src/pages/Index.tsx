@@ -412,7 +412,7 @@ const Index = () => {
               {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
             </p>
             <h2 className="text-sm sm:text-lg font-bold text-foreground tracking-tight truncate">
-              {getGreeting()}. Duncan is <span className="text-primary glow-text">operational</span>.
+              {getGreeting()}{userDisplayName && userDisplayName !== "You" ? `, ${userDisplayName.split(" ")[0]}` : ""}. Duncan is <span className="text-primary glow-text">operational</span>.
               {weather && <span className="hidden sm:inline ml-2 text-sm font-normal text-muted-foreground">{weather.temp}°C · {weather.description}</span>}
             </h2>
           </div>

@@ -335,7 +335,7 @@ export default function KeyEventsDiary() {
                 onView={setView}
                 date={date}
                 onNavigate={setDate}
-                views={["month", "week", "day", "agenda"]}
+                views={isMobile ? ["agenda", "day", "month"] : ["month", "week", "day", "agenda"]}
                 messages={{ agenda: "Events" }}
                 components={{ toolbar: PlannerToolbar, event: EventChip as any }}
                 popup

@@ -320,7 +320,7 @@ export default function KeyEventsDiary() {
           </div>
         </div>
 
-        <Card className="p-3 flex-1 min-h-0 flex flex-col">
+        <Card className="p-2 sm:p-3 flex-1 min-h-0 flex flex-col">
           {loading ? (
             <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
           ) : (

@@ -27,7 +27,7 @@ const integrationMeta: Record<string, { label: string; icon: React.ElementType }
 export const MobileMenuButton = ({ onClick }: { onClick: () => void }) => (
   <button
     onClick={onClick}
-    className="lg:hidden flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+    className="md:hidden flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
     aria-label="Open menu"
   >
     <Menu className="h-5 w-5" />
@@ -123,7 +123,7 @@ const Sidebar = ({
         {/* Close button on mobile */}
         <button
           onClick={onMobileClose}
-          className="lg:hidden flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+          className="md:hidden flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
         >
           <X className="h-4 w-4" />
         </button>
@@ -294,13 +294,13 @@ const Sidebar = ({
   return (
     <>
       {/* Desktop sidebar */}
-      <div className="hidden lg:block fixed left-0 top-0 z-40 h-screen">
+      <div className="hidden md:block fixed left-0 top-0 z-40 h-screen">
         {sidebarContent}
       </div>
 
       {/* Mobile sidebar overlay */}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-50">
+        <div className="md:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onMobileClose} />
           <div className="relative z-10 h-full w-64 shadow-2xl animate-in slide-in-from-left duration-200">
             {sidebarContent}

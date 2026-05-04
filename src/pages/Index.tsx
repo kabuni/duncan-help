@@ -499,7 +499,11 @@ const Index = () => {
       <VoiceModeOverlay
         open={voiceOpen}
         onClose={() => setVoiceOpen(false)}
-        chat={{ messages, isLoading, send: handleChatSubmit as any }}
+        chat={{
+          messages,
+          isLoading,
+          send: (text: string) => handleChatSubmit(text, []),
+        }}
       />
     </div>
   );

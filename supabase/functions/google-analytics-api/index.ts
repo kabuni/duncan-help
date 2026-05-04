@@ -330,6 +330,11 @@ serve(async (req) => {
       await supabaseAdmin.from("google_analytics_tokens").update({ property_id: propertyId }).eq("id", tokenData.id);
     }
 
+    if (action === "home_summary") {
+      const summary = await getHomeSummary(accessToken, propertyId);
+      return new Response(JSON.stringify({ connected: true, ...summary }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const dashboard = await getDashboard(accessToken, propertyId);
 
     if (action === "askQuestion") {

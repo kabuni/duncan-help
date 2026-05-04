@@ -85,6 +85,110 @@ function fmtDateTime(iso: string | null) {
   return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+function startOfDayLocal(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function addDaysLocal(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function formatMobileTime(item: CalItem, viewTz: ViewTz) {
+  const ev = item.resource.data;
+  if (ev.all_day) return "All day";
+  if (viewTz === "both") {
+    return `UK ${formatTimeInTz(ev.start_at, "Europe/London")} · IN ${formatTimeInTz(ev.start_at, "Asia/Kolkata")}`;
+  }
+  return formatTimeInTz(ev.start_at, viewTz);
+}
+
+function MobileAgenda({
+  items,
+  date,
+  onNavigate,
+  onSelectItem,
+  viewTz,
+}: {
+  items: CalItem[];
+  date: Date;
+  onNavigate: (date: Date) => void;
+  onSelectItem: (item: CalItem) => void;
+  viewTz: ViewTz;
+}) {
+  const rangeStart = startOfDayLocal(date);
+  const rangeEnd = addDaysLocal(rangeStart, 30);
+  const visibleItems = items
+    .filter((item) => item.end >= rangeStart && item.start < rangeEnd)
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+  const groupedItems = visibleItems.reduce<Record<string, CalItem[]>>((acc, item) => {
+    const key = format(item.start, "yyyy-MM-dd");
+    acc[key] = acc[key] || [];
+    acc[key].push(item);
+    return acc;
+  }, {});
+
+  return (
+    <div className="flex h-full min-h-[58vh] flex-col overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-border pb-3">
+        <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => onNavigate(addDaysLocal(date, -30))} aria-label="Previous 30 days">
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="min-w-0 flex-1 text-center">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Events</div>
+          <div className="truncate text-sm font-semibold"><span className="sm:hidden">{format(rangeStart, "MMM d")} – {format(addDaysLocal(rangeStart, 29), "MMM d")}</span><span className="hidden sm:inline">{format(rangeStart, "MMM d")} – {format(addDaysLocal(rangeStart, 29), "MMM d, yyyy")}</span></div>
+        </div>
+        <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => onNavigate(addDaysLocal(date, 30))} aria-label="Next 30 days">
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="sm" className="h-10 shrink-0 px-2 sm:px-3 text-xs sm:text-sm" onClick={() => onNavigate(new Date())}>
+          Today
+        </Button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto pt-3">
+        {visibleItems.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No events in this window.</div>
+        ) : (
+          <div className="space-y-3">
+            {Object.entries(groupedItems).map(([day, dayItems]) => (
+              <section key={day} className="overflow-hidden rounded-md border border-border bg-card">
+                <div className="border-b border-border bg-muted/40 px-3 py-2 text-sm font-semibold text-muted-foreground">
+                  {format(dayItems[0].start, "EEE MMM dd")}
+                </div>
+                <div className="divide-y divide-border">
+                  {dayItems.map((item) => {
+                    const ev = item.resource.data;
+                    const meta = getCategoryMeta(ev.category);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => onSelectItem(item)}
+                        className="flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: `hsl(${meta.hsl})` }} aria-hidden />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold leading-snug text-foreground break-words">{meta.icon} {ev.event_name || ev.title}</span>
+                          <span className="mt-1 block text-xs leading-snug text-muted-foreground break-words">{formatMobileTime(item, viewTz)}</span>
+                          {ev.owner && <span className="mt-1 block text-xs leading-snug text-muted-foreground break-words">{ev.owner}</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function KeyEventsDiary() {
   const { events, cards, status, lastSync, loading, syncing, refresh, connect, sync } = useKeyEvents();
   const { isAdmin } = useIsAdmin();
@@ -227,13 +331,13 @@ export default function KeyEventsDiary() {
 
   return (
     <AppLayout>
-      <div className="max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 min-h-[calc(100dvh-3.5rem)]">
+      <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 min-h-[calc(100dvh-3.5rem)] overflow-x-hidden">
         <header className="space-y-1 shrink-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight">Duncan Planner</h1>
-            <Badge variant="outline" className="font-mono text-[10px] uppercase">execution system</Badge>
+            <Badge variant="outline" className="hidden sm:inline-flex font-mono text-[10px] uppercase">execution system</Badge>
           </div>
-          <p className="text-xs md:text-sm text-muted-foreground">
+          <p className="text-xs md:text-sm text-muted-foreground break-words">
             Strategic events synced from <span className="font-semibold">Duncan | Planner</span>. Goal target dates appear as pinned markers.
           </p>
         </header>
@@ -246,7 +350,7 @@ export default function KeyEventsDiary() {
                 <div className="text-sm font-semibold truncate">
                   {status?.connected ? `Connected as ${status.google_account_email || "Duncan"}` : "Not connected"}
                 </div>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-[11px] text-muted-foreground break-words [overflow-wrap:anywhere]">
                   {status?.calendar_id
                     ? <>Calendar: <span className="font-mono">{status.calendar_name}</span></>
                     : status?.connected
@@ -256,13 +360,13 @@ export default function KeyEventsDiary() {
                 </div>
               </div>
             </div>
-             <div className="flex items-stretch gap-2 flex-wrap w-full lg:w-auto lg:justify-end">
+             <div className="flex items-stretch gap-2 flex-wrap w-full min-w-0 lg:w-auto lg:justify-end">
               <ToggleGroup
                 type="single"
                 size="sm"
                 value={viewTz}
                 onValueChange={(v) => v && setViewTz(v as ViewTz)}
-                className="h-8 w-full sm:w-auto border border-border rounded-md p-0.5"
+                className="h-8 w-full min-w-0 sm:w-auto border border-border rounded-md p-0.5"
               >
                 <ToggleGroupItem value="Europe/London" className="h-7 flex-1 sm:flex-none px-2 text-xs gap-1" aria-label="View in UK time">
                   <span aria-hidden>🇬🇧</span> UK
@@ -305,8 +409,8 @@ export default function KeyEventsDiary() {
           </div>
         </Card>
 
-        <div className="shrink-0 -mx-4 lg:mx-0 px-4 lg:px-1 overflow-x-auto scrollbar-thin">
-          <div className="flex items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground whitespace-nowrap min-w-max lg:flex-wrap lg:min-w-0 lg:whitespace-normal">
+        <div className="shrink-0 min-w-0 overflow-hidden lg:px-1">
+          <div className="flex items-center gap-x-2 gap-y-1.5 text-[10px] sm:text-[11px] text-muted-foreground overflow-x-auto pb-1 whitespace-nowrap scrollbar-thin lg:flex-wrap lg:overflow-visible lg:pb-0 lg:whitespace-normal">
             <span className="font-mono uppercase tracking-wider text-[10px] shrink-0">Categories</span>
             {Object.entries(CATEGORY_META).map(([key, meta]) => (
               <span key={key} className="inline-flex items-center gap-1.5 shrink-0">
@@ -322,42 +426,52 @@ export default function KeyEventsDiary() {
           </div>
         </div>
 
-        <Card className="p-2 sm:p-3 flex-1 min-h-0 flex flex-col overflow-hidden">
+        <Card className="p-2 sm:p-3 flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
           {loading ? (
             <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
           ) : (
             <div className="flex-1 min-h-[60vh] md:min-h-[420px] min-w-0 overflow-hidden">
-              <RBCalendar
-                localizer={localizer}
-                events={calItems}
-                startAccessor="start"
-                endAccessor="end"
-                allDayAccessor="allDay"
-                view={view}
-                onView={setView}
-                date={date}
-                onNavigate={setDate}
-                views={isMobile ? ["agenda", "day", "month"] : ["month", "week", "day", "agenda"]}
-                messages={{ agenda: "Events" }}
-                components={{ toolbar: PlannerToolbar, event: EventChip as any }}
-                popup
-                selectable={isAdmin}
-                onSelectSlot={(slot: any) => {
-                  if (!isAdmin) return;
-                  setAddDate(slot.start instanceof Date ? slot.start : new Date(slot.start));
-                  setAddOpen(true);
-                }}
-                eventPropGetter={eventPropGetter as any}
-                onSelectEvent={handleSelectItem as any}
-                tooltipAccessor={(item: any) => {
-                  if (item.resource?.kind === "goal") return `Goal target: ${item.resource.data.name}`;
-                  const ev = item.resource?.data as KeyEvent;
-                  const uk = formatTimeInTz(ev.start_at, "Europe/London");
-                  const ind = formatTimeInTz(ev.start_at, "Asia/Kolkata");
-                  const times = ev.all_day ? "All day" : `UK ${uk} · IN ${ind}`;
-                  return `${ev.event_name || ev.title} · ${times}${ev.owner ? ` · ${ev.owner}` : ""}`;
-                }}
-              />
+              {isMobile ? (
+                <MobileAgenda
+                  items={calItems}
+                  date={date}
+                  onNavigate={setDate}
+                  onSelectItem={handleSelectItem}
+                  viewTz={viewTz}
+                />
+              ) : (
+                <RBCalendar
+                  localizer={localizer}
+                  events={calItems}
+                  startAccessor="start"
+                  endAccessor="end"
+                  allDayAccessor="allDay"
+                  view={view}
+                  onView={setView}
+                  date={date}
+                  onNavigate={setDate}
+                  views={["month", "week", "day", "agenda"]}
+                  messages={{ agenda: "Events" }}
+                  components={{ toolbar: PlannerToolbar, event: EventChip as any }}
+                  popup
+                  selectable={isAdmin}
+                  onSelectSlot={(slot: any) => {
+                    if (!isAdmin) return;
+                    setAddDate(slot.start instanceof Date ? slot.start : new Date(slot.start));
+                    setAddOpen(true);
+                  }}
+                  eventPropGetter={eventPropGetter as any}
+                  onSelectEvent={handleSelectItem as any}
+                  tooltipAccessor={(item: any) => {
+                    if (item.resource?.kind === "goal") return `Goal target: ${item.resource.data.name}`;
+                    const ev = item.resource?.data as KeyEvent;
+                    const uk = formatTimeInTz(ev.start_at, "Europe/London");
+                    const ind = formatTimeInTz(ev.start_at, "Asia/Kolkata");
+                    const times = ev.all_day ? "All day" : `UK ${uk} · IN ${ind}`;
+                    return `${ev.event_name || ev.title} · ${times}${ev.owner ? ` · ${ev.owner}` : ""}`;
+                  }}
+                />
+              )}
             </div>
           )}
         </Card>

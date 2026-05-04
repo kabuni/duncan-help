@@ -109,9 +109,9 @@ export function useWorkstreamsStats() {
           .eq("acceptance_status", "accepted"),
       ]);
 
-      const all = allRes.data ?? [];
+      const all = (allRes.data ?? []) as Array<{ id: string; status: string }>;
       const total = all.length;
-      const green = all.filter((c: any) => c.status === "green").length;
+      const green = all.filter((c) => c.status === "green").length;
       const onTrackPct = total > 0 ? Math.round((green / total) * 100) : 0;
 
       return {

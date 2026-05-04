@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useKeyEvents, type KeyEvent, type WorkstreamCard } from "@/hooks/useKeyEvents";
 import { useIsAdmin } from "@/hooks/useUserRoles";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { RefreshCw, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -41,25 +42,25 @@ function PlannerToolbar(props: any) {
   const { label, onNavigate, onView, view, views } = props;
   return (
     <div className="rbc-toolbar">
-      <div className="flex items-center gap-1">
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onNavigate("PREV")} aria-label="Previous">
+      <div className="flex items-center gap-1 min-w-0">
+        <Button variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={() => onNavigate("PREV")} aria-label="Previous">
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="rbc-toolbar-label px-2 min-w-[140px] text-center">{label}</span>
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onNavigate("NEXT")} aria-label="Next">
+        <span className="rbc-toolbar-label px-1 sm:px-2 min-w-[100px] sm:min-w-[140px] text-center truncate">{label}</span>
+        <Button variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={() => onNavigate("NEXT")} aria-label="Next">
           <ChevronRight className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="sm" className="h-7 ml-1 text-xs" onClick={() => onNavigate("TODAY")}>
+        <Button variant="ghost" size="sm" className="h-7 ml-1 text-xs shrink-0" onClick={() => onNavigate("TODAY")}>
           Today
         </Button>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 flex-wrap">
         {(views as string[]).map((v) => (
           <Button
             key={v}
             variant={view === v ? "default" : "outline"}
             size="sm"
-            className="h-7 text-xs capitalize"
+            className="h-7 text-xs capitalize px-2"
             onClick={() => onView(v)}
           >
             {v}
@@ -87,8 +88,9 @@ function fmtDateTime(iso: string | null) {
 export default function KeyEventsDiary() {
   const { events, cards, status, lastSync, loading, syncing, refresh, connect, sync } = useKeyEvents();
   const { isAdmin } = useIsAdmin();
+  const isMobile = useIsMobile();
   const [params, setParams] = useSearchParams();
-  const [view, setView] = useState<View>("month");
+  const [view, setView] = useState<View>(() => (typeof window !== "undefined" && window.innerWidth < 768) ? "agenda" : "month");
   const [date, setDate] = useState<Date>(new Date());
   const [riskFilter, setRiskFilter] = useState<"all" | "atrisk">("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
@@ -225,7 +227,7 @@ export default function KeyEventsDiary() {
 
   return (
     <AppLayout>
-      <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-4 md:py-6 flex flex-col gap-4 h-[calc(100dvh-3.5rem)]">
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 min-h-[calc(100dvh-3.5rem)]">
         <header className="space-y-1 shrink-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight">Duncan Planner</h1>
@@ -318,11 +320,11 @@ export default function KeyEventsDiary() {
           </div>
         </div>
 
-        <Card className="p-3 flex-1 min-h-0 flex flex-col">
+        <Card className="p-2 sm:p-3 flex-1 min-h-0 flex flex-col">
           {loading ? (
             <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
           ) : (
-            <div className="flex-1 min-h-[420px]">
+            <div className="flex-1 min-h-[60vh] md:min-h-[420px]">
               <RBCalendar
                 localizer={localizer}
                 events={calItems}
@@ -333,7 +335,7 @@ export default function KeyEventsDiary() {
                 onView={setView}
                 date={date}
                 onNavigate={setDate}
-                views={["month", "week", "day", "agenda"]}
+                views={isMobile ? ["agenda", "day", "month"] : ["month", "week", "day", "agenda"]}
                 messages={{ agenda: "Events" }}
                 components={{ toolbar: PlannerToolbar, event: EventChip as any }}
                 popup

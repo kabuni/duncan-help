@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useKeyEvents, type KeyEvent, type WorkstreamCard } from "@/hooks/useKeyEvents";
 import { useIsAdmin } from "@/hooks/useUserRoles";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { RefreshCw, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";

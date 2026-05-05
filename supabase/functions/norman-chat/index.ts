@@ -4437,9 +4437,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     const latestUserMessage = [...messages].reverse().find((message: any) => message?.role === "user");
     const latestUserText = extractPlainText(latestUserMessage?.content).trim();
-    const SOURCE_AMBIGUOUS_MEETING_RE = /\bfetch\s+(my\s+)?(latest|recent)?\s*meeting(s|\s+notes)?\b|\b(my\s+)?(latest|recent|today'?s|yesterday'?s|this\s+week'?s)\s+meeting(s|\s+notes)?\b/i;
+    // Broad: any user message mentioning meetings/calls + an intent verb (fetch/get/show/give/what)
+    // OR meeting-notes/summary/discussions phrasing — triggers source disambiguation.
+    const SOURCE_AMBIGUOUS_MEETING_RE = /\b(meeting|meetings|call|calls)\b.*\b(notes?|summary|summaries|discussion|discussions|recording|recordings|transcript|transcripts)\b|\b(fetch|get|show|give\s+me|grab|pull|what\s+were|what\s+did|what\s+meetings)\b.*\b(meeting|meetings|call|calls)\b|\b(my\s+)?(latest|recent|last|today'?s|yesterday'?s|this\s+week'?s)\s+(meeting|meetings|call|calls)\b/i;
     const MEETING_SOURCE_MENTIONED_RE = /\b(gemini|google\s*meet|google-meet|googlemeet|gemini-?notes|plaud)\b/i;
-    const EXPLICIT_OWNERSHIP_MEETING_RE = /\b(meetings?\s+(i\s+)?(attended|hosted|was\s+in|participated\s+in)|meetings?\s+linked\s+to\s+me|my\s+meetings?\s+where\s+i\s+was)\b/i;
+    // Treat "meetings I attended/hosted" the same as other meeting requests — still ask source first.
+    const EXPLICIT_OWNERSHIP_MEETING_RE = /__never_match__/i;
 
     // Check whether the user has ALREADY chosen a source earlier in this conversation.
     // If so, the disambiguation has been satisfied — do not re-trigger the override on

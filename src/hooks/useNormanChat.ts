@@ -29,7 +29,21 @@ const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 const FASTAPI_CHAT_URL = rawApiBaseUrl && rawApiBaseUrl !== "undefined" && rawApiBaseUrl !== "null"
   ? `${rawApiBaseUrl}/norman-chat`
   : null;
-const CHAT_REQUEST_TIMEOUT_MS = 90_000;
+const NORMAL_TIMEOUT_MS = 90_000;
+const HEAVY_TIMEOUT_MS = 300_000;
+const HEAVY_MODES: Mode[] = ["reason", "analyze", "automate", "briefing"];
+
+function isHeavyChatRequest(
+  mode: Mode,
+  input: string,
+  attachments: ChatAttachment[]
+): boolean {
+  return (
+    HEAVY_MODES.includes(mode) ||
+    (input?.length ?? 0) > 300 ||
+    (Array.isArray(attachments) && attachments.length > 0)
+  );
+}
 
 function getChatErrorMessage(error: unknown) {
   if (error instanceof DOMException && error.name === "AbortError") {
@@ -193,6 +207,7 @@ export function useNormanChat() {
   const [extractionProgress, setExtractionProgress] = useState<string | null>(null);
   const { profile } = useProfile();
   const mountedRef = useRef(true);
+  const inflightControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     return () => {
@@ -202,9 +217,24 @@ export function useNormanChat() {
 
   const send = useCallback(
     async (input: string, mode: Mode = "general", attachments: ChatAttachment[] = []) => {
+      // Abort any previous in-flight request to avoid stacked long-running calls
+      if (inflightControllerRef.current) {
+        inflightControllerRef.current.abort();
+        inflightControllerRef.current = null;
+      }
+
       const userMsg: Message = { role: "user", content: input };
       setMessages((prev) => [...prev, userMsg]);
       setIsLoading(true);
+
+      const safeAttachments = Array.isArray(attachments) ? attachments : [];
+      const heavy = isHeavyChatRequest(mode, input, safeAttachments);
+      const timeoutMs = heavy ? HEAVY_TIMEOUT_MS : NORMAL_TIMEOUT_MS;
+      console.log("[chat] timeout:", timeoutMs, "heavy:", heavy);
+
+      if (heavy) {
+        setExtractionProgress("Processing a complex request — this may take up to a minute...");
+      }
 
       let assistantSoFar = "";
 
@@ -225,8 +255,8 @@ export function useNormanChat() {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const controller = new AbortController();
-        const timeoutId = window.setTimeout(() => controller.abort(), CHAT_REQUEST_TIMEOUT_MS);
-        const safeAttachments = Array.isArray(attachments) ? attachments : [];
+        inflightControllerRef.current = controller;
+        const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
         // --- Extract text from non-image attachments server-side ---
         const nonImageAtts = safeAttachments.filter((a) => !a.type.startsWith("image/"));
@@ -341,7 +371,7 @@ export function useNormanChat() {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const controller = new AbortController();
-        const timeoutId = window.setTimeout(() => controller.abort(), CHAT_REQUEST_TIMEOUT_MS);
+        const timeoutId = window.setTimeout(() => controller.abort(), HEAVY_TIMEOUT_MS);
 
         const briefingPrompt = `Generate my personalized morning briefing. Here is the latest data from across our systems:\n\n${JSON.stringify(briefingData, null, 2)}`;
         const apiMessages = [{ role: "user", content: briefingPrompt }];

@@ -570,7 +570,7 @@ const MEETING_TOOLS = [
     type: "function",
     function: {
       name: "list_meetings",
-      description: "Default entry point for any meeting question (summarize, analyze, search, browse). List stored meetings with optional filters. Results are sorted by meeting_date DESC (most recent first). The search is typo-tolerant — it splits the query into words and matches any of them (so 'lightning' will also match misspellings like 'lighting'). Always prefer using from_date/to_date when the user specifies a date so you don't return stale results.",
+      description: "Default entry point for any meeting question (summarize, analyze, search, browse). Returns ONLY the current user's meetings (hosted, fetched, or where they are a participant). Use scope='all' (admins only) to query across the entire company. Sorted by meeting_date DESC.",
       parameters: {
         type: "object",
         properties: {
@@ -579,6 +579,7 @@ const MEETING_TOOLS = [
           search: { type: "string", description: "Keyword(s) to match in title or transcript. Words are matched independently (OR), so partial / misspelled queries still work." },
           from_date: { type: "string", description: "Only return meetings on or after this date (YYYY-MM-DD)." },
           to_date: { type: "string", description: "Only return meetings on or before this date (YYYY-MM-DD)." },
+          scope: { type: "string", enum: ["mine", "all"], description: "'mine' (default) returns only the current user's meetings. 'all' requires admin and returns the full company list — use ONLY when the user explicitly asks for everyone's meetings." },
         },
         required: [],
       },

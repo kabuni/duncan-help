@@ -428,8 +428,14 @@ serve(async (req) => {
       const msgHeaders = msgData.payload?.headers || [];
       const subject = msgHeaders.find((h: any) => h.name.toLowerCase() === "subject")?.value || "";
       const from = msgHeaders.find((h: any) => h.name.toLowerCase() === "from")?.value || "";
+      const toHeader = msgHeaders.find((h: any) => h.name.toLowerCase() === "to")?.value || "";
+      const ccHeader = msgHeaders.find((h: any) => h.name.toLowerCase() === "cc")?.value || "";
       const dateHeader = msgHeaders.find((h: any) => h.name.toLowerCase() === "date")?.value || "";
       const senderEmail = extractSenderEmail(from);
+      const attendeeEmails = Array.from(new Set([
+        ...extractEmailList(toHeader),
+        ...extractEmailList(ccHeader),
+      ]));
 
       // Extract email body text (may contain transcript)
       const bodyText = extractPlainTextBody(msgData.payload);

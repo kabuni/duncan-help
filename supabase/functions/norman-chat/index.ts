@@ -2945,8 +2945,10 @@ async function executeMeetingTool(
   toolName: string,
   args: any,
   supabaseAdmin: any,
+  supabaseUser: any,
   supabaseUrl: string,
-  authHeader: string
+  authHeader: string,
+  userId: string
 ): Promise<any> {
   switch (toolName) {
     case "fetch_plaud_meetings": {
@@ -2964,46 +2966,65 @@ async function executeMeetingTool(
     }
 
     case "list_meetings": {
-      let query = supabaseAdmin
-        .from("meetings")
-        .select("id, title, meeting_date, status, source, summary, participants, sender_email, created_at")
-        .order("meeting_date", { ascending: false, nullsFirst: false })
-        .limit(args.limit || 20);
+      const scope = args.scope === "all" ? "all" : "mine";
+      const limit = args.limit || 20;
 
-      if (args.status) query = query.eq("status", args.status);
-      if (args.from_date) query = query.gte("meeting_date", args.from_date);
-      if (args.to_date) query = query.lte("meeting_date", `${args.to_date}T23:59:59`);
+      // Use RPC to get the base scoped set (RLS-safe, deterministic ordering)
+      const { data: baseRows, error: rpcErr } = await supabaseUser.rpc("get_my_meetings", {
+        _limit: 500, // pull a wider set so we can filter client-side
+        _scope: scope,
+      });
+      if (rpcErr) throw new Error(`Failed to list meetings: ${rpcErr.message}`);
 
+      let rows = (baseRows || []) as any[];
+
+      if (args.status) rows = rows.filter((r) => r.status === args.status);
+      if (args.from_date) {
+        const from = new Date(args.from_date).getTime();
+        rows = rows.filter((r) => r.meeting_date && new Date(r.meeting_date).getTime() >= from);
+      }
+      if (args.to_date) {
+        const to = new Date(`${args.to_date}T23:59:59`).getTime();
+        rows = rows.filter((r) => r.meeting_date && new Date(r.meeting_date).getTime() <= to);
+      }
       if (args.search) {
-        // Typo-tolerant: split into words >=4 chars and OR each across title + transcript.
-        // Falls back to the raw query if no usable tokens found.
         const tokens = String(args.search)
           .split(/\s+/)
-          .map((t) => t.replace(/[^\w]/g, ""))
+          .map((t) => t.replace(/[^\w]/g, "").toLowerCase())
           .filter((t) => t.length >= 4);
-        const escape = (s: string) => s.replace(/[%,()]/g, "");
-        const terms = tokens.length > 0 ? tokens : [String(args.search)];
-        const orClauses = terms
-          .flatMap((t) => [
-            `title.ilike.%${escape(t)}%`,
-            `transcript.ilike.%${escape(t)}%`,
-          ])
-          .join(",");
-        query = query.or(orClauses);
+        const terms = tokens.length > 0 ? tokens : [String(args.search).toLowerCase()];
+        rows = rows.filter((r) => {
+          const hay = `${r.title || ""} ${r.transcript || ""}`.toLowerCase();
+          return terms.some((t) => hay.includes(t));
+        });
       }
 
-      const { data, error } = await query;
-      if (error) throw new Error(`Failed to list meetings: ${error.message}`);
-      return { count: (data || []).length, meetings: data || [] };
+      const trimmed = rows.slice(0, limit).map((r) => ({
+        id: r.id,
+        title: r.title,
+        meeting_date: r.meeting_date,
+        status: r.status,
+        source: r.source,
+        summary: r.summary,
+        participants: r.participants,
+        sender_email: r.sender_email,
+        created_at: r.created_at,
+      }));
+
+      return { count: trimmed.length, scope, meetings: trimmed };
     }
 
     case "get_meeting": {
-      const { data, error } = await supabaseAdmin
+      // Fetch via the user client so RLS enforces access
+      const { data, error } = await supabaseUser
         .from("meetings")
         .select("*")
         .eq("id", args.meeting_id)
-        .single();
-      if (error) throw new Error(`Meeting not found: ${error.message}`);
+        .maybeSingle();
+      if (error) throw new Error(`Failed to load meeting: ${error.message}`);
+      if (!data) {
+        return { error: "Meeting not found or you do not have access to it." };
+      }
       return {
         ...data,
         transcript: data.transcript ? data.transcript.slice(0, 40000) : null,

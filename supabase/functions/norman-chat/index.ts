@@ -4493,20 +4493,37 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const meeting = Array.isArray(data) ? data[0] : null;
 
       const label = source === "gemini" ? "Google Meet" : "Plaud";
-      const disclosure = source === "gemini"
-        ? "Using Google Meet notes from gemini-notes@google.com. These are source-based notes, not ownership-linked."
-        : "Using latest Plaud notes. These are source-based notes, not ownership-linked.";
 
       if (!meeting) {
-        return `${disclosure}\n\nI couldn't find any recent ${label} meeting notes.`;
+        return `I couldn't find any recent ${label} meeting notes.`;
       }
 
       const date = meeting.meeting_date ? new Date(meeting.meeting_date).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Date unavailable";
       const analysis = meeting.analysis && typeof meeting.analysis === "object" ? meeting.analysis : null;
-      const notes = String(meeting.transcript || meeting.summary || analysis?.summary || "").trim();
+      let notes = String(meeting.transcript || meeting.summary || analysis?.summary || "").trim();
+
+      // Strip Gmail/Gemini email boilerplate so the output stays clean
+      if (source === "gemini" && notes) {
+        // Remove everything from common footer markers onward
+        const footerPatterns = [
+          /\n\s*Meeting records\s+Document\s+Notes by Gemini[\s\S]*$/i,
+          /\n\s*Is the ['"]?Next steps['"]? section in this email helpful\?[\s\S]*$/i,
+          /\n\s*Google LLC,[\s\S]*$/i,
+          /\n\s*You have received this email because[\s\S]*$/i,
+          /\n\s*The content was auto-generated[^\n]*\n?/i,
+          /\n\s*These notes have been sent to[^\n]*\n?/i,
+          /\n\s*Open meeting notes\s*\n?/i,
+          /^\s*Notes from ['"][^'"]+['"]\s*\n?/im,
+        ];
+        for (const re of footerPatterns) {
+          notes = notes.replace(re, "").trim();
+        }
+      }
+
       const body = notes || "No transcript or notes content is available for this meeting yet.";
 
-      return `${disclosure}\n\n## ${meeting.title || "Latest meeting notes"}\n\n- **Date:** ${date}\n- **Source:** ${label}\n\n${body.slice(0, 40000)}`;
+      return `## ${meeting.title?.trim() || "Latest meeting notes"}\n\n- **Date:** ${date}\n- **Source:** ${label}\n\n${body.slice(0, 40000)}`;
+
     };
 
     if (sourceChosenForPendingMeeting || explicitSourceMeetingRequest) {

@@ -2968,6 +2968,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      backfill_meeting_ownership: {
+        Args: never
+        Returns: {
+          host_set: boolean
+          matched_users: number
+          meeting_id: string
+          participants_inserted: number
+          unmatched_names: string[]
+        }[]
+      }
       call_edge_function_with_service_role: {
         Args: { body?: Json; function_name: string }
         Returns: number

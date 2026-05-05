@@ -150,22 +150,46 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
         <TileShell delay={0.1}>
           <TileHeader
             icon={Share2}
-            label="Social · 7d"
-            action={
-              <button onClick={() => navigate("/integrations")} className="text-[10px] text-primary hover:underline">
-                Connect
-              </button>
-            }
+            label={`Social · latest week${social.data?.fetchedAt ? ` · synced ${new Date(social.data.fetchedAt).toLocaleDateString()}` : ""}`}
           />
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <p className="text-xs">
-              Connect LinkedIn or Instagram to surface follower growth and post activity here.
+          {social.isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          ) : !social.data?.accounts.length ? (
+            <p className="text-xs text-muted-foreground">
+              Waiting for Alex's social stats sheet to land in Duncan's inbox.
             </p>
-            <div className="grid grid-cols-2 gap-3 opacity-60">
-              <Stat label="LinkedIn" value="—" hint="Followers / week" />
-              <Stat label="Instagram" value="—" hint="Followers / week" />
+          ) : (
+            <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
+              {social.data.accounts.map((a) => {
+                const delta = a.delta_followers;
+                return (
+                  <div key={a.account} className="flex items-center justify-between gap-3 border-b border-border/40 pb-1.5 last:border-0 last:pb-0">
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-foreground truncate">{a.account}</div>
+                      <div className="text-[10px] text-muted-foreground truncate">
+                        {[
+                          a.likes != null && `${formatNumber(a.likes)} likes`,
+                          a.comments != null && `${formatNumber(a.comments)} comments`,
+                          a.shares != null && `${formatNumber(a.shares)} shares`,
+                        ].filter(Boolean).join(" · ") || "—"}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-bold text-foreground">
+                        {a.followers != null ? formatNumber(a.followers) : "—"}
+                      </div>
+                      {delta != null && delta !== 0 && (
+                        <div className={`text-[10px] inline-flex items-center gap-0.5 ${delta >= 0 ? "text-norman-success" : "text-destructive"}`}>
+                          {delta >= 0 ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+                          {delta >= 0 ? "+" : ""}{formatNumber(delta)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
+          )}
         </TileShell>
       </div>
 

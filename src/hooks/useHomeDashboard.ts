@@ -55,13 +55,13 @@ export function useSocialStats() {
     queryKey: ["home-dashboard", "social"],
     staleTime: FIVE_MIN,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("social_stats_snapshots")
         .select("account,followers,posts,likes,comments,shares,engagement_rate,prev_followers,prev_likes,week_label,fetched_at,source_filename")
         .order("fetched_at", { ascending: false })
         .limit(50);
       if (error) throw error;
-      const rows = data ?? [];
+      const rows = (data ?? []) as any[];
       const latestBatchTs = rows[0]?.fetched_at ?? null;
       const filename = rows[0]?.source_filename ?? null;
       const seen = new Set<string>();

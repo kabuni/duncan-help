@@ -2142,6 +2142,84 @@ export type Database = {
           },
         ]
       }
+      social_stats_snapshots: {
+        Row: {
+          account: string
+          channel: string | null
+          comments: number | null
+          created_at: string
+          engagement_rate: number | null
+          fetched_at: string
+          followers: number | null
+          id: string
+          impressions: number | null
+          likes: number | null
+          posts: number | null
+          prev_comments: number | null
+          prev_followers: number | null
+          prev_likes: number | null
+          prev_posts: number | null
+          prev_shares: number | null
+          raw: Json | null
+          shares: number | null
+          source_email_date: string | null
+          source_filename: string | null
+          source_message_id: string | null
+          week_label: string | null
+          week_start: string | null
+        }
+        Insert: {
+          account: string
+          channel?: string | null
+          comments?: number | null
+          created_at?: string
+          engagement_rate?: number | null
+          fetched_at?: string
+          followers?: number | null
+          id?: string
+          impressions?: number | null
+          likes?: number | null
+          posts?: number | null
+          prev_comments?: number | null
+          prev_followers?: number | null
+          prev_likes?: number | null
+          prev_posts?: number | null
+          prev_shares?: number | null
+          raw?: Json | null
+          shares?: number | null
+          source_email_date?: string | null
+          source_filename?: string | null
+          source_message_id?: string | null
+          week_label?: string | null
+          week_start?: string | null
+        }
+        Update: {
+          account?: string
+          channel?: string | null
+          comments?: number | null
+          created_at?: string
+          engagement_rate?: number | null
+          fetched_at?: string
+          followers?: number | null
+          id?: string
+          impressions?: number | null
+          likes?: number | null
+          posts?: number | null
+          prev_comments?: number | null
+          prev_followers?: number | null
+          prev_likes?: number | null
+          prev_posts?: number | null
+          prev_shares?: number | null
+          raw?: Json | null
+          shares?: number | null
+          source_email_date?: string | null
+          source_filename?: string | null
+          source_message_id?: string | null
+          week_label?: string | null
+          week_start?: string | null
+        }
+        Relationships: []
+      }
       supplier_contacts: {
         Row: {
           created_at: string

@@ -29,7 +29,21 @@ const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 const FASTAPI_CHAT_URL = rawApiBaseUrl && rawApiBaseUrl !== "undefined" && rawApiBaseUrl !== "null"
   ? `${rawApiBaseUrl}/norman-chat`
   : null;
-const CHAT_REQUEST_TIMEOUT_MS = 90_000;
+const NORMAL_TIMEOUT_MS = 90_000;
+const HEAVY_TIMEOUT_MS = 300_000;
+const HEAVY_MODES: Mode[] = ["reason", "analyze", "automate", "briefing"];
+
+function isHeavyChatRequest(
+  mode: Mode,
+  input: string,
+  attachments: ChatAttachment[]
+): boolean {
+  return (
+    HEAVY_MODES.includes(mode) ||
+    (input?.length ?? 0) > 300 ||
+    (Array.isArray(attachments) && attachments.length > 0)
+  );
+}
 
 function getChatErrorMessage(error: unknown) {
   if (error instanceof DOMException && error.name === "AbortError") {

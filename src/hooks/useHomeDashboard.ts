@@ -33,6 +33,63 @@ export type WorkstreamsStats = {
   myOpen: number;
 };
 
+export type SocialStats = {
+  fetchedAt: string | null;
+  sourceFilename: string | null;
+  accounts: Array<{
+    account: string;
+    followers: number | null;
+    posts: number | null;
+    likes: number | null;
+    comments: number | null;
+    shares: number | null;
+    engagement_rate: number | null;
+    delta_followers: number | null;
+    delta_likes: number | null;
+    week_label: string | null;
+  }>;
+};
+
+export function useSocialStats() {
+  return useQuery<SocialStats>({
+    queryKey: ["home-dashboard", "social"],
+    staleTime: FIVE_MIN,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("social_stats_snapshots")
+        .select("account,followers,posts,likes,comments,shares,engagement_rate,prev_followers,prev_likes,week_label,fetched_at,source_filename")
+        .order("fetched_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      const rows = data ?? [];
+      const latestBatchTs = rows[0]?.fetched_at ?? null;
+      const filename = rows[0]?.source_filename ?? null;
+      const seen = new Set<string>();
+      const accounts = rows
+        .filter((r) => r.fetched_at === latestBatchTs)
+        .filter((r) => {
+          const k = (r.account || "").toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        })
+        .map((r) => ({
+          account: r.account,
+          followers: r.followers,
+          posts: r.posts,
+          likes: r.likes,
+          comments: r.comments,
+          shares: r.shares,
+          engagement_rate: r.engagement_rate,
+          delta_followers: r.followers != null && r.prev_followers != null ? Number(r.followers) - Number(r.prev_followers) : null,
+          delta_likes: r.likes != null && r.prev_likes != null ? Number(r.likes) - Number(r.prev_likes) : null,
+          week_label: r.week_label,
+        }));
+      return { fetchedAt: latestBatchTs, sourceFilename: filename, accounts };
+    },
+  });
+}
+
 export type ProjectsStats = {
   active: number;
   filesIndexed: number;

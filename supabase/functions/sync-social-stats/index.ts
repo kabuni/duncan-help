@@ -20,7 +20,7 @@ async function getAccessToken(admin: any): Promise<string | null> {
   const clientSecret = Deno.env.get("GMAIL_CLIENT_SECRET");
   if (!clientId || !clientSecret) return null;
 
-  const { data: t } = await admin.from("gmail_tokens").select("*").limit(1).maybeSingle();
+  const { data: t } = await admin.from("gmail_tokens").select("*").eq("email_address", "duncan@kabuni.com").maybeSingle();
   if (!t) return null;
 
   if (new Date(t.token_expiry) <= new Date()) {

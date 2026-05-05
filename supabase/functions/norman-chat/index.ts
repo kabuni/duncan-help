@@ -36,10 +36,11 @@ Your capabilities:
 5. Passing more than 5 meetings into analyze_meetings is NOT ALLOWED unless the user EXPLICITLY asks for more (e.g. "analyze all meetings", "last 2 weeks in detail") — and even then, stay within safe limits per call (batch if needed).
 
 **STRICT MEETING TOOL ROUTING (HARD RULE — NOT a suggestion):**
-- **SOURCE DISAMBIGUATION (ASK FIRST):** For ANY query like "fetch my latest meeting", "my latest meeting notes", "latest meeting", "recent meeting", "my meetings", "meeting notes" — if the user has NOT explicitly mentioned a source (Google Meet / Gemini / gemini-notes / Plaud), you MUST NOT call any meeting tool yet. Instead, reply with EXACTLY this question and stop: "Which source would you like the latest meeting notes from — **Google Meet (Gemini notes from gemini-notes@google.com)** or **Plaud**?" Wait for the user's answer before calling any tool.
+- **SOURCE DISAMBIGUATION (ASK FIRST):** For ANY query like "fetch my latest meeting", "my latest meeting notes", "latest meeting", "recent meeting", "my meetings", "meeting notes" — if the user has NOT explicitly mentioned a source (Google Meet / Gemini / gemini-notes / Plaud), you MUST NOT call any meeting tool yet. Instead, reply with EXACTLY this question and stop: "Which source should I use — **Google Meet** or **Plaud**?" Wait for the user's answer before calling any tool.
 - Once the user picks a source (or mentioned it up-front):
   - **Gemini / Google Meet** → call \`list_meetings_by_source\` with \`source="gemini"\` (this filters to notes from gemini-notes@google.com / source=google_meet). Then \`get_meeting\` on the most recent id.
   - **Plaud** → call \`list_meetings_by_source\` with \`source="plaud"\`. Then \`get_meeting\` on the most recent id.
+- When the user asked for latest meeting notes and then chooses a source, fetch immediately. DO NOT ask whether they want a summary, full notes, paste, a doc, or Notion. Return the notes/transcript directly; if only a summary exists, say the full transcript is unavailable and show the summary.
 - Only when the user EXPLICITLY asks for "my meetings where I was a participant", "meetings I attended", "meetings linked to me" (i.e. ownership semantics, not source semantics):
   1. Call list_meetings FIRST with scope="mine".
   2. You MUST NOT call analyze_meetings, search_meeting_transcripts, get_meeting, or get_operational_summary BEFORE list_meetings has returned results in the current turn.
@@ -645,7 +646,7 @@ const MEETING_TOOLS = [
     type: "function",
     function: {
       name: "list_meetings_by_source",
-      description: "FALLBACK ONLY. Lists recent meetings by ingestion source (gemini or plaud), regardless of ownership. Use ONLY after list_meetings(scope='mine') returned empty AND the user has confirmed they want to see source-based results, OR the user explicitly asks for 'gemini notes' / 'plaud recordings'. Results are NOT the user's meetings — they are unattributed company-wide notes from that source. Always disclose this clearly to the user.",
+      description: "FALLBACK ONLY. Lists recent meetings by ingestion source (gemini or plaud), regardless of ownership. Use ONLY after list_meetings(scope='mine') returned empty AND the user has confirmed they want to see source-based results, OR the user explicitly asks for 'gemini notes' / 'Google Meet notes' / 'plaud recordings'. For latest meeting notes, use limit=1 and return the notes directly without asking summary/full/paste/doc follow-ups. Results are NOT the user's meetings — they are unattributed company-wide notes from that source. Always disclose this clearly to the user.",
       parameters: {
         type: "object",
         properties: {

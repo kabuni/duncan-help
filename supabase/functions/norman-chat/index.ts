@@ -632,6 +632,23 @@ const MEETING_TOOLS = [
   {
     type: "function",
     function: {
+      name: "list_meetings_by_source",
+      description: "FALLBACK ONLY. Lists recent meetings by ingestion source (gemini or plaud), regardless of ownership. Use ONLY after list_meetings(scope='mine') returned empty AND the user has confirmed they want to see source-based results, OR the user explicitly asks for 'gemini notes' / 'plaud recordings'. Results are NOT the user's meetings — they are unattributed company-wide notes from that source. Always disclose this clearly to the user.",
+      parameters: {
+        type: "object",
+        properties: {
+          source: { type: "string", enum: ["gemini", "plaud"], description: "Which ingestion source to pull from." },
+          limit: { type: "number", description: "Max results (default 10, max 25)." },
+          from_date: { type: "string", description: "YYYY-MM-DD lower bound on meeting_date." },
+          to_date: { type: "string", description: "YYYY-MM-DD upper bound on meeting_date." },
+        },
+        required: ["source"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "search_meeting_transcripts",
       description: "Search across all meeting transcripts to find discussions about a specific topic. Use this when the user asks 'What did we discuss about X?' or 'When did we talk about Y?'",
       parameters: {

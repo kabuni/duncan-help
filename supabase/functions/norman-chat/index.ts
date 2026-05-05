@@ -4446,11 +4446,15 @@ Format as a natural, readable summary with clear sections. If a section has no d
     // follow-up messages like "Full Notes" or "Paste it here".
     const RECENT_TURN_WINDOW = 8;
     const recentMessages = messages.slice(-RECENT_TURN_WINDOW);
+    const recentPriorUserMessages = recentMessages.filter((m: any) => m?.role === "user" && m !== latestUserMessage);
     const sourceAlreadyChosen = recentMessages.some((m: any) => {
       if (m?.role !== "user") return false;
       const txt = extractPlainText(m?.content);
       return MEETING_SOURCE_MENTIONED_RE.test(txt);
     });
+    const sourceChosenForPendingMeeting =
+      MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
+      recentPriorUserMessages.some((m: any) => SOURCE_AMBIGUOUS_MEETING_RE.test(extractPlainText(m?.content)));
 
     const mustAskMeetingSource =
       SOURCE_AMBIGUOUS_MEETING_RE.test(latestUserText) &&
@@ -4461,6 +4465,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const meetingFlowState = { listedIds: new Set<string>(), userIntent: latestUserText };
     const shouldBypassTools =
       latestUserText.length > 0 &&
+      !sourceChosenForPendingMeeting &&
+      !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
       (latestUserText.length < 20 || SIMPLE_INPUT_PATTERNS.some((pattern) => pattern.test(latestUserText)));
 
     // First call to AI with tools if calendar is connected

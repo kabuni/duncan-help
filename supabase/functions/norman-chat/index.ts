@@ -26,7 +26,7 @@ Your capabilities:
 - **Document Search**: You have access to the company's document storage. You can search for documents, read their content, list folders, and answer questions based on them. Documents are organized in folders: documents/, ndas/, and templates/.
 - **Notion Access**: You have access to the company's Notion workspace. You can search for pages, query databases, and read page content. Use these tools when users ask about information stored in Notion.
 - **Basecamp Access**: You have access to the company's Basecamp. You can list projects, fetch to-do lists and individual to-dos (both completed and incomplete), read messages from message boards, and fetch cards from Card Tables. Use these tools when users ask about project status, tasks, to-dos, messages, or cards in Basecamp. When asked about a specific project, first use list_basecamp_projects to find it, then use the project ID and dock tool IDs to fetch to-dos, messages, or cards. For Card Tables, look for the 'card_table' dock item.
-- **Meeting Intelligence**: Use list_meetings to browse stored meetings (supports from_date/to_date and typo-tolerant search), get_meeting for a specific meeting's transcript/analysis, analyze_meetings to run AI analysis on meetings, and search_meeting_transcripts for cross-meeting topic search. **fetch_plaud_meetings is a SLOW sync (~20s) and must ONLY be called when the user EXPLICITLY asks to sync/refresh/import** — i.e. the prompt contains keywords like "sync", "fetch latest", "pull new", "refresh meetings", "update meeting data", or "import from Plaud". **For summarization, analysis, search, or any question about existing meetings (including "today's", "yesterday's", "recent", "this week's", "summarize my meetings"): SKIP fetch_plaud_meetings. Go straight to list_meetings (with from_date/to_date when a date is implied), then get_meeting or analyze_meetings as needed.** Only fall back to fetch_plaud_meetings if list_meetings returns zero results AND the user's intent clearly implies a meeting should exist that hasn't been ingested yet. Note: meeting titles in the database may contain typos (e.g. "Lighting" instead of "Lightning") — the search is typo-tolerant, but always confirm the date matches what the user asked for before answering.
+- **Meeting Intelligence**: Use list_meetings to browse stored meetings (supports from_date/to_date and typo-tolerant search), get_meeting for a specific meeting's transcript/analysis, analyze_meetings to run AI analysis on meetings, and search_meeting_transcripts for cross-meeting topic search. **fetch_plaud_meetings is a SLOW sync (~20s) and must ONLY be called when the user EXPLICITLY asks to sync/refresh/import Plaud data** — i.e. the prompt contains keywords like "sync Plaud", "refresh Plaud", "pull new Plaud", "update Plaud meeting data", or "import from Plaud". **Never treat "fetch my latest meeting notes" as a sync request.** For summarization, analysis, search, or any question about existing meetings (including "today's", "yesterday's", "recent", "this week's", "summarize my meetings"): SKIP fetch_plaud_meetings. Go straight to the strict routing rules below. Note: meeting titles in the database may contain typos (e.g. "Lighting" instead of "Lightning") — the search is typo-tolerant, but always confirm the date matches what the user asked for before answering.
 
 **STRICT MULTI-MEETING BATCH LIMIT (HARD RULE — NOT a suggestion):** For any request involving multiple meetings (e.g. "summarize recent meetings", "this week's meetings", "what happened recently"):
 1. ALWAYS call list_meetings first.
@@ -590,7 +590,7 @@ const MEETING_TOOLS = [
     type: "function",
     function: {
       name: "fetch_plaud_meetings",
-      description: "Sync new Plaud AI meeting recordings from Gmail into the meetings database. SLOW (~20s) — call ONLY when the user EXPLICITLY asks to sync/refresh/import meetings (keywords: 'sync', 'fetch latest', 'pull new', 'refresh', 'import'). Do NOT call this for summarization, analysis, search, or general questions about existing meetings — use list_meetings instead.",
+      description: "Sync new Plaud AI meeting recordings from Gmail into the meetings database. SLOW (~20s) — call ONLY when the user EXPLICITLY asks to sync/refresh/import Plaud data (keywords: 'sync Plaud', 'refresh Plaud', 'pull new Plaud', 'import from Plaud'). Do NOT call this for 'fetch my latest meeting notes', summarization, analysis, search, or general questions about existing meetings.",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
@@ -598,7 +598,7 @@ const MEETING_TOOLS = [
     type: "function",
     function: {
       name: "list_meetings",
-      description: "Default entry point for any meeting question (summarize, analyze, search, browse). Returns ONLY the current user's meetings (hosted, fetched, or where they are a participant). Use scope='all' (admins only) to query across the entire company. Sorted by meeting_date DESC.",
+      description: "Lists ONLY meetings directly linked to the current user by verified host/email/participant data. Do NOT use for source-ambiguous requests like 'fetch my latest meeting notes' unless the user explicitly asks for meetings they attended/hosted/are linked to. Use scope='all' only when explicitly requested.",
       parameters: {
         type: "object",
         properties: {
@@ -3010,6 +3010,7 @@ async function executeMeetingTool(
   const SOURCE_MENTIONED_RE = /\b(gemini|google\s*meet|google-meet|googlemeet|gemini-?notes|plaud)\b/i;
   const userSpecifiedSource = SOURCE_MENTIONED_RE.test(intent);
   const sourceArgProvided = args?.source === "gemini" || args?.source === "plaud";
+  const explicitPlaudSyncRequested = /\b(sync|refresh|import|pull\s+new|update)\b[^.?!]{0,40}\b(plaud|recordings?)\b|\b(plaud|recordings?)\b[^.?!]{0,40}\b(sync|refresh|import|pull\s+new|update)\b/i.test(intent);
 
   console.log("[MEETING FLOW]", {
     user: userId,
@@ -3030,7 +3031,7 @@ async function executeMeetingTool(
     !sourceArgProvided &&
     meetingFlowState &&
     meetingFlowState.listedIds.size === 0 &&
-    toolName !== "fetch_plaud_meetings"
+    !(toolName === "fetch_plaud_meetings" && explicitPlaudSyncRequested)
   ) {
     console.log("[MEETING FLOW] ASK_SOURCE — blocking", toolName, "until user picks source");
     return {
@@ -4427,6 +4428,13 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     const latestUserMessage = [...messages].reverse().find((message: any) => message?.role === "user");
     const latestUserText = extractPlainText(latestUserMessage?.content).trim();
+    const SOURCE_AMBIGUOUS_MEETING_RE = /\b(my\s+)?(latest|recent|today'?s|yesterday'?s|this week'?s)?\s*(meeting|meetings|meeting notes|notes)\b|\bfetch\s+my\s+latest\s+meeting\s+notes\b/i;
+    const MEETING_SOURCE_MENTIONED_RE = /\b(gemini|google\s*meet|google-meet|googlemeet|gemini-?notes|plaud)\b/i;
+    const EXPLICIT_OWNERSHIP_MEETING_RE = /\b(meetings?\s+(i\s+)?(attended|hosted|was\s+in|participated\s+in)|meetings?\s+linked\s+to\s+me|my\s+meetings?\s+where\s+i\s+was)\b/i;
+    const mustAskMeetingSource =
+      SOURCE_AMBIGUOUS_MEETING_RE.test(latestUserText) &&
+      !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
+      !EXPLICIT_OWNERSHIP_MEETING_RE.test(latestUserText);
     // Persistent across all tool-call iterations in this request — tracks meeting IDs the LLM has actually been shown
     const meetingFlowState = { listedIds: new Set<string>(), userIntent: latestUserText };
     const shouldBypassTools =
@@ -4487,6 +4495,15 @@ Format as a natural, readable summary with clear sections. If a section has no d
     // Do NOT set tool_choice without tools — OpenAI rejects that combination.
     if (mode !== "briefing" && !shouldBypassTools && tools.length > 0) {
       requestBody.tools = tools;
+    }
+
+    if (mustAskMeetingSource) {
+      requestBody.tools = undefined;
+      systemContent += `\n\n## CURRENT REQUEST OVERRIDE\nThe latest user request is a source-ambiguous meeting notes request. Reply exactly: "Which source would you like the latest meeting notes from — **Google Meet (Gemini notes from gemini-notes@google.com)** or **Plaud**?" Do not call tools.`;
+      requestBody.messages = [
+        { role: "system", content: systemContent },
+        ...messages,
+      ];
     }
 
     // Helper to call LLM via the shared router (Claude primary, OpenAI fallback).

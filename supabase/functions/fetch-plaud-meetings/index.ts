@@ -574,6 +574,7 @@ serve(async (req) => {
           gmail_message_id: msg.id,
           email_subject: subject,
           sender_email: senderEmail,
+          attendee_emails: attendeeEmails.length > 0 ? attendeeEmails : null,
           source,
           status: transcriptText ? "transcribed" : (audioStoragePath ? "audio_only" : "pending"),
           fetched_by: requestingUserId,

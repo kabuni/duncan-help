@@ -3183,6 +3183,48 @@ async function executeMeetingTool(
       return { count: trimmed.length, scope, meetings: trimmed };
     }
 
+    case "list_meetings_by_source": {
+      const source = args.source === "plaud" ? "plaud" : "gemini";
+      const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 25);
+      console.log(`[list_meetings_by_source] user=${userId} source=${source} limit=${limit}`);
+
+      let query = supabaseAdmin
+        .from("meetings")
+        .select("id, title, meeting_date, status, source, summary, participants, sender_email, host_email, created_at")
+        .order("meeting_date", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+      if (source === "gemini") {
+        query = query.or("source.eq.google_meet,sender_email.ilike.%gemini%");
+      } else {
+        query = query.eq("source", "plaud");
+      }
+
+      if (args.from_date) query = query.gte("meeting_date", args.from_date);
+      if (args.to_date) query = query.lte("meeting_date", `${args.to_date}T23:59:59`);
+
+      const { data, error } = await query;
+      if (error) {
+        console.error(`[list_meetings_by_source] error:`, error);
+        throw new Error(`Failed to list meetings by source: ${error.message}`);
+      }
+
+      const meetings = (data || []).map((r: any) => ({ ...r, match_reason: "source_fallback", match_confidence: 0 }));
+      if (meetingFlowState) {
+        for (const r of meetings) meetingFlowState.listedIds.add(r.id);
+      }
+
+      return {
+        count: meetings.length,
+        scope: "source_fallback",
+        source,
+        is_fallback: true,
+        disclosure: `These are recent meetings ingested from ${source === "gemini" ? "Gemini (Google Meet notes)" : "Plaud"}. They are NOT attributed to you — ownership was not verified. Present them as fallback results and make this clear to the user.`,
+        meetings,
+      };
+    }
+
     case "get_meeting": {
       // GUARD: meeting_id must come from a prior list_meetings call in this turn.
       // AUTO-RECOVERY: instead of erroring, return the scoped list so the LLM picks a valid id.

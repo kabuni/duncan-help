@@ -46,10 +46,19 @@ Your capabilities:
 **EMPTY RESULT HANDLING (HARD RULE):** If list_meetings returns \`empty: true\` or \`count: 0\`:
   - DO NOT hallucinate, invent, or summarize any meeting.
   - DO NOT call get_meeting, analyze_meetings, or search_meeting_transcripts to "try harder".
-  - Reply honestly using the tool's \`message\`, \`hint\`, and \`suggestion\` fields. Explain that no meetings are confidently linked to the user yet and ownership mapping may be incomplete.
-  - If \`admin_recovery_available\` is true, offer: "Want me to show all meetings instead?" (do NOT auto-run scope=all without confirmation).
+  - Reply honestly with the tool's \`message\` field: "I couldn't find any meetings directly linked to you based on email/participant data."
+  - Then OFFER the fallback verbatim: "Would you like me to fetch recent meeting notes from Gemini or Plaud instead?" — DO NOT auto-run the fallback. Wait for the user to confirm OR for them to explicitly ask for "gemini notes" / "plaud notes" / "any recent meetings".
+  - Once confirmed (or the user's intent is broad like "any recent meetings"), call \`list_meetings_by_source\` with \`source="gemini"\` or \`"plaud"\`.
+  - When presenting fallback results, ALWAYS prefix with a clear disclosure such as: "These aren't linked to you directly — showing recent Gemini/Plaud notes as a fallback." NEVER call them "your meetings".
+  - NEVER mix fallback (source-based) results with "my meetings" results in the same list.
+  - If \`admin_recovery_available\` is true, you may also offer: "Want me to show all meetings instead?" (do NOT auto-run scope=all without confirmation).
 
-**TRANSPARENCY:** When presenting meetings to the user, briefly note how each is linked using the \`match_reason\` field returned by list_meetings (host / participant / email).
+**FALLBACK MODE RULES:** When using \`list_meetings_by_source\`:
+  - Treat results as unattributed source notes, NOT user ownership.
+  - Do not claim the user attended, hosted, or owns them.
+  - Use phrasing like "Recent Gemini notes" or "Latest Plaud recordings".
+
+**TRANSPARENCY:** When presenting meetings from list_meetings, briefly note how each is linked using the \`match_reason\` field (host / participant / email). For \`list_meetings_by_source\` results, label them as fallback/source-based.
 
 **Behavioral priority:** Speed and successful completion > completeness. A partial correct summary is ALWAYS better than a failed full summary. Prioritize recency over coverage.
 - **Xero Finance**: You have access to the company's Xero accounting system. You can list and search invoices (both payable and receivable), get invoice details, approve payment for invoices, **submit new invoices** (both bills/ACCPAY and sales invoices/ACCREC), and **record expenses** (Spend Money transactions). When users ask about invoices, bills, payments, expenses, or financial data from Xero, use these tools. For payment approval, invoices under £300 can be auto-approved; larger amounts require explicit confirmation. Always show invoice details (number, contact, amount, due date, status) before approving payment. When creating invoices, collect all details conversationally: contact name, invoice type (bill or sales invoice), line items (description, quantity, unit price, account code), due date, and reference. Search contacts first to find the correct Xero contact. Always confirm all details before submitting. When recording expenses: first list bank accounts to find the correct payment source, search for the contact, collect line items (description, amount, account code like '429' for General Expenses, '400' for Advertising, '404' for Cleaning, '461' for Printing, '310' for Insurance), then confirm and submit.
@@ -626,6 +635,23 @@ const MEETING_TOOLS = [
           meeting_id: { type: "string", description: "Specific meeting ID to analyze (optional — omit to auto-analyze all pending)" },
         },
         required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_meetings_by_source",
+      description: "FALLBACK ONLY. Lists recent meetings by ingestion source (gemini or plaud), regardless of ownership. Use ONLY after list_meetings(scope='mine') returned empty AND the user has confirmed they want to see source-based results, OR the user explicitly asks for 'gemini notes' / 'plaud recordings'. Results are NOT the user's meetings — they are unattributed company-wide notes from that source. Always disclose this clearly to the user.",
+      parameters: {
+        type: "object",
+        properties: {
+          source: { type: "string", enum: ["gemini", "plaud"], description: "Which ingestion source to pull from." },
+          limit: { type: "number", description: "Max results (default 10, max 25)." },
+          from_date: { type: "string", description: "YYYY-MM-DD lower bound on meeting_date." },
+          to_date: { type: "string", description: "YYYY-MM-DD upper bound on meeting_date." },
+        },
+        required: ["source"],
       },
     },
   },
@@ -2994,6 +3020,7 @@ async function executeMeetingTool(
     meetingFlowState &&
     meetingFlowState.listedIds.size === 0 &&
     toolName !== "list_meetings" &&
+    toolName !== "list_meetings_by_source" &&
     toolName !== "fetch_plaud_meetings"
   ) {
     console.warn("[MEETING FLOW] AUTO-CORRECT — forcing list_meetings before", toolName);
@@ -3150,16 +3177,62 @@ async function executeMeetingTool(
           scope,
           empty: true,
           meetings: [],
-          message: "I couldn't find any meetings that are confidently linked to you yet.",
-          hint: "Some meetings may not be mapped to participants yet — ownership requires a high-confidence name/email match or being the host.",
+          message: "I couldn't find any meetings directly linked to you based on email/participant data.",
+          hint: "Ownership requires a verified email/host/participant match. Some meetings may exist in the system but aren't attributed to you.",
+          fallback_available: true,
+          fallback_prompt: "Would you like me to fetch recent meeting notes from Gemini or Plaud instead? (These are not your meetings — they are unattributed source-based notes.)",
+          fallback_tool: "list_meetings_by_source",
+          fallback_sources: ["gemini", "plaud"],
           suggestion: isAdmin
-            ? "As an admin, you can ask me to 'show all meetings' (scope=all) to see company-wide meetings."
-            : "Try specifying a date range, ask an admin to improve participant mapping, or sync new meetings if you expect a recent one.",
+            ? "As an admin, you can also ask me to 'show all meetings' (scope=all) to see company-wide meetings."
+            : "You can confirm the fallback above, specify a date range, or ask an admin to improve participant mapping.",
           admin_recovery_available: isAdmin,
         };
       }
       console.log("[MEETING FLOW FINAL]", { user: userId, tool: "list_meetings", args, corrected, count: trimmed.length });
       return { count: trimmed.length, scope, meetings: trimmed };
+    }
+
+    case "list_meetings_by_source": {
+      const source = args.source === "plaud" ? "plaud" : "gemini";
+      const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 25);
+      console.log(`[list_meetings_by_source] user=${userId} source=${source} limit=${limit}`);
+
+      let query = supabaseAdmin
+        .from("meetings")
+        .select("id, title, meeting_date, status, source, summary, participants, sender_email, host_email, created_at")
+        .order("meeting_date", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+      if (source === "gemini") {
+        query = query.or("source.eq.google_meet,sender_email.ilike.%gemini%");
+      } else {
+        query = query.eq("source", "plaud");
+      }
+
+      if (args.from_date) query = query.gte("meeting_date", args.from_date);
+      if (args.to_date) query = query.lte("meeting_date", `${args.to_date}T23:59:59`);
+
+      const { data, error } = await query;
+      if (error) {
+        console.error(`[list_meetings_by_source] error:`, error);
+        throw new Error(`Failed to list meetings by source: ${error.message}`);
+      }
+
+      const meetings = (data || []).map((r: any) => ({ ...r, match_reason: "source_fallback", match_confidence: 0 }));
+      if (meetingFlowState) {
+        for (const r of meetings) meetingFlowState.listedIds.add(r.id);
+      }
+
+      return {
+        count: meetings.length,
+        scope: "source_fallback",
+        source,
+        is_fallback: true,
+        disclosure: `These are recent meetings ingested from ${source === "gemini" ? "Gemini (Google Meet notes)" : "Plaud"}. They are NOT attributed to you — ownership was not verified. Present them as fallback results and make this clear to the user.`,
+        meetings,
+      };
     }
 
     case "get_meeting": {
@@ -4857,7 +4930,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const googleFormsToolNames = ["list_google_forms", "submit_google_form", "parse_google_form", "save_parsed_google_form"];
       const ndaToolNames = ["generate_nda", "list_nda_submissions", "send_nda_for_signature"];
       const basecampToolNames = ["list_basecamp_projects", "get_basecamp_todolists", "get_basecamp_todos", "get_basecamp_messages", "get_basecamp_card_table_cards"];
-      const meetingToolNames = ["fetch_plaud_meetings", "list_meetings", "get_meeting", "analyze_meetings", "search_meeting_transcripts"];
+      const meetingToolNames = ["fetch_plaud_meetings", "list_meetings", "list_meetings_by_source", "get_meeting", "analyze_meetings", "search_meeting_transcripts"];
       const azureDevOpsToolNames = ["list_azure_devops_projects", "query_azure_work_items", "get_azure_work_item", "search_synced_work_items"];
       const azureReposToolNames = ["list_azure_repos", "get_recent_commits", "list_pull_requests", "get_pr_reviews", "get_repos_team_summary"];
       const xeroToolNames = ["list_xero_invoices", "get_xero_invoice", "approve_xero_invoice_payment", "search_xero_contacts", "create_xero_invoice", "list_xero_bank_accounts", "create_xero_expense"];

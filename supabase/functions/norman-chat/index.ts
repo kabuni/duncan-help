@@ -3097,18 +3097,31 @@ async function executeMeetingTool(
     }
 
     case "get_meeting": {
-      // GUARD: meeting_id must come from a prior list_meetings call in this turn
+      // GUARD: meeting_id must come from a prior list_meetings call in this turn.
+      // AUTO-RECOVERY: instead of erroring, return the scoped list so the LLM picks a valid id.
       if (
         meetingFlowState &&
         meetingFlowState.listedIds.size > 0 &&
         !meetingFlowState.listedIds.has(args.meeting_id)
       ) {
-        console.warn("[MEETING FLOW] BLOCKED get_meeting — id not in listed set", {
+        console.warn("[MEETING FLOW] AUTO-CORRECT get_meeting — id not in listed set", {
           user: userId,
           meeting_id: args.meeting_id,
         });
+        const recovery = await executeMeetingTool(
+          "list_meetings",
+          { scope: "mine", limit: 5 },
+          supabaseAdmin,
+          supabaseUser,
+          supabaseUrl,
+          authHeader,
+          userId,
+          { listedIds: new Set(), userIntent: intent }
+        );
+        console.log("[MEETING FLOW FINAL]", { user: userId, tool: toolName, args, corrected: true, action: "returned_list_instead" });
         return {
-          error: "Invalid meeting_id. You may only call get_meeting on IDs returned by list_meetings in this turn. Call list_meetings(scope=\"mine\") first.",
+          ...recovery,
+          notice: "The requested meeting_id wasn't in your scoped meeting list. Pick one of these and call get_meeting again.",
         };
       }
       // Fetch via the user client so RLS enforces access
@@ -3119,7 +3132,8 @@ async function executeMeetingTool(
         .maybeSingle();
       if (error) throw new Error(`Failed to load meeting: ${error.message}`);
       if (!data) {
-        return { error: "Meeting not found or you do not have access to it." };
+        console.log("[MEETING FLOW FINAL]", { user: userId, tool: toolName, args, corrected, action: "not_found" });
+        return { error: "Meeting not found or you do not have access to it.", fallback_message: "I couldn't find that meeting. Try listing your recent meetings first." };
       }
       return {
         ...data,

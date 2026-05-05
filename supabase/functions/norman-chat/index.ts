@@ -3067,17 +3067,26 @@ async function executeMeetingTool(
         });
       }
 
-      const trimmed = rows.slice(0, limit).map((r) => ({
-        id: r.id,
-        title: r.title,
-        meeting_date: r.meeting_date,
-        status: r.status,
-        source: r.source,
-        summary: r.summary,
-        participants: r.participants,
-        sender_email: r.sender_email,
-        created_at: r.created_at,
-      }));
+      const trimmed = rows.slice(0, limit).map((r) => {
+        const reason =
+          r.host_user_id === userId
+            ? "host"
+            : r.fetched_by === userId
+              ? "fallback"
+              : "participant_or_email";
+        console.log("[MEETING MATCH]", { meeting_id: r.id, reason });
+        return {
+          id: r.id,
+          title: r.title,
+          meeting_date: r.meeting_date,
+          status: r.status,
+          source: r.source,
+          summary: r.summary,
+          participants: r.participants,
+          sender_email: r.sender_email,
+          created_at: r.created_at,
+        };
+      });
 
       // Record listed IDs so downstream get_meeting / analyze_meetings calls in this turn can be validated
       if (meetingFlowState) {

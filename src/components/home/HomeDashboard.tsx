@@ -61,6 +61,7 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
   const hires = useHiresStats();
   const ws = useWorkstreamsStats();
   const proj = useProjectsStats();
+  const social = useSocialStats();
 
   const play = ga.data?.play;
   const web = ga.data?.website;

@@ -3010,6 +3010,7 @@ async function executeMeetingTool(
   const SOURCE_MENTIONED_RE = /\b(gemini|google\s*meet|google-meet|googlemeet|gemini-?notes|plaud)\b/i;
   const userSpecifiedSource = SOURCE_MENTIONED_RE.test(intent);
   const sourceArgProvided = args?.source === "gemini" || args?.source === "plaud";
+  const explicitPlaudSyncRequested = /\b(sync|refresh|import|pull\s+new|update)\b[^.?!]{0,40}\b(plaud|recordings?)\b|\b(plaud|recordings?)\b[^.?!]{0,40}\b(sync|refresh|import|pull\s+new|update)\b/i.test(intent);
 
   console.log("[MEETING FLOW]", {
     user: userId,
@@ -3030,7 +3031,7 @@ async function executeMeetingTool(
     !sourceArgProvided &&
     meetingFlowState &&
     meetingFlowState.listedIds.size === 0 &&
-    toolName !== "fetch_plaud_meetings"
+    !(toolName === "fetch_plaud_meetings" && explicitPlaudSyncRequested)
   ) {
     console.log("[MEETING FLOW] ASK_SOURCE — blocking", toolName, "until user picks source");
     return {

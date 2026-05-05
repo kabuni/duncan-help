@@ -4428,13 +4428,26 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     const latestUserMessage = [...messages].reverse().find((message: any) => message?.role === "user");
     const latestUserText = extractPlainText(latestUserMessage?.content).trim();
-    const SOURCE_AMBIGUOUS_MEETING_RE = /\b(my\s+)?(latest|recent|today'?s|yesterday'?s|this week'?s)?\s*(meeting|meetings|meeting notes|notes)\b|\bfetch\s+my\s+latest\s+meeting\s+notes\b/i;
+    const SOURCE_AMBIGUOUS_MEETING_RE = /\bfetch\s+(my\s+)?(latest|recent)?\s*meeting(s|\s+notes)?\b|\b(my\s+)?(latest|recent|today'?s|yesterday'?s|this\s+week'?s)\s+meeting(s|\s+notes)?\b/i;
     const MEETING_SOURCE_MENTIONED_RE = /\b(gemini|google\s*meet|google-meet|googlemeet|gemini-?notes|plaud)\b/i;
     const EXPLICIT_OWNERSHIP_MEETING_RE = /\b(meetings?\s+(i\s+)?(attended|hosted|was\s+in|participated\s+in)|meetings?\s+linked\s+to\s+me|my\s+meetings?\s+where\s+i\s+was)\b/i;
+
+    // Check whether the user has ALREADY chosen a source earlier in this conversation.
+    // If so, the disambiguation has been satisfied — do not re-trigger the override on
+    // follow-up messages like "Full Notes" or "Paste it here".
+    const RECENT_TURN_WINDOW = 8;
+    const recentMessages = messages.slice(-RECENT_TURN_WINDOW);
+    const sourceAlreadyChosen = recentMessages.some((m: any) => {
+      if (m?.role !== "user") return false;
+      const txt = extractPlainText(m?.content);
+      return MEETING_SOURCE_MENTIONED_RE.test(txt);
+    });
+
     const mustAskMeetingSource =
       SOURCE_AMBIGUOUS_MEETING_RE.test(latestUserText) &&
       !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
-      !EXPLICIT_OWNERSHIP_MEETING_RE.test(latestUserText);
+      !EXPLICIT_OWNERSHIP_MEETING_RE.test(latestUserText) &&
+      !sourceAlreadyChosen;
     // Persistent across all tool-call iterations in this request — tracks meeting IDs the LLM has actually been shown
     const meetingFlowState = { listedIds: new Set<string>(), userIntent: latestUserText };
     const shouldBypassTools =

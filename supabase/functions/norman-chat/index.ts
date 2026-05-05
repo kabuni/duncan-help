@@ -3048,6 +3048,10 @@ async function executeMeetingTool(
         created_at: r.created_at,
       }));
 
+      // Record listed IDs so downstream get_meeting / analyze_meetings calls in this turn can be validated
+      if (meetingFlowState) {
+        for (const r of trimmed) meetingFlowState.listedIds.add(r.id);
+      }
       return { count: trimmed.length, scope, meetings: trimmed };
     }
 

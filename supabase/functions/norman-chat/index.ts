@@ -3056,6 +3056,20 @@ async function executeMeetingTool(
     }
 
     case "get_meeting": {
+      // GUARD: meeting_id must come from a prior list_meetings call in this turn
+      if (
+        meetingFlowState &&
+        meetingFlowState.listedIds.size > 0 &&
+        !meetingFlowState.listedIds.has(args.meeting_id)
+      ) {
+        console.warn("[MEETING FLOW] BLOCKED get_meeting — id not in listed set", {
+          user: userId,
+          meeting_id: args.meeting_id,
+        });
+        return {
+          error: "Invalid meeting_id. You may only call get_meeting on IDs returned by list_meetings in this turn. Call list_meetings(scope=\"mine\") first.",
+        };
+      }
       // Fetch via the user client so RLS enforces access
       const { data, error } = await supabaseUser
         .from("meetings")

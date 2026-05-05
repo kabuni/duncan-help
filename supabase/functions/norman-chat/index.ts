@@ -3067,14 +3067,48 @@ async function executeMeetingTool(
         });
       }
 
-      const trimmed = rows.slice(0, limit).map((r) => {
-        const reason =
-          r.host_user_id === userId
-            ? "host"
-            : r.fetched_by === userId
-              ? "fallback"
-              : "participant_or_email";
-        console.log("[MEETING MATCH]", { meeting_id: r.id, reason });
+      const sliced = rows.slice(0, limit);
+
+      // Resolve current user's email + participant confidence to label match_reason precisely.
+      let userEmail: string | null = null;
+      try {
+        const { data: u } = await supabaseUser.auth.getUser();
+        userEmail = u?.user?.email?.toLowerCase() ?? null;
+      } catch { /* ignore */ }
+
+      const partMap = new Map<string, number>();
+      if (sliced.length > 0) {
+        const { data: parts } = await supabaseUser
+          .from("meeting_participants")
+          .select("meeting_id, match_confidence")
+          .eq("user_id", userId)
+          .in("meeting_id", sliced.map((r) => r.id));
+        for (const p of parts || []) {
+          partMap.set(p.meeting_id, Number(p.match_confidence ?? 0));
+        }
+      }
+
+      const trimmed = sliced.map((r) => {
+        let reason: "host" | "participant" | "email" | "unknown" = "unknown";
+        let confidence = 1;
+        if (r.host_user_id === userId) {
+          reason = "host";
+        } else if (partMap.has(r.id)) {
+          reason = "participant";
+          confidence = partMap.get(r.id)!;
+        } else if (
+          userEmail &&
+          (String(r.host_email || "").toLowerCase() === userEmail ||
+            (Array.isArray(r.attendee_emails) &&
+              r.attendee_emails.some((e: string) => String(e || "").toLowerCase() === userEmail)))
+        ) {
+          reason = "email";
+        }
+        console.log("[MEETING MATCH]", {
+          meeting_id: r.id,
+          match_reason: reason,
+          match_confidence: confidence,
+        });
         return {
           id: r.id,
           title: r.title,

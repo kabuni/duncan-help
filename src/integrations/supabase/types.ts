@@ -3053,7 +3053,6 @@ export type Database = {
           matched_users: number
           meeting_id: string
           participants_inserted: number
-          unmatched_names: string[]
         }[]
       }
       call_edge_function_with_service_role: {

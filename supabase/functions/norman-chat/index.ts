@@ -2968,13 +2968,18 @@ async function executeMeetingTool(
     case "list_meetings": {
       const scope = args.scope === "all" ? "all" : "mine";
       const limit = args.limit || 20;
+      console.log(`[list_meetings] user=${userId} scope=${scope} args=${JSON.stringify(args)}`);
 
       // Use RPC to get the base scoped set (RLS-safe, deterministic ordering)
       const { data: baseRows, error: rpcErr } = await supabaseUser.rpc("get_my_meetings", {
         _limit: 500, // pull a wider set so we can filter client-side
         _scope: scope,
       });
-      if (rpcErr) throw new Error(`Failed to list meetings: ${rpcErr.message}`);
+      if (rpcErr) {
+        console.error(`[list_meetings] RPC error for user=${userId}:`, rpcErr);
+        throw new Error(`Failed to list meetings: ${rpcErr.message}`);
+      }
+      console.log(`[list_meetings] user=${userId} rpc_rows=${(baseRows || []).length}`);
 
       let rows = (baseRows || []) as any[];
 

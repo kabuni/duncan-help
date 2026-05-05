@@ -3119,6 +3119,8 @@ async function executeMeetingTool(
           participants: r.participants,
           sender_email: r.sender_email,
           created_at: r.created_at,
+          match_reason: reason,
+          match_confidence: confidence,
         };
       });
 
@@ -3126,13 +3128,26 @@ async function executeMeetingTool(
       if (meetingFlowState) {
         for (const r of trimmed) meetingFlowState.listedIds.add(r.id);
       }
+
       if (trimmed.length === 0) {
-        console.log("[MEETING FLOW FINAL]", { user: userId, tool: "list_meetings", args, corrected, action: "no_results" });
+        let isAdmin = false;
+        try {
+          const { data } = await supabaseAdmin.rpc("has_role", { _user_id: userId, _role: "admin" });
+          isAdmin = !!data;
+        } catch { /* ignore */ }
+
+        console.log("[MEETING FLOW FINAL]", { user: userId, tool: "list_meetings", args, corrected, action: "no_results", isAdmin });
         return {
           count: 0,
           scope,
+          empty: true,
           meetings: [],
-          fallback_message: "I couldn't find any of your recent meetings. Try specifying a date range (e.g. 'last week') or sync with fetch_plaud_meetings if you expect new ones.",
+          message: "I couldn't find any meetings that are confidently linked to you yet.",
+          hint: "Some meetings may not be mapped to participants yet — ownership requires a high-confidence name/email match or being the host.",
+          suggestion: isAdmin
+            ? "As an admin, you can ask me to 'show all meetings' (scope=all) to see company-wide meetings."
+            : "Try specifying a date range, ask an admin to improve participant mapping, or sync new meetings if you expect a recent one.",
+          admin_recovery_available: isAdmin,
         };
       }
       console.log("[MEETING FLOW FINAL]", { user: userId, tool: "list_meetings", args, corrected, count: trimmed.length });

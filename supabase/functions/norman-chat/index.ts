@@ -3020,6 +3020,7 @@ async function executeMeetingTool(
     meetingFlowState &&
     meetingFlowState.listedIds.size === 0 &&
     toolName !== "list_meetings" &&
+    toolName !== "list_meetings_by_source" &&
     toolName !== "fetch_plaud_meetings"
   ) {
     console.warn("[MEETING FLOW] AUTO-CORRECT — forcing list_meetings before", toolName);

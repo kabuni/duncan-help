@@ -3047,7 +3047,7 @@ async function executeMeetingTool(
 
     case "search_meeting_transcripts": {
       const searchTerm = args.query;
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabaseUser
         .from("meetings")
         .select("id, title, meeting_date, transcript, summary, analysis, status")
         .not("transcript", "is", null)

@@ -1,9 +1,9 @@
-// Daily sync: pulls Alex's latest social stats Excel from Duncan's Gmail
-// (alex@kabuni.com), parses every account tab, stores latest week snapshot
-// per account in social_stats_snapshots.
+// Daily sync: pulls Alex's social stats from Google Sheet
+// (https://docs.google.com/spreadsheets/d/1JuNZvCZAsvJEOof4FyElkRPz568aIYnqKiHwAhsHrrA)
+// using Duncan's Gmail OAuth token (which now also has sheets.readonly scope).
+// Parses each tab and stores latest week snapshot per account in social_stats_snapshots.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,9 +11,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const GMAIL_API = "https://www.googleapis.com/gmail/v1/users/me";
+const SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const SENDER = "alex@kabuni.com";
+const SPREADSHEET_ID = "1JuNZvCZAsvJEOof4FyElkRPz568aIYnqKiHwAhsHrrA";
 
 async function getAccessToken(admin: any): Promise<string | null> {
   const clientId = Deno.env.get("GMAIL_CLIENT_ID");
@@ -46,40 +46,11 @@ async function getAccessToken(admin: any): Promise<string | null> {
   return t.access_token;
 }
 
-function b64urlToBytes(b64: string): Uint8Array {
-  const norm = b64.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = norm.length % 4 ? "=".repeat(4 - (norm.length % 4)) : "";
-  const bin = atob(norm + pad);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-type Attachment = { filename: string; attachmentId: string; mimeType: string };
-function findExcelAttachments(payload: any, out: Attachment[] = []): Attachment[] {
-  if (!payload) return out;
-  const fn = (payload.filename || "").toLowerCase();
-  const isXlsx = fn.endsWith(".xlsx") || fn.endsWith(".xls") ||
-    payload.mimeType?.includes("spreadsheetml") ||
-    payload.mimeType === "application/vnd.ms-excel";
-  if (isXlsx && payload.body?.attachmentId) {
-    out.push({
-      filename: payload.filename,
-      attachmentId: payload.body.attachmentId,
-      mimeType: payload.mimeType || "",
-    });
-  }
-  if (Array.isArray(payload.parts)) {
-    for (const p of payload.parts) findExcelAttachments(p, out);
-  }
-  return out;
-}
-
-// ---------- Excel parsing ----------
+// ---------- Sheet parsing ----------
 const METRIC_KEYS: Record<string, string> = {
   followers: "followers", "follower count": "followers", "total followers": "followers",
   subscribers: "followers",
-  posts: "posts", "post count": "posts", "# posts": "posts",
+  posts: "posts", "post count": "posts", "# posts": "posts", "posts this week": "posts",
   likes: "likes", reactions: "likes",
   comments: "comments", replies: "comments",
   shares: "shares", reposts: "shares", retweets: "shares",
@@ -88,7 +59,7 @@ const METRIC_KEYS: Record<string, string> = {
   "engagement %": "engagement_rate",
 };
 
-const WEEK_KEYS = ["week", "week of", "week starting", "date", "week start", "period"];
+const WEEK_KEYS = ["week", "week of", "week starting", "date", "week start", "period", "w/c", "week commencing"];
 
 function norm(s: any): string {
   return String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -102,23 +73,20 @@ function toNum(v: any): number | null {
   return isFinite(n) ? n : null;
 }
 
-function parseSheet(sheetName: string, sheet: XLSX.WorkSheet) {
-  const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: true });
-  if (!rows.length) return null;
+function parseSheet(sheetName: string, rows: any[][]) {
+  if (!rows?.length) return null;
 
-  // Find header row: row containing "week" or "date" plus at least one metric
   let headerIdx = -1;
   let header: string[] = [];
   for (let i = 0; i < Math.min(rows.length, 15); i++) {
-    const r = rows[i].map(norm);
+    const r = (rows[i] || []).map(norm);
     const hasWeek = r.some((c) => WEEK_KEYS.includes(c));
     const hasMetric = r.some((c) => METRIC_KEYS[c]);
     if (hasWeek && hasMetric) { headerIdx = i; header = r; break; }
   }
   if (headerIdx === -1) {
-    // Fallback: first row that has any metric column
     for (let i = 0; i < Math.min(rows.length, 15); i++) {
-      const r = rows[i].map(norm);
+      const r = (rows[i] || []).map(norm);
       if (r.some((c) => METRIC_KEYS[c])) { headerIdx = i; header = r; break; }
     }
   }
@@ -132,12 +100,10 @@ function parseSheet(sheetName: string, sheet: XLSX.WorkSheet) {
     if (key && colIdx[key] === undefined) colIdx[key] = idx;
   });
 
-  // Data rows after header
   const dataRows = rows.slice(headerIdx + 1)
-    .filter((r) => r.some((c) => c !== null && c !== "" && c !== undefined));
+    .filter((r) => r && r.some((c: any) => c !== null && c !== "" && c !== undefined));
   if (!dataRows.length) return null;
 
-  // Latest = last row with a numeric metric
   let lastIdx = -1;
   for (let i = dataRows.length - 1; i >= 0; i--) {
     const r = dataRows[i];
@@ -147,22 +113,14 @@ function parseSheet(sheetName: string, sheet: XLSX.WorkSheet) {
   const last = dataRows[lastIdx];
   const prev = lastIdx > 0 ? dataRows[lastIdx - 1] : null;
 
-  const pick = (r: any[], k: string) => r ? toNum(r[colIdx[k]]) : null;
+  const pick = (r: any[] | null, k: string) =>
+    r && colIdx[k] !== undefined ? toNum(r[colIdx[k]]) : null;
 
   let weekLabel: string | null = null;
   let weekStart: string | null = null;
   if (weekCol >= 0) {
     const v = last[weekCol];
-    if (v instanceof Date) {
-      weekStart = v.toISOString().slice(0, 10);
-      weekLabel = weekStart;
-    } else if (typeof v === "number") {
-      // Excel serial date
-      const epoch = new Date(Date.UTC(1899, 11, 30));
-      const d = new Date(epoch.getTime() + v * 86400000);
-      weekStart = d.toISOString().slice(0, 10);
-      weekLabel = weekStart;
-    } else if (v) {
+    if (v) {
       weekLabel = String(v);
       const d = new Date(weekLabel);
       if (!isNaN(d.getTime())) weekStart = d.toISOString().slice(0, 10);
@@ -181,11 +139,11 @@ function parseSheet(sheetName: string, sheet: XLSX.WorkSheet) {
     shares: pick(last, "shares"),
     impressions: pick(last, "impressions"),
     engagement_rate: pick(last, "engagement_rate"),
-    prev_followers: pick(prev as any, "followers"),
-    prev_posts: pick(prev as any, "posts"),
-    prev_likes: pick(prev as any, "likes"),
-    prev_comments: pick(prev as any, "comments"),
-    prev_shares: pick(prev as any, "shares"),
+    prev_followers: pick(prev, "followers"),
+    prev_posts: pick(prev, "posts"),
+    prev_likes: pick(prev, "likes"),
+    prev_comments: pick(prev, "comments"),
+    prev_shares: pick(prev, "shares"),
     raw: { header, last, prev },
   };
 }
@@ -203,76 +161,70 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Search recent messages from Alex with Excel attachments
-    const q = encodeURIComponent(`from:${SENDER} has:attachment filename:xlsx newer_than:60d`);
-    const listRes = await fetch(`${GMAIL_API}/messages?q=${q}&maxResults=10`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!listRes.ok) {
-      const t = await listRes.text();
-      return new Response(JSON.stringify({ error: `Gmail list failed: ${t}` }),
+    // 1. Get spreadsheet metadata to list tabs
+    const metaRes = await fetch(
+      `${SHEETS_API}/${SPREADSHEET_ID}?fields=sheets.properties(title,sheetId)`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!metaRes.ok) {
+      const t = await metaRes.text();
+      return new Response(JSON.stringify({ error: `Sheets metadata failed: ${t}` }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    const list = await listRes.json();
-    const messages = list.messages || [];
-    if (!messages.length) {
-      return new Response(JSON.stringify({ ok: true, message: "No matching emails" }),
+    const meta = await metaRes.json();
+    const tabs: string[] = (meta.sheets || []).map((s: any) => s.properties.title);
+    if (!tabs.length) {
+      return new Response(JSON.stringify({ ok: true, message: "No tabs in spreadsheet" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Walk most-recent first; pick first message that yields a parseable workbook
-    for (const m of messages) {
-      const mRes = await fetch(`${GMAIL_API}/messages/${m.id}?format=full`, {
-        headers: { Authorization: `Bearer ${token}` },
+    // 2. Batch get values for all tabs
+    const ranges = tabs.map((t) => `ranges=${encodeURIComponent(`'${t}'!A1:Z1000`)}`).join("&");
+    const valsRes = await fetch(
+      `${SHEETS_API}/${SPREADSHEET_ID}/values:batchGet?${ranges}&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!valsRes.ok) {
+      const t = await valsRes.text();
+      return new Response(JSON.stringify({ error: `Sheets values failed: ${t}` }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const valsJson = await valsRes.json();
+    const valueRanges = valsJson.valueRanges || [];
+
+    const snapshots: any[] = [];
+    const skipped: string[] = [];
+    for (let i = 0; i < tabs.length; i++) {
+      const name = tabs[i];
+      const rows = valueRanges[i]?.values || [];
+      const parsed = parseSheet(name, rows);
+      if (!parsed) { skipped.push(name); continue; }
+      snapshots.push({
+        source_message_id: SPREADSHEET_ID,
+        source_filename: `Google Sheet: ${name}`,
+        source_email_date: new Date().toISOString(),
+        ...parsed,
       });
-      if (!mRes.ok) continue;
-      const msg = await mRes.json();
-      const atts = findExcelAttachments(msg.payload);
-      if (!atts.length) continue;
+    }
 
-      const internalDate = msg.internalDate ? new Date(Number(msg.internalDate)).toISOString() : null;
-
-      // Use the first xlsx attachment
-      const att = atts[0];
-      const aRes = await fetch(
-        `${GMAIL_API}/messages/${m.id}/attachments/${att.attachmentId}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (!aRes.ok) continue;
-      const aJson = await aRes.json();
-      const bytes = b64urlToBytes(aJson.data);
-      const wb = XLSX.read(bytes, { type: "array", cellDates: true });
-
-      const snapshots: any[] = [];
-      for (const name of wb.SheetNames) {
-        const parsed = parseSheet(name, wb.Sheets[name]);
-        if (!parsed) continue;
-        snapshots.push({
-          source_message_id: m.id,
-          source_filename: att.filename,
-          source_email_date: internalDate,
-          ...parsed,
-        });
-      }
-
-      if (!snapshots.length) continue;
-
-      const { error: insErr } = await admin.from("social_stats_snapshots").insert(snapshots);
-      if (insErr) {
-        return new Response(JSON.stringify({ error: insErr.message }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
+    if (!snapshots.length) {
       return new Response(JSON.stringify({
-        ok: true,
-        message_id: m.id,
-        filename: att.filename,
-        accounts: snapshots.map((s) => s.account),
+        ok: true, message: "No parseable tabs", tabs, skipped,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    return new Response(JSON.stringify({ ok: true, message: "No parseable workbook found" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const { error: insErr } = await admin.from("social_stats_snapshots").insert(snapshots);
+    if (insErr) {
+      return new Response(JSON.stringify({ error: insErr.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    return new Response(JSON.stringify({
+      ok: true,
+      spreadsheet_id: SPREADSHEET_ID,
+      accounts: snapshots.map((s) => s.account),
+      skipped,
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {
     console.error("[sync-social-stats]", e);
     return new Response(JSON.stringify({ error: e.message || String(e) }),

@@ -3242,7 +3242,7 @@ async function executeMeetingTool(
         .limit(limit);
 
       if (source === "gemini") {
-        query = query.or("source.eq.google_meet,sender_email.ilike.%gemini%");
+        query = query.ilike("sender_email", "%gemini-notes@google.com%");
       } else {
         query = query.eq("source", "plaud");
       }

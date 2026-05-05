@@ -207,6 +207,7 @@ export function useNormanChat() {
   const [extractionProgress, setExtractionProgress] = useState<string | null>(null);
   const { profile } = useProfile();
   const mountedRef = useRef(true);
+  const inflightControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     return () => {
@@ -216,9 +217,24 @@ export function useNormanChat() {
 
   const send = useCallback(
     async (input: string, mode: Mode = "general", attachments: ChatAttachment[] = []) => {
+      // Abort any previous in-flight request to avoid stacked long-running calls
+      if (inflightControllerRef.current) {
+        inflightControllerRef.current.abort();
+        inflightControllerRef.current = null;
+      }
+
       const userMsg: Message = { role: "user", content: input };
       setMessages((prev) => [...prev, userMsg]);
       setIsLoading(true);
+
+      const safeAttachments = Array.isArray(attachments) ? attachments : [];
+      const heavy = isHeavyChatRequest(mode, input, safeAttachments);
+      const timeoutMs = heavy ? HEAVY_TIMEOUT_MS : NORMAL_TIMEOUT_MS;
+      console.log("[chat] timeout:", timeoutMs, "heavy:", heavy);
+
+      if (heavy) {
+        setExtractionProgress("Processing a complex request — this may take up to a minute...");
+      }
 
       let assistantSoFar = "";
 
@@ -239,8 +255,8 @@ export function useNormanChat() {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const controller = new AbortController();
-        const timeoutId = window.setTimeout(() => controller.abort(), CHAT_REQUEST_TIMEOUT_MS);
-        const safeAttachments = Array.isArray(attachments) ? attachments : [];
+        inflightControllerRef.current = controller;
+        const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
         // --- Extract text from non-image attachments server-side ---
         const nonImageAtts = safeAttachments.filter((a) => !a.type.startsWith("image/"));

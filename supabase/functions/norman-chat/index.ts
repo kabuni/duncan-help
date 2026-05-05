@@ -2995,7 +2995,7 @@ async function executeMeetingTool(
   supabaseUrl: string,
   authHeader: string,
   userId: string,
-  meetingFlowState?: { listedIds: Set<string>; userIntent: string }
+  meetingFlowState?: { listedIds: Set<string>; sourceFallbackIds?: Set<string>; userIntent: string }
 ): Promise<any> {
   const intent = meetingFlowState?.userIntent || "";
   let corrected = false;
@@ -3040,9 +3040,9 @@ async function executeMeetingTool(
       empty: true,
       meetings: [],
       message:
-        "Which source would you like the latest meeting notes from — Google Meet (Gemini notes from gemini-notes@google.com) or Plaud?",
+        "Which source should I use — Google Meet or Plaud?",
       instructions:
-        "Reply to the user with the message above verbatim and STOP. Do NOT call any meeting tool until they pick 'gemini' or 'plaud'. Once they answer, call list_meetings_by_source with the chosen source.",
+        "Reply to the user with the message above verbatim and STOP. Do NOT call any meeting tool until they pick 'gemini' or 'plaud'. Once they answer, immediately call list_meetings_by_source with the chosen source and return the latest notes without asking summary/full/paste follow-ups.",
       options: ["gemini", "plaud"],
     };
   }
@@ -3258,7 +3258,11 @@ async function executeMeetingTool(
 
       const meetings = (data || []).map((r: any) => ({ ...r, match_reason: "source_fallback", match_confidence: 0 }));
       if (meetingFlowState) {
-        for (const r of meetings) meetingFlowState.listedIds.add(r.id);
+        if (!meetingFlowState.sourceFallbackIds) meetingFlowState.sourceFallbackIds = new Set<string>();
+        for (const r of meetings) {
+          meetingFlowState.listedIds.add(r.id);
+          meetingFlowState.sourceFallbackIds.add(r.id);
+        }
       }
 
       return {
@@ -3299,8 +3303,12 @@ async function executeMeetingTool(
           notice: "The requested meeting_id wasn't in your scoped meeting list. Pick one of these and call get_meeting again.",
         };
       }
-      // Fetch via the user client so RLS enforces access
-      const { data, error } = await supabaseUser
+      // Fetch source-fallback meetings with the admin client because they are intentionally
+      // unattributed source results; ownership is not assumed or claimed in the response.
+      const readClient = meetingFlowState?.sourceFallbackIds?.has(args.meeting_id)
+        ? supabaseAdmin
+        : supabaseUser;
+      const { data, error } = await readClient
         .from("meetings")
         .select("*")
         .eq("id", args.meeting_id)

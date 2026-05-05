@@ -1,0 +1,2 @@
+CREATE POLICY "Authenticated can view social stats" ON public.social_stats_snapshots FOR SELECT TO authenticated USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Admins manage social stats" ON public.social_stats_snapshots FOR ALL USING (has_role(auth.uid(), 'admin'::app_role)) WITH CHECK (has_role(auth.uid(), 'admin'::app_role));

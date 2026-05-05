@@ -35,6 +35,14 @@ Your capabilities:
 4. NEVER pass all meetings into analyze_meetings in a single request.
 5. Passing more than 5 meetings into analyze_meetings is NOT ALLOWED unless the user EXPLICITLY asks for more (e.g. "analyze all meetings", "last 2 weeks in detail") — and even then, stay within safe limits per call (batch if needed).
 
+**STRICT MEETING TOOL ROUTING (HARD RULE — NOT a suggestion):**
+- For ANY query mentioning "my meetings", "latest meeting", "latest meeting notes", "recent meetings", "meeting notes", "summarize my meetings" or any variation that implies the CURRENT USER's meetings:
+  1. You MUST call `list_meetings` FIRST with `scope="mine"` (this is the default — never pass `scope="all"` unless the user EXPLICITLY says "everyone's", "company-wide", "all users").
+  2. You MUST NOT call `analyze_meetings`, `search_meeting_transcripts`, `get_meeting`, or `get_operational_summary` BEFORE `list_meetings` has returned results in the current turn.
+  3. You MUST NOT call `get_meeting` with a `meeting_id` that did not come from a prior `list_meetings` result in this turn — invented IDs will be rejected by the server.
+  4. After `list_meetings` returns, you MAY call `get_meeting` or `analyze_meetings` ONLY on IDs from that list.
+- `scope="all"` requires explicit user intent ("all meetings across the company", "everyone's meetings"). Never default to it.
+
 **Behavioral priority:** Speed and successful completion > completeness. A partial correct summary is ALWAYS better than a failed full summary. Prioritize recency over coverage.
 - **Xero Finance**: You have access to the company's Xero accounting system. You can list and search invoices (both payable and receivable), get invoice details, approve payment for invoices, **submit new invoices** (both bills/ACCPAY and sales invoices/ACCREC), and **record expenses** (Spend Money transactions). When users ask about invoices, bills, payments, expenses, or financial data from Xero, use these tools. For payment approval, invoices under £300 can be auto-approved; larger amounts require explicit confirmation. Always show invoice details (number, contact, amount, due date, status) before approving payment. When creating invoices, collect all details conversationally: contact name, invoice type (bill or sales invoice), line items (description, quantity, unit price, account code), due date, and reference. Search contacts first to find the correct Xero contact. Always confirm all details before submitting. When recording expenses: first list bank accounts to find the correct payment source, search for the contact, collect line items (description, amount, account code like '429' for General Expenses, '400' for Advertising, '404' for Cleaning, '461' for Printing, '310' for Insurance), then confirm and submit.
 - **Gmail Access**: You have access to the user's personal Gmail inbox. You can list recent emails, search emails by query (sender, subject, date, keywords), read full email content, and send emails on behalf of the user. Use these tools when the user asks about their emails, wants to find a specific email, read an email, or send a new email. When sending emails, collect to, subject, and body; optionally cc and bcc. Always confirm before sending. Present email lists clearly with sender, subject, date, and unread status.
@@ -2948,8 +2956,30 @@ async function executeMeetingTool(
   supabaseUser: any,
   supabaseUrl: string,
   authHeader: string,
-  userId: string
+  userId: string,
+  meetingFlowState?: { listedIds: Set<string>; userIntent: string }
 ): Promise<any> {
+  const intent = meetingFlowState?.userIntent || "";
+  console.log("[MEETING FLOW]", { user: userId, tool: toolName, args, intent_excerpt: intent.slice(0, 120) });
+
+  // Detect "my meetings" intent — applies whenever the user is asking about their own meetings
+  const MY_MEETINGS_RE = /\b(my|latest|recent|today'?s|yesterday'?s|this week'?s)\b[^.?!]{0,40}\bmeetings?\b|\bmeeting notes\b|\bsummari[sz]e (my|recent|latest) meetings\b/i;
+  const isMyMeetingsIntent = MY_MEETINGS_RE.test(intent);
+
+  // GUARD 1: For "my meetings" intent, the FIRST meeting tool call must be list_meetings
+  if (
+    isMyMeetingsIntent &&
+    meetingFlowState &&
+    meetingFlowState.listedIds.size === 0 &&
+    toolName !== "list_meetings" &&
+    toolName !== "fetch_plaud_meetings"
+  ) {
+    console.warn("[MEETING FLOW] BLOCKED — must call list_meetings first", { user: userId, attempted: toolName });
+    return {
+      error: "Invalid tool path. You must call list_meetings(scope=\"mine\") first before calling " + toolName + ".",
+    };
+  }
+
   switch (toolName) {
     case "fetch_plaud_meetings": {
       const res = await fetch(`${supabaseUrl}/functions/v1/fetch-plaud-meetings`, {
@@ -2966,7 +2996,9 @@ async function executeMeetingTool(
     }
 
     case "list_meetings": {
-      const scope = args.scope === "all" ? "all" : "mine";
+      // Force scope default — never allow undefined to fall through
+      const scope: "mine" | "all" = args.scope === "all" ? "all" : "mine";
+      args.scope = scope;
       const limit = args.limit || 20;
       console.log(`[list_meetings] user=${userId} scope=${scope} args=${JSON.stringify(args)}`);
 
@@ -3016,10 +3048,28 @@ async function executeMeetingTool(
         created_at: r.created_at,
       }));
 
+      // Record listed IDs so downstream get_meeting / analyze_meetings calls in this turn can be validated
+      if (meetingFlowState) {
+        for (const r of trimmed) meetingFlowState.listedIds.add(r.id);
+      }
       return { count: trimmed.length, scope, meetings: trimmed };
     }
 
     case "get_meeting": {
+      // GUARD: meeting_id must come from a prior list_meetings call in this turn
+      if (
+        meetingFlowState &&
+        meetingFlowState.listedIds.size > 0 &&
+        !meetingFlowState.listedIds.has(args.meeting_id)
+      ) {
+        console.warn("[MEETING FLOW] BLOCKED get_meeting — id not in listed set", {
+          user: userId,
+          meeting_id: args.meeting_id,
+        });
+        return {
+          error: "Invalid meeting_id. You may only call get_meeting on IDs returned by list_meetings in this turn. Call list_meetings(scope=\"mine\") first.",
+        };
+      }
       // Fetch via the user client so RLS enforces access
       const { data, error } = await supabaseUser
         .from("meetings")
@@ -4149,6 +4199,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     const latestUserMessage = [...messages].reverse().find((message: any) => message?.role === "user");
     const latestUserText = extractPlainText(latestUserMessage?.content).trim();
+    // Persistent across all tool-call iterations in this request — tracks meeting IDs the LLM has actually been shown
+    const meetingFlowState = { listedIds: new Set<string>(), userIntent: latestUserText };
     const shouldBypassTools =
       latestUserText.length > 0 &&
       (latestUserText.length < 20 || SIMPLE_INPUT_PATTERNS.some((pattern) => pattern.test(latestUserText)));
@@ -4754,7 +4806,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               console.log(`Basecamp tool ${tc.function.name} result preview:`, JSON.stringify(result).slice(0, 500));
             }
           } else if (meetingToolNames.includes(tc.function.name)) {
-              result = await withToolTimeout(tc.function.name, executeMeetingTool(tc.function.name, args, supabaseAdmin, supabaseUser, supabaseUrl, authHeader || "", userId || ""));
+              result = await withToolTimeout(tc.function.name, executeMeetingTool(tc.function.name, args, supabaseAdmin, supabaseUser, supabaseUrl, authHeader || "", userId || "", meetingFlowState));
           } else if (azureDevOpsToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeAzureDevOpsTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));
           } else if (azureReposToolNames.includes(tc.function.name)) {

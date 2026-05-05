@@ -62,6 +62,15 @@ function extractSenderEmail(fromHeader: string): string {
   return match ? match[1] : fromHeader.trim();
 }
 
+function extractEmailList(headerVal: string): string[] {
+  if (!headerVal) return [];
+  // Split on commas at top level (good enough for most well-formed headers)
+  return headerVal.split(",").map((part) => {
+    const m = part.match(/<([^>]+)>/);
+    return (m ? m[1] : part).trim().toLowerCase();
+  }).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+}
+
 function base64UrlDecode(data: string): Uint8Array {
   const base64 = data.replace(/-/g, "+").replace(/_/g, "/");
   const binaryStr = atob(base64);

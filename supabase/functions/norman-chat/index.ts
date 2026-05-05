@@ -4199,6 +4199,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     const latestUserMessage = [...messages].reverse().find((message: any) => message?.role === "user");
     const latestUserText = extractPlainText(latestUserMessage?.content).trim();
+    // Persistent across all tool-call iterations in this request — tracks meeting IDs the LLM has actually been shown
+    const meetingFlowState = { listedIds: new Set<string>(), userIntent: latestUserText };
     const shouldBypassTools =
       latestUserText.length > 0 &&
       (latestUserText.length < 20 || SIMPLE_INPUT_PATTERNS.some((pattern) => pattern.test(latestUserText)));

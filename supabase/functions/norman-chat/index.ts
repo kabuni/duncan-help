@@ -4465,6 +4465,52 @@ Format as a natural, readable summary with clear sections. If a section has no d
       SOURCE_AMBIGUOUS_MEETING_RE.test(latestUserText) &&
       MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
       !EXPLICIT_OWNERSHIP_MEETING_RE.test(latestUserText);
+
+    const buildTextSseResponse = (content: string) => {
+      const payload = `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\ndata: [DONE]\n\n`;
+      return new Response(payload, {
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      });
+    };
+
+    const formatLatestSourceMeetingNotes = async (source: "gemini" | "plaud") => {
+      let query = supabaseAdmin
+        .from("meetings")
+        .select("id, title, meeting_date, status, source, sender_email, summary, transcript, analysis, created_at")
+        .order("meeting_date", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      query = source === "gemini"
+        ? query.ilike("sender_email", "%gemini-notes@google.com%")
+        : query.eq("source", "plaud");
+
+      const { data, error } = await query;
+      if (error) throw new Error(`Failed to fetch latest ${source} meeting notes: ${error.message}`);
+      const meeting = Array.isArray(data) ? data[0] : null;
+
+      const label = source === "gemini" ? "Google Meet" : "Plaud";
+      const disclosure = source === "gemini"
+        ? "Using Google Meet notes from gemini-notes@google.com. These are source-based notes, not ownership-linked."
+        : "Using latest Plaud notes. These are source-based notes, not ownership-linked.";
+
+      if (!meeting) {
+        return `${disclosure}\n\nI couldn't find any recent ${label} meeting notes.`;
+      }
+
+      const date = meeting.meeting_date ? new Date(meeting.meeting_date).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Date unavailable";
+      const analysis = meeting.analysis && typeof meeting.analysis === "object" ? meeting.analysis : null;
+      const notes = String(meeting.transcript || meeting.summary || analysis?.summary || "").trim();
+      const body = notes || "No transcript or notes content is available for this meeting yet.";
+
+      return `${disclosure}\n\n## ${meeting.title || "Latest meeting notes"}\n\n- **Date:** ${date}\n- **Source:** ${label}\n\n${body.slice(0, 40000)}`;
+    };
+
+    if (sourceChosenForPendingMeeting || explicitSourceMeetingRequest) {
+      const selectedSource: "gemini" | "plaud" = /plaud/i.test(latestUserText) ? "plaud" : "gemini";
+      const content = await formatLatestSourceMeetingNotes(selectedSource);
+      return buildTextSseResponse(content);
+    }
     // Persistent across all tool-call iterations in this request — tracks meeting IDs the LLM has actually been shown
     const meetingFlowState = { listedIds: new Set<string>(), sourceFallbackIds: new Set<string>(), userIntent: latestUserText };
     const shouldBypassTools =

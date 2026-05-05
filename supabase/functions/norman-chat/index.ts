@@ -3083,6 +3083,16 @@ async function executeMeetingTool(
       if (meetingFlowState) {
         for (const r of trimmed) meetingFlowState.listedIds.add(r.id);
       }
+      if (trimmed.length === 0) {
+        console.log("[MEETING FLOW FINAL]", { user: userId, tool: "list_meetings", args, corrected, action: "no_results" });
+        return {
+          count: 0,
+          scope,
+          meetings: [],
+          fallback_message: "I couldn't find any of your recent meetings. Try specifying a date range (e.g. 'last week') or sync with fetch_plaud_meetings if you expect new ones.",
+        };
+      }
+      console.log("[MEETING FLOW FINAL]", { user: userId, tool: "list_meetings", args, corrected, count: trimmed.length });
       return { count: trimmed.length, scope, meetings: trimmed };
     }
 

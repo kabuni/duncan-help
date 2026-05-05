@@ -43,6 +43,14 @@ Your capabilities:
   4. After list_meetings returns, you MAY call get_meeting or analyze_meetings ONLY on IDs from that list.
 - scope="all" requires explicit user intent ("all meetings across the company", "everyone\'s meetings"). Never default to it.
 
+**EMPTY RESULT HANDLING (HARD RULE):** If list_meetings returns \`empty: true\` or \`count: 0\`:
+  - DO NOT hallucinate, invent, or summarize any meeting.
+  - DO NOT call get_meeting, analyze_meetings, or search_meeting_transcripts to "try harder".
+  - Reply honestly using the tool's \`message\`, \`hint\`, and \`suggestion\` fields. Explain that no meetings are confidently linked to the user yet and ownership mapping may be incomplete.
+  - If \`admin_recovery_available\` is true, offer: "Want me to show all meetings instead?" (do NOT auto-run scope=all without confirmation).
+
+**TRANSPARENCY:** When presenting meetings to the user, briefly note how each is linked using the \`match_reason\` field returned by list_meetings (host / participant / email).
+
 **Behavioral priority:** Speed and successful completion > completeness. A partial correct summary is ALWAYS better than a failed full summary. Prioritize recency over coverage.
 - **Xero Finance**: You have access to the company's Xero accounting system. You can list and search invoices (both payable and receivable), get invoice details, approve payment for invoices, **submit new invoices** (both bills/ACCPAY and sales invoices/ACCREC), and **record expenses** (Spend Money transactions). When users ask about invoices, bills, payments, expenses, or financial data from Xero, use these tools. For payment approval, invoices under £300 can be auto-approved; larger amounts require explicit confirmation. Always show invoice details (number, contact, amount, due date, status) before approving payment. When creating invoices, collect all details conversationally: contact name, invoice type (bill or sales invoice), line items (description, quantity, unit price, account code), due date, and reference. Search contacts first to find the correct Xero contact. Always confirm all details before submitting. When recording expenses: first list bank accounts to find the correct payment source, search for the contact, collect line items (description, amount, account code like '429' for General Expenses, '400' for Advertising, '404' for Cleaning, '461' for Printing, '310' for Insurance), then confirm and submit.
 - **Gmail Access**: You have access to the user's personal Gmail inbox. You can list recent emails, search emails by query (sender, subject, date, keywords), read full email content, and send emails on behalf of the user. Use these tools when the user asks about their emails, wants to find a specific email, read an email, or send a new email. When sending emails, collect to, subject, and body; optionally cc and bcc. Always confirm before sending. Present email lists clearly with sender, subject, date, and unread status.
@@ -3119,6 +3127,8 @@ async function executeMeetingTool(
           participants: r.participants,
           sender_email: r.sender_email,
           created_at: r.created_at,
+          match_reason: reason,
+          match_confidence: confidence,
         };
       });
 
@@ -3126,13 +3136,26 @@ async function executeMeetingTool(
       if (meetingFlowState) {
         for (const r of trimmed) meetingFlowState.listedIds.add(r.id);
       }
+
       if (trimmed.length === 0) {
-        console.log("[MEETING FLOW FINAL]", { user: userId, tool: "list_meetings", args, corrected, action: "no_results" });
+        let isAdmin = false;
+        try {
+          const { data } = await supabaseAdmin.rpc("has_role", { _user_id: userId, _role: "admin" });
+          isAdmin = !!data;
+        } catch { /* ignore */ }
+
+        console.log("[MEETING FLOW FINAL]", { user: userId, tool: "list_meetings", args, corrected, action: "no_results", isAdmin });
         return {
           count: 0,
           scope,
+          empty: true,
           meetings: [],
-          fallback_message: "I couldn't find any of your recent meetings. Try specifying a date range (e.g. 'last week') or sync with fetch_plaud_meetings if you expect new ones.",
+          message: "I couldn't find any meetings that are confidently linked to you yet.",
+          hint: "Some meetings may not be mapped to participants yet — ownership requires a high-confidence name/email match or being the host.",
+          suggestion: isAdmin
+            ? "As an admin, you can ask me to 'show all meetings' (scope=all) to see company-wide meetings."
+            : "Try specifying a date range, ask an admin to improve participant mapping, or sync new meetings if you expect a recent one.",
+          admin_recovery_available: isAdmin,
         };
       }
       console.log("[MEETING FLOW FINAL]", { user: userId, tool: "list_meetings", args, corrected, count: trimmed.length });

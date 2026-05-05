@@ -4461,8 +4461,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
       !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
       !EXPLICIT_OWNERSHIP_MEETING_RE.test(latestUserText) &&
       !sourceAlreadyChosen;
+    const explicitSourceMeetingRequest =
+      SOURCE_AMBIGUOUS_MEETING_RE.test(latestUserText) &&
+      MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
+      !EXPLICIT_OWNERSHIP_MEETING_RE.test(latestUserText);
     // Persistent across all tool-call iterations in this request — tracks meeting IDs the LLM has actually been shown
-    const meetingFlowState = { listedIds: new Set<string>(), userIntent: latestUserText };
+    const meetingFlowState = { listedIds: new Set<string>(), sourceFallbackIds: new Set<string>(), userIntent: latestUserText };
     const shouldBypassTools =
       latestUserText.length > 0 &&
       !sourceChosenForPendingMeeting &&
@@ -4527,7 +4531,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     if (mustAskMeetingSource) {
       requestBody.tools = undefined;
-      systemContent += `\n\n## CURRENT REQUEST OVERRIDE\nThe latest user request is a source-ambiguous meeting notes request. Reply exactly: "Which source would you like the latest meeting notes from — **Google Meet (Gemini notes from gemini-notes@google.com)** or **Plaud**?" Do not call tools.`;
+      systemContent += `\n\n## CURRENT REQUEST OVERRIDE\nThe latest user request is a source-ambiguous meeting notes request. Reply exactly: "Which source should I use — **Google Meet** or **Plaud**?" Do not call tools.`;
       requestBody.messages = [
         { role: "system", content: systemContent },
         ...messages,

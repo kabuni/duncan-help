@@ -4476,54 +4476,149 @@ Format as a natural, readable summary with clear sections. If a section has no d
       });
     };
 
+    // ===== Personal Gmail token resolver (for the calling user) =====
+    const getUserGmailAccessToken = async (uid: string): Promise<{ accessToken: string; emailAddress: string | null } | null> => {
+      const { data: tokenRow } = await supabaseAdmin
+        .from("gmail_tokens")
+        .select("*")
+        .eq("connected_by", uid)
+        .maybeSingle();
+      if (!tokenRow) return null;
+
+      const expiry = new Date(tokenRow.token_expiry);
+      if (expiry.getTime() - Date.now() < 5 * 60 * 1000) {
+        const clientId = Deno.env.get("GMAIL_CLIENT_ID")!;
+        const clientSecret = Deno.env.get("GMAIL_CLIENT_SECRET")!;
+        const res = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: tokenRow.refresh_token,
+            grant_type: "refresh_token",
+          }),
+        });
+        if (!res.ok) return null;
+        const refreshed = await res.json();
+        const newExpiry = new Date(Date.now() + refreshed.expires_in * 1000);
+        await supabaseAdmin
+          .from("gmail_tokens")
+          .update({ access_token: refreshed.access_token, token_expiry: newExpiry.toISOString() })
+          .eq("id", tokenRow.id);
+        return { accessToken: refreshed.access_token, emailAddress: tokenRow.email_address };
+      }
+      return { accessToken: tokenRow.access_token, emailAddress: tokenRow.email_address };
+    };
+
+    const decodeBase64Url = (b64: string): string => {
+      try {
+        const norm = b64.replace(/-/g, "+").replace(/_/g, "/");
+        const padded = norm + "=".repeat((4 - (norm.length % 4)) % 4);
+        const bin = atob(padded);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return new TextDecoder("utf-8").decode(bytes);
+      } catch { return ""; }
+    };
+
+    const extractPlainBodyFromGmailPayload = (payload: any): string => {
+      if (!payload) return "";
+      // Prefer text/plain
+      const walk = (part: any, mime: string): string => {
+        if (!part) return "";
+        if (part.mimeType === mime && part.body?.data) return decodeBase64Url(part.body.data);
+        if (Array.isArray(part.parts)) {
+          for (const p of part.parts) {
+            const found = walk(p, mime);
+            if (found) return found;
+          }
+        }
+        return "";
+      };
+      let text = walk(payload, "text/plain");
+      if (!text) {
+        const html = walk(payload, "text/html");
+        if (html) text = html.replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+      }
+      if (!text && payload.body?.data) text = decodeBase64Url(payload.body.data);
+      return text.trim();
+    };
+
+    const stripGeminiBoilerplate = (notes: string): string => {
+      let out = notes;
+      const footerPatterns = [
+        /\n\s*Meeting records\s+Document\s+Notes by Gemini[\s\S]*$/i,
+        /\n\s*Is the ['"]?Next steps['"]? section in this email helpful\?[\s\S]*$/i,
+        /\n\s*Google LLC,[\s\S]*$/i,
+        /\n\s*You have received this email because[\s\S]*$/i,
+        /\n\s*The content was auto-generated[^\n]*\n?/i,
+        /\n\s*These notes have been sent to[^\n]*\n?/i,
+        /\n\s*Open meeting notes\s*\n?/i,
+        /^\s*Notes from ['"][^'"]+['"]\s*\n?/im,
+      ];
+      for (const re of footerPatterns) out = out.replace(re, "").trim();
+      return out;
+    };
+
+    const fetchLatestGeminiNotesFromUserGmail = async (uid: string): Promise<string> => {
+      const tok = await getUserGmailAccessToken(uid);
+      if (!tok) {
+        return `Your personal Gmail isn't connected yet, so I can't pull your Google Meet (Gemini) notes. Connect Gmail in Settings → Integrations and try again.`;
+      }
+      const headers = { Authorization: `Bearer ${tok.accessToken}` };
+      const listRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=1&q=${encodeURIComponent("from:gemini-notes@google.com")}`,
+        { headers },
+      );
+      if (!listRes.ok) {
+        const err = await listRes.text();
+        return `I couldn't reach your Gmail to fetch the latest Google Meet notes (${listRes.status}). ${err.slice(0, 200)}`;
+      }
+      const listJson = await listRes.json();
+      const msgId = listJson?.messages?.[0]?.id;
+      if (!msgId) {
+        return `I checked your Gmail (${tok.emailAddress || "your inbox"}) and didn't find any messages from gemini-notes@google.com.`;
+      }
+      const msgRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=full`,
+        { headers },
+      );
+      if (!msgRes.ok) {
+        return `I found a Google Meet notes email but couldn't read it (${msgRes.status}).`;
+      }
+      const msg = await msgRes.json();
+      const hdrs: any[] = msg?.payload?.headers || [];
+      const getH = (name: string) => hdrs.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || "";
+      const subject = getH("Subject") || "Latest Google Meet notes";
+      const dateRaw = getH("Date");
+      const date = dateRaw ? new Date(dateRaw).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Date unavailable";
+      let body = extractPlainBodyFromGmailPayload(msg?.payload);
+      body = stripGeminiBoilerplate(body) || "No notes content was found in this email.";
+
+      return `## ${subject}\n\n- **Date:** ${date}\n- **Source:** Google Meet (from your Gmail: ${tok.emailAddress || "you"})\n\n${body.slice(0, 40000)}`;
+    };
+
     const formatLatestSourceMeetingNotes = async (source: "gemini" | "plaud") => {
-      let query = supabaseAdmin
+      if (source === "gemini") {
+        return await fetchLatestGeminiNotesFromUserGmail(userId);
+      }
+      // Plaud: keep DB-based fetch (Plaud notes are ingested centrally)
+      const { data, error } = await supabaseAdmin
         .from("meetings")
         .select("id, title, meeting_date, status, source, sender_email, summary, transcript, analysis, created_at")
+        .eq("source", "plaud")
         .order("meeting_date", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(1);
-
-      query = source === "gemini"
-        ? query.ilike("sender_email", "%gemini-notes@google.com%")
-        : query.eq("source", "plaud");
-
-      const { data, error } = await query;
-      if (error) throw new Error(`Failed to fetch latest ${source} meeting notes: ${error.message}`);
+      if (error) throw new Error(`Failed to fetch latest Plaud meeting notes: ${error.message}`);
       const meeting = Array.isArray(data) ? data[0] : null;
-
-      const label = source === "gemini" ? "Google Meet" : "Plaud";
-
-      if (!meeting) {
-        return `I couldn't find any recent ${label} meeting notes.`;
-      }
-
+      if (!meeting) return `I couldn't find any recent Plaud meeting notes.`;
       const date = meeting.meeting_date ? new Date(meeting.meeting_date).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Date unavailable";
       const analysis = meeting.analysis && typeof meeting.analysis === "object" ? meeting.analysis : null;
-      let notes = String(meeting.transcript || meeting.summary || analysis?.summary || "").trim();
-
-      // Strip Gmail/Gemini email boilerplate so the output stays clean
-      if (source === "gemini" && notes) {
-        // Remove everything from common footer markers onward
-        const footerPatterns = [
-          /\n\s*Meeting records\s+Document\s+Notes by Gemini[\s\S]*$/i,
-          /\n\s*Is the ['"]?Next steps['"]? section in this email helpful\?[\s\S]*$/i,
-          /\n\s*Google LLC,[\s\S]*$/i,
-          /\n\s*You have received this email because[\s\S]*$/i,
-          /\n\s*The content was auto-generated[^\n]*\n?/i,
-          /\n\s*These notes have been sent to[^\n]*\n?/i,
-          /\n\s*Open meeting notes\s*\n?/i,
-          /^\s*Notes from ['"][^'"]+['"]\s*\n?/im,
-        ];
-        for (const re of footerPatterns) {
-          notes = notes.replace(re, "").trim();
-        }
-      }
-
+      const notes = String(meeting.transcript || meeting.summary || analysis?.summary || "").trim();
       const body = notes || "No transcript or notes content is available for this meeting yet.";
-
-      return `## ${meeting.title?.trim() || "Latest meeting notes"}\n\n- **Date:** ${date}\n- **Source:** ${label}\n\n${body.slice(0, 40000)}`;
-
+      return `## ${meeting.title?.trim() || "Latest meeting notes"}\n\n- **Date:** ${date}\n- **Source:** Plaud\n\n${body.slice(0, 40000)}`;
     };
 
     if (sourceChosenForPendingMeeting || explicitSourceMeetingRequest) {
@@ -4531,6 +4626,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const content = await formatLatestSourceMeetingNotes(selectedSource);
       return buildTextSseResponse(content);
     }
+
     // Persistent across all tool-call iterations in this request — tracks meeting IDs the LLM has actually been shown
     const meetingFlowState = { listedIds: new Set<string>(), sourceFallbackIds: new Set<string>(), userIntent: latestUserText };
     const shouldBypassTools =

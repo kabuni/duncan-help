@@ -4806,7 +4806,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               console.log(`Basecamp tool ${tc.function.name} result preview:`, JSON.stringify(result).slice(0, 500));
             }
           } else if (meetingToolNames.includes(tc.function.name)) {
-              result = await withToolTimeout(tc.function.name, executeMeetingTool(tc.function.name, args, supabaseAdmin, supabaseUser, supabaseUrl, authHeader || "", userId || ""));
+              result = await withToolTimeout(tc.function.name, executeMeetingTool(tc.function.name, args, supabaseAdmin, supabaseUser, supabaseUrl, authHeader || "", userId || "", meetingFlowState));
           } else if (azureDevOpsToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeAzureDevOpsTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));
           } else if (azureReposToolNames.includes(tc.function.name)) {

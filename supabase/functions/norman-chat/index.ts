@@ -2960,13 +2960,27 @@ async function executeMeetingTool(
   meetingFlowState?: { listedIds: Set<string>; userIntent: string }
 ): Promise<any> {
   const intent = meetingFlowState?.userIntent || "";
-  console.log("[MEETING FLOW]", { user: userId, tool: toolName, args, intent_excerpt: intent.slice(0, 120) });
+  let corrected = false;
 
-  // Detect "my meetings" intent — applies whenever the user is asking about their own meetings
+  // Detect meeting-related intent — broader net to catch all variations
   const MY_MEETINGS_RE = /\b(my|latest|recent|today'?s|yesterday'?s|this week'?s)\b[^.?!]{0,40}\bmeetings?\b|\bmeeting notes\b|\bsummari[sz]e (my|recent|latest) meetings\b/i;
-  const isMyMeetingsIntent = MY_MEETINGS_RE.test(intent);
+  const BROAD_MEETING_RE = /\b(meeting|meetings|notes|discussion|call|standup|stand-up|recap|summary)\b/i;
+  const isMyMeetingsIntent =
+    MY_MEETINGS_RE.test(intent) ||
+    (BROAD_MEETING_RE.test(intent) && /\b(my|i|me|mine|our)\b/i.test(intent));
 
-  // GUARD 1: For "my meetings" intent, the FIRST meeting tool call must be list_meetings
+  console.log("[MEETING FLOW]", {
+    user: userId,
+    tool: toolName,
+    args,
+    isMyMeetingsIntent,
+    listedSoFar: meetingFlowState?.listedIds.size ?? 0,
+    intent_excerpt: intent.slice(0, 120),
+  });
+
+  // GUARD 1: For "my meetings" intent, the FIRST meeting tool call must be list_meetings.
+  // AUTO-RECOVERY: instead of returning an error, run list_meetings(scope="mine") ourselves
+  // and either return that list (if the requested tool needs an id we don't have) or proceed.
   if (
     isMyMeetingsIntent &&
     meetingFlowState &&
@@ -2974,10 +2988,27 @@ async function executeMeetingTool(
     toolName !== "list_meetings" &&
     toolName !== "fetch_plaud_meetings"
   ) {
-    console.warn("[MEETING FLOW] BLOCKED — must call list_meetings first", { user: userId, attempted: toolName });
-    return {
-      error: "Invalid tool path. You must call list_meetings(scope=\"mine\") first before calling " + toolName + ".",
-    };
+    console.warn("[MEETING FLOW] AUTO-CORRECT — forcing list_meetings before", toolName);
+    corrected = true;
+    const recovery = await executeMeetingTool(
+      "list_meetings",
+      { scope: "mine", limit: 5 },
+      supabaseAdmin,
+      supabaseUser,
+      supabaseUrl,
+      authHeader,
+      userId,
+      meetingFlowState
+    );
+    if (toolName === "get_meeting" && !meetingFlowState.listedIds.has(args?.meeting_id)) {
+      console.log("[MEETING FLOW FINAL]", { user: userId, tool: toolName, args, corrected, action: "returned_list_instead" });
+      return {
+        ...recovery,
+        notice: "Auto-corrected: ran list_meetings(scope='mine') first. Pick an id from `meetings` and retry get_meeting.",
+      };
+    }
+    // For analyze_meetings / search_meeting_transcripts, fall through and run the requested tool
+    // now that we have a scoped list available.
   }
 
   switch (toolName) {

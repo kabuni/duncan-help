@@ -36,10 +36,11 @@ Your capabilities:
 5. Passing more than 5 meetings into analyze_meetings is NOT ALLOWED unless the user EXPLICITLY asks for more (e.g. "analyze all meetings", "last 2 weeks in detail") — and even then, stay within safe limits per call (batch if needed).
 
 **STRICT MEETING TOOL ROUTING (HARD RULE — NOT a suggestion):**
-- **SOURCE DISAMBIGUATION (ASK FIRST):** For ANY query like "fetch my latest meeting", "my latest meeting notes", "latest meeting", "recent meeting", "my meetings", "meeting notes" — if the user has NOT explicitly mentioned a source (Google Meet / Gemini / gemini-notes / Plaud), you MUST NOT call any meeting tool yet. Instead, reply with EXACTLY this question and stop: "Which source would you like the latest meeting notes from — **Google Meet (Gemini notes from gemini-notes@google.com)** or **Plaud**?" Wait for the user's answer before calling any tool.
+- **SOURCE DISAMBIGUATION (ASK FIRST):** For ANY query like "fetch my latest meeting", "my latest meeting notes", "latest meeting", "recent meeting", "my meetings", "meeting notes" — if the user has NOT explicitly mentioned a source (Google Meet / Gemini / gemini-notes / Plaud), you MUST NOT call any meeting tool yet. Instead, reply with EXACTLY this question and stop: "Which source should I use — **Google Meet** or **Plaud**?" Wait for the user's answer before calling any tool.
 - Once the user picks a source (or mentioned it up-front):
   - **Gemini / Google Meet** → call \`list_meetings_by_source\` with \`source="gemini"\` (this filters to notes from gemini-notes@google.com / source=google_meet). Then \`get_meeting\` on the most recent id.
   - **Plaud** → call \`list_meetings_by_source\` with \`source="plaud"\`. Then \`get_meeting\` on the most recent id.
+- When the user asked for latest meeting notes and then chooses a source, fetch immediately. DO NOT ask whether they want a summary, full notes, paste, a doc, or Notion. Return the notes/transcript directly; if only a summary exists, say the full transcript is unavailable and show the summary.
 - Only when the user EXPLICITLY asks for "my meetings where I was a participant", "meetings I attended", "meetings linked to me" (i.e. ownership semantics, not source semantics):
   1. Call list_meetings FIRST with scope="mine".
   2. You MUST NOT call analyze_meetings, search_meeting_transcripts, get_meeting, or get_operational_summary BEFORE list_meetings has returned results in the current turn.
@@ -645,7 +646,7 @@ const MEETING_TOOLS = [
     type: "function",
     function: {
       name: "list_meetings_by_source",
-      description: "FALLBACK ONLY. Lists recent meetings by ingestion source (gemini or plaud), regardless of ownership. Use ONLY after list_meetings(scope='mine') returned empty AND the user has confirmed they want to see source-based results, OR the user explicitly asks for 'gemini notes' / 'plaud recordings'. Results are NOT the user's meetings — they are unattributed company-wide notes from that source. Always disclose this clearly to the user.",
+      description: "FALLBACK ONLY. Lists recent meetings by ingestion source (gemini or plaud), regardless of ownership. Use ONLY after list_meetings(scope='mine') returned empty AND the user has confirmed they want to see source-based results, OR the user explicitly asks for 'gemini notes' / 'Google Meet notes' / 'plaud recordings'. For latest meeting notes, use limit=1 and return the notes directly without asking summary/full/paste/doc follow-ups. Results are NOT the user's meetings — they are unattributed company-wide notes from that source. Always disclose this clearly to the user.",
       parameters: {
         type: "object",
         properties: {
@@ -2994,7 +2995,7 @@ async function executeMeetingTool(
   supabaseUrl: string,
   authHeader: string,
   userId: string,
-  meetingFlowState?: { listedIds: Set<string>; userIntent: string }
+  meetingFlowState?: { listedIds: Set<string>; sourceFallbackIds?: Set<string>; userIntent: string }
 ): Promise<any> {
   const intent = meetingFlowState?.userIntent || "";
   let corrected = false;
@@ -3039,9 +3040,9 @@ async function executeMeetingTool(
       empty: true,
       meetings: [],
       message:
-        "Which source would you like the latest meeting notes from — Google Meet (Gemini notes from gemini-notes@google.com) or Plaud?",
+        "Which source should I use — Google Meet or Plaud?",
       instructions:
-        "Reply to the user with the message above verbatim and STOP. Do NOT call any meeting tool until they pick 'gemini' or 'plaud'. Once they answer, call list_meetings_by_source with the chosen source.",
+        "Reply to the user with the message above verbatim and STOP. Do NOT call any meeting tool until they pick 'gemini' or 'plaud'. Once they answer, immediately call list_meetings_by_source with the chosen source and return the latest notes without asking summary/full/paste follow-ups.",
       options: ["gemini", "plaud"],
     };
   }
@@ -3241,7 +3242,7 @@ async function executeMeetingTool(
         .limit(limit);
 
       if (source === "gemini") {
-        query = query.or("source.eq.google_meet,sender_email.ilike.%gemini%");
+        query = query.ilike("sender_email", "%gemini-notes@google.com%");
       } else {
         query = query.eq("source", "plaud");
       }
@@ -3257,7 +3258,11 @@ async function executeMeetingTool(
 
       const meetings = (data || []).map((r: any) => ({ ...r, match_reason: "source_fallback", match_confidence: 0 }));
       if (meetingFlowState) {
-        for (const r of meetings) meetingFlowState.listedIds.add(r.id);
+        if (!meetingFlowState.sourceFallbackIds) meetingFlowState.sourceFallbackIds = new Set<string>();
+        for (const r of meetings) {
+          meetingFlowState.listedIds.add(r.id);
+          meetingFlowState.sourceFallbackIds.add(r.id);
+        }
       }
 
       return {
@@ -3298,8 +3303,12 @@ async function executeMeetingTool(
           notice: "The requested meeting_id wasn't in your scoped meeting list. Pick one of these and call get_meeting again.",
         };
       }
-      // Fetch via the user client so RLS enforces access
-      const { data, error } = await supabaseUser
+      // Fetch source-fallback meetings with the admin client because they are intentionally
+      // unattributed source results; ownership is not assumed or claimed in the response.
+      const readClient = meetingFlowState?.sourceFallbackIds?.has(args.meeting_id)
+        ? supabaseAdmin
+        : supabaseUser;
+      const { data, error } = await readClient
         .from("meetings")
         .select("*")
         .eq("id", args.meeting_id)
@@ -4437,21 +4446,77 @@ Format as a natural, readable summary with clear sections. If a section has no d
     // follow-up messages like "Full Notes" or "Paste it here".
     const RECENT_TURN_WINDOW = 8;
     const recentMessages = messages.slice(-RECENT_TURN_WINDOW);
+    const recentPriorUserMessages = recentMessages.filter((m: any) => m?.role === "user" && m !== latestUserMessage);
     const sourceAlreadyChosen = recentMessages.some((m: any) => {
       if (m?.role !== "user") return false;
       const txt = extractPlainText(m?.content);
       return MEETING_SOURCE_MENTIONED_RE.test(txt);
     });
+    const sourceChosenForPendingMeeting =
+      MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
+      recentPriorUserMessages.some((m: any) => SOURCE_AMBIGUOUS_MEETING_RE.test(extractPlainText(m?.content)));
 
     const mustAskMeetingSource =
       SOURCE_AMBIGUOUS_MEETING_RE.test(latestUserText) &&
       !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
       !EXPLICIT_OWNERSHIP_MEETING_RE.test(latestUserText) &&
       !sourceAlreadyChosen;
+    const explicitSourceMeetingRequest =
+      SOURCE_AMBIGUOUS_MEETING_RE.test(latestUserText) &&
+      MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
+      !EXPLICIT_OWNERSHIP_MEETING_RE.test(latestUserText);
+
+    const buildTextSseResponse = (content: string) => {
+      const payload = `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\ndata: [DONE]\n\n`;
+      return new Response(payload, {
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      });
+    };
+
+    const formatLatestSourceMeetingNotes = async (source: "gemini" | "plaud") => {
+      let query = supabaseAdmin
+        .from("meetings")
+        .select("id, title, meeting_date, status, source, sender_email, summary, transcript, analysis, created_at")
+        .order("meeting_date", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      query = source === "gemini"
+        ? query.ilike("sender_email", "%gemini-notes@google.com%")
+        : query.eq("source", "plaud");
+
+      const { data, error } = await query;
+      if (error) throw new Error(`Failed to fetch latest ${source} meeting notes: ${error.message}`);
+      const meeting = Array.isArray(data) ? data[0] : null;
+
+      const label = source === "gemini" ? "Google Meet" : "Plaud";
+      const disclosure = source === "gemini"
+        ? "Using Google Meet notes from gemini-notes@google.com. These are source-based notes, not ownership-linked."
+        : "Using latest Plaud notes. These are source-based notes, not ownership-linked.";
+
+      if (!meeting) {
+        return `${disclosure}\n\nI couldn't find any recent ${label} meeting notes.`;
+      }
+
+      const date = meeting.meeting_date ? new Date(meeting.meeting_date).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Date unavailable";
+      const analysis = meeting.analysis && typeof meeting.analysis === "object" ? meeting.analysis : null;
+      const notes = String(meeting.transcript || meeting.summary || analysis?.summary || "").trim();
+      const body = notes || "No transcript or notes content is available for this meeting yet.";
+
+      return `${disclosure}\n\n## ${meeting.title || "Latest meeting notes"}\n\n- **Date:** ${date}\n- **Source:** ${label}\n\n${body.slice(0, 40000)}`;
+    };
+
+    if (sourceChosenForPendingMeeting || explicitSourceMeetingRequest) {
+      const selectedSource: "gemini" | "plaud" = /plaud/i.test(latestUserText) ? "plaud" : "gemini";
+      const content = await formatLatestSourceMeetingNotes(selectedSource);
+      return buildTextSseResponse(content);
+    }
     // Persistent across all tool-call iterations in this request — tracks meeting IDs the LLM has actually been shown
-    const meetingFlowState = { listedIds: new Set<string>(), userIntent: latestUserText };
+    const meetingFlowState = { listedIds: new Set<string>(), sourceFallbackIds: new Set<string>(), userIntent: latestUserText };
     const shouldBypassTools =
       latestUserText.length > 0 &&
+      !sourceChosenForPendingMeeting &&
+      !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
       (latestUserText.length < 20 || SIMPLE_INPUT_PATTERNS.some((pattern) => pattern.test(latestUserText)));
 
     // First call to AI with tools if calendar is connected
@@ -4512,7 +4577,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     if (mustAskMeetingSource) {
       requestBody.tools = undefined;
-      systemContent += `\n\n## CURRENT REQUEST OVERRIDE\nThe latest user request is a source-ambiguous meeting notes request. Reply exactly: "Which source would you like the latest meeting notes from — **Google Meet (Gemini notes from gemini-notes@google.com)** or **Plaud**?" Do not call tools.`;
+      systemContent += `\n\n## CURRENT REQUEST OVERRIDE\nThe latest user request is a source-ambiguous meeting notes request. Reply exactly: "Which source should I use — **Google Meet** or **Plaud**?" Do not call tools.`;
       requestBody.messages = [
         { role: "system", content: systemContent },
         ...messages,

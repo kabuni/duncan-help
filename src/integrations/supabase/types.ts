@@ -1406,15 +1406,56 @@ export type Database = {
         }
         Relationships: []
       }
+      meeting_participants: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          match_confidence: number | null
+          meeting_id: string
+          role: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          match_confidence?: number | null
+          meeting_id: string
+          role?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          match_confidence?: number | null
+          meeting_id?: string
+          role?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_participants_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meetings: {
         Row: {
           action_items: Json | null
           analysis: Json | null
+          attendee_emails: string[] | null
           audio_storage_path: string | null
           created_at: string
           email_subject: string | null
           fetched_by: string | null
           gmail_message_id: string | null
+          host_email: string | null
+          host_user_id: string | null
           id: string
           meeting_date: string | null
           participants: string[] | null
@@ -1429,11 +1470,14 @@ export type Database = {
         Insert: {
           action_items?: Json | null
           analysis?: Json | null
+          attendee_emails?: string[] | null
           audio_storage_path?: string | null
           created_at?: string
           email_subject?: string | null
           fetched_by?: string | null
           gmail_message_id?: string | null
+          host_email?: string | null
+          host_user_id?: string | null
           id?: string
           meeting_date?: string | null
           participants?: string[] | null
@@ -1448,11 +1492,14 @@ export type Database = {
         Update: {
           action_items?: Json | null
           analysis?: Json | null
+          attendee_emails?: string[] | null
           audio_storage_path?: string | null
           created_at?: string
           email_subject?: string | null
           fetched_by?: string | null
           gmail_message_id?: string | null
+          host_email?: string | null
+          host_user_id?: string | null
           id?: string
           meeting_date?: string | null
           participants?: string[] | null
@@ -2951,6 +2998,37 @@ export type Database = {
           google_account_email: string
           last_updated: string
         }[]
+      }
+      get_my_meetings: {
+        Args: { _limit?: number; _scope?: string }
+        Returns: {
+          action_items: Json | null
+          analysis: Json | null
+          attendee_emails: string[] | null
+          audio_storage_path: string | null
+          created_at: string
+          email_subject: string | null
+          fetched_by: string | null
+          gmail_message_id: string | null
+          host_email: string | null
+          host_user_id: string | null
+          id: string
+          meeting_date: string | null
+          participants: string[] | null
+          sender_email: string | null
+          source: string
+          status: string
+          summary: string | null
+          title: string
+          transcript: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "meetings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       has_role: {
         Args: {

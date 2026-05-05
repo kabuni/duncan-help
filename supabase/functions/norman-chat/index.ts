@@ -3167,11 +3167,15 @@ async function executeMeetingTool(
           scope,
           empty: true,
           meetings: [],
-          message: "I couldn't find any meetings that are confidently linked to you yet.",
-          hint: "Some meetings may not be mapped to participants yet — ownership requires a high-confidence name/email match or being the host.",
+          message: "I couldn't find any meetings directly linked to you based on email/participant data.",
+          hint: "Ownership requires a verified email/host/participant match. Some meetings may exist in the system but aren't attributed to you.",
+          fallback_available: true,
+          fallback_prompt: "Would you like me to fetch recent meeting notes from Gemini or Plaud instead? (These are not your meetings — they are unattributed source-based notes.)",
+          fallback_tool: "list_meetings_by_source",
+          fallback_sources: ["gemini", "plaud"],
           suggestion: isAdmin
-            ? "As an admin, you can ask me to 'show all meetings' (scope=all) to see company-wide meetings."
-            : "Try specifying a date range, ask an admin to improve participant mapping, or sync new meetings if you expect a recent one.",
+            ? "As an admin, you can also ask me to 'show all meetings' (scope=all) to see company-wide meetings."
+            : "You can confirm the fallback above, specify a date range, or ask an admin to improve participant mapping.",
           admin_recovery_available: isAdmin,
         };
       }

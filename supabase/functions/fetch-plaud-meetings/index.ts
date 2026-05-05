@@ -62,6 +62,15 @@ function extractSenderEmail(fromHeader: string): string {
   return match ? match[1] : fromHeader.trim();
 }
 
+function extractEmailList(headerVal: string): string[] {
+  if (!headerVal) return [];
+  // Split on commas at top level (good enough for most well-formed headers)
+  return headerVal.split(",").map((part) => {
+    const m = part.match(/<([^>]+)>/);
+    return (m ? m[1] : part).trim().toLowerCase();
+  }).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+}
+
 function base64UrlDecode(data: string): Uint8Array {
   const base64 = data.replace(/-/g, "+").replace(/_/g, "/");
   const binaryStr = atob(base64);
@@ -419,8 +428,14 @@ serve(async (req) => {
       const msgHeaders = msgData.payload?.headers || [];
       const subject = msgHeaders.find((h: any) => h.name.toLowerCase() === "subject")?.value || "";
       const from = msgHeaders.find((h: any) => h.name.toLowerCase() === "from")?.value || "";
+      const toHeader = msgHeaders.find((h: any) => h.name.toLowerCase() === "to")?.value || "";
+      const ccHeader = msgHeaders.find((h: any) => h.name.toLowerCase() === "cc")?.value || "";
       const dateHeader = msgHeaders.find((h: any) => h.name.toLowerCase() === "date")?.value || "";
       const senderEmail = extractSenderEmail(from);
+      const attendeeEmails = Array.from(new Set([
+        ...extractEmailList(toHeader),
+        ...extractEmailList(ccHeader),
+      ]));
 
       // Extract email body text (may contain transcript)
       const bodyText = extractPlainTextBody(msgData.payload);
@@ -559,6 +574,7 @@ serve(async (req) => {
           gmail_message_id: msg.id,
           email_subject: subject,
           sender_email: senderEmail,
+          attendee_emails: attendeeEmails.length > 0 ? attendeeEmails : null,
           source,
           status: transcriptText ? "transcribed" : (audioStoragePath ? "audio_only" : "pending"),
           fetched_by: requestingUserId,

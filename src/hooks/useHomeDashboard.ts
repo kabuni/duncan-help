@@ -96,7 +96,7 @@ export type ProjectsStats = {
   updatedToday: number;
 };
 
-const FIVE_MIN = 5 * 60 * 1000;
+
 
 export function useGAHomeSummary() {
   return useQuery<GAHomeSummary>({

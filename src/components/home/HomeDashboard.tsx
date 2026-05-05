@@ -5,7 +5,7 @@ import {
   AlertTriangle, Share2, BarChart3, ExternalLink, Loader2,
 } from "lucide-react";
 import {
-  useGAHomeSummary, useHiresStats, useWorkstreamsStats, useProjectsStats,
+  useGAHomeSummary, useHiresStats, useWorkstreamsStats, useProjectsStats, useSocialStats,
 } from "@/hooks/useHomeDashboard";
 
 const formatNumber = (n: number) => new Intl.NumberFormat("en-US").format(Math.round(n));

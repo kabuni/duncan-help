@@ -3006,31 +3006,62 @@ async function executeMeetingTool(
     MY_MEETINGS_RE.test(intent) ||
     (BROAD_MEETING_RE.test(intent) && /\b(my|i|me|mine|our)\b/i.test(intent));
 
+  // Detect whether the user already specified a source (Gemini / Google Meet / Plaud).
+  const SOURCE_MENTIONED_RE = /\b(gemini|google\s*meet|google-meet|googlemeet|gemini-?notes|plaud)\b/i;
+  const userSpecifiedSource = SOURCE_MENTIONED_RE.test(intent);
+  const sourceArgProvided = args?.source === "gemini" || args?.source === "plaud";
+
   console.log("[MEETING FLOW]", {
     user: userId,
     tool: toolName,
     args,
     isMyMeetingsIntent,
+    userSpecifiedSource,
     listedSoFar: meetingFlowState?.listedIds.size ?? 0,
     intent_excerpt: intent.slice(0, 120),
   });
 
-  // GUARD 1: For "my meetings" intent, the FIRST meeting tool call must be list_meetings.
-  // AUTO-RECOVERY: instead of returning an error, run list_meetings(scope="mine") ourselves
-  // and either return that list (if the requested tool needs an id we don't have) or proceed.
+  // GUARD 0 (NEW): If the user asked for "my/latest meeting(s)" but did NOT specify a
+  // source, do NOT run any meeting tool. Return an ASK_SOURCE payload so the model is
+  // forced to ask the user to choose Google Meet (Gemini) vs Plaud first.
   if (
     isMyMeetingsIntent &&
+    !userSpecifiedSource &&
+    !sourceArgProvided &&
+    meetingFlowState &&
+    meetingFlowState.listedIds.size === 0 &&
+    toolName !== "fetch_plaud_meetings"
+  ) {
+    console.log("[MEETING FLOW] ASK_SOURCE — blocking", toolName, "until user picks source");
+    return {
+      ask_source: true,
+      empty: true,
+      meetings: [],
+      message:
+        "Which source would you like the latest meeting notes from — Google Meet (Gemini notes from gemini-notes@google.com) or Plaud?",
+      instructions:
+        "Reply to the user with the message above verbatim and STOP. Do NOT call any meeting tool until they pick 'gemini' or 'plaud'. Once they answer, call list_meetings_by_source with the chosen source.",
+      options: ["gemini", "plaud"],
+    };
+  }
+
+  // GUARD 1: For "my meetings" intent WITH a specified source, the FIRST meeting tool call
+  // should be list_meetings_by_source (source-based retrieval).
+  if (
+    isMyMeetingsIntent &&
+    userSpecifiedSource &&
     meetingFlowState &&
     meetingFlowState.listedIds.size === 0 &&
     toolName !== "list_meetings" &&
     toolName !== "list_meetings_by_source" &&
     toolName !== "fetch_plaud_meetings"
   ) {
-    console.warn("[MEETING FLOW] AUTO-CORRECT — forcing list_meetings before", toolName);
+    console.warn("[MEETING FLOW] AUTO-CORRECT — forcing list_meetings_by_source before", toolName);
     corrected = true;
+    const inferredSource = /plaud/i.test(intent) ? "plaud" : "gemini";
     const recovery = await executeMeetingTool(
-      "list_meetings",
-      { scope: "mine", limit: 5 },
+      "list_meetings_by_source",
+      { source: inferredSource, limit: 5 },
       supabaseAdmin,
       supabaseUser,
       supabaseUrl,
@@ -3042,7 +3073,7 @@ async function executeMeetingTool(
       console.log("[MEETING FLOW FINAL]", { user: userId, tool: toolName, args, corrected, action: "returned_list_instead" });
       return {
         ...recovery,
-        notice: "Auto-corrected: ran list_meetings(scope='mine') first. Pick an id from `meetings` and retry get_meeting.",
+        notice: `Auto-corrected: ran list_meetings_by_source(source='${inferredSource}') first. Pick an id from \`meetings\` and retry get_meeting.`,
       };
     }
     // For analyze_meetings / search_meeting_transcripts, fall through and run the requested tool

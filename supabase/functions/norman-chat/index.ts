@@ -2996,7 +2996,9 @@ async function executeMeetingTool(
     }
 
     case "list_meetings": {
-      const scope = args.scope === "all" ? "all" : "mine";
+      // Force scope default — never allow undefined to fall through
+      const scope: "mine" | "all" = args.scope === "all" ? "all" : "mine";
+      args.scope = scope;
       const limit = args.limit || 20;
       console.log(`[list_meetings] user=${userId} scope=${scope} args=${JSON.stringify(args)}`);
 

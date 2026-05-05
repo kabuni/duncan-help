@@ -2956,8 +2956,30 @@ async function executeMeetingTool(
   supabaseUser: any,
   supabaseUrl: string,
   authHeader: string,
-  userId: string
+  userId: string,
+  meetingFlowState?: { listedIds: Set<string>; userIntent: string }
 ): Promise<any> {
+  const intent = meetingFlowState?.userIntent || "";
+  console.log("[MEETING FLOW]", { user: userId, tool: toolName, args, intent_excerpt: intent.slice(0, 120) });
+
+  // Detect "my meetings" intent — applies whenever the user is asking about their own meetings
+  const MY_MEETINGS_RE = /\b(my|latest|recent|today'?s|yesterday'?s|this week'?s)\b[^.?!]{0,40}\bmeetings?\b|\bmeeting notes\b|\bsummari[sz]e (my|recent|latest) meetings\b/i;
+  const isMyMeetingsIntent = MY_MEETINGS_RE.test(intent);
+
+  // GUARD 1: For "my meetings" intent, the FIRST meeting tool call must be list_meetings
+  if (
+    isMyMeetingsIntent &&
+    meetingFlowState &&
+    meetingFlowState.listedIds.size === 0 &&
+    toolName !== "list_meetings" &&
+    toolName !== "fetch_plaud_meetings"
+  ) {
+    console.warn("[MEETING FLOW] BLOCKED — must call list_meetings first", { user: userId, attempted: toolName });
+    return {
+      error: "Invalid tool path. You must call list_meetings(scope=\"mine\") first before calling " + toolName + ".",
+    };
+  }
+
   switch (toolName) {
     case "fetch_plaud_meetings": {
       const res = await fetch(`${supabaseUrl}/functions/v1/fetch-plaud-meetings`, {

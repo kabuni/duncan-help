@@ -4428,6 +4428,13 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     const latestUserMessage = [...messages].reverse().find((message: any) => message?.role === "user");
     const latestUserText = extractPlainText(latestUserMessage?.content).trim();
+    const SOURCE_AMBIGUOUS_MEETING_RE = /\b(my\s+)?(latest|recent|today'?s|yesterday'?s|this week'?s)?\s*(meeting|meetings|meeting notes|notes)\b|\bfetch\s+my\s+latest\s+meeting\s+notes\b/i;
+    const MEETING_SOURCE_MENTIONED_RE = /\b(gemini|google\s*meet|google-meet|googlemeet|gemini-?notes|plaud)\b/i;
+    const EXPLICIT_OWNERSHIP_MEETING_RE = /\b(meetings?\s+(i\s+)?(attended|hosted|was\s+in|participated\s+in)|meetings?\s+linked\s+to\s+me|my\s+meetings?\s+where\s+i\s+was)\b/i;
+    const mustAskMeetingSource =
+      SOURCE_AMBIGUOUS_MEETING_RE.test(latestUserText) &&
+      !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
+      !EXPLICIT_OWNERSHIP_MEETING_RE.test(latestUserText);
     // Persistent across all tool-call iterations in this request — tracks meeting IDs the LLM has actually been shown
     const meetingFlowState = { listedIds: new Set<string>(), userIntent: latestUserText };
     const shouldBypassTools =
@@ -4488,6 +4495,15 @@ Format as a natural, readable summary with clear sections. If a section has no d
     // Do NOT set tool_choice without tools — OpenAI rejects that combination.
     if (mode !== "briefing" && !shouldBypassTools && tools.length > 0) {
       requestBody.tools = tools;
+    }
+
+    if (mustAskMeetingSource) {
+      requestBody.tools = undefined;
+      systemContent += `\n\n## CURRENT REQUEST OVERRIDE\nThe latest user request is a source-ambiguous meeting notes request. Reply exactly: "Which source would you like the latest meeting notes from — **Google Meet (Gemini notes from gemini-notes@google.com)** or **Plaud**?" Do not call tools.`;
+      requestBody.messages = [
+        { role: "system", content: systemContent },
+        ...messages,
+      ];
     }
 
     // Helper to call LLM via the shared router (Claude primary, OpenAI fallback).

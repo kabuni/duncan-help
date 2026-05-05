@@ -33,6 +33,8 @@ export type WorkstreamsStats = {
   myOpen: number;
 };
 
+const FIVE_MIN = 5 * 60 * 1000;
+
 export type SocialStats = {
   fetchedAt: string | null;
   sourceFilename: string | null;

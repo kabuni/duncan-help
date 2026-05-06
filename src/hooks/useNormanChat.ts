@@ -255,14 +255,15 @@ export function useNormanChat() {
         });
       };
 
+      let controller: TaggedController | null = null;
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        const controller = new AbortController() as TaggedController;
+        controller = new AbortController() as TaggedController;
         inflightControllerRef.current = controller;
         const timeoutId = window.setTimeout(() => {
-          controller.wasTimeout = true;
-          controller.abort();
+          controller!.wasTimeout = true;
+          controller!.abort();
         }, timeoutMs);
 
         // --- Extract text from non-image attachments server-side ---
@@ -293,7 +294,7 @@ export function useNormanChat() {
               Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify({ messages: apiMessages, mode, userProfile: profile ?? undefined }),
-            signal: controller.signal,
+            signal: controller!.signal,
           });
         };
 
@@ -318,7 +319,7 @@ export function useNormanChat() {
           let resp = await fetchChat();
           if (resp.status === 429) {
             await new Promise((r) => setTimeout(r, 1500));
-            if (controller.signal.aborted) {
+            if (controller!.signal.aborted) {
               throw new DOMException("Timed out", "AbortError");
             }
             resp = await fetchChat();
@@ -339,6 +340,11 @@ export function useNormanChat() {
           window.clearTimeout(timeoutId);
         }
       } catch (e) {
+        // Silently swallow superseded-request aborts (newer send() cancelled this one)
+        if (e instanceof DOMException && e.name === "AbortError" && !controller?.wasTimeout) {
+          console.info("[Duncan] chat request superseded — silent");
+          return;
+        }
         console.error("Duncan chat error:", e);
         if (mountedRef.current) {
           toast.error(getChatErrorMessage(e));

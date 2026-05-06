@@ -263,7 +263,8 @@ export function PlanningChecklist({
       </div>
 
       {open && (
-        <div className="px-3 pb-3 space-y-2">
+        <div>
+        <div className="px-3 pt-2 pb-2 space-y-2 max-h-[40vh] overflow-y-auto overscroll-contain">
           {loading ? (
             <p className="text-xs text-muted-foreground italic">Loading…</p>
           ) : open_items.length === 0 ? (

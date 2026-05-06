@@ -5679,7 +5679,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
             console.log("FINAL LLM INPUT (last 3 messages):");
             console.log(JSON.stringify(conversationMessages.slice(-3), null, 2));
             currentResponse = await fetchAIWithRetry({
-              model: "gpt-4.1",
+              model: "gpt-4o",
               messages: sanitizeConversationMessages(conversationMessages),
               stream: true,
               tools,

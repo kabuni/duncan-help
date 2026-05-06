@@ -770,6 +770,8 @@ export type Database = {
       gmail_writing_profiles: {
         Row: {
           auto_draft_enabled: boolean
+          auto_draft_filter_list: string[]
+          auto_draft_filter_mode: string
           auto_draft_last_run_at: string | null
           auto_drafts_counter_date: string
           auto_drafts_created_today: number
@@ -787,6 +789,8 @@ export type Database = {
         }
         Insert: {
           auto_draft_enabled?: boolean
+          auto_draft_filter_list?: string[]
+          auto_draft_filter_mode?: string
           auto_draft_last_run_at?: string | null
           auto_drafts_counter_date?: string
           auto_drafts_created_today?: number
@@ -804,6 +808,8 @@ export type Database = {
         }
         Update: {
           auto_draft_enabled?: boolean
+          auto_draft_filter_list?: string[]
+          auto_draft_filter_mode?: string
           auto_draft_last_run_at?: string | null
           auto_drafts_counter_date?: string
           auto_drafts_created_today?: number

@@ -232,6 +232,32 @@ async function processUser(
         console.log(`Skip ${m.id}: automated-sender (${from})`);
         stats.skipped++; continue;
       }
+
+      // Apply user-defined whitelist/blacklist
+      {
+        const filterMode = (profile.auto_draft_filter_mode || "blacklist") as "blacklist" | "whitelist";
+        const filterList: string[] = Array.isArray(profile.auto_draft_filter_list)
+          ? profile.auto_draft_filter_list
+          : [];
+        const fromLower = from.toLowerCase();
+        const matchEmail = (fromLower.match(/<([^>]+)>/)?.[1] || fromLower).trim();
+        const matches = filterList
+          .map((e) => String(e || "").trim().toLowerCase())
+          .filter(Boolean)
+          .some((entry) => {
+            if (entry.startsWith("@")) return matchEmail.endsWith(entry);
+            if (entry.includes("@")) return matchEmail === entry;
+            return matchEmail.includes(entry);
+          });
+        if (filterMode === "blacklist" && matches) {
+          console.log(`Skip ${m.id}: blacklisted sender (${from})`);
+          stats.skipped++; continue;
+        }
+        if (filterMode === "whitelist" && filterList.length > 0 && !matches) {
+          console.log(`Skip ${m.id}: not in whitelist (${from})`);
+          stats.skipped++; continue;
+        }
+      }
       if (listUnsubscribe) {
         console.log(`Skip ${m.id}: list-unsubscribe`);
         stats.skipped++; continue;

@@ -1,0 +1,51 @@
+name: Mirror to Azure Repos
+
+# ──────────────────────────────────────────────
+# Trigger: every push to any branch + tag pushes
+# ──────────────────────────────────────────────
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '**'
+
+  # Optional: allows you to manually trigger a sync
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    name: Push to Azure Repos
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # 1. Full clone (not shallow) so all history is available
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2. Fetch all branches and tags explicitly
+      #    (checkout@v4 only checks out the triggered ref by default)
+      - name: Fetch all refs
+        run: |
+          git fetch --all --tags
+
+      # 3. Add Azure Repos as a remote and push
+      - name: Push to Azure Repos
+        env:
+          AZURE_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
+          AZURE_URL: ${{ secrets.AZURE_REPO_URL }}
+        run: |
+          # Configure the Azure remote using the PAT for auth
+          # The username before the colon can be anything; Azure ignores it
+          git remote add azure "https://mirror:${AZURE_PAT}@${AZURE_URL}"
+
+          # Push all branches
+          git push azure --all --force
+
+          # Push all tags
+          git push azure --tags --force
+
+          echo "✅ Successfully mirrored to Azure Repos"

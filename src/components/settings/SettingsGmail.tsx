@@ -214,6 +214,82 @@ export default function SettingsGmail() {
               </div>
             </div>
           )}
+
+          {autoDraftEnabled && (
+            <div className="pt-3 border-t border-border space-y-3">
+              <div>
+                <div className="text-xs font-medium text-foreground">Sender filter</div>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                  {filterMode === "blacklist"
+                    ? "Duncan will skip emails from these senders. Use a full email (jane@acme.com) or a domain (@acme.com)."
+                    : "Duncan will only draft replies for emails from these senders. Empty list = no one."}
+                </p>
+              </div>
+
+              <div className="inline-flex rounded-lg border border-border bg-secondary/40 p-0.5 text-[11px]">
+                <button
+                  onClick={() => changeMode("blacklist")}
+                  className={`px-3 py-1 rounded-md font-medium transition-colors ${
+                    filterMode === "blacklist" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                  }`}
+                >
+                  Blacklist
+                </button>
+                <button
+                  onClick={() => changeMode("whitelist")}
+                  className={`px-3 py-1 rounded-md font-medium transition-colors ${
+                    filterMode === "whitelist" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                  }`}
+                >
+                  Whitelist
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <Input
+                  value={filterInput}
+                  onChange={(e) => setFilterInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addFilterEntry(); } }}
+                  placeholder="email@example.com or @example.com"
+                  className="h-8 text-xs"
+                />
+                <button
+                  onClick={addFilterEntry}
+                  disabled={!filterInput.trim() || filterUpdate.isPending}
+                  className="flex items-center gap-1 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  <Plus className="h-3 w-3" />
+                  Add
+                </button>
+              </div>
+
+              {filterList.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {filterList.map((entry) => (
+                    <span
+                      key={entry}
+                      className="inline-flex items-center gap-1 rounded-md bg-secondary/60 px-2 py-1 text-[11px] text-foreground"
+                    >
+                      {entry}
+                      <button
+                        onClick={() => removeFilterEntry(entry)}
+                        className="text-muted-foreground hover:text-destructive"
+                        aria-label={`Remove ${entry}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground/70 italic">
+                  {filterMode === "whitelist"
+                    ? "No senders added — auto-draft is effectively off until you add some."
+                    : "No senders blocked yet."}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

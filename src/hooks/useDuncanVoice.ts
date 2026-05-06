@@ -49,6 +49,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
   const playingRef = useRef(false);
   const mutedRef = useRef(muted);
   useEffect(() => { mutedRef.current = muted; }, [muted]);
+  const lastCommitRef = useRef<{ text: string; at: number }>({ text: "", at: 0 });
 
   const stopAudio = useCallback(() => {
     queueRef.current = [];

@@ -21,6 +21,8 @@ export default function SettingsGmail() {
   const autoDraftToggle = useGmailAutoDraftToggle();
   const ceoOptinToggle = useGmailCEOBriefingOptinToggle();
 
+  const filterUpdate = useGmailAutoDraftFilterUpdate();
+
   const trained = profile?.last_trained_at;
   const autoDraftEnabled = profile?.auto_draft_enabled ?? false;
   const ceoOptinEnabled = profile?.ceo_briefing_optin ?? false;
@@ -29,6 +31,38 @@ export default function SettingsGmail() {
   const draftsToday = profile?.auto_drafts_counter_date === today
     ? profile?.auto_drafts_created_today ?? 0
     : 0;
+
+  const [filterMode, setFilterMode] = useState<"blacklist" | "whitelist">(
+    profile?.auto_draft_filter_mode ?? "blacklist",
+  );
+  const [filterList, setFilterList] = useState<string[]>(profile?.auto_draft_filter_list ?? []);
+  const [filterInput, setFilterInput] = useState("");
+
+  useEffect(() => {
+    if (profile) {
+      setFilterMode(profile.auto_draft_filter_mode ?? "blacklist");
+      setFilterList(profile.auto_draft_filter_list ?? []);
+    }
+  }, [profile?.auto_draft_filter_mode, profile?.auto_draft_filter_list?.join(",")]);
+
+  const addFilterEntry = () => {
+    const v = filterInput.trim().toLowerCase();
+    if (!v) return;
+    if (filterList.includes(v)) { setFilterInput(""); return; }
+    const next = [...filterList, v];
+    setFilterList(next);
+    setFilterInput("");
+    filterUpdate.mutate({ mode: filterMode, list: next });
+  };
+  const removeFilterEntry = (entry: string) => {
+    const next = filterList.filter((e) => e !== entry);
+    setFilterList(next);
+    filterUpdate.mutate({ mode: filterMode, list: next });
+  };
+  const changeMode = (mode: "blacklist" | "whitelist") => {
+    setFilterMode(mode);
+    filterUpdate.mutate({ mode, list: filterList });
+  };
 
   if (!status?.connected) {
     return (

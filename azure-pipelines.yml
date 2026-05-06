@@ -1,52 +1,27 @@
-trigger: none  # We use the GitHub trigger via the service connection, not CI on Azure Repos
-
-# ──────────────────────────────────────────────
-# This pipeline is triggered by GitHub pushes
-# and mirrors the code into an Azure Repo
-# ──────────────────────────────────────────────
-
-resources:
-  repositories:
-    - repository: github_repo
-      type: github
-      endpoint: github-kabuni  # Must match your service connection name
-      name: kabuni/duncan-help  # GitHub org/repo
-      ref: refs/heads/main
-      trigger:
-        branches:
-          include:
-            - '*'
+trigger: none
 
 pool:
   vmImage: ubuntu-latest
 
 steps:
-  - checkout: github_repo
-    fetchDepth: 0
-    persistCredentials: false
+  - checkout: none
 
   - script: |
+      # Clone the GitHub repo using the PAT
+      git clone --mirror https://$(GITHUB_PAT)@github.com/kabuni/duncan-help.git mirror-repo
+      cd mirror-repo
+
       # Configure git
       git config user.email "azure-pipeline@kabuni.com"
       git config user.name "Azure Pipeline Mirror"
 
-      # Add the Azure Repo as a remote using the system access token
+      # Push everything to Azure Repos
       git remote add azure-target https://$(AZURE_PAT)@dev.azure.com/$(AZURE_ORG)/$(AZURE_PROJECT)/_git/$(AZURE_REPO)
 
-      # Fetch all branches from the GitHub clone
-      git fetch origin '+refs/heads/*:refs/remotes/origin/*' --tags
-
-      # Push each branch to Azure Repos
-      for branch in $(git branch -r | grep 'origin/' | grep -v 'HEAD' | sed 's|origin/||'); do
-        echo "Pushing branch: $branch"
-        git checkout -B "$branch" "origin/$branch"
-        git push azure-target "$branch" --force
-      done
-
-      # Push all tags
-      git push azure-target --tags --force
+      git push azure-target --mirror --force
 
       echo "✅ Successfully mirrored to Azure Repos"
-    displayName: 'Mirror to Azure Repos'
+    displayName: 'Mirror GitHub to Azure Repos'
     env:
+      GITHUB_PAT: $(GitHubPAT)
       AZURE_PAT: $(AzureRepoPAT)

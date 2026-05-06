@@ -1,60 +1,34 @@
-## Option 1: Scribe Config Tuning
+## Issue
 
-Single-file change to `src/hooks/useDuncanVoice.ts`. Updates the `scribe.connect()` call inside `start()` (currently lines ~205-213) and the `useScribe({...})` options block (currently lines ~149-152).
+The Planning checklist (`src/components/projects/PlanningChecklist.tsx`) sits above the chat messages inside the center column of `ProjectWorkspace.tsx`. The center column is `flex-1 ... overflow-hidden`, but the checklist's expanded content (`<div className="px-3 pb-3 space-y-2">` at line 266) has no max-height or overflow rule. When many items are added, the list keeps growing and pushes the chat down — and because its parent clips overflow, you can't scroll inside the checklist to reach lower items.
 
-### Change 1 — `useScribe` hook options (top-level)
+## Root Cause
 
-**Before:**
-```ts
-const scribe = useScribe({
-  modelId: "scribe_v2_realtime",
-  commitStrategy: CommitStrategy.VAD,
-  onPartialTranscript: (data: any) => {
+`PlanningChecklist` renders inline as a static block with no scroll container. The only scroller is the messages area below it.
+
+## Fix (frontend only, single file)
+
+In `src/components/projects/PlanningChecklist.tsx`:
+
+- Wrap (or update) the expanded body so it has a bounded height and its own scrollbar:
+  - Change line 266 `<div className="px-3 pb-3 space-y-2">` to `<div className="px-3 pb-3 space-y-2 max-h-[40vh] overflow-y-auto overscroll-contain">`.
+- Keep the quick-add row (Group / title input / Add button) visible by moving it OUT of the scroll area into a sibling block that stays pinned below the scrollable list, so users can always add new items even when the list is long.
+
+Resulting structure inside `{open && (...)}`:
+
+```text
+<div>  // wrapper (no scroll)
+  <div class="max-h-[40vh] overflow-y-auto overscroll-contain px-3 pt-2 space-y-2">
+     ...loading / suggested / groupedAccepted...
+  </div>
+  <div class="px-3 pb-3 pt-2 border-t border-border/50">
+     ...quick-add inputs + Add button...
+  </div>
+</div>
 ```
 
-**After:**
-```ts
-const scribe = useScribe({
-  modelId: "scribe_v2_realtime",
-  commitStrategy: CommitStrategy.VAD,
-  vadThreshold: 0.6,
-  minSpeechDurationMs: 300,
-  noVerbatim: true,
-  languageCode: "en",
-  onPartialTranscript: (data: any) => {
-```
+## Out of scope
 
-### Change 2 — `scribe.connect()` microphone options
-
-**Before:**
-```ts
-await scribe.connect({
-  token,
-  microphone: {
-    echoCancellation: true,
-    noiseSuppression: true,
-    autoGainControl: false,
-  },
-});
-```
-
-**After:**
-```ts
-await scribe.connect({
-  token,
-  microphone: {
-    echoCancellation: true,
-    noiseSuppression: true,
-    autoGainControl: true,
-    channelCount: 1,
-  },
-});
-```
-
-### Notes
-- No other files touched.
-- `vadThreshold`, `minSpeechDurationMs`, `noVerbatim`, `languageCode` belong on the `useScribe` hook (session-level config), not on `microphone` (which is a `MediaTrackConstraints`-shaped object).
-- `autoGainControl` and `channelCount` belong on `microphone` (browser `getUserMedia` constraints).
-- If TypeScript flags any of the new `useScribe` props as unknown in the SDK's type definitions, I'll cast the options object to `any` rather than dropping the field — please confirm that's acceptable, or I can omit any field the SDK rejects.
-
-Approve to apply.
+- No schema, hook, or business-logic changes.
+- No changes to `ProjectWorkspace.tsx` layout.
+- No restyling beyond the scroll container and a thin divider above the quick-add row.

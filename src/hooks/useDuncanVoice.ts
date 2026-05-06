@@ -233,7 +233,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
         microphone: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
+          autoGainControl: false,
         },
       });
       setState("listening");

@@ -6,6 +6,22 @@ import { extractSentences, sanitizeForSpeech } from "@/lib/ttsTextSanitizer";
 
 type VoiceState = "idle" | "listening" | "thinking" | "speaking";
 
+const FILLER_BLACKLIST = new Set([
+  "uh","um","hmm","mm","mhm","ah","oh","eh","huh",
+  "ok","okay","yeah","yep","nope","hi","hey","bye",
+  "[music]","[noise]","[silence]"
+]);
+
+function isLikelyNoise(raw: string): boolean {
+  const t = raw.toLowerCase().replace(/[.,!?…]+$/g, "").trim();
+  if (!t) return true;
+  if (FILLER_BLACKLIST.has(t)) return true;
+  const words = t.split(/\s+/);
+  if (words.length < 2 && t.length < 6) return true;
+  if (/^(.)\1+$/.test(t.replace(/\s/g, ""))) return true;
+  return false;
+}
+
 interface ChatLike {
   messages: { role: "user" | "assistant"; content: string }[];
   isLoading: boolean;
@@ -33,6 +49,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
   const playingRef = useRef(false);
   const mutedRef = useRef(muted);
   useEffect(() => { mutedRef.current = muted; }, [muted]);
+  const lastCommitRef = useRef<{ text: string; at: number }>({ text: "", at: 0 });
 
   const stopAudio = useCallback(() => {
     queueRef.current = [];
@@ -145,8 +162,8 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
     commitStrategy: CommitStrategy.VAD,
     onPartialTranscript: (data: any) => {
       const text = (data?.text || "").trim();
-      if (!text) return;
-      // Barge-in: if Duncan is speaking and user starts talking, stop playback.
+      if (!text || isLikelyNoise(text)) return;
+      // Barge-in: only if substantive speech detected
       if (playingRef.current) {
         stopAudio();
         setState("listening");
@@ -154,7 +171,16 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
     },
     onCommittedTranscript: (data: any) => {
       const text = (data?.text || "").trim();
-      if (!text) return;
+      if (!text || isLikelyNoise(text)) {
+        console.debug("[Duncan voice] dropped noise commit:", text);
+        return;
+      }
+      const now = Date.now();
+      if (text === lastCommitRef.current.text && now - lastCommitRef.current.at < 1500) {
+        console.debug("[Duncan voice] dropped duplicate commit:", text);
+        return;
+      }
+      lastCommitRef.current = { text, at: now };
       stopAudio();
       lastSpokenIndexRef.current = 0;
       lastAssistantMsgIdRef.current = -1;
@@ -207,7 +233,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
         microphone: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
+          autoGainControl: false,
         },
       });
       setState("listening");

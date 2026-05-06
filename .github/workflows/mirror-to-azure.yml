@@ -27,19 +27,42 @@ jobs:
           fetch-depth: 0
 
       # 2. Fetch all branches and tags explicitly
-      #    (checkout@v4 only checks out the triggered ref by default)
       - name: Fetch all refs
         run: |
           git fetch --all --tags
 
-      # 3. Add Azure Repos as a remote and push
+      # 3. Rewrite bot commit emails to pass Azure DevOps policy
+      - name: Rewrite bot commit emails
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+        run: |
+          git filter-branch --env-filter '
+            # Lovable (GPT Engineer) bot
+            if [ "$GIT_AUTHOR_EMAIL" = "159125892+gpt-engineer-app[bot]@users.noreply.github.com" ]; then
+              export GIT_AUTHOR_EMAIL="lovable-bot@kabuni.com"
+              export GIT_AUTHOR_NAME="Lovable Bot"
+            fi
+            if [ "$GIT_COMMITTER_EMAIL" = "159125892+gpt-engineer-app[bot]@users.noreply.github.com" ]; then
+              export GIT_COMMITTER_EMAIL="lovable-bot@kabuni.com"
+              export GIT_COMMITTER_NAME="Lovable Bot"
+            fi
+
+            # GitHub noreply addresses (e.g. users who have email privacy enabled)
+            if echo "$GIT_AUTHOR_EMAIL" | grep -q "users.noreply.github.com"; then
+              export GIT_AUTHOR_EMAIL="${GIT_AUTHOR_NAME// /.}@kabuni.com"
+            fi
+            if echo "$GIT_COMMITTER_EMAIL" | grep -q "users.noreply.github.com"; then
+              export GIT_COMMITTER_EMAIL="${GIT_COMMITTER_NAME// /.}@kabuni.com"
+            fi
+          ' --tag-name-filter cat -- --all
+
+      # 4. Add Azure Repos as a remote and push
       - name: Push to Azure Repos
         env:
           AZURE_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
           AZURE_URL: ${{ secrets.AZURE_REPO_URL }}
         run: |
           # Configure the Azure remote using the PAT for auth
-          # The username before the colon can be anything; Azure ignores it
           git remote add azure "https://mirror:${AZURE_PAT}@${AZURE_URL}"
 
           # Push all branches

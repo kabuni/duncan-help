@@ -11,6 +11,7 @@ resources:
       type: github
       endpoint: github-kabuni  # Must match your service connection name
       name: kabuni/duncan-help  # GitHub org/repo
+      ref: refs/heads/main
       trigger:
         branches:
           include:

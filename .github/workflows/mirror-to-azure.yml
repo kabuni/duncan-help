@@ -1,16 +1,11 @@
 name: Mirror to Azure Repos
 
-# ──────────────────────────────────────────────
-# Trigger: every push to any branch + tag pushes
-# ──────────────────────────────────────────────
 on:
   push:
     branches:
       - '**'
     tags:
       - '**'
-
-  # Optional: allows you to manually trigger a sync
   workflow_dispatch:
 
 jobs:
@@ -18,57 +13,52 @@ jobs:
     name: Push to Azure Repos
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-      # 1. Full clone (not shallow) so all history is available
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2. Fetch all branches and tags explicitly
       - name: Fetch all refs
         run: |
           git fetch --all --tags
 
-      # 3. Rewrite bot commit emails to pass Azure DevOps policy
-      - name: Rewrite bot commit emails
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      - name: Rewrite non-org commit emails
         run: |
           git filter-branch --env-filter '
-            # Lovable (GPT Engineer) bot
-            if [ "$GIT_AUTHOR_EMAIL" = "159125892+gpt-engineer-app[bot]@users.noreply.github.com" ]; then
-              export GIT_AUTHOR_EMAIL="lovable-bot@kabuni.com"
-              export GIT_AUTHOR_NAME="Lovable Bot"
-            fi
-            if [ "$GIT_COMMITTER_EMAIL" = "159125892+gpt-engineer-app[bot]@users.noreply.github.com" ]; then
-              export GIT_COMMITTER_EMAIL="lovable-bot@kabuni.com"
-              export GIT_COMMITTER_NAME="Lovable Bot"
-            fi
 
-            # GitHub noreply addresses (e.g. users who have email privacy enabled)
-            if echo "$GIT_AUTHOR_EMAIL" | grep -q "users.noreply.github.com"; then
-              export GIT_AUTHOR_EMAIL="${GIT_AUTHOR_NAME// /.}@kabuni.com"
-            fi
-            if echo "$GIT_COMMITTER_EMAIL" | grep -q "users.noreply.github.com"; then
-              export GIT_COMMITTER_EMAIL="${GIT_COMMITTER_NAME// /.}@kabuni.com"
-            fi
+            # Define your allowed email domain
+            ALLOWED_DOMAIN="kabuni.com"
+
+            # Function to rewrite email if it does not match the allowed domain
+            rewrite_if_needed() {
+              local email="$1"
+              local name="$2"
+              if echo "$email" | grep -qv "@${ALLOWED_DOMAIN}$"; then
+                # Replace spaces/special chars in name, lowercase it
+                local safe_name=$(echo "$name" | tr "[:upper:]" "[:lower:]" | sed "s/[^a-z0-9]/-/g" | sed "s/--*/-/g" | sed "s/^-//;s/-$//")
+                echo "${safe_name}@${ALLOWED_DOMAIN}"
+              else
+                echo "$email"
+              fi
+            }
+
+            export GIT_AUTHOR_EMAIL=$(rewrite_if_needed "$GIT_AUTHOR_EMAIL" "$GIT_AUTHOR_NAME")
+            export GIT_COMMITTER_EMAIL=$(rewrite_if_needed "$GIT_COMMITTER_EMAIL" "$GIT_COMMITTER_NAME")
+
           ' --tag-name-filter cat -- --all
 
-      # 4. Add Azure Repos as a remote and push
       - name: Push to Azure Repos
         env:
           AZURE_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
           AZURE_URL: ${{ secrets.AZURE_REPO_URL }}
         run: |
-          # Configure the Azure remote using the PAT for auth
           git remote add azure "https://mirror:${AZURE_PAT}@${AZURE_URL}"
 
-          # Push all branches
           git push azure --all --force
-
-          # Push all tags
           git push azure --tags --force
 
           echo "✅ Successfully mirrored to Azure Repos"

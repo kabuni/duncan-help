@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
-import { Loader2, Trash2, Lightbulb } from "lucide-react";
+import { Loader2, Trash2, Lightbulb, Paperclip, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
+
+interface Attachment {
+  id: string;
+  storage_path: string;
+  file_name: string;
+  size_bytes: number | null;
+  mime_type: string | null;
+}
 
 interface FeatureRequest {
   id: string;
@@ -14,6 +22,7 @@ interface FeatureRequest {
   status: string;
   admin_notes: string | null;
   created_at: string;
+  attachments?: Attachment[];
 }
 
 const statusOptions = ["new", "under_review", "planned", "in_progress", "completed", "declined"];
@@ -21,15 +30,16 @@ const statusOptions = ["new", "under_review", "planned", "in_progress", "complet
 export default function FeatureRequestsAdmin() {
   const [requests, setRequests] = useState<FeatureRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("feature_requests")
-      .select("*")
+      .select("*, attachments:feature_request_attachments(id, storage_path, file_name, size_bytes, mime_type)")
       .order("created_at", { ascending: false });
     if (error) toast.error(error.message);
-    setRequests(data ?? []);
+    setRequests((data as any) ?? []);
     setLoading(false);
   };
 
@@ -47,6 +57,16 @@ export default function FeatureRequestsAdmin() {
     if (error) return toast.error(error.message);
     setRequests((prev) => prev.filter((r) => r.id !== id));
     toast.success("Deleted");
+  };
+
+  const downloadAttachment = async (att: Attachment) => {
+    setDownloadingId(att.id);
+    const { data, error } = await supabase.storage
+      .from("feature-request-attachments")
+      .createSignedUrl(att.storage_path, 60);
+    setDownloadingId(null);
+    if (error || !data?.signedUrl) return toast.error(error?.message ?? "Failed to get URL");
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
   if (loading) {
@@ -71,6 +91,9 @@ export default function FeatureRequestsAdmin() {
               <h4 className="text-sm font-semibold text-foreground">{r.title}</h4>
               <p className="text-[11px] text-muted-foreground mt-0.5">
                 {r.user_email ?? "—"} · {format(new Date(r.created_at), "MMM d, yyyy")} · Priority: {r.priority}
+                {r.attachments && r.attachments.length > 0 && (
+                  <> · <Paperclip className="inline h-3 w-3 -mt-0.5" /> {r.attachments.length}</>
+                )}
               </p>
             </div>
             <button onClick={() => remove(r.id)} className="text-destructive hover:bg-destructive/10 rounded p-1.5 transition-colors" title="Delete">
@@ -81,6 +104,28 @@ export default function FeatureRequestsAdmin() {
           {r.use_case && (
             <p className="text-xs text-muted-foreground italic"><span className="font-medium">Use case:</span> {r.use_case}</p>
           )}
+
+          {r.attachments && r.attachments.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {r.attachments.map((att) => (
+                <button
+                  key={att.id}
+                  onClick={() => downloadAttachment(att)}
+                  className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11px] text-foreground hover:bg-secondary/60 transition-colors"
+                  title={att.file_name}
+                >
+                  {downloadingId === att.id
+                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                    : <Download className="h-3 w-3 text-muted-foreground" />}
+                  <span className="truncate max-w-[180px]">{att.file_name}</span>
+                  {att.size_bytes != null && (
+                    <span className="text-muted-foreground">({(att.size_bytes / 1024).toFixed(1)} KB)</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center gap-2 pt-1">
             <label className="text-[11px] text-muted-foreground">Status:</label>
             <select

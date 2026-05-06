@@ -177,6 +177,37 @@ export interface GmailWritingProfile {
   auto_drafts_created_today: number;
   auto_drafts_counter_date: string;
   ceo_briefing_optin: boolean;
+  auto_draft_filter_mode: "blacklist" | "whitelist";
+  auto_draft_filter_list: string[];
+}
+
+export function useGmailAutoDraftFilterUpdate() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, { mode: "blacklist" | "whitelist"; list: string[] }>({
+    mutationFn: async ({ mode, list }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not signed in");
+      const cleaned = Array.from(
+        new Set(
+          list
+            .map((s) => s.trim().toLowerCase())
+            .filter((s) => s.length > 0 && s.length < 200),
+        ),
+      );
+      const { error } = await supabase
+        .from("gmail_writing_profiles")
+        .upsert(
+          { user_id: user.id, auto_draft_filter_mode: mode, auto_draft_filter_list: cleaned } as any,
+          { onConflict: "user_id" },
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["gmail-writing-profile"] });
+      toast.success("Auto-draft filter saved");
+    },
+    onError: (err) => toast.error(err.message || "Failed to save filter"),
+  });
 }
 
 export function useGmailCEOBriefingOptinToggle() {

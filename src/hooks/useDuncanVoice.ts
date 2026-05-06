@@ -6,6 +6,22 @@ import { extractSentences, sanitizeForSpeech } from "@/lib/ttsTextSanitizer";
 
 type VoiceState = "idle" | "listening" | "thinking" | "speaking";
 
+const FILLER_BLACKLIST = new Set([
+  "uh","um","hmm","mm","mhm","ah","oh","eh","huh",
+  "ok","okay","yeah","yep","nope","hi","hey","bye",
+  "[music]","[noise]","[silence]"
+]);
+
+function isLikelyNoise(raw: string): boolean {
+  const t = raw.toLowerCase().replace(/[.,!?…]+$/g, "").trim();
+  if (!t) return true;
+  if (FILLER_BLACKLIST.has(t)) return true;
+  const words = t.split(/\s+/);
+  if (words.length < 2 && t.length < 6) return true;
+  if (/^(.)\1+$/.test(t.replace(/\s/g, ""))) return true;
+  return false;
+}
+
 interface ChatLike {
   messages: { role: "user" | "assistant"; content: string }[];
   isLoading: boolean;

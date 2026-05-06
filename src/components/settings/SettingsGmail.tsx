@@ -1,4 +1,5 @@
-import { Mail, Loader2, Sparkles, Trash2, RefreshCw, CheckCircle2, Wand2, Eye } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Mail, Loader2, Sparkles, Trash2, RefreshCw, CheckCircle2, Wand2, Eye, X, Plus } from "lucide-react";
 import {
   useGmailWritingProfile,
   useGmailTrainStyle,
@@ -6,8 +7,10 @@ import {
   useGmailStatus,
   useGmailAutoDraftToggle,
   useGmailCEOBriefingOptinToggle,
+  useGmailAutoDraftFilterUpdate,
 } from "@/hooks/useGmailIntegration";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
 import { formatDistanceToNow } from "date-fns";
 
 export default function SettingsGmail() {

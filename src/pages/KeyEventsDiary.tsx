@@ -198,6 +198,14 @@ export default function KeyEventsDiary() {
   const [date, setDate] = useState<Date>(new Date());
   const [riskFilter, setRiskFilter] = useState<"all" | "atrisk">("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const toggleCategory = (key: string) => {
+    setSelectedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   const [selectedEvent, setSelectedEvent] = useState<KeyEvent | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);

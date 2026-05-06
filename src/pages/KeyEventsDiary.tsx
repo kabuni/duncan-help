@@ -423,17 +423,44 @@ export default function KeyEventsDiary() {
         <div className="shrink-0 min-w-0 overflow-hidden lg:px-1">
           <div className="flex items-center gap-x-2 gap-y-1.5 text-[10px] sm:text-[11px] text-muted-foreground overflow-x-auto pb-1 whitespace-nowrap scrollbar-thin lg:flex-wrap lg:overflow-visible lg:pb-0 lg:whitespace-normal">
             <span className="font-mono uppercase tracking-wider text-[10px] shrink-0">Categories</span>
-            {Object.entries(CATEGORY_META).map(([key, meta]) => (
-              <span key={key} className="inline-flex items-center gap-1.5 shrink-0">
-                <span
-                  aria-hidden
-                  className="inline-block h-2 w-2 rounded-sm"
-                  style={{ background: `hsl(${meta.hsl})` }}
-                />
-                <span aria-hidden>{meta.icon}</span>
-                <span>{meta.label}</span>
-              </span>
-            ))}
+            {Object.entries(CATEGORY_META).map(([key, meta]) => {
+              const active = selectedCategories.has(key);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => toggleCategory(key)}
+                  aria-pressed={active}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 shrink-0 rounded-full border px-2 py-0.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    active
+                      ? "border-transparent text-foreground font-medium shadow-sm"
+                      : "border-border/60 hover:border-border hover:bg-accent/40",
+                  )}
+                  style={
+                    active
+                      ? {
+                          background: `hsl(${meta.hsl} / 0.18)`,
+                          boxShadow: `0 0 0 1px hsl(${meta.hsl} / 0.55), 0 0 8px hsl(${meta.hsl} / 0.25)`,
+                        }
+                      : undefined
+                  }
+                >
+                  <span aria-hidden className="inline-block h-2 w-2 rounded-sm" style={{ background: `hsl(${meta.hsl})` }} />
+                  <span aria-hidden>{meta.icon}</span>
+                  <span>{meta.label}</span>
+                </button>
+              );
+            })}
+            {selectedCategories.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedCategories(new Set())}
+                className="ml-1 shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-[10px] uppercase tracking-wider hover:bg-accent"
+              >
+                Clear
+              </button>
+            )}
           </div>
         </div>
 

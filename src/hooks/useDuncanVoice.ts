@@ -162,8 +162,8 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
     commitStrategy: CommitStrategy.VAD,
     onPartialTranscript: (data: any) => {
       const text = (data?.text || "").trim();
-      if (!text) return;
-      // Barge-in: if Duncan is speaking and user starts talking, stop playback.
+      if (!text || isLikelyNoise(text)) return;
+      // Barge-in: only if substantive speech detected
       if (playingRef.current) {
         stopAudio();
         setState("listening");
@@ -171,7 +171,16 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
     },
     onCommittedTranscript: (data: any) => {
       const text = (data?.text || "").trim();
-      if (!text) return;
+      if (!text || isLikelyNoise(text)) {
+        console.debug("[Duncan voice] dropped noise commit:", text);
+        return;
+      }
+      const now = Date.now();
+      if (text === lastCommitRef.current.text && now - lastCommitRef.current.at < 1500) {
+        console.debug("[Duncan voice] dropped duplicate commit:", text);
+        return;
+      }
+      lastCommitRef.current = { text, at: now };
       stopAudio();
       lastSpokenIndexRef.current = 0;
       lastAssistantMsgIdRef.current = -1;

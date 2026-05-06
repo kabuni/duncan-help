@@ -256,6 +256,9 @@ export default function KeyEventsDiary() {
     if (ownerFilter !== "all") {
       filteredEvents = filteredEvents.filter((e) => (e.owner || "") === ownerFilter);
     }
+    if (selectedCategories.size > 0) {
+      filteredEvents = filteredEvents.filter((e) => e.category && selectedCategories.has(e.category));
+    }
 
     const evItems: CalItem[] = filteredEvents
       .filter((e) => e.start_at)
@@ -278,7 +281,7 @@ export default function KeyEventsDiary() {
       });
 
     return evItems;
-  }, [events, riskFilter, ownerFilter]);
+  }, [events, riskFilter, ownerFilter, selectedCategories]);
 
 
   function handleSelectItem(item: CalItem) {

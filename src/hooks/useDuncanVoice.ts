@@ -160,6 +160,10 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     commitStrategy: CommitStrategy.VAD,
+    vadThreshold: 0.6,
+    minSpeechDurationMs: 300,
+    noVerbatim: true,
+    languageCode: "en",
     onPartialTranscript: (data: any) => {
       const text = (data?.text || "").trim();
       if (!text || isLikelyNoise(text)) return;
@@ -233,7 +237,8 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
         microphone: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: false,
+          autoGainControl: true,
+          channelCount: 1,
         },
       });
       setState("listening");

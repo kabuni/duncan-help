@@ -29,9 +29,12 @@ const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 const FASTAPI_CHAT_URL = rawApiBaseUrl && rawApiBaseUrl !== "undefined" && rawApiBaseUrl !== "null"
   ? `${rawApiBaseUrl}/norman-chat`
   : null;
-const NORMAL_TIMEOUT_MS = 90_000;
+const NORMAL_TIMEOUT_MS = 180_000;
 const HEAVY_TIMEOUT_MS = 300_000;
 const HEAVY_MODES: Mode[] = ["reason", "analyze", "automate", "briefing"];
+const HEAVY_KEYWORDS = /\b(meeting|meetings|calendar|diary|availability|schedule|brief|briefing|summary|summari[sz]e|recap|workstream|kanban|overdue|tasks?|report|analy[sz]e|compare|cv|candidate|recruit|email|gmail|inbox|draft|devops|ado|basecamp)\b/i;
+
+type TaggedController = AbortController & { wasTimeout?: boolean };
 
 function isHeavyChatRequest(
   mode: Mode,
@@ -41,13 +44,14 @@ function isHeavyChatRequest(
   return (
     HEAVY_MODES.includes(mode) ||
     (input?.length ?? 0) > 300 ||
-    (Array.isArray(attachments) && attachments.length > 0)
+    (Array.isArray(attachments) && attachments.length > 0) ||
+    HEAVY_KEYWORDS.test(input || "")
   );
 }
 
 function getChatErrorMessage(error: unknown) {
   if (error instanceof DOMException && error.name === "AbortError") {
-    return "Duncan took too long to respond, so the request was stopped. Please try again.";
+    return "That request took longer than expected. Duncan may still be working — try again or rephrase.";
   }
 
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -251,12 +255,16 @@ export function useNormanChat() {
         });
       };
 
+      let controller: TaggedController | null = null;
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        const controller = new AbortController();
+        controller = new AbortController() as TaggedController;
         inflightControllerRef.current = controller;
-        const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+        const timeoutId = window.setTimeout(() => {
+          controller!.wasTimeout = true;
+          controller!.abort();
+        }, timeoutMs);
 
         // --- Extract text from non-image attachments server-side ---
         const nonImageAtts = safeAttachments.filter((a) => !a.type.startsWith("image/"));
@@ -286,7 +294,7 @@ export function useNormanChat() {
               Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify({ messages: apiMessages, mode, userProfile: profile ?? undefined }),
-            signal: controller.signal,
+            signal: controller!.signal,
           });
         };
 
@@ -311,7 +319,7 @@ export function useNormanChat() {
           let resp = await fetchChat();
           if (resp.status === 429) {
             await new Promise((r) => setTimeout(r, 1500));
-            if (controller.signal.aborted) {
+            if (controller!.signal.aborted) {
               throw new DOMException("Timed out", "AbortError");
             }
             resp = await fetchChat();
@@ -332,6 +340,11 @@ export function useNormanChat() {
           window.clearTimeout(timeoutId);
         }
       } catch (e) {
+        // Silently swallow superseded-request aborts (newer send() cancelled this one)
+        if (e instanceof DOMException && e.name === "AbortError" && !controller?.wasTimeout) {
+          console.info("[Duncan] chat request superseded — silent");
+          return;
+        }
         console.error("Duncan chat error:", e);
         if (mountedRef.current) {
           toast.error(getChatErrorMessage(e));

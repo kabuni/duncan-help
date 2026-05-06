@@ -29,9 +29,12 @@ const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 const FASTAPI_CHAT_URL = rawApiBaseUrl && rawApiBaseUrl !== "undefined" && rawApiBaseUrl !== "null"
   ? `${rawApiBaseUrl}/norman-chat`
   : null;
-const NORMAL_TIMEOUT_MS = 90_000;
+const NORMAL_TIMEOUT_MS = 180_000;
 const HEAVY_TIMEOUT_MS = 300_000;
 const HEAVY_MODES: Mode[] = ["reason", "analyze", "automate", "briefing"];
+const HEAVY_KEYWORDS = /\b(meeting|meetings|calendar|diary|availability|schedule|brief|briefing|summary|summari[sz]e|recap|workstream|kanban|overdue|tasks?|report|analy[sz]e|compare|cv|candidate|recruit|email|gmail|inbox|draft|devops|ado|basecamp)\b/i;
+
+type TaggedController = AbortController & { wasTimeout?: boolean };
 
 function isHeavyChatRequest(
   mode: Mode,
@@ -41,13 +44,14 @@ function isHeavyChatRequest(
   return (
     HEAVY_MODES.includes(mode) ||
     (input?.length ?? 0) > 300 ||
-    (Array.isArray(attachments) && attachments.length > 0)
+    (Array.isArray(attachments) && attachments.length > 0) ||
+    HEAVY_KEYWORDS.test(input || "")
   );
 }
 
 function getChatErrorMessage(error: unknown) {
   if (error instanceof DOMException && error.name === "AbortError") {
-    return "Duncan took too long to respond, so the request was stopped. Please try again.";
+    return "That request took longer than expected. Duncan may still be working — try again or rephrase.";
   }
 
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";

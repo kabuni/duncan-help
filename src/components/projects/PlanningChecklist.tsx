@@ -319,9 +319,10 @@ export function PlanningChecklist({
               ))}
             </>
           )}
+        </div>
 
           {/* Quick-add */}
-          <div className="flex flex-wrap gap-1.5 pt-1">
+          <div className="flex flex-wrap gap-1.5 px-3 pb-3 pt-2 border-t border-border/50">
             <Input
               value={newGroup}
               onChange={(e) => setNewGroup(e.target.value)}

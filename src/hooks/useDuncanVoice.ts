@@ -25,7 +25,7 @@ function isLikelyNoise(raw: string): boolean {
 interface ChatLike {
   messages: { role: "user" | "assistant"; content: string }[];
   isLoading: boolean;
-  send: (input: string, mode?: any, attachments?: any[]) => void;
+  send: (input: string, mode?: any, attachments?: any[], opts?: { voiceMode?: boolean }) => void;
 }
 
 interface Options {

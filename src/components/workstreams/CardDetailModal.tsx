@@ -26,6 +26,7 @@ import {
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { StatusBadge, priorityConfig } from "./StatusBadge";
 import MultiAssigneeSelect from "./MultiAssigneeSelect";
+import { TaskAttachments } from "./TaskAttachments";
 import { useAuth } from "@/hooks/useAuth";
 
 interface CardDetailModalProps {

@@ -213,7 +213,7 @@ const Sidebar = ({
           }
         >
           <Receipt className="h-4 w-4" />
-          Purchase Orders
+          Budget Authorisation
         </RouterNavLink>
 
         {canViewBriefing(user?.email) && (

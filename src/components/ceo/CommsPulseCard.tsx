@@ -122,6 +122,10 @@ interface Props {
     release_risks?: number;
     summary?: string | null;
     degraded_reason?: string | null;
+    commits_7d?: number;
+    files_added_7d?: number;
+    files_removed_7d?: number;
+    active_contributors_7d?: number;
   } | null;
 }
 

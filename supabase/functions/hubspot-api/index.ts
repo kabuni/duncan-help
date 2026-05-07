@@ -42,6 +42,11 @@ type HubspotSummary = {
   key_contacts?: Array<Record<string, unknown>>;
   lists?: Array<Record<string, unknown>>;
   credential_diagnostics?: Record<string, unknown>;
+  form_metrics?: {
+    newsletter: { form_name: string | null; total: number; last_30d: number; found: boolean };
+    scout: { form_name: string | null; total: number; last_30d: number; found: boolean };
+    location_breakdown: Array<{ location: string; newsletter_count: number; scout_count: number }>;
+  } | null;
 };
 
 // Marketing forms (HubSpot Forms API) — fetched dynamically, no hardcoded names.

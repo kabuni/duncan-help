@@ -747,7 +747,10 @@ function TaskRow({
             )}
           </div>
 
-          {/* Comments list */}
+          {/* Attachments */}
+          <TaskAttachments taskId={task.id} />
+
+
           <div className="space-y-2">
             {taskComments.length === 0 ? (
               <p className="text-[10px] text-muted-foreground italic">No comments yet</p>

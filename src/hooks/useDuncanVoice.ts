@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useScribe, CommitStrategy } from "@elevenlabs/react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { extractSentences, sanitizeForSpeech } from "@/lib/ttsTextSanitizer";
+import { extractSpeakable, sanitizeForSpeech } from "@/lib/ttsTextSanitizer";
 
 type VoiceState = "idle" | "listening" | "thinking" | "speaking";
 
@@ -50,6 +50,26 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
   const mutedRef = useRef(muted);
   useEffect(() => { mutedRef.current = muted; }, [muted]);
   const lastCommitRef = useRef<{ text: string; at: number }>({ text: "", at: 0 });
+  const tokenRef = useRef<string | null>(null);
+  const hasWarmedRef = useRef(false);
+
+  // Keep cached access token in sync with auth state
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      tokenRef.current = session?.access_token ?? null;
+    });
+    return () => {
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  const getToken = useCallback(async (): Promise<string> => {
+    if (tokenRef.current) return tokenRef.current;
+    const { data: { session } } = await supabase.auth.getSession();
+    tokenRef.current = session?.access_token ?? null;
+    return tokenRef.current ?? "";
+  }, []);
+
 
   const stopAudio = useCallback(() => {
     queueRef.current = [];
@@ -74,16 +94,25 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
     playingRef.current = true;
     setState("speaking");
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const resp = await fetch(TTS_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token ?? ""}`,
-        },
-        body: JSON.stringify({ text: next, voiceId, speed }),
-      });
+      let token = await getToken();
+      const doFetch = (t: string) =>
+        fetch(TTS_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${t}`,
+          },
+          body: JSON.stringify({ text: next, voiceId, speed }),
+        });
+      let resp = await doFetch(token);
+      if (resp.status === 401) {
+        // Token may have rotated — refresh once and retry
+        tokenRef.current = null;
+        token = await getToken();
+        resp = await doFetch(token);
+      }
       if (!resp.ok) throw new Error(`TTS ${resp.status}`);
+
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
@@ -114,7 +143,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
       queueRef.current.push(clean);
       playNext();
     },
-    [playNext]
+    [playNext, getToken]
   );
 
   // Watch the latest assistant message and stream sentences into TTS queue
@@ -133,7 +162,10 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
     }
 
     const fresh = last.content.slice(lastSpokenIndexRef.current);
-    const { sentences, remainder } = extractSentences(fresh);
+    const { sentences, remainder } = extractSpeakable(fresh, {
+      eager: chat.isLoading,
+      minSoftLen: 60,
+    });
     if (sentences.length > 0) {
       sentences.forEach(enqueueSentence);
       lastSpokenIndexRef.current = last.content.length - remainder.length;
@@ -161,7 +193,8 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
     modelId: "scribe_v2_realtime",
     commitStrategy: CommitStrategy.VAD,
     vadThreshold: 0.6,
-    minSpeechDurationMs: 300,
+    minSpeechDurationMs: 200,
+    minSilenceDurationMs: 350,
     noVerbatim: true,
     languageCode: "eng",
     onPartialTranscript: (data: any) => {
@@ -218,6 +251,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not signed in");
+      tokenRef.current = session.access_token;
       const resp = await fetch(TOKEN_URL, {
         method: "POST",
         headers: {
@@ -242,6 +276,23 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
         },
       });
       setState("listening");
+
+      // Pre-warm TTS edge function + ElevenLabs connection so the first
+      // real reply doesn't pay cold-start cost. Fire-and-forget, no playback.
+      if (!hasWarmedRef.current) {
+        hasWarmedRef.current = true;
+        const warmToken = session.access_token;
+        fetch(TTS_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${warmToken}`,
+          },
+          body: JSON.stringify({ text: ".", voiceId, speed }),
+        })
+          .then((r) => r.body?.cancel().catch(() => {}))
+          .catch(() => {});
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[Duncan voice] start failed", e);
@@ -249,7 +300,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
       toast.error(msg);
       throw e;
     }
-  }, [scribe]);
+  }, [scribe, voiceId, speed]);
 
   const stop = useCallback(async () => {
     stopAudio();

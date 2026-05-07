@@ -9,6 +9,7 @@ import { useAuthSync } from "@/hooks/useAuthSync";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
+import Onboarding from "./pages/Onboarding";
 
 import Integrations from "./pages/Integrations";
 import Auth from "./pages/Auth";
@@ -45,6 +46,7 @@ const AppContent = () => {
           <Route path="/auth" element={<Auth />} />
           <Route path="/auth/slack/callback" element={<ProtectedRoute><SlackCallback /></ProtectedRoute>} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           
           <Route path="/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />

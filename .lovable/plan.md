@@ -1,61 +1,138 @@
-## Plan: HubSpot card — Newsletter / Scout form metrics + location breakdown
+# Mandatory Onboarding & Activation Flow
 
-Add compact metric tiles at the top of the HubSpot sub-card showing total + last-30d submission counts for the Newsletter signup form and the Scout form, plus a location breakdown table grouped by contact city/country. Existing sections (Active deals, At-risk, Key contacts, Marketing forms list) stay unchanged.
+## 1. Audit Summary (current state)
 
-### Backend — `supabase/functions/hubspot-api/index.ts`
+**Auth lifecycle today**
+- `Auth.tsx` → `supabase.auth.signUp` (email/password). `handle_new_user()` trigger creates `profiles` row with `approval_status = 'pending'`.
+- `ProtectedRoute` only checks `session` + `profile.approval_status === 'approved'`. After approval → full app access.
+- No onboarding state, no first-run wizard.
 
-1. **Identify the two forms by name** (case-insensitive substring match against `form.name` from existing `/marketing/v3/forms?limit=100` fetch):
-   - Newsletter: match any of `newsletter`, `subscribe`, `signup` (first hit wins, prefer `newsletter`).
-   - Scout: match `scout`.
-   - If no match, return zero counts with a `not_found` flag so the UI can show "Form not found".
+**Personalization (single source of truth — must be reused)**
+- Lives entirely in `public.profiles`, edited via `SettingsProfile.tsx` + `useProfile()`:
+  - `display_name`, `role_title`, `department`, `bio`
+  - `norman_context` ← the actual "Duncan Personalisation" free-text prompt that feeds AI context
+  - `avatar_url`
+  - `preferences` (jsonb, currently mostly unused — good place for onboarding state)
+- Used by Duncan's prompt engine (`bio` + `norman_context` injected into system prompt — see `mem://features/profile-personalization`).
 
-2. **New helper `fetchFormMetrics(token, source, formId)`**: paginates `/form-integrations/v1/submissions/forms/{formId}?limit=50` (HubSpot caps at 50) using the `paging.next.after` cursor. For each submission, capture `submittedAt` (ms) and the associated `contact.vid` / contact email from the submission's `values` array (email field). Stop paginating when oldest submission is older than 30 days **AND** we've collected the full total — but since `total` is returned on first page, use that for the "total" metric and only paginate enough pages to cover last 30d for the time window count.
-   - Returns: `{ form_id, form_name, total, last_30d_count, contact_emails_30d: string[], contact_vids_30d: string[] }`.
+**Integrations to gate on (Gmail + Google Calendar)**
+- Per-user OAuth, already complete:
+  - `gmail_tokens` table + `gmail-auth` / `gmail-callback` edge functions, hook `useGmailIntegration`.
+  - `google_calendar_tokens` table + `google-calendar-auth` / `google-calendar-callback`, hook `useGoogleCalendar`.
+- Both already have "Connect" buttons in `/integrations`. We reuse these hooks verbatim — no rebuild.
 
-3. **Resolve location for 30d submitters** via batch read `/crm/v3/objects/contacts/batch/read` with `properties: ["city","country","email"]` and `inputs` from the union of vids/emails for both forms. Build a `Map<contactId, {city, country}>`.
+## 2. State Model (minimal, no new table)
 
-4. **Aggregate location breakdown**: produce `location_breakdown: Array<{ location: string, newsletter_count: number, scout_count: number }>` where `location = [city, country].filter(Boolean).join(", ") || "Unknown"`. Sort by total desc, cap at 10 rows.
+Add two columns to `public.profiles`:
+- `onboarding_completed_at timestamptz null`
+- `onboarding_step text not null default 'welcome'`  (`welcome | integrations | personalization | done`)
 
-5. **Extend `HubspotSummary` and `buildTeamBriefingSummary`** with new field:
-   ```ts
-   form_metrics?: {
-     newsletter: { form_name: string|null, total: number, last_30d: number, found: boolean };
-     scout: { form_name: string|null, total: number, last_30d: number, found: boolean };
-     location_breakdown: Array<{ location: string; newsletter_count: number; scout_count: number }>;
-   }
-   ```
+Rationale: keeps onboarding co-located with approval/profile, avoids a parallel table, no jsonb gymnastics. Existing personalization fields stay exactly where they are.
 
-6. **Wire into team_briefing handler** (line ~874): after `fetchHubspotForms`, identify the two target forms from the existing `lists` result, call `fetchFormMetrics` for each in parallel, then resolve contacts and aggregate. Wrap in try/catch — on failure, omit `form_metrics` and log; do not break the rest of the card.
+A user is **fully active** when:
+```
+approval_status = 'approved' AND onboarding_completed_at IS NOT NULL
+```
 
-### Frontend — `src/components/ceo/CommsPulseCard.tsx`
+## 3. Route & Gating Flow
 
-1. **Extend `hubspotSignal` Props type** with the `form_metrics` shape above.
+```text
+unauth ─────────────► /auth
+pending approval ───► <Pending Approval screen> (existing)
+approved + !onboarded ─► /onboarding (forced, sidebar/chat/etc. blocked)
+approved + onboarded ──► full app
+```
 
-2. **Render new "Form metrics" block** at the very top of the HubSpot section (inside the existing `{hubspotSignal ? (...)` container, before the 4-column grid). Two parts:
+Extend `ProtectedRoute`:
+1. No session → `/auth`
+2. `approval_status !== 'approved'` → existing pending screen
+3. `onboarding_completed_at == null` → `<Navigate to="/onboarding">` (whitelist `/onboarding` itself + `/auth`)
+4. Otherwise render children.
 
-   **a. Compact tiles row** — 2 tiles, side by side:
-   ```
-   [ Newsletter signups          ] [ Scout submissions          ]
-   [ 1,247 total · 38 last 30d   ] [ 562 total · 14 last 30d    ]
-   ```
-   Use existing `rounded border bg-background/60 p-2.5` styling. If `found: false`, show "Form not found in connected portal" muted text.
+The `/onboarding` route renders a fullscreen flow (no `AppLayout`, no Sidebar) so the rest of the platform is genuinely inaccessible.
 
-   **b. Location breakdown table** — below the tiles, only if `location_breakdown.length > 0`. Compact 3-col table using existing `<Table>` primitives (`text-xs`, explicit borders matching project style):
-   ```
-   Location          | Newsletter | Scout
-   London, UK        |    412     |  187
-   New York, US      |    298     |  121
-   Unknown           |     54     |   23
-   ```
+## 4. Onboarding UX (modern AI-workspace style)
 
-3. **Keep all existing sections unchanged** (Active deals, At-risk accounts, Key contacts, Marketing forms grid, status meta).
+Single-page, 3 steps with progress dots. Linear/Cursor feel — large type, generous whitespace, one decision per screen, framer-motion transitions.
 
-### Out of scope
-- No DB migrations or schema changes
-- No changes to non-HubSpot sub-cards (Email/Slack/Azure Repos)
-- No historical trend lines, no per-form breakdown beyond Newsletter + Scout
-- Form name matching is fixed in code; no admin UI to configure
+**Step 1 — Welcome / Activation**
+- Duncan avatar, "Let's get you set up" headline, 3 short bullets (Connect → Personalize → Go).
+- Single "Get started" CTA. No forms.
 
-### Files changed
-- `supabase/functions/hubspot-api/index.ts` — new helpers, type extension, wired into team briefing path
-- `src/components/ceo/CommsPulseCard.tsx` — type extension + new tiles + location table at top of HubSpot section
+**Step 2 — Integrations (mandatory)**
+- Two cards: Gmail, Google Calendar. Each shows live status from `useGmailIntegration` / `useGoogleCalendar`.
+- "Connect" buttons trigger the existing OAuth flows. After redirect back, the step auto-detects connection and shows a green check.
+- "Continue" disabled until both connected. Optional "Why?" tooltip explaining what Duncan does with them.
+
+**Step 3 — Duncan Personalization (reuses existing system)**
+- Renders the EXACT same fields backed by `useProfile().updateProfile`:
+  - Display name (prefilled)
+  - Role / Department (prefilled from signup)
+  - About you (`bio`)
+  - Duncan Personalisation (`norman_context`) — same textarea, same field, same storage
+- A small `<PersonalizationForm>` component is extracted from `SettingsProfile.tsx` and reused by both Settings and Onboarding. Zero duplicate state.
+
+**Step 4 — Activation**
+- "You're all set" screen. Sets `onboarding_completed_at = now()`, `onboarding_step = 'done'`. Redirects to `/`.
+
+After each step, persist `onboarding_step` so refresh/return resumes in place.
+
+## 5. Backend / Security
+
+**Phase 1 (this PR — frontend gate, parity with current approval model):**
+- `ProtectedRoute` enforces onboarding. Same trust level as today's approval gate.
+
+**Phase 2 (recommended follow-up, NOT in this PR unless requested):**
+- Add SECURITY DEFINER `public.is_active_user(uid)` returning `approved AND onboarded`.
+- Tighten RLS on sensitive tables to use `is_active_user(auth.uid())` instead of bare `auth.uid()`.
+- Edge functions add an early `is_active_user` check after `getUser()`.
+- Risk of doing it now: broad RLS rewrite touches every domain table → high regression surface. Better as a dedicated hardening pass once the UX is shipped and stable.
+
+## 6. Schema Migration
+
+```sql
+ALTER TABLE public.profiles
+  ADD COLUMN onboarding_completed_at timestamptz,
+  ADD COLUMN onboarding_step text NOT NULL DEFAULT 'welcome';
+
+-- Existing approved users grandfathered in (don't force them through onboarding):
+UPDATE public.profiles
+   SET onboarding_completed_at = now(), onboarding_step = 'done'
+ WHERE approval_status = 'approved';
+```
+RLS: existing self-update policy already covers writes. No new policies needed.
+
+## 7. Files Affected
+
+**New**
+- `src/pages/Onboarding.tsx` — flow shell + step orchestration
+- `src/components/onboarding/StepWelcome.tsx`
+- `src/components/onboarding/StepIntegrations.tsx`
+- `src/components/onboarding/StepPersonalization.tsx`
+- `src/components/onboarding/StepComplete.tsx`
+- `src/components/profile/PersonalizationForm.tsx` — extracted from SettingsProfile, reused by both
+
+**Modified**
+- `src/App.tsx` — add `/onboarding` route
+- `src/components/ProtectedRoute.tsx` — onboarding gate
+- `src/hooks/useProfile.ts` — surface `onboarding_completed_at`, `onboarding_step`
+- `src/components/settings/SettingsProfile.tsx` — swap inline form for `<PersonalizationForm>`
+
+**Migration**
+- Adds two columns + grandfathers existing approved users.
+
+## 8. Risks & Notes
+
+- Grandfathering current approved users avoids locking the team out on deploy.
+- OAuth callbacks return to `/integrations` today; onboarding detects connection state on mount via existing hooks (no callback changes needed).
+- `norman_context` remains the single AI personalization field — onboarding writes to it directly, so Settings and onboarding are perfectly in sync.
+- Backend enforcement intentionally deferred to keep this change scoped and safe.
+
+## 9. Rollout
+
+1. Apply migration (grandfathers existing users).
+2. Ship frontend gate + onboarding flow.
+3. Monitor: any new signup goes through full flow; existing users see no change.
+4. Follow-up PR: `is_active_user()` + RLS/edge hardening (Phase 2).
+
+Awaiting approval before implementation.

@@ -429,6 +429,37 @@ Deno.serve(async (req) => {
           }
         }
 
+        // ---- Last-7d commit metrics (per-repo, file-change counts as line proxy) ----
+        const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        let commits7d = 0;
+        let filesAdded7d = 0;
+        let filesRemoved7d = 0;
+        const contributors7d = new Set<string>();
+        let commitMetricsPartial = false;
+
+        for (const r of repoList) {
+          try {
+            const url =
+              `${orgUrl}/${encodeURIComponent(r.project)}/_apis/git/repositories/${r.id}/commits` +
+              `?searchCriteria.fromDate=${encodeURIComponent(sevenDaysAgoIso)}` +
+              `&searchCriteria.includeLinks=false` +
+              `&searchCriteria.$top=1000` +
+              `&api-version=7.1`;
+            const cRes = await adoFetch(url, accessToken);
+            for (const c of cRes.value || []) {
+              commits7d += 1;
+              const who = c.author?.email || c.author?.name;
+              if (who) contributors7d.add(String(who).toLowerCase());
+              const cc = c.changeCounts || {};
+              filesAdded7d += Number(cc.Add || 0);
+              filesRemoved7d += Number(cc.Delete || 0);
+            }
+          } catch (e) {
+            commitMetricsPartial = true;
+            console.warn(`briefing_summary: commits scan failed for ${r.project}/${r.name}`, e);
+          }
+        }
+
         // Org-wide active PRs (single call instead of per-repo).
         let openPrs = 0;
         let blockedPrs = 0;

@@ -251,6 +251,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not signed in");
+      tokenRef.current = session.access_token;
       const resp = await fetch(TOKEN_URL, {
         method: "POST",
         headers: {

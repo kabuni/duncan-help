@@ -194,7 +194,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
     commitStrategy: CommitStrategy.VAD,
     vadThreshold: 0.6,
     minSpeechDurationMs: 200,
-    silenceDurationMs: 350,
+    minSilenceDurationMs: 350,
     noVerbatim: true,
     languageCode: "eng",
     onPartialTranscript: (data: any) => {

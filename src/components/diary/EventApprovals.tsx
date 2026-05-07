@@ -239,6 +239,7 @@ export function EventApprovals({ eventId }: { eventId: string }) {
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <div className="text-xs text-muted-foreground">Approvals</div>
+        <div className="text-[10px] text-muted-foreground italic">Cost sign-off? Use Purchase Orders →</div>
       </div>
 
       {loading ? (

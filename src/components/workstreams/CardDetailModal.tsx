@@ -83,6 +83,16 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
     setNewTaskTitle("");
   };
 
+  const handleAddSubtask = (parentTaskId: string, title: string, currentSubtaskCount: number) => {
+    if (!title.trim() || !cardId) return;
+    createTask.mutate({
+      card_id: cardId,
+      title: title.trim(),
+      parent_task_id: parentTaskId,
+      sort_order: currentSubtaskCount,
+    });
+  };
+
   const handleToggleTask = (task: WorkstreamTask) => {
     const nowCompleted = !task.completed;
     updateTask.mutate({

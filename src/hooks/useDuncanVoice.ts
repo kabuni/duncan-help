@@ -94,16 +94,25 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
     playingRef.current = true;
     setState("speaking");
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const resp = await fetch(TTS_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token ?? ""}`,
-        },
-        body: JSON.stringify({ text: next, voiceId, speed }),
-      });
+      let token = await getToken();
+      const doFetch = (t: string) =>
+        fetch(TTS_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${t}`,
+          },
+          body: JSON.stringify({ text: next, voiceId, speed }),
+        });
+      let resp = await doFetch(token);
+      if (resp.status === 401) {
+        // Token may have rotated — refresh once and retry
+        tokenRef.current = null;
+        token = await getToken();
+        resp = await doFetch(token);
+      }
       if (!resp.ok) throw new Error(`TTS ${resp.status}`);
+
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);

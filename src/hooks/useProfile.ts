@@ -13,6 +13,8 @@ export interface ProfileData {
   preferences: Record<string, unknown>;
   approval_status: string;
   requested_role_title: string | null;
+  onboarding_completed_at: string | null;
+  onboarding_step: string;
 }
 
 export function useProfile() {

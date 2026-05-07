@@ -501,18 +501,30 @@ Deno.serve(async (req) => {
 
         result = {
           connected: true,
-          status: partialFailure ? "degraded" : "connected",
+          status: (partialFailure || commitMetricsPartial) ? "degraded" : "connected",
           credential_source: "stored_token",
           verification_path: "/_apis/git/pullrequests",
           last_verified_at: verifiedAt,
           last_sync_at: verifiedAt,
-          error_code: partialFailure ? "pr_scan_partial_failure" : null,
-          error_message: partialFailure ? "Some pull requests could not be scanned fully" : null,
+          error_code: partialFailure
+            ? "pr_scan_partial_failure"
+            : commitMetricsPartial
+            ? "commit_scan_partial_failure"
+            : null,
+          error_message: partialFailure
+            ? "Some pull requests could not be scanned fully"
+            : commitMetricsPartial
+            ? "Some repository commit history could not be scanned fully"
+            : null,
           repos_scanned: reposScanned,
           open_prs: openPrs,
           blocked_prs: blockedPrs,
           stale_prs: stalePrs,
           release_risks: blockedPrs + stalePrs,
+          commits_7d: commits7d,
+          files_added_7d: filesAdded7d,
+          files_removed_7d: filesRemoved7d,
+          active_contributors_7d: contributors7d.size,
           signals,
           summary,
           metrics_summary: summary,

@@ -4423,7 +4423,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
     }
 
     const SIMPLE_INPUT_PATTERNS = [/^hi[!.?\s]*$/i, /^hello[!.?\s]*$/i, /^how are you[?.!\s]*$/i];
-    const MAX_TOOL_ROUNDS = 3;
+    const MAX_TOOL_ROUNDS = isVoiceMode ? 2 : 3;
     const MAX_EXECUTION_TIME_MS = 45_000;
 
     function extractPlainText(content: unknown): string {

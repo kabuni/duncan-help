@@ -276,6 +276,23 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
         },
       });
       setState("listening");
+
+      // Pre-warm TTS edge function + ElevenLabs connection so the first
+      // real reply doesn't pay cold-start cost. Fire-and-forget, no playback.
+      if (!hasWarmedRef.current) {
+        hasWarmedRef.current = true;
+        const warmToken = session.access_token;
+        fetch(TTS_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${warmToken}`,
+          },
+          body: JSON.stringify({ text: ".", voiceId, speed }),
+        })
+          .then((r) => r.body?.cancel().catch(() => {}))
+          .catch(() => {});
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[Duncan voice] start failed", e);

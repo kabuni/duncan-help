@@ -228,13 +228,23 @@ function StepIntegrations({
         <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
           Back
         </button>
-        <button
-          onClick={onNext}
-          disabled={!bothOk}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          Continue <ArrowRight className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-3">
+          {!bothOk && (
+            <button
+              onClick={onNext}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Skip for now
+            </button>
+          )}
+          <button
+            onClick={onNext}
+            disabled={!bothOk}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            Continue <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </motion.div>
   );

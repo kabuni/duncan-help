@@ -99,6 +99,11 @@ interface Props {
       updated_at?: string | null;
       error?: string | null;
     }>;
+    form_metrics?: {
+      newsletter?: { form_name?: string | null; total?: number; last_30d?: number; found?: boolean };
+      scout?: { form_name?: string | null; total?: number; last_30d?: number; found?: boolean };
+      location_breakdown?: Array<{ location: string; newsletter_count: number; scout_count: number }>;
+    } | null;
   } | null;
   azureReposSignal?: {
     status?: string;
@@ -221,6 +226,60 @@ function ExternalSignalColumn({
 
       {hubspotSignal ? (
         <div className="space-y-3 border-t border-border/70 pt-3">
+          {hubspotSignal.form_metrics ? (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                {(["newsletter", "scout"] as const).map((key) => {
+                  const fm = hubspotSignal.form_metrics?.[key];
+                  const label = key === "newsletter" ? "Newsletter signups" : "Scout submissions";
+                  return (
+                    <div key={key} className="rounded border border-border bg-background/60 p-2.5">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+                      {fm?.found ? (
+                        <>
+                          <div className="mt-0.5 flex items-baseline gap-1.5">
+                            <span className="text-base font-semibold tabular-nums text-foreground">{(fm.total ?? 0).toLocaleString()}</span>
+                            <span className="text-[10px] text-muted-foreground">total</span>
+                            <span className="text-[10px] text-muted-foreground">·</span>
+                            <span className="text-xs font-medium tabular-nums text-foreground">{(fm.last_30d ?? 0).toLocaleString()}</span>
+                            <span className="text-[10px] text-muted-foreground">last 30d</span>
+                          </div>
+                          {fm.form_name ? <div className="text-[10px] text-muted-foreground truncate mt-0.5">{fm.form_name}</div> : null}
+                        </>
+                      ) : (
+                        <div className="text-[10px] text-muted-foreground mt-1">Form not found in connected portal</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {(hubspotSignal.form_metrics.location_breakdown?.length ?? 0) > 0 ? (
+                <div className="rounded border border-border bg-background/60 overflow-hidden">
+                  <div className="px-2.5 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border">
+                    Location breakdown (last 30d)
+                  </div>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border text-[10px] uppercase tracking-wider text-muted-foreground">
+                        <th className="text-left font-normal px-2.5 py-1.5">Location</th>
+                        <th className="text-right font-normal px-2.5 py-1.5">Newsletter</th>
+                        <th className="text-right font-normal px-2.5 py-1.5">Scout</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {hubspotSignal.form_metrics.location_breakdown!.map((row, idx) => (
+                        <tr key={`${row.location}-${idx}`} className="border-b border-border last:border-0">
+                          <td className="px-2.5 py-1.5 text-foreground">{row.location}</td>
+                          <td className="px-2.5 py-1.5 text-right tabular-nums text-foreground">{row.newsletter_count.toLocaleString()}</td>
+                          <td className="px-2.5 py-1.5 text-right tabular-nums text-foreground">{row.scout_count.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">

@@ -50,6 +50,26 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
   const mutedRef = useRef(muted);
   useEffect(() => { mutedRef.current = muted; }, [muted]);
   const lastCommitRef = useRef<{ text: string; at: number }>({ text: "", at: 0 });
+  const tokenRef = useRef<string | null>(null);
+  const hasWarmedRef = useRef(false);
+
+  // Keep cached access token in sync with auth state
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      tokenRef.current = session?.access_token ?? null;
+    });
+    return () => {
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  const getToken = useCallback(async (): Promise<string> => {
+    if (tokenRef.current) return tokenRef.current;
+    const { data: { session } } = await supabase.auth.getSession();
+    tokenRef.current = session?.access_token ?? null;
+    return tokenRef.current ?? "";
+  }, []);
+
 
   const stopAudio = useCallback(() => {
     queueRef.current = [];

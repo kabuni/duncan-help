@@ -2017,6 +2017,7 @@ export type Database = {
           approval_tier: string | null
           approved_at: string | null
           approved_by: string | null
+          approver_user_id: string | null
           attachment_path: string | null
           category: Database["public"]["Enums"]["po_category"]
           created_at: string
@@ -2039,6 +2040,7 @@ export type Database = {
           approval_tier?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          approver_user_id?: string | null
           attachment_path?: string | null
           category?: Database["public"]["Enums"]["po_category"]
           created_at?: string
@@ -2061,6 +2063,7 @@ export type Database = {
           approval_tier?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          approver_user_id?: string | null
           attachment_path?: string | null
           category?: Database["public"]["Enums"]["po_category"]
           created_at?: string

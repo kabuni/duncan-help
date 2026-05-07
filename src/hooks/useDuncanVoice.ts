@@ -300,7 +300,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
       toast.error(msg);
       throw e;
     }
-  }, [scribe]);
+  }, [scribe, voiceId, speed]);
 
   const stop = useCallback(async () => {
     stopAudio();

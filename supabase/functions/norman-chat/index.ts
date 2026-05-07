@@ -4679,7 +4679,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     // First call to AI with tools if calendar is connected
     const requestBody: any = {
-      model: "gpt-4o",
+      model: CHAT_MODEL,
       messages: [
         { role: "system", content: systemContent },
         ...messages,

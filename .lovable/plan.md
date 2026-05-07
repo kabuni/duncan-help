@@ -1,138 +1,77 @@
-# Mandatory Onboarding & Activation Flow
 
-## 1. Audit Summary (current state)
+# Improving the approval process
 
-**Auth lifecycle today**
-- `Auth.tsx` → `supabase.auth.signUp` (email/password). `handle_new_user()` trigger creates `profiles` row with `approval_status = 'pending'`.
-- `ProtectedRoute` only checks `session` + `profile.approval_status === 'approved'`. After approval → full app access.
-- No onboarding state, no first-run wizard.
+## The problem
 
-**Personalization (single source of truth — must be reused)**
-- Lives entirely in `public.profiles`, edited via `SettingsProfile.tsx` + `useProfile()`:
-  - `display_name`, `role_title`, `department`, `bio`
-  - `norman_context` ← the actual "Duncan Personalisation" free-text prompt that feeds AI context
-  - `avatar_url`
-  - `preferences` (jsonb, currently mostly unused — good place for onboarding state)
-- Used by Duncan's prompt engine (`bio` + `norman_context` injected into system prompt — see `mem://features/profile-personalization`).
+Today, "approvals" live in three disconnected places:
 
-**Integrations to gate on (Gmail + Google Calendar)**
-- Per-user OAuth, already complete:
-  - `gmail_tokens` table + `gmail-auth` / `gmail-callback` edge functions, hook `useGmailIntegration`.
-  - `google_calendar_tokens` table + `google-calendar-auth` / `google-calendar-callback`, hook `useGoogleCalendar`.
-- Both already have "Connect" buttons in `/integrations`. We reuse these hooks verbatim — no rebuild.
+1. **Planner** (`key_event_approvals`) — bolted onto calendar events. Works for "approve this launch date", awkward for anything without a date (a cost, a contract, a hire).
+2. **Purchase Orders** (`POApprovals`) — proper tiered sign-off (dept owner / admin), rejection reasons, but isolated on its own page.
+3. **Account approvals**, **Release approvals**, etc. — each in its own settings nook.
 
-## 2. State Model (minimal, no new table)
+Nothing pulls these into one place for the approver, and there's no obvious home for "I need someone to sign off £4k of spend that isn't tied to an event."
 
-Add two columns to `public.profiles`:
-- `onboarding_completed_at timestamptz null`
-- `onboarding_step text not null default 'welcome'`  (`welcome | integrations | personalization | done`)
+## Recommendation — three layers
 
-Rationale: keeps onboarding co-located with approval/profile, avoids a parallel table, no jsonb gymnastics. Existing personalization fields stay exactly where they are.
+### 1. Stop forcing costs into the planner
 
-A user is **fully active** when:
-```
-approval_status = 'approved' AND onboarding_completed_at IS NOT NULL
-```
+Costs should flow through **Purchase Orders**, not planner approvals. The PO module already supports vendor, amount, department, tiered approval, rejection reasons and audit. We extend it slightly so it covers *all* cost sign-off cases, not just formal POs:
 
-## 3. Route & Gating Flow
+- Add a lightweight **"Cost approval"** entry type alongside formal POs (same table, `kind = 'cost' | 'po'`). One-line description, amount, department, attachments — no need for a vendor/PO number for ad-hoc spend.
+- From the planner event detail, an event with budget impact gets a **"Request cost sign-off"** button that pre-fills a cost approval and links back to the event (`linked_event_id`) — instead of pretending the approval *is* the event.
+
+### 2. Introduce a generic `approvals` primitive
+
+A single table that any module can write to:
 
 ```text
-unauth ─────────────► /auth
-pending approval ───► <Pending Approval screen> (existing)
-approved + !onboarded ─► /onboarding (forced, sidebar/chat/etc. blocked)
-approved + onboarded ──► full app
+approvals
+  id, kind ('cost' | 'event_date' | 'release' | 'hire' | 'contract' | 'other')
+  subject_table, subject_id          -- polymorphic link back to source
+  title, summary, amount?, currency?
+  requested_by, approver_profile_id
+  status ('pending'|'approved'|'rejected'|'changes_requested')
+  decision_note, decided_at
+  due_at?                            -- SLA / deadline
+  created_at
 ```
 
-Extend `ProtectedRoute`:
-1. No session → `/auth`
-2. `approval_status !== 'approved'` → existing pending screen
-3. `onboarding_completed_at == null` → `<Navigate to="/onboarding">` (whitelist `/onboarding` itself + `/auth`)
-4. Otherwise render children.
+Existing `key_event_approvals` and PO approvals stay where they are (they have domain fields the generic table shouldn't carry), but they **emit a row into `approvals`** on create/update via trigger. That gives us one queryable surface without a destructive migration.
 
-The `/onboarding` route renders a fullscreen flow (no `AppLayout`, no Sidebar) so the rest of the platform is genuinely inaccessible.
+### 3. Build an "Approvals Inbox"
 
-## 4. Onboarding UX (modern AI-workspace style)
+A new top-level page (`/approvals`) and a Sidebar count badge, showing every pending item where `approver_profile_id = me`, grouped by kind:
 
-Single-page, 3 steps with progress dots. Linear/Cursor feel — large type, generous whitespace, one decision per screen, framer-motion transitions.
-
-**Step 1 — Welcome / Activation**
-- Duncan avatar, "Let's get you set up" headline, 3 short bullets (Connect → Personalize → Go).
-- Single "Get started" CTA. No forms.
-
-**Step 2 — Integrations (mandatory)**
-- Two cards: Gmail, Google Calendar. Each shows live status from `useGmailIntegration` / `useGoogleCalendar`.
-- "Connect" buttons trigger the existing OAuth flows. After redirect back, the step auto-detects connection and shows a green check.
-- "Continue" disabled until both connected. Optional "Why?" tooltip explaining what Duncan does with them.
-
-**Step 3 — Duncan Personalization (reuses existing system)**
-- Renders the EXACT same fields backed by `useProfile().updateProfile`:
-  - Display name (prefilled)
-  - Role / Department (prefilled from signup)
-  - About you (`bio`)
-  - Duncan Personalisation (`norman_context`) — same textarea, same field, same storage
-- A small `<PersonalizationForm>` component is extracted from `SettingsProfile.tsx` and reused by both Settings and Onboarding. Zero duplicate state.
-
-**Step 4 — Activation**
-- "You're all set" screen. Sets `onboarding_completed_at = now()`, `onboarding_step = 'done'`. Redirects to `/`.
-
-After each step, persist `onboarding_step` so refresh/return resumes in place.
-
-## 5. Backend / Security
-
-**Phase 1 (this PR — frontend gate, parity with current approval model):**
-- `ProtectedRoute` enforces onboarding. Same trust level as today's approval gate.
-
-**Phase 2 (recommended follow-up, NOT in this PR unless requested):**
-- Add SECURITY DEFINER `public.is_active_user(uid)` returning `approved AND onboarded`.
-- Tighten RLS on sensitive tables to use `is_active_user(auth.uid())` instead of bare `auth.uid()`.
-- Edge functions add an early `is_active_user` check after `getUser()`.
-- Risk of doing it now: broad RLS rewrite touches every domain table → high regression surface. Better as a dedicated hardening pass once the UX is shipped and stable.
-
-## 6. Schema Migration
-
-```sql
-ALTER TABLE public.profiles
-  ADD COLUMN onboarding_completed_at timestamptz,
-  ADD COLUMN onboarding_step text NOT NULL DEFAULT 'welcome';
-
--- Existing approved users grandfathered in (don't force them through onboarding):
-UPDATE public.profiles
-   SET onboarding_completed_at = now(), onboarding_step = 'done'
- WHERE approval_status = 'approved';
+```text
+Approvals (4 pending)
+  Costs (2)        £4,200 — "Off-site catering"      Request: Ash       [Approve][Reject][Comment]
+                   £850   — "Figma seats x3"          Request: Priya     [Approve][Reject][Comment]
+  Event dates (1)  "Investor update — 14 May"        Request: Nimesh    [Approve][Suggest date]
+  Releases (1)     "v2.4 — feature flags off"        Request: Ops       [Approve][Reject]
 ```
-RLS: existing self-update policy already covers writes. No new policies needed.
 
-## 7. Files Affected
+Plus:
 
-**New**
-- `src/pages/Onboarding.tsx` — flow shell + step orchestration
-- `src/components/onboarding/StepWelcome.tsx`
-- `src/components/onboarding/StepIntegrations.tsx`
-- `src/components/onboarding/StepPersonalization.tsx`
-- `src/components/onboarding/StepComplete.tsx`
-- `src/components/profile/PersonalizationForm.tsx` — extracted from SettingsProfile, reused by both
+- **Filters**: kind, requester, age, amount.
+- **Bulk actions** for low-risk items (e.g. approve multiple <£500 costs).
+- **SLA chip** when `due_at` is near or past.
+- **Slack DM on request + decision** — reuse `notify-event-approval` and generalise it to `notify-approval`.
 
-**Modified**
-- `src/App.tsx` — add `/onboarding` route
-- `src/components/ProtectedRoute.tsx` — onboarding gate
-- `src/hooks/useProfile.ts` — surface `onboarding_completed_at`, `onboarding_step`
-- `src/components/settings/SettingsProfile.tsx` — swap inline form for `<PersonalizationForm>`
+## What changes for users
 
-**Migration**
-- Adds two columns + grandfathers existing approved users.
+- **CEO / approvers**: one inbox, one place to clear, with a Slack ping. No more hunting between Planner, POs and Settings.
+- **Requesters**: a "Request approval" action wherever it makes sense — on a PO, on an event, on a release, or standalone for ad-hoc costs.
+- **Planner**: stays for *date-bound* sign-offs (launch dates, holidays, comms windows). Cost approvals leave the planner.
 
-## 8. Risks & Notes
+## Phasing
 
-- Grandfathering current approved users avoids locking the team out on deploy.
-- OAuth callbacks return to `/integrations` today; onboarding detects connection state on mount via existing hooks (no callback changes needed).
-- `norman_context` remains the single AI personalization field — onboarding writes to it directly, so Settings and onboarding are perfectly in sync.
-- Backend enforcement intentionally deferred to keep this change scoped and safe.
+1. **Phase 1 — short**: add the `approvals` table + triggers from `key_event_approvals` and `purchase_orders`; build `/approvals` inbox (read-only roll-up, decision still happens in the source module). Generalise the Slack notifier.
+2. **Phase 2**: add the lightweight "cost approval" path on PurchaseOrders + a "Request cost sign-off" button on planner events.
+3. **Phase 3**: allow decisions directly from the inbox (write back to source rows), bulk approve, SLA badges.
 
-## 9. Rollout
+## Open questions before I plan implementation
 
-1. Apply migration (grandfathers existing users).
-2. Ship frontend gate + onboarding flow.
-3. Monitor: any new signup goes through full flow; existing users see no change.
-4. Follow-up PR: `is_active_user()` + RLS/edge hardening (Phase 2).
-
-Awaiting approval before implementation.
+1. Should the inbox **also let you decide** in-place (Phase 3) from day one, or are you happy with the read-only roll-up first?
+2. For ad-hoc cost approvals: keep them in the existing `purchase_orders` table with a `kind` column, or split into a sibling `cost_requests` table? (I'd recommend the former — less surface area.)
+3. Approver model — single approver per item (today's model), or do you want **multi-approver** (e.g. dept owner *and* finance both required) for amounts above a threshold?
+4. Should approvers see a **weekly digest** ("3 items waiting > 48h") in addition to per-event Slack DMs?

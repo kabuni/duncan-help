@@ -176,3 +176,12 @@ verify_jwt = false
 
 [functions.duncan-calendar-sync]
 verify_jwt = false
+
+[functions.hubspot-api]
+verify_jwt = false
+
+[functions.azure-repos-api]
+verify_jwt = false
+
+[functions.ceo-briefing]
+verify_jwt = false

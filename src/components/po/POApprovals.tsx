@@ -8,16 +8,27 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePurchaseOrders, useApprovePO } from "@/hooks/usePurchaseOrders";
 import { useDepartments } from "@/hooks/useDepartments";
+import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
 
 export default function POApprovals() {
   const { data: orders = [] } = usePurchaseOrders();
   const { data: departments = [] } = useDepartments();
+  const { user } = useAuth();
   const approvePO = useApprovePO();
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
-  const pending = orders.filter(o => o.status === "pending_approval");
+  const pending = orders.filter(o => {
+    if (o.status !== "pending_approval") return false;
+    const me = user?.id;
+    if (!me) return false;
+    // Primary approver still needs to sign
+    if (o.approver_user_id === me && !o.approved_at) return true;
+    // Secondary approver still needs to sign
+    if (o.secondary_approver_user_id === me && !o.secondary_approved_at) return true;
+    return false;
+  });
   const getDeptName = (id: string) => departments.find(d => d.id === id)?.name ?? "—";
 
   const handleReject = async () => {
@@ -48,7 +59,15 @@ export default function POApprovals() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-muted-foreground">{po.po_number}</span>
-                    <Badge variant="outline" className="text-[10px]">{po.approval_tier === "admin" ? "Admin" : "Dept Owner"}</Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {po.approval_tier === "dual_exec"
+                        ? (po.approved_at ? "Co-approval" : "Exec sign-off")
+                        : po.approval_tier === "simon"
+                        ? "Simon"
+                        : po.approval_tier === "admin"
+                        ? "Admin"
+                        : "Dept Owner"}
+                    </Badge>
                   </div>
                   <p className="text-sm font-medium text-foreground truncate">{po.vendor_name} — {po.description}</p>
                   <p className="text-xs text-muted-foreground">{getDeptName(po.department_id)} · {format(new Date(po.created_at), "dd MMM yyyy")}</p>

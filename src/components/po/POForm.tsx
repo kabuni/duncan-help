@@ -97,8 +97,8 @@ export default function POForm({ onClose }: { onClose: () => void }) {
 
   const tierLabel =
     totalAmount < 500 ? "Auto-approved" :
-    totalAmount <= 5000 ? "Dept Owner approval" :
-    "Admin approval required";
+    totalAmount <= 5000 ? "Simon Wood approval" :
+    "Nimesh + Patrick (dual sign-off)";
 
   return (
     <Dialog open onOpenChange={() => onClose()}>

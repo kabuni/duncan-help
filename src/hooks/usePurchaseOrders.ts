@@ -23,6 +23,9 @@ export interface PurchaseOrder {
   approver_user_id: string | null;
   approved_by: string | null;
   approved_at: string | null;
+  secondary_approver_user_id: string | null;
+  secondary_approved_by: string | null;
+  secondary_approved_at: string | null;
   rejection_reason: string | null;
   attachment_path: string | null;
   notes: string | null;
@@ -97,14 +100,32 @@ export function useApprovePO() {
 
   return useMutation({
     mutationFn: async ({ id, approved, rejection_reason }: { id: string; approved: boolean; rejection_reason?: string }) => {
-      const update: any = {
-        status: approved ? "approved" : "rejected",
-        approved_by: approved ? user!.id : null,
-        approved_at: approved ? new Date().toISOString() : null,
-      };
+      // Look up the PO to decide which approver slot the current user fills
+      const { data: po, error: fetchErr } = await supabase
+        .from("purchase_orders")
+        .select("approver_user_id, secondary_approver_user_id, approved_at, secondary_approved_at")
+        .eq("id", id)
+        .single();
+      if (fetchErr) throw fetchErr;
+
+      const update: any = {};
+      const now = new Date().toISOString();
+
       if (!approved) {
+        update.status = "rejected";
         update.rejection_reason = rejection_reason || "Rejected";
+      } else if (po.approver_user_id === user!.id) {
+        update.approved_by = user!.id;
+        update.approved_at = now;
+      } else if (po.secondary_approver_user_id === user!.id) {
+        update.secondary_approved_by = user!.id;
+        update.secondary_approved_at = now;
+      } else {
+        // Fallback: admin override fills primary slot
+        update.approved_by = user!.id;
+        update.approved_at = now;
       }
+
       const { error } = await supabase.from("purchase_orders").update(update).eq("id", id);
       if (error) throw error;
     },

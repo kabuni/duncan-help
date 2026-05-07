@@ -2030,6 +2030,9 @@ export type Database = {
           quantity: number
           rejection_reason: string | null
           requester_id: string
+          secondary_approved_at: string | null
+          secondary_approved_by: string | null
+          secondary_approver_user_id: string | null
           status: Database["public"]["Enums"]["po_status"]
           total_amount: number
           unit_price: number
@@ -2053,6 +2056,9 @@ export type Database = {
           quantity?: number
           rejection_reason?: string | null
           requester_id: string
+          secondary_approved_at?: string | null
+          secondary_approved_by?: string | null
+          secondary_approver_user_id?: string | null
           status?: Database["public"]["Enums"]["po_status"]
           total_amount: number
           unit_price: number
@@ -2076,6 +2082,9 @@ export type Database = {
           quantity?: number
           rejection_reason?: string | null
           requester_id?: string
+          secondary_approved_at?: string | null
+          secondary_approved_by?: string | null
+          secondary_approver_user_id?: string | null
           status?: Database["public"]["Enums"]["po_status"]
           total_amount?: number
           unit_price?: number

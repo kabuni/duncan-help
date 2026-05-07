@@ -217,6 +217,7 @@ export function useWorkstreamCards(filters?: {
       const taskCounts: Record<string, { total: number; completed: number }> = {};
       const tasksByCard: Record<string, Array<{ status?: string | null; completed?: boolean }>> = {};
       (tasksRes.data || []).forEach((t: any) => {
+        if (t.parent_task_id) return; // only count top-level tasks for card rollup
         if (!taskCounts[t.card_id]) taskCounts[t.card_id] = { total: 0, completed: 0 };
         taskCounts[t.card_id].total++;
         if (t.completed) taskCounts[t.card_id].completed++;

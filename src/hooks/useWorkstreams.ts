@@ -510,7 +510,7 @@ export function useCreateTask() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async (input: { card_id: string; title: string; description?: string; assignee_id?: string; due_date?: string; sort_order?: number; assignee_ids?: string[] }) => {
+    mutationFn: async (input: { card_id: string; title: string; description?: string; assignee_id?: string; due_date?: string; sort_order?: number; assignee_ids?: string[]; parent_task_id?: string | null }) => {
       const { assignee_ids, ...taskInput } = input;
       const { data, error } = await supabase
         .from("workstream_tasks")

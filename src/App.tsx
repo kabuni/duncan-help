@@ -9,6 +9,7 @@ import { useAuthSync } from "@/hooks/useAuthSync";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
+import Onboarding from "./pages/Onboarding";
 
 import Integrations from "./pages/Integrations";
 import Auth from "./pages/Auth";

@@ -30,7 +30,7 @@ const PurchaseOrders = () => {
                   Purchase Orders
                 </p>
                 <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
-                  Procurement & <span className="text-primary glow-text">Budget</span>
+                  Budget <span className="text-primary glow-text">Authorisation</span>
                 </h2>
               </div>
               <Button onClick={() => setShowForm(true)} className="gap-2 w-full sm:w-auto">

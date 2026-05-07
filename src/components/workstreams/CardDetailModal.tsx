@@ -632,6 +632,7 @@ function MetaField({ icon, label, value, children }: {
 
 function TaskRow({
   task, users, currentUserId, onToggle, onDelete, onUpdateAssignees, onUpdateDueDate, onSetStatus,
+  onAddSubtask, onToggleSubtask, onDeleteSubtask,
 }: {
   task: WorkstreamTask;
   users: UserProfile[];
@@ -641,7 +642,14 @@ function TaskRow({
   onUpdateAssignees: (ids: string[]) => void;
   onUpdateDueDate: (date: string | null) => void;
   onSetStatus: (status: CardStatus) => void;
+  onAddSubtask?: (title: string) => void;
+  onToggleSubtask?: (sub: WorkstreamTask) => void;
+  onDeleteSubtask?: (sub: WorkstreamTask) => void;
 }) {
+  const subtasks = task.subtasks || [];
+  const isSubtask = !!task.parent_task_id;
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [showSubtaskInput, setShowSubtaskInput] = useState(false);
   const initialExpanded = (task.comments_count || 0) > 0;
   const [expanded, setExpanded] = useState(initialExpanded);
   const [newComment, setNewComment] = useState("");

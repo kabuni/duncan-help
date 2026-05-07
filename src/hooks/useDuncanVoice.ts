@@ -193,7 +193,8 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
     modelId: "scribe_v2_realtime",
     commitStrategy: CommitStrategy.VAD,
     vadThreshold: 0.6,
-    minSpeechDurationMs: 300,
+    minSpeechDurationMs: 200,
+    silenceDurationMs: 350,
     noVerbatim: true,
     languageCode: "eng",
     onPartialTranscript: (data: any) => {

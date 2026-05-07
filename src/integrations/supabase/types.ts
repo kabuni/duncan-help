@@ -2900,6 +2900,7 @@ export type Database = {
           description: string
           due_date: string | null
           id: string
+          parent_task_id: string | null
           sort_order: number
           status: string
           title: string
@@ -2913,6 +2914,7 @@ export type Database = {
           description?: string
           due_date?: string | null
           id?: string
+          parent_task_id?: string | null
           sort_order?: number
           status?: string
           title: string
@@ -2926,6 +2928,7 @@ export type Database = {
           description?: string
           due_date?: string | null
           id?: string
+          parent_task_id?: string | null
           sort_order?: number
           status?: string
           title?: string
@@ -2937,6 +2940,13 @@ export type Database = {
             columns: ["card_id"]
             isOneToOne: false
             referencedRelation: "workstream_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workstream_tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "workstream_tasks"
             referencedColumns: ["id"]
           },
         ]

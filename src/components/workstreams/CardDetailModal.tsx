@@ -83,6 +83,16 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
     setNewTaskTitle("");
   };
 
+  const handleAddSubtask = (parentTaskId: string, title: string, currentSubtaskCount: number) => {
+    if (!title.trim() || !cardId) return;
+    createTask.mutate({
+      card_id: cardId,
+      title: title.trim(),
+      parent_task_id: parentTaskId,
+      sort_order: currentSubtaskCount,
+    });
+  };
+
   const handleToggleTask = (task: WorkstreamTask) => {
     const nowCompleted = !task.completed;
     updateTask.mutate({
@@ -476,6 +486,9 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                         onUpdateAssignees={(ids) => updateTaskAssignees.mutate({ taskId: task.id, cardId: task.card_id, userIds: ids })}
                         onUpdateDueDate={(d) => updateTask.mutate({ id: task.id, card_id: task.card_id, due_date: d })}
                         onSetStatus={(s) => handleSetTaskStatus(task, s)}
+                        onAddSubtask={(title) => handleAddSubtask(task.id, title, (task.subtasks || []).length)}
+                        onToggleSubtask={(sub) => handleToggleTask(sub)}
+                        onDeleteSubtask={(sub) => deleteTask.mutate({ id: sub.id, card_id: sub.card_id })}
                       />
                     ))}
 
@@ -516,6 +529,9 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                               onUpdateAssignees={(ids) => updateTaskAssignees.mutate({ taskId: task.id, cardId: task.card_id, userIds: ids })}
                               onUpdateDueDate={(d) => updateTask.mutate({ id: task.id, card_id: task.card_id, due_date: d })}
                               onSetStatus={(s) => handleSetTaskStatus(task, s)}
+                              onAddSubtask={(title) => handleAddSubtask(task.id, title, (task.subtasks || []).length)}
+                              onToggleSubtask={(sub) => handleToggleTask(sub)}
+                              onDeleteSubtask={(sub) => deleteTask.mutate({ id: sub.id, card_id: sub.card_id })}
                             />
                           ))}
                         </div>
@@ -616,6 +632,7 @@ function MetaField({ icon, label, value, children }: {
 
 function TaskRow({
   task, users, currentUserId, onToggle, onDelete, onUpdateAssignees, onUpdateDueDate, onSetStatus,
+  onAddSubtask, onToggleSubtask, onDeleteSubtask,
 }: {
   task: WorkstreamTask;
   users: UserProfile[];
@@ -625,7 +642,14 @@ function TaskRow({
   onUpdateAssignees: (ids: string[]) => void;
   onUpdateDueDate: (date: string | null) => void;
   onSetStatus: (status: CardStatus) => void;
+  onAddSubtask?: (title: string) => void;
+  onToggleSubtask?: (sub: WorkstreamTask) => void;
+  onDeleteSubtask?: (sub: WorkstreamTask) => void;
 }) {
+  const subtasks = task.subtasks || [];
+  const isSubtask = !!task.parent_task_id;
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [showSubtaskInput, setShowSubtaskInput] = useState(false);
   const initialExpanded = (task.comments_count || 0) > 0;
   const [expanded, setExpanded] = useState(initialExpanded);
   const [newComment, setNewComment] = useState("");
@@ -762,6 +786,71 @@ function TaskRow({
               <Send className="h-3 w-3" />
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* Subtasks (one level) */}
+      {!isSubtask && (subtasks.length > 0 || onAddSubtask) && (
+        <div className="mt-2 ml-6 pl-3 border-l border-border/60 space-y-1.5">
+          {subtasks.map(sub => (
+            <div key={sub.id} className="group/sub flex items-center gap-2 py-0.5">
+              <button onClick={() => onToggleSubtask?.(sub)} className="shrink-0">
+                {sub.completed ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                ) : (
+                  <Circle className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+                )}
+              </button>
+              <span className={`flex-1 text-xs ${sub.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                {sub.title}
+              </span>
+              {(sub.assignees || []).slice(0, 2).map(a => (
+                <Badge key={a.user_id} variant="secondary" className="text-[10px] py-0 px-1.5">
+                  {(a.display_name || "?").split(" ")[0]}
+                </Badge>
+              ))}
+              <button
+                onClick={() => onDeleteSubtask?.(sub)}
+                className="opacity-0 group-hover/sub:opacity-100 h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-destructive transition"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+
+          {onAddSubtask && (
+            showSubtaskInput ? (
+              <div className="flex items-center gap-1.5 pt-1">
+                <Input
+                  autoFocus
+                  value={newSubtaskTitle}
+                  onChange={e => setNewSubtaskTitle(e.target.value)}
+                  placeholder="Subtask title…"
+                  className="h-7 text-xs"
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && newSubtaskTitle.trim()) {
+                      onAddSubtask(newSubtaskTitle.trim());
+                      setNewSubtaskTitle("");
+                      setShowSubtaskInput(false);
+                    } else if (e.key === "Escape") {
+                      setShowSubtaskInput(false);
+                      setNewSubtaskTitle("");
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!newSubtaskTitle.trim()) setShowSubtaskInput(false);
+                  }}
+                />
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowSubtaskInput(true)}
+                className="text-[10px] text-muted-foreground hover:text-primary inline-flex items-center gap-1 transition-colors pt-0.5"
+              >
+                <Plus className="h-2.5 w-2.5" /> Add subtask
+              </button>
+            )
+          )}
         </div>
       )}
     </div>

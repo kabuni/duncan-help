@@ -103,6 +103,7 @@ export interface AssigneeInfo {
 export interface WorkstreamTask {
   id: string;
   card_id: string;
+  parent_task_id: string | null;
   title: string;
   description: string;
   assignee_id: string | null;
@@ -115,6 +116,7 @@ export interface WorkstreamTask {
   assignee_name?: string;
   assignees?: AssigneeInfo[];
   comments_count?: number;
+  subtasks?: WorkstreamTask[];
 }
 
 export interface WorkstreamComment {
@@ -193,7 +195,7 @@ export function useWorkstreamCards(filters?: {
 
       // Fetch task counts, card assignees, and owner profiles in parallel
       const [tasksRes, cardAssigneesRes] = await Promise.all([
-        supabase.from("workstream_tasks").select("card_id, completed, status").in("card_id", cardIds),
+        supabase.from("workstream_tasks").select("card_id, completed, status, parent_task_id").in("card_id", cardIds),
         supabase.from("workstream_card_assignees").select("card_id, user_id, assignment_status, responded_at, decline_reason").in("card_id", cardIds),
       ]);
 
@@ -215,6 +217,7 @@ export function useWorkstreamCards(filters?: {
       const taskCounts: Record<string, { total: number; completed: number }> = {};
       const tasksByCard: Record<string, Array<{ status?: string | null; completed?: boolean }>> = {};
       (tasksRes.data || []).forEach((t: any) => {
+        if (t.parent_task_id) return; // only count top-level tasks for card rollup
         if (!taskCounts[t.card_id]) taskCounts[t.card_id] = { total: 0, completed: 0 };
         taskCounts[t.card_id].total++;
         if (t.completed) taskCounts[t.card_id].completed++;
@@ -334,6 +337,19 @@ export function useWorkstreamCard(cardId: string | null) {
           comments_count: taskCommentCountMap[t.id] || 0,
         })) as WorkstreamTask[];
 
+        // Nest subtasks under their parents
+        const topLevel = mappedTasks.filter(t => !t.parent_task_id);
+        const childrenByParent: Record<string, WorkstreamTask[]> = {};
+        mappedTasks.forEach(t => {
+          if (t.parent_task_id) {
+            (childrenByParent[t.parent_task_id] ||= []).push(t);
+          }
+        });
+        const nestedTasks = topLevel.map(t => ({
+          ...t,
+          subtasks: (childrenByParent[t.id] || []).sort((a, b) => a.sort_order - b.sort_order),
+        }));
+
         return {
           card: {
             ...card,
@@ -341,10 +357,10 @@ export function useWorkstreamCard(cardId: string | null) {
             priority: card.priority as CardPriority,
             owner_name: card.owner_id ? profileMap[card.owner_id] : undefined,
             assignees: cardAssignees.map((a: any) => ({ user_id: a.user_id, display_name: profileMap[a.user_id] || "Unknown", assignment_status: a.assignment_status, responded_at: a.responded_at, decline_reason: a.decline_reason })),
-            overall_status: getOverallStatus(mappedTasks),
-            task_breakdown: getTaskBreakdown(mappedTasks),
+            overall_status: getOverallStatus(topLevel),
+            task_breakdown: getTaskBreakdown(topLevel),
           } as WorkstreamCard,
-          tasks: mappedTasks,
+          tasks: nestedTasks,
           comments: comments.map(c => ({ ...c, user_name: profileMap[c.user_id] })) as WorkstreamComment[],
           activity: activity.map(a => ({ ...a, user_name: profileMap[a.user_id] })) as WorkstreamActivity[],
         };
@@ -494,7 +510,7 @@ export function useCreateTask() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async (input: { card_id: string; title: string; description?: string; assignee_id?: string; due_date?: string; sort_order?: number; assignee_ids?: string[] }) => {
+    mutationFn: async (input: { card_id: string; title: string; description?: string; assignee_id?: string; due_date?: string; sort_order?: number; assignee_ids?: string[]; parent_task_id?: string | null }) => {
       const { assignee_ids, ...taskInput } = input;
       const { data, error } = await supabase
         .from("workstream_tasks")

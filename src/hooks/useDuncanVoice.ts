@@ -163,7 +163,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
     vadThreshold: 0.6,
     minSpeechDurationMs: 300,
     noVerbatim: true,
-    languageCode: "en",
+    languageCode: "eng",
     onPartialTranscript: (data: any) => {
       const text = (data?.text || "").trim();
       if (!text || isLikelyNoise(text)) return;

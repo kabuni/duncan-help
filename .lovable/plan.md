@@ -1,34 +1,17 @@
-## Issue
+## Goal
+Force Duncan voice mode to transcribe English only (reject other languages).
 
-The Planning checklist (`src/components/projects/PlanningChecklist.tsx`) sits above the chat messages inside the center column of `ProjectWorkspace.tsx`. The center column is `flex-1 ... overflow-hidden`, but the checklist's expanded content (`<div className="px-3 pb-3 space-y-2">` at line 266) has no max-height or overflow rule. When many items are added, the list keeps growing and pushes the chat down — and because its parent clips overflow, you can't scroll inside the checklist to reach lower items.
+## Findings
+In `src/hooks/useDuncanVoice.ts`, `useScribe` is already configured with `languageCode: "en"`. However, ElevenLabs Scribe expects **ISO 639-3** codes (e.g. `"eng"`), not ISO 639-1 (`"en"`) — see the batch STT docs (`language_code: 'eng'`). With an unrecognized code, Scribe likely falls back to auto-detect, which is why non-English speech still gets transcribed.
 
-## Root Cause
-
-`PlanningChecklist` renders inline as a static block with no scroll container. The only scroller is the messages area below it.
-
-## Fix (frontend only, single file)
-
-In `src/components/projects/PlanningChecklist.tsx`:
-
-- Wrap (or update) the expanded body so it has a bounded height and its own scrollbar:
-  - Change line 266 `<div className="px-3 pb-3 space-y-2">` to `<div className="px-3 pb-3 space-y-2 max-h-[40vh] overflow-y-auto overscroll-contain">`.
-- Keep the quick-add row (Group / title input / Add button) visible by moving it OUT of the scroll area into a sibling block that stays pinned below the scrollable list, so users can always add new items even when the list is long.
-
-Resulting structure inside `{open && (...)}`:
-
-```text
-<div>  // wrapper (no scroll)
-  <div class="max-h-[40vh] overflow-y-auto overscroll-contain px-3 pt-2 space-y-2">
-     ...loading / suggested / groupedAccepted...
-  </div>
-  <div class="px-3 pb-3 pt-2 border-t border-border/50">
-     ...quick-add inputs + Add button...
-  </div>
-</div>
-```
+## Plan
+1. **`src/hooks/useDuncanVoice.ts`** — change `languageCode: "en"` → `languageCode: "eng"` in the `useScribe({...})` config.
+2. (Optional safety net) In `onCommittedTranscript`, drop commits whose detected language (if Scribe returns one on the payload, e.g. `data.language_code`) is not `eng`. I'll only add this if the SDK exposes it; otherwise the model-level lock above is sufficient.
 
 ## Out of scope
+- TTS voice (`elevenlabs-tts`) — already English voice, no change.
+- UI / overlay copy — no change.
 
-- No schema, hook, or business-logic changes.
-- No changes to `ProjectWorkspace.tsx` layout.
-- No restyling beyond the scroll container and a thin divider above the quick-add row.
+## Verification
+- Open voice mode, speak English → transcribes normally.
+- Speak a non-English phrase → Scribe should either ignore it or return garbled English (no foreign-language commits sent to chat).

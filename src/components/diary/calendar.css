@@ -60,6 +60,13 @@
   background: hsl(var(--card));
 }
 
+/* Let month rows expand to fill the available calendar height so RBC
+   can fit more events per cell before collapsing into "+X more". */
+.rbc-month-view { display: flex; flex-direction: column; min-height: 100%; }
+.rbc-month-view .rbc-month-header { flex: 0 0 auto; }
+.rbc-month-view .rbc-month-row { flex: 1 1 0; min-height: 7.5rem; overflow: hidden; }
+.rbc-month-row .rbc-row-content { flex: 1 1 auto; }
+
 .rbc-header,
 .rbc-time-header-content,
 .rbc-time-header-gutter,

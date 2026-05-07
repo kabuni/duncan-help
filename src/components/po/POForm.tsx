@@ -1,6 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,6 @@ import { useDepartments } from "@/hooks/useDepartments";
 import { useCreatePO, type POCategory } from "@/hooks/usePurchaseOrders";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useState } from "react";
 
 const categories: { value: POCategory; label: string }[] = [
   { value: "software", label: "Software" },
@@ -30,21 +30,36 @@ const schema = z.object({
   category: z.enum(["software", "hardware", "services", "marketing", "travel", "office_supplies", "other"]),
   quantity: z.coerce.number().int().min(1),
   unit_price: z.coerce.number().min(0.01),
+  approver_user_id: z.string().optional(),
   delivery_date: z.string().optional(),
   notes: z.string().max(1000).optional(),
 });
 
 type FormData = z.infer<typeof schema>;
 
+interface ApproverOption { user_id: string; display_name: string | null; }
+
 export default function POForm({ onClose }: { onClose: () => void }) {
   const { data: departments = [] } = useDepartments();
   const createPO = useCreatePO();
   const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
+  const [approvers, setApprovers] = useState<ApproverOption[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("user_id, display_name")
+        .eq("approval_status", "approved")
+        .order("display_name");
+      setApprovers((data || []).filter((p: any) => p.user_id) as ApproverOption[]);
+    })();
+  }, []);
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { quantity: 1, category: "other" },
+    defaultValues: { quantity: 1, category: "other", approver_user_id: "auto" },
   });
 
   const quantity = form.watch("quantity") ?? 1;
@@ -72,6 +87,10 @@ export default function POForm({ onClose }: { onClose: () => void }) {
       delivery_date: values.delivery_date,
       notes: values.notes,
       attachment_path,
+      approver_user_id:
+        values.approver_user_id && values.approver_user_id !== "auto"
+          ? values.approver_user_id
+          : undefined,
     });
     onClose();
   };
@@ -85,7 +104,7 @@ export default function POForm({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={() => onClose()}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Raise Purchase Order</DialogTitle>
+          <DialogTitle>Request Approval</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -154,6 +173,27 @@ export default function POForm({ onClose }: { onClose: () => void }) {
               <span className="text-xs font-mono text-muted-foreground">{tierLabel}</span>
             </div>
 
+            <FormField control={form.control} name="approver_user_id" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Approver</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value || "auto"}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Auto-route by amount" /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    <SelectItem value="auto">Auto-route by amount (default)</SelectItem>
+                    {approvers.map(a => (
+                      <SelectItem key={a.user_id} value={a.user_id}>
+                        {a.display_name || "Unnamed"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Nominate a specific approver, or leave on auto-route to use the standard tier rules.
+                </p>
+                <FormMessage />
+              </FormItem>
+            )} />
+
             <FormField control={form.control} name="delivery_date" render={({ field }) => (
               <FormItem>
                 <FormLabel>Expected Delivery Date</FormLabel>
@@ -178,7 +218,7 @@ export default function POForm({ onClose }: { onClose: () => void }) {
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
               <Button type="submit" disabled={createPO.isPending}>
-                {createPO.isPending ? "Submitting..." : "Submit PO"}
+                {createPO.isPending ? "Submitting..." : "Request Approval"}
               </Button>
             </div>
           </form>

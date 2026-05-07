@@ -4229,7 +4229,9 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode, userProfile } = await req.json();
+    const { messages, mode, userProfile, voiceMode } = await req.json();
+    const isVoiceMode = voiceMode === true;
+    const CHAT_MODEL = isVoiceMode ? "gpt-4o-mini" : "gpt-4o";
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -4420,8 +4422,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
       systemContent += "\n\nYou are in ANALYSIS mode. Focus on data patterns, trends, and insights. Use structured formats like tables and comparisons. Quantify findings when possible.";
     }
 
+    if (isVoiceMode) {
+      systemContent += "\n\nYou are responding via VOICE. Reply in 1–3 short sentences, conversational tone, no markdown, no lists, no headings, no tables. If you used tools, summarize the results aloud — do not read raw data, IDs, or URLs. Speak naturally, like a colleague on a call.";
+    }
+
     const SIMPLE_INPUT_PATTERNS = [/^hi[!.?\s]*$/i, /^hello[!.?\s]*$/i, /^how are you[?.!\s]*$/i];
-    const MAX_TOOL_ROUNDS = 3;
+    const MAX_TOOL_ROUNDS = isVoiceMode ? 2 : 3;
     const MAX_EXECUTION_TIME_MS = 45_000;
 
     function extractPlainText(content: unknown): string {
@@ -4673,7 +4679,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     // First call to AI with tools if calendar is connected
     const requestBody: any = {
-      model: "gpt-4o",
+      model: CHAT_MODEL,
       messages: [
         { role: "system", content: systemContent },
         ...messages,
@@ -5679,7 +5685,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
             console.log("FINAL LLM INPUT (last 3 messages):");
             console.log(JSON.stringify(conversationMessages.slice(-3), null, 2));
             currentResponse = await fetchAIWithRetry({
-              model: "gpt-4o",
+              model: CHAT_MODEL,
               messages: sanitizeConversationMessages(conversationMessages),
               stream: true,
               tools,

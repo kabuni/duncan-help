@@ -220,7 +220,7 @@ export function useNormanChat() {
   }, []);
 
   const send = useCallback(
-    async (input: string, mode: Mode = "general", attachments: ChatAttachment[] = []) => {
+    async (input: string, mode: Mode = "general", attachments: ChatAttachment[] = [], opts: { voiceMode?: boolean } = {}) => {
       // Abort any previous in-flight request to avoid stacked long-running calls
       if (inflightControllerRef.current) {
         inflightControllerRef.current.abort();
@@ -293,7 +293,7 @@ export function useNormanChat() {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ messages: apiMessages, mode, userProfile: profile ?? undefined }),
+            body: JSON.stringify({ messages: apiMessages, mode, userProfile: profile ?? undefined, voiceMode: opts.voiceMode === true }),
             signal: controller!.signal,
           });
         };

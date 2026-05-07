@@ -1,53 +1,37 @@
-# Reduce Duncan voice latency — apply A, C, E, F
+# Apply change D — voice-only fast path (tools stay enabled)
 
-Targeted, low-risk frontend-only changes. No edge function or LLM changes.
+Goal: Cut LLM latency in voice mode (~500–1500 ms saved per turn) without affecting text chat. Duncan must still access real data via tools during voice turns.
 
-## A. Cut STT commit latency
-File: `src/hooks/useDuncanVoice.ts` (`useScribe` config, ~line 160)
-- Add `silenceDurationMs: 350` (currently unset → ElevenLabs default ~700–1000 ms).
-- Lower `minSpeechDurationMs` from `300` → `200`.
-- Keep `vadThreshold: 0.6`.
+## Scope
+Voice path only. Text chat in `useNormanChat` continues to use `gpt-4o` with multi-round reasoning exactly as today.
 
-Expected: ~400–700 ms saved per turn.
+## Changes
 
-## C. Speak earlier — flush at phrase boundaries
-File: `src/hooks/useDuncanVoice.ts` (assistant-watch effect, ~lines 123–147) and `src/lib/ttsTextSanitizer.ts` if `extractSentences` needs an "early flush" mode.
-- During streaming (`chat.isLoading === true`), if no full sentence boundary has been hit but the unspoken buffer is ≥ 60 chars and ends with `, ` / `; ` / `: ` / ` — `, flush the chunk up to that boundary as a TTS sentence.
-- Keep current behavior on full sentence boundaries (`. ! ?`).
-- Final remainder still flushed when `chat.isLoading` flips to false.
-- Guard so we never flush mid-word (only after whitespace following punctuation).
+### 1. `src/hooks/useNormanChat.ts`
+- Extend `send(input, mode, attachments, opts?)` with optional `opts: { voiceMode?: boolean }`.
+- When `voiceMode === true`, include `voiceMode: true` in the POST body to `norman-chat`.
+- No other behavior change for text callers (default `false`).
 
-Implementation: small helper `extractSpeakable(fresh, { eager: chat.isLoading })` that wraps existing `extractSentences` and, in eager mode, additionally accepts soft-boundary cuts.
+### 2. `src/hooks/useDuncanVoice.ts`
+- When invoking `chat.send(...)` for a voice turn, pass `{ voiceMode: true }`.
 
-Expected: Duncan starts speaking ~500–1000 ms sooner on multi-sentence answers.
+### 3. `supabase/functions/norman-chat/index.ts`
+- Read `voiceMode` from request body.
+- When `voiceMode === true`:
+  - Force model to `gpt-4o-mini` (still streamed).
+  - **Tools stay fully enabled** — Duncan must still query Calendar, Workstreams, Gmail, DevOps, etc. during voice turns.
+  - Multi-round reasoning loop stays enabled but cap reduced from 5 → 2 iterations (one tool call + one synthesis), so simple voice questions don't burn extra rounds. Two rounds still covers the vast majority of real data lookups.
+  - Append a brevity instruction to the system prompt: "You are responding via voice. Reply in 1–3 short sentences, conversational tone, no markdown, no lists, no headings. If you used tools, summarize results aloud — don't read raw data."
+- When `voiceMode` is falsy: existing behavior unchanged (gpt-4o + 5-round multi-round + tools).
 
-## E. Trim per-call overhead
-File: `src/hooks/useDuncanVoice.ts`
-- Add `tokenRef = useRef<string | null>(null)`. Populate in `start()` from `supabase.auth.getSession()`. Reuse in `playNext()` instead of calling `getSession()` for every TTS chunk.
-- Add a Supabase `onAuthStateChange` subscription inside the hook to refresh `tokenRef.current` when the access token rotates; clear on `SIGNED_OUT`.
-- On TTS 401, do a one-shot refresh (`getSession()`) and retry once.
-
-Expected: removes ~50–150 ms of auth lookup per spoken chunk; meaningful when a reply has 4–6 sentences.
-
-## F. Pre-warm on overlay open
-File: `src/hooks/useDuncanVoice.ts` (inside `start()`, after scribe connects)
-- Fire-and-forget: `fetch(TTS_URL, { method: "POST", headers, body: JSON.stringify({ text: ".", voiceId, speed }) }).then(r => r.body?.cancel())`.
-- Wrapped in try/catch, no `await`, no playback. Purpose: warm Supabase edge function + ElevenLabs HTTPS connection so the first real TTS chunk skips cold-start.
-- Gate behind a `hasWarmedRef` so we only warm once per session.
-
-Expected: ~200–500 ms saved on the very first reply of a voice session.
-
-## Files touched
-- `src/hooks/useDuncanVoice.ts` — all four changes.
-- `src/lib/ttsTextSanitizer.ts` — add optional eager mode to `extractSentences` (or new helper); only if needed to keep logic clean.
-
-## Out of scope (per your decision)
-- B: streaming MP3 playback via MediaSource.
-- D: `voiceMode` flag through `norman-chat` (model swap, brevity prompt).
+## Out of scope
+- No change to STT, TTS, or any other hook.
+- No change to text-chat model, reasoning depth, or tool surface.
 
 ## Verification
-- Manually open voice overlay, speak one short utterance, confirm Duncan starts replying noticeably sooner.
-- Check console: no extra `getSession` calls per TTS chunk; warm-up request visible once on overlay open.
-- Confirm long replies still sound natural (no mid-word cuts, no stuttering between phrase chunks).
+- Voice turn ("what's on my calendar today?"): logs show `model=gpt-4o-mini`, tool call executed, ≤2 rounds, brevity prompt applied, spoken summary is short.
+- Voice turn (chit-chat): single round, fast reply.
+- Text turn: logs still show `gpt-4o` with up to 5-round multi-round reasoning intact.
 
-Approve and I'll implement.
+## Expected outcome
+Voice-only first-token latency drops from ~1.5–3 s to ~0.7–1.5 s. Tool-backed voice answers still work. Text chat unchanged.

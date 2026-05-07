@@ -25,7 +25,7 @@ function isLikelyNoise(raw: string): boolean {
 interface ChatLike {
   messages: { role: "user" | "assistant"; content: string }[];
   isLoading: boolean;
-  send: (input: string, mode?: any, attachments?: any[]) => void;
+  send: (input: string, mode?: any, attachments?: any[], opts?: { voiceMode?: boolean }) => void;
 }
 
 interface Options {
@@ -224,7 +224,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
       setState("thinking");
       try {
         const safeAttachments: any[] = [];
-        chat.send(text, "general", safeAttachments);
+        chat.send(text, "general", safeAttachments, { voiceMode: true });
       } catch (e) {
         console.error("[Duncan voice] send failed", e);
         toast.error("Couldn't send your message to Duncan.");

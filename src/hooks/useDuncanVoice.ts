@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useScribe, CommitStrategy } from "@elevenlabs/react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { extractSentences, sanitizeForSpeech } from "@/lib/ttsTextSanitizer";
+import { extractSpeakable, sanitizeForSpeech } from "@/lib/ttsTextSanitizer";
 
 type VoiceState = "idle" | "listening" | "thinking" | "speaking";
 

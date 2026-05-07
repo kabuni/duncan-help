@@ -143,7 +143,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
       queueRef.current.push(clean);
       playNext();
     },
-    [playNext]
+    [playNext, getToken]
   );
 
   // Watch the latest assistant message and stream sentences into TTS queue

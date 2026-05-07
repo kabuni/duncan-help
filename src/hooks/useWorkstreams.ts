@@ -103,6 +103,7 @@ export interface AssigneeInfo {
 export interface WorkstreamTask {
   id: string;
   card_id: string;
+  parent_task_id: string | null;
   title: string;
   description: string;
   assignee_id: string | null;
@@ -115,6 +116,7 @@ export interface WorkstreamTask {
   assignee_name?: string;
   assignees?: AssigneeInfo[];
   comments_count?: number;
+  subtasks?: WorkstreamTask[];
 }
 
 export interface WorkstreamComment {

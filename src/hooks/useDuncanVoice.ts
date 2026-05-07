@@ -162,7 +162,10 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
     }
 
     const fresh = last.content.slice(lastSpokenIndexRef.current);
-    const { sentences, remainder } = extractSentences(fresh);
+    const { sentences, remainder } = extractSpeakable(fresh, {
+      eager: chat.isLoading,
+      minSoftLen: 60,
+    });
     if (sentences.length > 0) {
       sentences.forEach(enqueueSentence);
       lastSpokenIndexRef.current = last.content.length - remainder.length;

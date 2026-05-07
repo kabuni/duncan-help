@@ -1049,15 +1049,17 @@ Deno.serve(async (req) => {
       }
 
       await hubspotApi("/crm/v3/objects/companies?limit=1&properties=name", resolved.token, "verify", resolved.source);
-      const [companies, deals, contacts, lists] = await Promise.all([
+      const [companies, deals, contacts, lists, formMetrics] = await Promise.all([
         hubspotApi("/crm/v3/objects/companies?limit=50&properties=name,hs_lastmodifieddate,hubspotscore,notes_last_updated", resolved.token, "summary", resolved.source),
         hubspotApi("/crm/v3/objects/deals?limit=50&associations=companies,contacts&properties=dealname,dealstage,hs_lastmodifieddate,amount,closedate,hubspot_owner_id", resolved.token, "summary", resolved.source),
         hubspotApi("/crm/v3/objects/contacts?limit=50&properties=firstname,lastname,email,company,lifecyclestage,hubspot_owner_id,lastmodifieddate,notes_last_updated", resolved.token, "summary", resolved.source),
         fetchHubspotForms(resolved.token, resolved.source),
+        buildHubspotFormMetrics(resolved.token, resolved.source),
       ]);
 
       return json({
         ...buildTeamBriefingSummary(companies, deals, contacts, resolved.lastSync ?? verifiedAt, null, null, lists),
+        form_metrics: formMetrics,
         credential_source: resolved.source,
         verification_path: "/crm/v3/objects/companies",
         credential_diagnostics: resolved.diagnostics,

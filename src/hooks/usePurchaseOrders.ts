@@ -20,6 +20,7 @@ export interface PurchaseOrder {
   delivery_date: string | null;
   status: POStatus;
   approval_tier: string | null;
+  approver_user_id: string | null;
   approved_by: string | null;
   approved_at: string | null;
   rejection_reason: string | null;

@@ -34,7 +34,7 @@ const PurchaseOrders = () => {
                 </h2>
               </div>
               <Button onClick={() => setShowForm(true)} className="gap-2 w-full sm:w-auto">
-                <Plus className="h-4 w-4" /> Raise PO
+                <Plus className="h-4 w-4" /> Request Approval
               </Button>
             </div>
           </motion.div>

@@ -29,7 +29,7 @@ export default function POList() {
       <Card className="border-dashed">
         <CardContent className="py-12 text-center">
           <FileText className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-          <p className="text-sm text-muted-foreground">No purchase orders yet. Click "Raise PO" to create one.</p>
+          <p className="text-sm text-muted-foreground">No purchase orders yet. Click "Request Approval" to create one.</p>
         </CardContent>
       </Card>
     );

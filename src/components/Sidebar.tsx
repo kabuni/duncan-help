@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Plug, Settings, LogOut, X, ChevronDown, CheckCircle2, Mail, FileText, MessageSquare, Calendar, FolderOpen, GitBranch, Zap, Menu, Layers, Megaphone, Crown } from "lucide-react";
+import { LayoutDashboard, Plug, Settings, LogOut, X, ChevronDown, CheckCircle2, Mail, FileText, MessageSquare, Calendar, FolderOpen, GitBranch, Zap, Menu, Layers, Megaphone, Crown, Inbox, Receipt } from "lucide-react";
 import { canViewBriefing } from "@/lib/ceoAccess";
 import ChatHistory from "@/components/ChatHistory";
 import { useGeneralChats } from "@/hooks/useGeneralChats";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { useApprovalCount } from "@/hooks/useApprovals";
 
 const integrationMeta: Record<string, { label: string; icon: React.ElementType }> = {
   "slack": { label: "Slack", icon: MessageSquare },
@@ -54,6 +55,7 @@ const Sidebar = ({
   const [showModal, setShowModal] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [connectedApps, setConnectedApps] = useState<string[]>([]);
+  const { data: pendingApprovals = 0 } = useApprovalCount();
 
   useEffect(() => {
     const fetchConnected = async () => {

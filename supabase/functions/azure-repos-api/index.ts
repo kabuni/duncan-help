@@ -429,6 +429,37 @@ Deno.serve(async (req) => {
           }
         }
 
+        // ---- Last-7d commit metrics (per-repo, file-change counts as line proxy) ----
+        const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        let commits7d = 0;
+        let filesAdded7d = 0;
+        let filesRemoved7d = 0;
+        const contributors7d = new Set<string>();
+        let commitMetricsPartial = false;
+
+        for (const r of repoList) {
+          try {
+            const url =
+              `${orgUrl}/${encodeURIComponent(r.project)}/_apis/git/repositories/${r.id}/commits` +
+              `?searchCriteria.fromDate=${encodeURIComponent(sevenDaysAgoIso)}` +
+              `&searchCriteria.includeLinks=false` +
+              `&searchCriteria.$top=1000` +
+              `&api-version=7.1`;
+            const cRes = await adoFetch(url, accessToken);
+            for (const c of cRes.value || []) {
+              commits7d += 1;
+              const who = c.author?.email || c.author?.name;
+              if (who) contributors7d.add(String(who).toLowerCase());
+              const cc = c.changeCounts || {};
+              filesAdded7d += Number(cc.Add || 0);
+              filesRemoved7d += Number(cc.Delete || 0);
+            }
+          } catch (e) {
+            commitMetricsPartial = true;
+            console.warn(`briefing_summary: commits scan failed for ${r.project}/${r.name}`, e);
+          }
+        }
+
         // Org-wide active PRs (single call instead of per-repo).
         let openPrs = 0;
         let blockedPrs = 0;
@@ -470,18 +501,30 @@ Deno.serve(async (req) => {
 
         result = {
           connected: true,
-          status: partialFailure ? "degraded" : "connected",
+          status: (partialFailure || commitMetricsPartial) ? "degraded" : "connected",
           credential_source: "stored_token",
           verification_path: "/_apis/git/pullrequests",
           last_verified_at: verifiedAt,
           last_sync_at: verifiedAt,
-          error_code: partialFailure ? "pr_scan_partial_failure" : null,
-          error_message: partialFailure ? "Some pull requests could not be scanned fully" : null,
+          error_code: partialFailure
+            ? "pr_scan_partial_failure"
+            : commitMetricsPartial
+            ? "commit_scan_partial_failure"
+            : null,
+          error_message: partialFailure
+            ? "Some pull requests could not be scanned fully"
+            : commitMetricsPartial
+            ? "Some repository commit history could not be scanned fully"
+            : null,
           repos_scanned: reposScanned,
           open_prs: openPrs,
           blocked_prs: blockedPrs,
           stale_prs: stalePrs,
           release_risks: blockedPrs + stalePrs,
+          commits_7d: commits7d,
+          files_added_7d: filesAdded7d,
+          files_removed_7d: filesRemoved7d,
+          active_contributors_7d: contributors7d.size,
           signals,
           summary,
           metrics_summary: summary,

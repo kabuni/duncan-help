@@ -1678,6 +1678,8 @@ export type Database = {
           display_name: string | null
           id: string
           norman_context: string | null
+          onboarding_completed_at: string | null
+          onboarding_step: string
           preferences: Json | null
           requested_role_title: string | null
           role_title: string | null
@@ -1693,6 +1695,8 @@ export type Database = {
           display_name?: string | null
           id?: string
           norman_context?: string | null
+          onboarding_completed_at?: string | null
+          onboarding_step?: string
           preferences?: Json | null
           requested_role_title?: string | null
           role_title?: string | null
@@ -1708,6 +1712,8 @@ export type Database = {
           display_name?: string | null
           id?: string
           norman_context?: string | null
+          onboarding_completed_at?: string | null
+          onboarding_step?: string
           preferences?: Json | null
           requested_role_title?: string | null
           role_title?: string | null

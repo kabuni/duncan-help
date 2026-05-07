@@ -99,6 +99,11 @@ interface Props {
       updated_at?: string | null;
       error?: string | null;
     }>;
+    form_metrics?: {
+      newsletter?: { form_name?: string | null; total?: number; last_30d?: number; found?: boolean };
+      scout?: { form_name?: string | null; total?: number; last_30d?: number; found?: boolean };
+      location_breakdown?: Array<{ location: string; newsletter_count: number; scout_count: number }>;
+    } | null;
   } | null;
   azureReposSignal?: {
     status?: string;

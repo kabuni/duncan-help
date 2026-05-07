@@ -800,29 +800,13 @@ function TaskRow({
       {!isSubtask && (subtasks.length > 0 || onAddSubtask) && (
         <div className="mt-2 ml-6 pl-3 border-l border-border/60 space-y-1.5">
           {subtasks.map(sub => (
-            <div key={sub.id} className="group/sub flex items-center gap-2 py-0.5">
-              <button onClick={() => onToggleSubtask?.(sub)} className="shrink-0">
-                {sub.completed ? (
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                ) : (
-                  <Circle className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
-                )}
-              </button>
-              <span className={`flex-1 text-xs ${sub.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                {sub.title}
-              </span>
-              {(sub.assignees || []).slice(0, 2).map(a => (
-                <Badge key={a.user_id} variant="secondary" className="text-[10px] py-0 px-1.5">
-                  {(a.display_name || "?").split(" ")[0]}
-                </Badge>
-              ))}
-              <button
-                onClick={() => onDeleteSubtask?.(sub)}
-                className="opacity-0 group-hover/sub:opacity-100 h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-destructive transition"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </div>
+            <SubtaskRow
+              key={sub.id}
+              sub={sub}
+              onToggle={() => onToggleSubtask?.(sub)}
+              onDelete={() => onDeleteSubtask?.(sub)}
+              onUpdateDueDate={(d) => onUpdateSubtaskDueDate?.(sub, d)}
+            />
           ))}
 
           {onAddSubtask && (

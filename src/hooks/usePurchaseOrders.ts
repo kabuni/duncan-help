@@ -94,14 +94,14 @@ export function useApprovePO() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, approved }: { id: string; approved: boolean; rejection_reason?: string }) => {
+    mutationFn: async ({ id, approved, rejection_reason }: { id: string; approved: boolean; rejection_reason?: string }) => {
       const update: any = {
         status: approved ? "approved" : "rejected",
         approved_by: approved ? user!.id : null,
         approved_at: approved ? new Date().toISOString() : null,
       };
       if (!approved) {
-        update.rejection_reason = arguments[0]?.rejection_reason || "Rejected";
+        update.rejection_reason = rejection_reason || "Rejected";
       }
       const { error } = await supabase.from("purchase_orders").update(update).eq("id", id);
       if (error) throw error;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Plug, Settings, LogOut, X, ChevronDown, CheckCircle2, Mail, FileText, MessageSquare, Calendar, FolderOpen, GitBranch, Zap, Menu, Layers, Megaphone, Crown } from "lucide-react";
+import { LayoutDashboard, Plug, Settings, LogOut, X, ChevronDown, CheckCircle2, Mail, FileText, MessageSquare, Calendar, FolderOpen, GitBranch, Zap, Menu, Layers, Megaphone, Crown, Inbox, Receipt } from "lucide-react";
 import { canViewBriefing } from "@/lib/ceoAccess";
 import ChatHistory from "@/components/ChatHistory";
 import { useGeneralChats } from "@/hooks/useGeneralChats";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { useApprovalCount } from "@/hooks/useApprovals";
 
 const integrationMeta: Record<string, { label: string; icon: React.ElementType }> = {
   "slack": { label: "Slack", icon: MessageSquare },
@@ -54,6 +55,7 @@ const Sidebar = ({
   const [showModal, setShowModal] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [connectedApps, setConnectedApps] = useState<string[]>([]);
+  const { data: pendingApprovals = 0 } = useApprovalCount();
 
   useEffect(() => {
     const fetchConnected = async () => {
@@ -181,6 +183,37 @@ const Sidebar = ({
         >
           <Calendar className="h-4 w-4" />
           Planner
+        </RouterNavLink>
+
+        <RouterNavLink
+          to="/approvals"
+          onClick={() => onMobileClose?.()}
+          className={({ isActive }) =>
+            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )
+          }
+        >
+          <Inbox className="h-4 w-4" />
+          <span className="flex-1">Approvals</span>
+          {pendingApprovals > 0 && (
+            <span className="ml-auto rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
+              {pendingApprovals}
+            </span>
+          )}
+        </RouterNavLink>
+
+        <RouterNavLink
+          to="/purchase-orders"
+          onClick={() => onMobileClose?.()}
+          className={({ isActive }) =>
+            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )
+          }
+        >
+          <Receipt className="h-4 w-4" />
+          Purchase Orders
         </RouterNavLink>
 
         {canViewBriefing(user?.email) && (

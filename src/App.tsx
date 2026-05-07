@@ -29,6 +29,8 @@ import ReleaseManager from "./pages/ReleaseManager";
 import WhatsNew from "./pages/WhatsNew";
 import CEOBriefing from "./pages/CEOBriefing";
 import KeyEventsDiary from "./pages/KeyEventsDiary";
+import Approvals from "./pages/Approvals";
+import PurchaseOrders from "./pages/PurchaseOrders";
 import SlackCallback from "./pages/SlackCallback";
 import NotFound from "./pages/NotFound";
 
@@ -65,6 +67,8 @@ const AppContent = () => {
           <Route path="/whats-new" element={<ProtectedRoute><WhatsNew /></ProtectedRoute>} />
           <Route path="/team-briefing" element={<ProtectedRoute><CEOBriefing /></ProtectedRoute>} />
           <Route path="/diary" element={<ProtectedRoute><KeyEventsDiary /></ProtectedRoute>} />
+          <Route path="/approvals" element={<ProtectedRoute><Approvals /></ProtectedRoute>} />
+          <Route path="/purchase-orders" element={<ProtectedRoute><PurchaseOrders /></ProtectedRoute>} />
           <Route path="/ceo" element={<Navigate to="/team-briefing" replace />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

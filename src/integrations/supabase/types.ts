@@ -14,6 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
+      approvals: {
+        Row: {
+          amount: number | null
+          approver_profile_id: string | null
+          approver_user_id: string | null
+          created_at: string
+          currency: string | null
+          decided_at: string | null
+          decision_note: string | null
+          due_at: string | null
+          id: string
+          kind: Database["public"]["Enums"]["approval_kind"]
+          link_path: string | null
+          requested_by: string | null
+          source_id: string
+          source_table: string
+          status: Database["public"]["Enums"]["approval_status"]
+          summary: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number | null
+          approver_profile_id?: string | null
+          approver_user_id?: string | null
+          created_at?: string
+          currency?: string | null
+          decided_at?: string | null
+          decision_note?: string | null
+          due_at?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["approval_kind"]
+          link_path?: string | null
+          requested_by?: string | null
+          source_id: string
+          source_table: string
+          status?: Database["public"]["Enums"]["approval_status"]
+          summary?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number | null
+          approver_profile_id?: string | null
+          approver_user_id?: string | null
+          created_at?: string
+          currency?: string | null
+          decided_at?: string | null
+          decision_note?: string | null
+          due_at?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["approval_kind"]
+          link_path?: string | null
+          requested_by?: string | null
+          source_id?: string
+          source_table?: string
+          status?: Database["public"]["Enums"]["approval_status"]
+          summary?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       azure_devops_tokens: {
         Row: {
           access_token: string
@@ -3249,6 +3312,19 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
+      approval_kind:
+        | "cost"
+        | "event_date"
+        | "release"
+        | "hire"
+        | "contract"
+        | "other"
+      approval_status:
+        | "pending"
+        | "approved"
+        | "rejected"
+        | "changes_requested"
+        | "cancelled"
       event_approval_status: "pending" | "approved" | "rejected" | "proposed"
       po_category:
         | "software"
@@ -3392,6 +3468,21 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
+      approval_kind: [
+        "cost",
+        "event_date",
+        "release",
+        "hire",
+        "contract",
+        "other",
+      ],
+      approval_status: [
+        "pending",
+        "approved",
+        "rejected",
+        "changes_requested",
+        "cancelled",
+      ],
       event_approval_status: ["pending", "approved", "rejected", "proposed"],
       po_category: [
         "software",

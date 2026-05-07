@@ -4422,6 +4422,10 @@ Format as a natural, readable summary with clear sections. If a section has no d
       systemContent += "\n\nYou are in ANALYSIS mode. Focus on data patterns, trends, and insights. Use structured formats like tables and comparisons. Quantify findings when possible.";
     }
 
+    if (isVoiceMode) {
+      systemContent += "\n\nYou are responding via VOICE. Reply in 1–3 short sentences, conversational tone, no markdown, no lists, no headings, no tables. If you used tools, summarize the results aloud — do not read raw data, IDs, or URLs. Speak naturally, like a colleague on a call.";
+    }
+
     const SIMPLE_INPUT_PATTERNS = [/^hi[!.?\s]*$/i, /^hello[!.?\s]*$/i, /^how are you[?.!\s]*$/i];
     const MAX_TOOL_ROUNDS = isVoiceMode ? 2 : 3;
     const MAX_EXECUTION_TIME_MS = 45_000;

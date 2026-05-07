@@ -293,7 +293,7 @@ export function useNormanChat() {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ messages: apiMessages, mode, userProfile: profile ?? undefined }),
+            body: JSON.stringify({ messages: apiMessages, mode, userProfile: profile ?? undefined, voiceMode: opts.voiceMode === true }),
             signal: controller!.signal,
           });
         };

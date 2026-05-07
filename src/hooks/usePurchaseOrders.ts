@@ -20,6 +20,7 @@ export interface PurchaseOrder {
   delivery_date: string | null;
   status: POStatus;
   approval_tier: string | null;
+  approver_user_id: string | null;
   approved_by: string | null;
   approved_at: string | null;
   rejection_reason: string | null;
@@ -63,6 +64,7 @@ export function useCreatePO() {
       delivery_date?: string;
       attachment_path?: string;
       notes?: string;
+      approver_user_id?: string;
     }) => {
       const { data, error } = await supabase
         .from("purchase_orders")

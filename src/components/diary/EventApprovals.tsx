@@ -88,6 +88,11 @@ export function EventApprovals({ eventId }: { eventId: string }) {
   const [suggestDate, setSuggestDate] = useState<string>("");
   const [suggestNote, setSuggestNote] = useState<string>("");
 
+  // Decision-comment popover state
+  const [decideFor, setDecideFor] = useState<string | null>(null);
+  const [decideAction, setDecideAction] = useState<"approved" | "rejected">("approved");
+  const [decideNote, setDecideNote] = useState<string>("");
+
   async function load() {
     const [{ data: u }, { data: r }, { data: p }] = await Promise.all([
       supabase.auth.getUser(),

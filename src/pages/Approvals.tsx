@@ -238,7 +238,7 @@ export default function Approvals() {
     <AppLayout>
       <main className="flex-1 overflow-y-auto">
         <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />
-        <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-5xl">
+        <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-7xl">
           <div className="mb-6">
             <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1">
               Inbox

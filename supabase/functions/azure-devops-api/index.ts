@@ -88,22 +88,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get token
-    const { data: tokenRow, error: tokenError } = await supabaseAdmin
-      .from("azure_devops_tokens")
-      .select("*")
-      .limit(1)
-      .maybeSingle();
-
-    if (tokenError || !tokenRow) {
-      return new Response(JSON.stringify({ error: "Azure DevOps not connected" }), {
-        status: 400,
+    const authResult = await getAuthAndOrg(supabaseAdmin);
+    if ("error" in authResult) {
+      return new Response(JSON.stringify({ error: authResult.error }), {
+        status: authResult.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const accessToken = await refreshTokenIfNeeded(supabaseAdmin, tokenRow);
-    const orgUrl = tokenRow.org_url || Deno.env.get("AZURE_DEVOPS_ORG_URL") || "";
+    const { authHeader: adoAuthHeader, orgUrl } = authResult;
 
     const { action, project, wiql, workItemId } = await req.json();
 

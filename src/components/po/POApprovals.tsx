@@ -19,6 +19,7 @@ export default function POApprovals() {
   const approvePO = useApprovePO();
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [selected, setSelected] = useState<PurchaseOrder | null>(null);
 
   const pending = orders.filter(o => {
     if (o.status !== "pending_approval") return false;

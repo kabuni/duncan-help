@@ -24,20 +24,34 @@ const categories: { value: POCategory; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
+const LEADERSHIP_TITLES = [
+  "Founder/CEO",
+  "CEO",
+  "COO & General Counsel",
+  "COO",
+  "CMO",
+  "CPO",
+  "CTO",
+  "Director of Operations",
+];
+
+const isLeadership = (title: string | null | undefined) =>
+  !!title && LEADERSHIP_TITLES.some(t => t.toLowerCase() === title.toLowerCase());
+
 const schema = z.object({
   department_id: z.string().min(1, "Select a department"),
   vendor_name: z.string().trim().min(1, "Required").max(200),
   description: z.string().trim().min(1, "Required").max(1000),
   category: z.enum(["software", "hardware", "services", "marketing", "creative", "travel", "office_supplies", "other"]),
   total_amount: z.coerce.number().optional(),
-  approver_user_id: z.string().optional(),
+  approver_user_ids: z.array(z.string()).min(1, "Select at least one approver").max(2, "Maximum 2 approvers"),
   delivery_date: z.string().optional(),
   notes: z.string().max(1000).optional(),
 });
 
 type FormData = z.infer<typeof schema>;
 
-interface ApproverOption { user_id: string; display_name: string | null; }
+interface ApproverOption { user_id: string; display_name: string | null; role_title: string | null; }
 
 export default function POForm({ onClose, kind = "budget" }: { onClose: () => void; kind?: "budget" | "creative" }) {
   const { data: departments = [] } = useDepartments();
@@ -55,10 +69,12 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
     (async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("user_id, display_name")
+        .select("user_id, display_name, role_title")
         .eq("approval_status", "approved")
         .order("display_name");
-      setApprovers((data || []).filter((p: any) => p.user_id) as ApproverOption[]);
+      const filtered = (data || [])
+        .filter((p: any) => p.user_id && isLeadership(p.role_title));
+      setApprovers(filtered as ApproverOption[]);
     })();
   }, []);
 
@@ -67,7 +83,7 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
     defaultValues: {
       total_amount: 0,
       category: isCreative ? "marketing" : "other",
-      approver_user_id: "auto",
+      approver_user_ids: [],
     },
   });
 

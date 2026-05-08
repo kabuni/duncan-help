@@ -57,9 +57,8 @@ export default function POApprovals() {
         {pending.map((po, i) => (
           <motion.div key={po.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
             <Card className="hover:border-primary/30 transition-colors cursor-pointer" onClick={() => setSelected(po)}>
-              <CardContent className="py-4 px-5 flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
+              <CardContent className="py-4 px-5 flex items-center gap-4">
                 <div className="flex-1 min-w-0" onClick={() => setSelected(po)}>
-                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-muted-foreground">{po.po_number}</span>
                     <Badge variant="outline" className="text-[10px]">

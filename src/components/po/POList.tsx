@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { FileText, CheckCircle, Clock, XCircle, Ban } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePurchaseOrders, type POStatus, type PurchaseOrder } from "@/hooks/usePurchaseOrders";
 import { useDepartments } from "@/hooks/useDepartments";
 import { format } from "date-fns";
 import PODetailModal from "./PODetailModal";
+
+const CLOSED_STATUSES: POStatus[] = ["approved", "rejected", "cancelled"];
 
 const statusConfig: Record<POStatus, { icon: any; color: string; label: string }> = {
   draft: { icon: FileText, color: "text-muted-foreground", label: "Draft" },
@@ -20,28 +23,46 @@ export default function POList() {
   const { data: orders = [], isLoading } = usePurchaseOrders();
   const { data: departments = [] } = useDepartments();
   const [selected, setSelected] = useState<PurchaseOrder | null>(null);
+  const [view, setView] = useState<"open" | "closed">("open");
 
   const getDeptName = (id: string) => departments.find(d => d.id === id)?.name ?? "—";
+
+  const { open, closed } = useMemo(() => {
+    return {
+      open: orders.filter(o => !CLOSED_STATUSES.includes(o.status)),
+      closed: orders.filter(o => CLOSED_STATUSES.includes(o.status)),
+    };
+  }, [orders]);
+
+  const visible = view === "open" ? open : closed;
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground">Loading orders...</div>;
   }
 
-  if (orders.length === 0) {
-    return (
-      <Card className="border-dashed">
-        <CardContent className="py-12 text-center">
-          <FileText className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-          <p className="text-sm text-muted-foreground">No purchase orders yet. Click "Request Approval" to create one.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <>
+      <Tabs value={view} onValueChange={(v) => setView(v as "open" | "closed")} className="mb-4">
+        <TabsList className="bg-secondary/50">
+          <TabsTrigger value="open">Open ({open.length})</TabsTrigger>
+          <TabsTrigger value="closed">Closed ({closed.length})</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {visible.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="py-12 text-center">
+            <FileText className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+            <p className="text-sm text-muted-foreground">
+              {view === "open"
+                ? 'No open requests. Click "Request Approval" to create one.'
+                : "No closed requests yet."}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
       <div className="space-y-3">
-        {orders.map((po, i) => {
+        {visible.map((po, i) => {
           const cfg = statusConfig[po.status];
           const Icon = cfg.icon;
           return (
@@ -72,6 +93,7 @@ export default function POList() {
           );
         })}
       </div>
+      )}
       {selected && <PODetailModal po={selected} onClose={() => setSelected(null)} />}
     </>
   );

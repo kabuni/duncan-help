@@ -76,14 +76,51 @@ export function useDecideApproval() {
     }) => {
       // Mirror decision back into source table so the source remains the truth.
       if (row.source_table === "purchase_orders") {
-        const update: any = {
-          status: status === "approved" ? "approved" : "rejected",
-          approved_by: status === "approved" ? user!.id : null,
-          approved_at: status === "approved" ? new Date().toISOString() : null,
-        };
-        if (status === "rejected") update.rejection_reason = note || "Rejected";
-        const { error } = await supabase.from("purchase_orders").update(update).eq("id", row.source_id);
-        if (error) throw error;
+        if (status === "rejected") {
+          const { error } = await supabase
+            .from("purchase_orders")
+            .update({ status: "rejected", rejection_reason: note || "Rejected" })
+            .eq("id", row.source_id);
+          if (error) throw error;
+        } else {
+          // Look up the PO to decide which approver slot the current user fills.
+          // Dual sign-off requires both primary + secondary; the DB trigger flips
+          // the PO to 'approved' only when both timestamps are set.
+          const { data: po, error: fetchErr } = await supabase
+            .from("purchase_orders")
+            .select("approver_user_id, secondary_approver_user_id")
+            .eq("id", row.source_id)
+            .single();
+          if (fetchErr) throw fetchErr;
+
+          const now = new Date().toISOString();
+          const update: any = {};
+          if (po.secondary_approver_user_id === user!.id) {
+            update.secondary_approved_by = user!.id;
+            update.secondary_approved_at = now;
+          } else {
+            update.approved_by = user!.id;
+            update.approved_at = now;
+          }
+          const { error } = await supabase
+            .from("purchase_orders")
+            .update(update)
+            .eq("id", row.source_id);
+          if (error) throw error;
+        }
+
+        // Also close out the specific approvals inbox row for this approver,
+        // so it moves to "Decided" immediately (the PO sync trigger only
+        // mirrors when the PO itself flips status).
+        const { error: aErr } = await supabase
+          .from("approvals" as any)
+          .update({
+            status,
+            decision_note: note ?? null,
+            decided_at: new Date().toISOString(),
+          })
+          .eq("id", row.id);
+        if (aErr) throw aErr;
       } else if (row.source_table === "key_event_approvals") {
         const { error } = await supabase
           .from("key_event_approvals" as any)

@@ -59,21 +59,36 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { data: tokenRow, error: tokenError } = await supabaseAdmin
-      .from("azure_devops_tokens")
-      .select("*")
-      .limit(1)
-      .maybeSingle();
+    // Prefer PAT if configured; otherwise fall back to stored OAuth token
+    const pat = Deno.env.get("AZURE_DEVOPS_PAT");
+    let accessToken: string;
+    let orgUrl: string;
 
-    if (tokenError || !tokenRow) {
-      return new Response(JSON.stringify({ error: "Azure DevOps not connected" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (pat) {
+      accessToken = `Basic ${btoa(":" + pat)}`;
+      orgUrl = (Deno.env.get("AZURE_DEVOPS_ORG_URL") || "").replace(/\/+$/, "");
+      if (!orgUrl) {
+        return new Response(JSON.stringify({ error: "AZURE_DEVOPS_ORG_URL not configured" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else {
+      const { data: tokenRow, error: tokenError } = await supabaseAdmin
+        .from("azure_devops_tokens")
+        .select("*")
+        .limit(1)
+        .maybeSingle();
+
+      if (tokenError || !tokenRow) {
+        return new Response(JSON.stringify({ error: "Azure DevOps not connected" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      accessToken = `Bearer ${tokenRow.access_token}`;
+      orgUrl = (tokenRow.org_url || Deno.env.get("AZURE_DEVOPS_ORG_URL") || "").replace(/\/+$/, "");
     }
-
-    const accessToken = await refreshTokenIfNeeded(supabaseAdmin, tokenRow);
-    const orgUrl = (tokenRow.org_url || Deno.env.get("AZURE_DEVOPS_ORG_URL") || "").replace(/\/+$/, "");
 
     const body = await req.json().catch(() => ({}));
     const { action } = body;

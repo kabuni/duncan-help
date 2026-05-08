@@ -315,9 +315,8 @@ const Integrations = () => {
   const checkAzureDevOpsConnection = async () => {
     try {
       const { supabase } = await import("@/integrations/supabase/client");
-      const { data } = await supabase.rpc("get_company_integrations_status");
-      const row = (data ?? []).find((r: any) => r.integration_id === "azure-devops");
-      setIsAzureDevOpsConnected(row?.status === "connected");
+      const { data } = await supabase.from("azure_devops_tokens").select("id").limit(1);
+      setIsAzureDevOpsConnected(!!(data && data.length > 0));
     } catch {
       setIsAzureDevOpsConnected(false);
     }

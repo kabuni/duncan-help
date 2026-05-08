@@ -207,52 +207,75 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
               </>
             )}
 
-            <FormField control={form.control} name="approver_user_ids" render={({ field }) => {
-              const selected: string[] = Array.isArray(field.value) ? field.value : [];
-              const toggle = (id: string) => {
-                if (selected.includes(id)) {
-                  field.onChange(selected.filter(x => x !== id));
-                } else if (selected.length < 2) {
-                  field.onChange([...selected, id]);
-                }
-              };
-              return (
+            {isCreative ? (
+              <FormField control={form.control} name="approver_user_ids" render={({ field }) => {
+                const selected: string[] = Array.isArray(field.value) ? field.value : [];
+                const toggle = (id: string) => {
+                  if (selected.includes(id)) {
+                    field.onChange(selected.filter(x => x !== id));
+                  } else if (selected.length < 2) {
+                    field.onChange([...selected, id]);
+                  }
+                };
+                return (
+                  <FormItem>
+                    <FormLabel>Approvers</FormLabel>
+                    <div className="rounded-md border border-border divide-y divide-border max-h-56 overflow-y-auto">
+                      {leadershipApprovers.length === 0 && (
+                        <p className="text-xs text-muted-foreground p-3">No CEO/Director approvers available.</p>
+                      )}
+                      {leadershipApprovers.map(a => {
+                        const checked = selected.includes(a.user_id);
+                        const disabled = !checked && selected.length >= 2;
+                        return (
+                          <label
+                            key={a.user_id}
+                            className={`flex items-center justify-between gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-secondary/40 ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+                          >
+                            <div className="flex flex-col">
+                              <span className="text-foreground">{a.display_name || "Unnamed"}</span>
+                              <span className="text-xs text-muted-foreground">{a.role_title}</span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 accent-primary"
+                              checked={checked}
+                              disabled={disabled}
+                              onChange={() => toggle(a.user_id)}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Select up to 2 approvers (CEO and Directors). Both must sign off when 2 are selected.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                );
+              }} />
+            ) : (
+              <FormField control={form.control} name="approver_user_id" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Approvers</FormLabel>
-                  <div className="rounded-md border border-border divide-y divide-border max-h-56 overflow-y-auto">
-                    {approvers.length === 0 && (
-                      <p className="text-xs text-muted-foreground p-3">No CEO/Director approvers available.</p>
-                    )}
-                    {approvers.map(a => {
-                      const checked = selected.includes(a.user_id);
-                      const disabled = !checked && selected.length >= 2;
-                      return (
-                        <label
-                          key={a.user_id}
-                          className={`flex items-center justify-between gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-secondary/40 ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
-                        >
-                          <div className="flex flex-col">
-                            <span className="text-foreground">{a.display_name || "Unnamed"}</span>
-                            <span className="text-xs text-muted-foreground">{a.role_title}</span>
-                          </div>
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 accent-primary"
-                            checked={checked}
-                            disabled={disabled}
-                            onChange={() => toggle(a.user_id)}
-                          />
-                        </label>
-                      );
-                    })}
-                  </div>
+                  <FormLabel>Approver</FormLabel>
+                  <Select onValueChange={field.onChange} value={(field.value as string) || "auto"}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Auto-route by amount" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="auto">Auto-route by amount (default)</SelectItem>
+                      {approvers.map(a => (
+                        <SelectItem key={a.user_id} value={a.user_id}>
+                          {a.display_name || "Unnamed"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-muted-foreground">
-                    Select up to 2 approvers (CEO and Directors). Both must sign off when 2 are selected.
+                    Nominate a specific approver, or leave on auto-route to use the standard tier rules.
                   </p>
                   <FormMessage />
                 </FormItem>
-              );
-            }} />
+              )} />
+            )}
 
             <FormField control={form.control} name="delivery_date" render={({ field }) => (
               <FormItem>

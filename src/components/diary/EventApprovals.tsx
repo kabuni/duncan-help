@@ -88,6 +88,11 @@ export function EventApprovals({ eventId }: { eventId: string }) {
   const [suggestDate, setSuggestDate] = useState<string>("");
   const [suggestNote, setSuggestNote] = useState<string>("");
 
+  // Decision-comment popover state
+  const [decideFor, setDecideFor] = useState<string | null>(null);
+  const [decideAction, setDecideAction] = useState<"approved" | "rejected">("approved");
+  const [decideNote, setDecideNote] = useState<string>("");
+
   async function load() {
     const [{ data: u }, { data: r }, { data: p }] = await Promise.all([
       supabase.auth.getUser(),
@@ -147,22 +152,39 @@ export function EventApprovals({ eventId }: { eventId: string }) {
     load();
   }
 
-  async function setStatus(row: ApprovalRow, status: "approved" | "rejected" | "pending") {
+  async function setStatus(row: ApprovalRow, status: "approved" | "rejected" | "pending", note?: string) {
     setBusyId(row.id);
+    const update: any = {
+      status,
+      decided_at: status === "pending" ? null : new Date().toISOString(),
+      proposed_date: status === "pending" ? row.proposed_date : null,
+      proposed_note: status === "pending" ? row.proposed_note : null,
+    };
+    if (status === "pending") {
+      update.decision_note = null;
+    } else {
+      update.decision_note = note?.trim() ? note.trim() : null;
+    }
     const { error } = await supabase
       .from("key_event_approvals" as any)
-      .update({
-        status,
-        decided_at: status === "pending" ? null : new Date().toISOString(),
-        // Clear any prior counter-proposal when finalising
-        proposed_date: status === "pending" ? row.proposed_date : null,
-        proposed_note: status === "pending" ? row.proposed_note : null,
-      })
+      .update(update)
       .eq("id", row.id);
     setBusyId(null);
     if (error) return toast.error(error.message);
     if (status !== "pending") notify(row.id, "decided");
     load();
+  }
+
+  function openDecide(row: ApprovalRow, action: "approved" | "rejected") {
+    setDecideFor(row.id);
+    setDecideAction(action);
+    setDecideNote("");
+  }
+
+  async function submitDecide(row: ApprovalRow) {
+    await setStatus(row, decideAction, decideNote);
+    setDecideFor(null);
+    setDecideNote("");
   }
 
   async function submitProposed(row: ApprovalRow) {
@@ -265,24 +287,75 @@ export function EventApprovals({ eventId }: { eventId: string }) {
                   <span className="truncate">Approver: <span className="text-foreground">{nameForProfile(row.approver_profile_id)}</span></span>
                   <div className="flex items-center gap-1 shrink-0">
                     {isApprover && row.status !== "approved" && row.status !== "proposed" && (
-                      <button
-                        onClick={() => setStatus(row, "approved")}
-                        disabled={busyId === row.id}
-                        className="text-emerald-600 hover:bg-emerald-500/10 rounded p-1"
-                        title="Approve"
+                      <Popover
+                        open={decideFor === row.id && decideAction === "approved"}
+                        onOpenChange={(open) => { if (!open) { setDecideFor(null); setDecideNote(""); } }}
                       >
-                        <Check className="h-3 w-3" />
-                      </button>
+                        <PopoverTrigger asChild>
+                          <button
+                            onClick={() => openDecide(row, "approved")}
+                            disabled={busyId === row.id}
+                            className="text-emerald-600 hover:bg-emerald-500/10 rounded p-1"
+                            title="Approve"
+                          >
+                            <Check className="h-3 w-3" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-2 space-y-1.5" align="end">
+                          <div className="text-xs font-medium">Approve</div>
+                          <Input
+                            value={decideNote}
+                            onChange={(e) => setDecideNote(e.target.value)}
+                            placeholder="Optional comment"
+                            className="h-7 text-xs"
+                            autoFocus
+                          />
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs w-full"
+                            onClick={() => submitDecide(row)}
+                            disabled={busyId === row.id}
+                          >
+                            <Check className="h-3 w-3 mr-1" /> Confirm approve
+                          </Button>
+                        </PopoverContent>
+                      </Popover>
                     )}
                     {isApprover && row.status !== "rejected" && row.status !== "proposed" && (
-                      <button
-                        onClick={() => setStatus(row, "rejected")}
-                        disabled={busyId === row.id}
-                        className="text-destructive hover:bg-destructive/10 rounded p-1"
-                        title="Reject"
+                      <Popover
+                        open={decideFor === row.id && decideAction === "rejected"}
+                        onOpenChange={(open) => { if (!open) { setDecideFor(null); setDecideNote(""); } }}
                       >
-                        <XCircle className="h-3 w-3" />
-                      </button>
+                        <PopoverTrigger asChild>
+                          <button
+                            onClick={() => openDecide(row, "rejected")}
+                            disabled={busyId === row.id}
+                            className="text-destructive hover:bg-destructive/10 rounded p-1"
+                            title="Reject"
+                          >
+                            <XCircle className="h-3 w-3" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-2 space-y-1.5" align="end">
+                          <div className="text-xs font-medium">Reject</div>
+                          <Input
+                            value={decideNote}
+                            onChange={(e) => setDecideNote(e.target.value)}
+                            placeholder="Reason (recommended)"
+                            className="h-7 text-xs"
+                            autoFocus
+                          />
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="h-7 text-xs w-full"
+                            onClick={() => submitDecide(row)}
+                            disabled={busyId === row.id}
+                          >
+                            <XCircle className="h-3 w-3 mr-1" /> Confirm reject
+                          </Button>
+                        </PopoverContent>
+                      </Popover>
                     )}
                     {isApprover && row.status !== "proposed" && (
                       <Popover
@@ -346,6 +419,12 @@ export function EventApprovals({ eventId }: { eventId: string }) {
                     )}
                   </div>
                 </div>
+
+                {row.decision_note && (row.status === "approved" || row.status === "rejected") && (
+                  <div className="text-[11px] text-muted-foreground italic border-t border-border/60 pt-1 mt-1">
+                    "{row.decision_note}"
+                  </div>
+                )}
 
                 {/* Counter-proposal panel */}
                 {row.status === "proposed" && row.proposed_date && (

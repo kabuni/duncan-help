@@ -77,7 +77,7 @@ export default function POApprovals() {
                 <p className="text-sm font-semibold text-foreground shrink-0">
                   £{Number(po.total_amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}
                 </p>
-                <div className="flex gap-2 shrink-0">
+                <div className="flex gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <Button size="sm" variant="outline" className="gap-1 text-norman-success border-norman-success/30 hover:bg-norman-success/10"
                     onClick={() => approvePO.mutate({ id: po.id, approved: true })}
                     disabled={approvePO.isPending}>

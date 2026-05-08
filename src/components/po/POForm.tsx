@@ -44,7 +44,8 @@ const schema = z.object({
   description: z.string().trim().min(1, "Required").max(1000),
   category: z.enum(["software", "hardware", "services", "marketing", "creative", "travel", "office_supplies", "other"]),
   total_amount: z.coerce.number().optional(),
-  approver_user_ids: z.array(z.string()).min(1, "Select at least one approver").max(2, "Maximum 2 approvers"),
+  approver_user_id: z.string().optional(),
+  approver_user_ids: z.array(z.string()).optional(),
   delivery_date: z.string().optional(),
   notes: z.string().max(1000).optional(),
 });
@@ -59,6 +60,7 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
   const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [approvers, setApprovers] = useState<ApproverOption[]>([]);
+  const [leadershipApprovers, setLeadershipApprovers] = useState<ApproverOption[]>([]);
 
   const isCreative = kind === "creative";
   const allowedCategories = isCreative
@@ -72,9 +74,9 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
         .select("user_id, display_name, role_title")
         .eq("approval_status", "approved")
         .order("display_name");
-      const filtered = (data || [])
-        .filter((p: any) => p.user_id && isLeadership(p.role_title));
-      setApprovers(filtered as ApproverOption[]);
+      const all = (data || []).filter((p: any) => p.user_id) as ApproverOption[];
+      setApprovers(all);
+      setLeadershipApprovers(all.filter(p => isLeadership(p.role_title)));
     })();
   }, []);
 
@@ -83,6 +85,7 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
     defaultValues: {
       total_amount: 0,
       category: isCreative ? "marketing" : "other",
+      approver_user_id: "auto",
       approver_user_ids: [],
     },
   });
@@ -92,6 +95,10 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
   const onSubmit = async (values: FormData) => {
     if (!isCreative && (!values.total_amount || values.total_amount < 0.01)) {
       form.setError("total_amount", { message: "Enter an amount" });
+      return;
+    }
+    if (isCreative && (!values.approver_user_ids || values.approver_user_ids.length === 0)) {
+      form.setError("approver_user_ids", { message: "Select at least one approver" });
       return;
     }
 
@@ -106,6 +113,11 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
 
     const amount = isCreative ? 0 : (values.total_amount || 0);
 
+    const approver_user_id = isCreative
+      ? values.approver_user_ids?.[0]
+      : (values.approver_user_id && values.approver_user_id !== "auto" ? values.approver_user_id : undefined);
+    const secondary_approver_user_id = isCreative ? values.approver_user_ids?.[1] : undefined;
+
     await createPO.mutateAsync({
       department_id: values.department_id,
       vendor_name: values.vendor_name,
@@ -117,13 +129,16 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
       delivery_date: values.delivery_date,
       notes: values.notes,
       attachment_path,
-      approver_user_id: values.approver_user_ids[0],
-      secondary_approver_user_id: values.approver_user_ids[1],
+      approver_user_id,
+      secondary_approver_user_id,
     });
     onClose();
   };
 
-  const tierLabel = !isCreative && totalAmount >= 500 ? "Requires approval" : "";
+  const tierLabel =
+    totalAmount < 500 ? "Auto-approved" :
+    totalAmount <= 5000 ? "Simon Wood approval" :
+    "Nimesh + Patrick (dual sign-off)";
 
   return (
     <Dialog open onOpenChange={() => onClose()}>
@@ -192,52 +207,75 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
               </>
             )}
 
-            <FormField control={form.control} name="approver_user_ids" render={({ field }) => {
-              const selected: string[] = Array.isArray(field.value) ? field.value : [];
-              const toggle = (id: string) => {
-                if (selected.includes(id)) {
-                  field.onChange(selected.filter(x => x !== id));
-                } else if (selected.length < 2) {
-                  field.onChange([...selected, id]);
-                }
-              };
-              return (
+            {isCreative ? (
+              <FormField control={form.control} name="approver_user_ids" render={({ field }) => {
+                const selected: string[] = Array.isArray(field.value) ? field.value : [];
+                const toggle = (id: string) => {
+                  if (selected.includes(id)) {
+                    field.onChange(selected.filter(x => x !== id));
+                  } else if (selected.length < 2) {
+                    field.onChange([...selected, id]);
+                  }
+                };
+                return (
+                  <FormItem>
+                    <FormLabel>Approvers</FormLabel>
+                    <div className="rounded-md border border-border divide-y divide-border max-h-56 overflow-y-auto">
+                      {leadershipApprovers.length === 0 && (
+                        <p className="text-xs text-muted-foreground p-3">No CEO/Director approvers available.</p>
+                      )}
+                      {leadershipApprovers.map(a => {
+                        const checked = selected.includes(a.user_id);
+                        const disabled = !checked && selected.length >= 2;
+                        return (
+                          <label
+                            key={a.user_id}
+                            className={`flex items-center justify-between gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-secondary/40 ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+                          >
+                            <div className="flex flex-col">
+                              <span className="text-foreground">{a.display_name || "Unnamed"}</span>
+                              <span className="text-xs text-muted-foreground">{a.role_title}</span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 accent-primary"
+                              checked={checked}
+                              disabled={disabled}
+                              onChange={() => toggle(a.user_id)}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Select up to 2 approvers (CEO and Directors). Both must sign off when 2 are selected.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                );
+              }} />
+            ) : (
+              <FormField control={form.control} name="approver_user_id" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Approvers</FormLabel>
-                  <div className="rounded-md border border-border divide-y divide-border max-h-56 overflow-y-auto">
-                    {approvers.length === 0 && (
-                      <p className="text-xs text-muted-foreground p-3">No CEO/Director approvers available.</p>
-                    )}
-                    {approvers.map(a => {
-                      const checked = selected.includes(a.user_id);
-                      const disabled = !checked && selected.length >= 2;
-                      return (
-                        <label
-                          key={a.user_id}
-                          className={`flex items-center justify-between gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-secondary/40 ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
-                        >
-                          <div className="flex flex-col">
-                            <span className="text-foreground">{a.display_name || "Unnamed"}</span>
-                            <span className="text-xs text-muted-foreground">{a.role_title}</span>
-                          </div>
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 accent-primary"
-                            checked={checked}
-                            disabled={disabled}
-                            onChange={() => toggle(a.user_id)}
-                          />
-                        </label>
-                      );
-                    })}
-                  </div>
+                  <FormLabel>Approver</FormLabel>
+                  <Select onValueChange={field.onChange} value={(field.value as string) || "auto"}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Auto-route by amount" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="auto">Auto-route by amount (default)</SelectItem>
+                      {approvers.map(a => (
+                        <SelectItem key={a.user_id} value={a.user_id}>
+                          {a.display_name || "Unnamed"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-muted-foreground">
-                    Select up to 2 approvers (CEO and Directors). Both must sign off when 2 are selected.
+                    Nominate a specific approver, or leave on auto-route to use the standard tier rules.
                   </p>
                   <FormMessage />
                 </FormItem>
-              );
-            }} />
+              )} />
+            )}
 
             <FormField control={form.control} name="delivery_date" render={({ field }) => (
               <FormItem>

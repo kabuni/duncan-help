@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     const apiResponse = await fetch(apiUrl, {
       method,
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: adoAuthHeader,
         "Content-Type": "application/json",
       },
       ...(body ? { body } : {}),

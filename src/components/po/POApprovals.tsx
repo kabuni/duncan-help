@@ -6,10 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { usePurchaseOrders, useApprovePO } from "@/hooks/usePurchaseOrders";
+import { usePurchaseOrders, useApprovePO, type PurchaseOrder } from "@/hooks/usePurchaseOrders";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
+import PODetailModal from "./PODetailModal";
 
 export default function POApprovals() {
   const { data: orders = [] } = usePurchaseOrders();
@@ -18,6 +19,7 @@ export default function POApprovals() {
   const approvePO = useApprovePO();
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [selected, setSelected] = useState<PurchaseOrder | null>(null);
 
   const pending = orders.filter(o => {
     if (o.status !== "pending_approval") return false;
@@ -54,9 +56,9 @@ export default function POApprovals() {
       <div className="space-y-3">
         {pending.map((po, i) => (
           <motion.div key={po.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-            <Card>
+            <Card className="hover:border-primary/30 transition-colors cursor-pointer" onClick={() => setSelected(po)}>
               <CardContent className="py-4 px-5 flex items-center gap-4">
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0" onClick={() => setSelected(po)}>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-muted-foreground">{po.po_number}</span>
                     <Badge variant="outline" className="text-[10px]">
@@ -75,7 +77,7 @@ export default function POApprovals() {
                 <p className="text-sm font-semibold text-foreground shrink-0">
                   £{Number(po.total_amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}
                 </p>
-                <div className="flex gap-2 shrink-0">
+                <div className="flex gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <Button size="sm" variant="outline" className="gap-1 text-norman-success border-norman-success/30 hover:bg-norman-success/10"
                     onClick={() => approvePO.mutate({ id: po.id, approved: true })}
                     disabled={approvePO.isPending}>
@@ -103,6 +105,8 @@ export default function POApprovals() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {selected && <PODetailModal po={selected} onClose={() => setSelected(null)} />}
     </>
   );
 }

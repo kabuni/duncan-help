@@ -76,7 +76,7 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
         .order("display_name");
       const all = (data || []).filter((p: any) => p.user_id) as ApproverOption[];
       setApprovers(all);
-      setLeadershipApprovers(all.filter(p => isLeadership(p.role_title)));
+      setLeadershipApprovers(all.filter(p => isLeadership(p.role_title) || p.display_name?.toLowerCase().includes("simon wood")));
     })();
   }, []);
 
@@ -172,7 +172,7 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
             <FormField control={form.control} name="description" render={({ field }) => (
               <FormItem>
                 <FormLabel>Description</FormLabel>
-                <FormControl><Textarea {...field} placeholder="What is this purchase for?" rows={2} /></FormControl>
+                <FormControl><Textarea {...field} placeholder={isCreative ? "What is being signed off" : "What is this purchase for?"} rows={2} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />

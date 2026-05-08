@@ -50,6 +50,7 @@ export default function Approvals() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: rows = [], isLoading } = useApprovals();
+  const { data: pos = [] } = usePurchaseOrders();
   const decide = useDecideApproval();
 
   const [tab, setTab] = useState<"mine" | "requested" | "all">("mine");
@@ -57,6 +58,22 @@ export default function Approvals() {
   const [search, setSearch] = useState("");
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState("");
+
+  const poCategoryById = useMemo(() => {
+    const m = new Map<string, string>();
+    pos.forEach((p) => m.set(p.id, p.category));
+    return m;
+  }, [pos]);
+
+  const bucketOf = (r: ApprovalRow): "finance" | "marketing" | "other" => {
+    if (r.source_table === "purchase_orders") {
+      const cat = poCategoryById.get(r.source_id);
+      if (cat === "marketing" || cat === "creative") return "marketing";
+      return "finance";
+    }
+    if (r.kind === "cost") return "finance";
+    return "other";
+  };
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
@@ -68,11 +85,27 @@ export default function Approvals() {
     });
   }, [rows, tab, kindFilter, search, user]);
 
-  const grouped = useMemo(() => {
-    const pending = filtered.filter((r) => r.status === "pending");
-    const decided = filtered.filter((r) => r.status !== "pending");
-    return { pending, decided };
-  }, [filtered]);
+  const columns = useMemo(() => {
+    const finance: ApprovalRow[] = [];
+    const marketing: ApprovalRow[] = [];
+    const other: ApprovalRow[] = [];
+    filtered.forEach((r) => {
+      const b = bucketOf(r);
+      if (b === "finance") finance.push(r);
+      else if (b === "marketing") marketing.push(r);
+      else other.push(r);
+    });
+    const sorter = (a: ApprovalRow, b: ApprovalRow) => {
+      if (a.status === "pending" && b.status !== "pending") return -1;
+      if (a.status !== "pending" && b.status === "pending") return 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    };
+    return {
+      finance: finance.sort(sorter),
+      marketing: marketing.sort(sorter),
+      other: other.sort(sorter),
+    };
+  }, [filtered, poCategoryById]);
 
   const myPendingCount = rows.filter((r) => r.status === "pending" && r.approver_user_id === user?.id).length;
 

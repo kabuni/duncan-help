@@ -6,53 +6,11 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function refreshTokenIfNeeded(supabaseAdmin: any, tokenRow: any): Promise<string> {
-  const expiry = new Date(tokenRow.token_expiry);
-  if (expiry > new Date(Date.now() + 5 * 60 * 1000)) {
-    return tokenRow.access_token;
-  }
-
-  const clientId = Deno.env.get("AZURE_DEVOPS_CLIENT_ID")!;
-  const clientSecret = Deno.env.get("AZURE_DEVOPS_CLIENT_SECRET")!;
-  const tenantId = Deno.env.get("AZURE_TENANT_ID") || "53e795b0-6f86-4e93-b619-32b5f5850f07";
-
-  const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: tokenRow.refresh_token,
-      grant_type: "refresh_token",
-      scope: "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation offline_access",
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Token refresh failed: ${err}`);
-  }
-
-  const tokens = await response.json();
-  const newExpiry = new Date(Date.now() + tokens.expires_in * 1000);
-
-  await supabaseAdmin
-    .from("azure_devops_tokens")
-    .update({
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token || tokenRow.refresh_token,
-      token_expiry: newExpiry.toISOString(),
-    })
-    .eq("id", tokenRow.id);
-
-  return tokens.access_token;
-}
-
-async function adoFetch(url: string, accessToken: string, init?: RequestInit) {
+async function adoFetch(url: string, authHeader: string, init?: RequestInit) {
   const res = await fetch(url, {
     ...(init || {}),
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: authHeader,
       "Content-Type": "application/json",
       ...((init?.headers as Record<string, string>) || {}),
     },

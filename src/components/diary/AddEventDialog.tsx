@@ -223,11 +223,15 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     setSaving(true);
 
     const tz = draft.start_tz || DEFAULT_TZ;
+    // For all-day events anchor at UTC noon so the calendar date never shifts
+    // across the viewer's timezone (a UTC-midnight value displays as the
+    // previous day for any negative offset; UTC 23:59 displays as the next day
+    // for any positive offset). UTC noon is safe for every IANA zone.
     const startISO = draft.all_day
-      ? zonedDateTimeToISO(draft.start_date, "00:00", tz)
+      ? zonedDateTimeToISO(draft.start_date, "12:00", "UTC")
       : zonedDateTimeToISO(draft.start_date, draft.start_time || "09:00", tz);
     const endISO = draft.all_day
-      ? zonedDateTimeToISO(effectiveEndDate, "23:59", tz)
+      ? zonedDateTimeToISO(effectiveEndDate, "12:00", "UTC")
       : zonedDateTimeToISO(effectiveEndDate, draft.end_time || draft.start_time || "10:00", tz);
 
     if (new Date(endISO) <= new Date(startISO)) {

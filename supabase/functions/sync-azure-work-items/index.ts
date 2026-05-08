@@ -23,49 +23,59 @@ Deno.serve(async (req) => {
     .single();
 
   try {
-    // Get token
-    const { data: tokenRow } = await supabaseAdmin
-      .from("azure_devops_tokens")
-      .select("*")
-      .limit(1)
-      .maybeSingle();
+    let authHeader: string;
+    let orgUrl: string;
+    const pat = Deno.env.get("AZURE_DEVOPS_PAT");
 
-    if (!tokenRow) {
-      throw new Error("Azure DevOps not connected");
-    }
-
-    // Refresh token if needed
-    let accessToken = tokenRow.access_token;
-    const expiry = new Date(tokenRow.token_expiry);
-    if (expiry <= new Date(Date.now() + 5 * 60 * 1000)) {
-      const clientId = Deno.env.get("AZURE_DEVOPS_CLIENT_ID")!;
-      const clientSecret = Deno.env.get("AZURE_DEVOPS_CLIENT_SECRET")!;
-      const tenantId = Deno.env.get("AZURE_TENANT_ID") || "53e795b0-6f86-4e93-b619-32b5f5850f07";
-      const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          refresh_token: tokenRow.refresh_token,
-          grant_type: "refresh_token",
-          scope: "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation offline_access",
-        }),
-      });
-      if (!response.ok) throw new Error("Token refresh failed");
-      const tokens = await response.json();
-      accessToken = tokens.access_token;
-      await supabaseAdmin
+    if (pat) {
+      authHeader = `Basic ${btoa(":" + pat)}`;
+      orgUrl = (Deno.env.get("AZURE_DEVOPS_ORG_URL") || "").replace(/\/+$/, "");
+      if (!orgUrl) throw new Error("AZURE_DEVOPS_ORG_URL not configured");
+    } else {
+      // Get token
+      const { data: tokenRow } = await supabaseAdmin
         .from("azure_devops_tokens")
-        .update({
-          access_token: tokens.access_token,
-          refresh_token: tokens.refresh_token || tokenRow.refresh_token,
-          token_expiry: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-        })
-        .eq("id", tokenRow.id);
-    }
+        .select("*")
+        .limit(1)
+        .maybeSingle();
 
-    const orgUrl = tokenRow.org_url || Deno.env.get("AZURE_DEVOPS_ORG_URL") || "";
+      if (!tokenRow) {
+        throw new Error("Azure DevOps not connected");
+      }
+
+      // Refresh token if needed
+      let accessToken = tokenRow.access_token;
+      const expiry = new Date(tokenRow.token_expiry);
+      if (expiry <= new Date(Date.now() + 5 * 60 * 1000)) {
+        const clientId = Deno.env.get("AZURE_DEVOPS_CLIENT_ID")!;
+        const clientSecret = Deno.env.get("AZURE_DEVOPS_CLIENT_SECRET")!;
+        const tenantId = Deno.env.get("AZURE_TENANT_ID") || "53e795b0-6f86-4e93-b619-32b5f5850f07";
+        const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: tokenRow.refresh_token,
+            grant_type: "refresh_token",
+            scope: "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation offline_access",
+          }),
+        });
+        if (!response.ok) throw new Error("Token refresh failed");
+        const tokens = await response.json();
+        accessToken = tokens.access_token;
+        await supabaseAdmin
+          .from("azure_devops_tokens")
+          .update({
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token || tokenRow.refresh_token,
+            token_expiry: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+          })
+          .eq("id", tokenRow.id);
+      }
+      authHeader = `Bearer ${accessToken}`;
+      orgUrl = tokenRow.org_url || Deno.env.get("AZURE_DEVOPS_ORG_URL") || "";
+    }
 
     // List projects
     const projectsRes = await fetch(`${orgUrl}/_apis/projects?api-version=7.1`, {

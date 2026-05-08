@@ -117,10 +117,8 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
       delivery_date: values.delivery_date,
       notes: values.notes,
       attachment_path,
-      approver_user_id:
-        values.approver_user_id && values.approver_user_id !== "auto"
-          ? values.approver_user_id
-          : undefined,
+      approver_user_id: values.approver_user_ids[0],
+      secondary_approver_user_id: values.approver_user_ids[1],
     });
     onClose();
   };

@@ -93,6 +93,7 @@ export default function POList() {
           );
         })}
       </div>
+      )}
       {selected && <PODetailModal po={selected} onClose={() => setSelected(null)} />}
     </>
   );

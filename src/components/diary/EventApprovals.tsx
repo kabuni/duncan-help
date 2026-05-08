@@ -287,24 +287,75 @@ export function EventApprovals({ eventId }: { eventId: string }) {
                   <span className="truncate">Approver: <span className="text-foreground">{nameForProfile(row.approver_profile_id)}</span></span>
                   <div className="flex items-center gap-1 shrink-0">
                     {isApprover && row.status !== "approved" && row.status !== "proposed" && (
-                      <button
-                        onClick={() => setStatus(row, "approved")}
-                        disabled={busyId === row.id}
-                        className="text-emerald-600 hover:bg-emerald-500/10 rounded p-1"
-                        title="Approve"
+                      <Popover
+                        open={decideFor === row.id && decideAction === "approved"}
+                        onOpenChange={(open) => { if (!open) { setDecideFor(null); setDecideNote(""); } }}
                       >
-                        <Check className="h-3 w-3" />
-                      </button>
+                        <PopoverTrigger asChild>
+                          <button
+                            onClick={() => openDecide(row, "approved")}
+                            disabled={busyId === row.id}
+                            className="text-emerald-600 hover:bg-emerald-500/10 rounded p-1"
+                            title="Approve"
+                          >
+                            <Check className="h-3 w-3" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-2 space-y-1.5" align="end">
+                          <div className="text-xs font-medium">Approve</div>
+                          <Input
+                            value={decideNote}
+                            onChange={(e) => setDecideNote(e.target.value)}
+                            placeholder="Optional comment"
+                            className="h-7 text-xs"
+                            autoFocus
+                          />
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs w-full"
+                            onClick={() => submitDecide(row)}
+                            disabled={busyId === row.id}
+                          >
+                            <Check className="h-3 w-3 mr-1" /> Confirm approve
+                          </Button>
+                        </PopoverContent>
+                      </Popover>
                     )}
                     {isApprover && row.status !== "rejected" && row.status !== "proposed" && (
-                      <button
-                        onClick={() => setStatus(row, "rejected")}
-                        disabled={busyId === row.id}
-                        className="text-destructive hover:bg-destructive/10 rounded p-1"
-                        title="Reject"
+                      <Popover
+                        open={decideFor === row.id && decideAction === "rejected"}
+                        onOpenChange={(open) => { if (!open) { setDecideFor(null); setDecideNote(""); } }}
                       >
-                        <XCircle className="h-3 w-3" />
-                      </button>
+                        <PopoverTrigger asChild>
+                          <button
+                            onClick={() => openDecide(row, "rejected")}
+                            disabled={busyId === row.id}
+                            className="text-destructive hover:bg-destructive/10 rounded p-1"
+                            title="Reject"
+                          >
+                            <XCircle className="h-3 w-3" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-2 space-y-1.5" align="end">
+                          <div className="text-xs font-medium">Reject</div>
+                          <Input
+                            value={decideNote}
+                            onChange={(e) => setDecideNote(e.target.value)}
+                            placeholder="Reason (recommended)"
+                            className="h-7 text-xs"
+                            autoFocus
+                          />
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="h-7 text-xs w-full"
+                            onClick={() => submitDecide(row)}
+                            disabled={busyId === row.id}
+                          >
+                            <XCircle className="h-3 w-3 mr-1" /> Confirm reject
+                          </Button>
+                        </PopoverContent>
+                      </Popover>
                     )}
                     {isApprover && row.status !== "proposed" && (
                       <Popover

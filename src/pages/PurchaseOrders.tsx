@@ -14,7 +14,7 @@ import BudgetUpload from "@/components/po/BudgetUpload";
 import DepartmentManager from "@/components/po/DepartmentManager";
 
 const PurchaseOrders = () => {
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState<null | "budget" | "creative">(null);
   const { isAdmin } = useIsAdmin();
 
   return (
@@ -24,18 +24,23 @@ const PurchaseOrders = () => {
 
         <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-6xl">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div>
                 <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1">
-                  Purchase Orders
+                  Approvals
                 </p>
                 <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
-                  Budget <span className="text-primary glow-text">Authorisation</span>
+                  <span className="text-primary glow-text">Authorisation</span>
                 </h2>
               </div>
-              <Button onClick={() => setShowForm(true)} className="gap-2 w-full sm:w-auto">
-                <Plus className="h-4 w-4" /> Request Approval
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <Button onClick={() => setShowForm("budget")} className="gap-2 w-full sm:w-auto">
+                  <Plus className="h-4 w-4" /> Budget Authorisation
+                </Button>
+                <Button onClick={() => setShowForm("creative")} variant="outline" className="gap-2 w-full sm:w-auto">
+                  <Plus className="h-4 w-4" /> Marketing & Creative
+                </Button>
+              </div>
             </div>
           </motion.div>
 
@@ -77,7 +82,7 @@ const PurchaseOrders = () => {
             )}
           </Tabs>
 
-          {showForm && <POForm onClose={() => setShowForm(false)} />}
+          {showForm && <POForm kind={showForm} onClose={() => setShowForm(null)} />}
         </div>
       </main>
     </AppLayout>

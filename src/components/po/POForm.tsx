@@ -40,12 +40,17 @@ type FormData = z.infer<typeof schema>;
 
 interface ApproverOption { user_id: string; display_name: string | null; }
 
-export default function POForm({ onClose }: { onClose: () => void }) {
+export default function POForm({ onClose, kind = "budget" }: { onClose: () => void; kind?: "budget" | "creative" }) {
   const { data: departments = [] } = useDepartments();
   const createPO = useCreatePO();
   const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [approvers, setApprovers] = useState<ApproverOption[]>([]);
+
+  const isCreative = kind === "creative";
+  const allowedCategories = isCreative
+    ? categories.filter(c => c.value === "marketing" || c.value === "creative")
+    : categories.filter(c => c.value !== "marketing" && c.value !== "creative");
 
   useEffect(() => {
     (async () => {
@@ -60,7 +65,11 @@ export default function POForm({ onClose }: { onClose: () => void }) {
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { quantity: 1, category: "other", approver_user_id: "auto" },
+    defaultValues: {
+      quantity: 1,
+      category: isCreative ? "marketing" : "other",
+      approver_user_id: "auto",
+    },
   });
 
   const quantity = form.watch("quantity") ?? 1;
@@ -105,7 +114,7 @@ export default function POForm({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={() => onClose()}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Request Approval</DialogTitle>
+          <DialogTitle>{isCreative ? "Marketing & Creative Authorisation" : "Budget Authorisation"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -144,7 +153,7 @@ export default function POForm({ onClose }: { onClose: () => void }) {
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                   <SelectContent>
-                    {categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                    {allowedCategories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <FormMessage />

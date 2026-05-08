@@ -43,8 +43,26 @@ Deno.serve(async (req) => {
     }
 
     // Trusted internal calls (e.g. ceo-briefing) authenticate with the service role key.
+    // Accept either an exact match against SUPABASE_SERVICE_ROLE_KEY (legacy) OR a JWT
+    // whose role claim is "service_role" (new signing-keys system, where the env var
+    // value may not exactly match the JWT used by other functions).
     const bearerToken = authHeader.replace(/^Bearer\s+/i, "");
-    const isTrustedInternalCall = !!bearerToken && bearerToken === supabaseServiceKey;
+    let isTrustedInternalCall = !!bearerToken && bearerToken === supabaseServiceKey;
+    if (!isTrustedInternalCall && bearerToken) {
+      try {
+        const parts = bearerToken.split(".");
+        if (parts.length === 3) {
+          const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+          const padding = padded.length % 4 ? "=".repeat(4 - (padded.length % 4)) : "";
+          const claims = JSON.parse(atob(padded + padding));
+          if (claims?.role === "service_role") {
+            isTrustedInternalCall = true;
+          }
+        }
+      } catch (_e) {
+        // ignore — fall through to user-JWT validation
+      }
+    }
 
     if (!isTrustedInternalCall) {
       const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {

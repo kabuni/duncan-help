@@ -315,8 +315,15 @@ const Integrations = () => {
   const checkAzureDevOpsConnection = async () => {
     try {
       const { supabase } = await import("@/integrations/supabase/client");
-      const { data } = await supabase.from("azure_devops_tokens").select("id").limit(1);
-      setIsAzureDevOpsConnected(!!(data && data.length > 0));
+      // Probe live connectivity (works for both PAT and OAuth-token modes)
+      const { data, error } = await supabase.functions.invoke("azure-devops-api", {
+        body: { action: "list_projects" },
+      });
+      if (error) {
+        setIsAzureDevOpsConnected(false);
+        return;
+      }
+      setIsAzureDevOpsConnected(!data?.error);
     } catch {
       setIsAzureDevOpsConnected(false);
     }

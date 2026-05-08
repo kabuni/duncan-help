@@ -41,9 +41,9 @@ const PurchaseOrders = () => {
 
           <Tabs defaultValue="orders" className="space-y-6">
             <TabsList className="bg-secondary/50 w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
-              <TabsTrigger value="orders" className="gap-2 whitespace-nowrap">
-                <FileText className="h-3.5 w-3.5" /> My Orders
-              </TabsTrigger>
+            <TabsTrigger value="orders" className="gap-2 whitespace-nowrap">
+              <FileText className="h-3.5 w-3.5" /> My Approval Requests
+            </TabsTrigger>
               <TabsTrigger value="approvals" className="gap-2 whitespace-nowrap">
                 <Clock className="h-3.5 w-3.5" /> Approvals
               </TabsTrigger>

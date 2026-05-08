@@ -300,23 +300,30 @@ export default function Approvals() {
               </div>
             </Card>
           ) : (
-            <div className="space-y-6">
-              {grouped.pending.length > 0 && (
-                <section>
-                  <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">
-                    Pending ({grouped.pending.length})
-                  </h3>
-                  <div className="space-y-2">{grouped.pending.map(renderRow)}</div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {([
+                { key: "finance", label: "Finance & PO Approvals", rows: columns.finance },
+                { key: "marketing", label: "Marketing & Creative Approvals", rows: columns.marketing },
+                { key: "other", label: "Other Approvals", rows: columns.other },
+              ] as const).map((col) => (
+                <section key={col.key} className="min-w-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                      {col.label}
+                    </h3>
+                    <Badge variant="outline" className="text-[10px]">{col.rows.length}</Badge>
+                  </div>
+                  {col.rows.length === 0 ? (
+                    <Card className="border-dashed">
+                      <div className="py-8 text-center">
+                        <p className="text-xs text-muted-foreground">Nothing here.</p>
+                      </div>
+                    </Card>
+                  ) : (
+                    <div className="space-y-2">{col.rows.map(renderRow)}</div>
+                  )}
                 </section>
-              )}
-              {grouped.decided.length > 0 && (
-                <section>
-                  <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">
-                    Decided ({grouped.decided.length})
-                  </h3>
-                  <div className="space-y-2">{grouped.decided.map(renderRow)}</div>
-                </section>
-              )}
+              ))}
             </div>
           )}
         </div>

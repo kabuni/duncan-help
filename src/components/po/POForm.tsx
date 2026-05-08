@@ -93,8 +93,8 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
   const totalAmount = Number(form.watch("total_amount")) || 0;
 
   const onSubmit = async (values: FormData) => {
-    if (!isCreative && (!values.total_amount || values.total_amount < 0.01)) {
-      form.setError("total_amount", { message: "Enter an amount" });
+    if (!values.total_amount || values.total_amount < 0.01) {
+      form.setError("total_amount", { message: isCreative ? "Enter the estimated cost to pre-authorise" : "Enter an amount" });
       return;
     }
     if (isCreative && (!values.approver_user_ids || values.approver_user_ids.length === 0)) {
@@ -111,7 +111,7 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
       if (!error) attachment_path = path;
     }
 
-    const amount = isCreative ? 0 : (values.total_amount || 0);
+    const amount = values.total_amount || 0;
 
     const approver_user_id = isCreative
       ? values.approver_user_ids?.[0]
@@ -190,22 +190,27 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
               </FormItem>
             )} />
 
-            {!isCreative && (
-              <>
-                <FormField control={form.control} name="total_amount" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Total Amount (£)</FormLabel>
-                    <FormControl><Input type="number" step="0.01" min={0.01} {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
+            <FormField control={form.control} name="total_amount" render={({ field }) => (
+              <FormItem>
+                <FormLabel>{isCreative ? "Estimated Cost (£)" : "Total Amount (£)"}</FormLabel>
+                <FormControl><Input type="number" step="0.01" min={0.01} {...field} /></FormControl>
+                {isCreative && (
+                  <p className="text-xs text-muted-foreground">
+                    Pre-authorisation amount. Approvers sign off against this cost before any spend is committed.
+                  </p>
+                )}
+                <FormMessage />
+              </FormItem>
+            )} />
 
-                <div className="rounded-md border border-border bg-secondary/30 px-4 py-3 flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">Total: £{totalAmount.toFixed(2)}</span>
-                  <span className="text-xs font-mono text-muted-foreground">{tierLabel}</span>
-                </div>
-              </>
-            )}
+            <div className="rounded-md border border-border bg-secondary/30 px-4 py-3 flex items-center justify-between">
+              <span className="text-sm font-medium text-foreground">
+                {isCreative ? "Pre-authorisation total" : "Total"}: £{totalAmount.toFixed(2)}
+              </span>
+              {!isCreative && (
+                <span className="text-xs font-mono text-muted-foreground">{tierLabel}</span>
+              )}
+            </div>
 
             {isCreative ? (
               <FormField control={form.control} name="approver_user_ids" render={({ field }) => {

@@ -1,0 +1,1 @@
+DELETE FROM public.azure_devops_tokens;

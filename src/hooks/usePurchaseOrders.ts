@@ -86,6 +86,11 @@ export function useCreatePO() {
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
       const statusMsg = data.status === "approved" ? "Auto-approved (under £500)" : "Submitted for approval";
       toast({ title: "PO Created", description: `${data.po_number} — ${statusMsg}` });
+      // Notify approvers by email (fire-and-forget)
+      if (data.status === "pending_approval") {
+        supabase.functions.invoke("send-po-approval-email", { body: { po_id: data.id } })
+          .catch((e) => console.error("send-po-approval-email failed", e));
+      }
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });

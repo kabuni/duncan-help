@@ -19,6 +19,7 @@ const statusConfig: Record<POStatus, { icon: any; color: string; label: string }
 export default function POList() {
   const { data: orders = [], isLoading } = usePurchaseOrders();
   const { data: departments = [] } = useDepartments();
+  const [selected, setSelected] = useState<PurchaseOrder | null>(null);
 
   const getDeptName = (id: string) => departments.find(d => d.id === id)?.name ?? "—";
 

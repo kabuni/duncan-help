@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { FileText, CheckCircle, Clock, XCircle, Ban } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePurchaseOrders, type POStatus, type PurchaseOrder } from "@/hooks/usePurchaseOrders";
 import { useDepartments } from "@/hooks/useDepartments";
 import { format } from "date-fns";
 import PODetailModal from "./PODetailModal";
+
+const CLOSED_STATUSES: POStatus[] = ["approved", "rejected", "cancelled"];
 
 const statusConfig: Record<POStatus, { icon: any; color: string; label: string }> = {
   draft: { icon: FileText, color: "text-muted-foreground", label: "Draft" },

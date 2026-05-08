@@ -97,6 +97,10 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
       form.setError("total_amount", { message: "Enter an amount" });
       return;
     }
+    if (isCreative && (!values.approver_user_ids || values.approver_user_ids.length === 0)) {
+      form.setError("approver_user_ids", { message: "Select at least one approver" });
+      return;
+    }
 
     let attachment_path: string | undefined;
 
@@ -109,6 +113,11 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
 
     const amount = isCreative ? 0 : (values.total_amount || 0);
 
+    const approver_user_id = isCreative
+      ? values.approver_user_ids?.[0]
+      : (values.approver_user_id && values.approver_user_id !== "auto" ? values.approver_user_id : undefined);
+    const secondary_approver_user_id = isCreative ? values.approver_user_ids?.[1] : undefined;
+
     await createPO.mutateAsync({
       department_id: values.department_id,
       vendor_name: values.vendor_name,
@@ -120,13 +129,16 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
       delivery_date: values.delivery_date,
       notes: values.notes,
       attachment_path,
-      approver_user_id: values.approver_user_ids[0],
-      secondary_approver_user_id: values.approver_user_ids[1],
+      approver_user_id,
+      secondary_approver_user_id,
     });
     onClose();
   };
 
-  const tierLabel = !isCreative && totalAmount >= 500 ? "Requires approval" : "";
+  const tierLabel =
+    totalAmount < 500 ? "Auto-approved" :
+    totalAmount <= 5000 ? "Simon Wood approval" :
+    "Nimesh + Patrick (dual sign-off)";
 
   return (
     <Dialog open onOpenChange={() => onClose()}>

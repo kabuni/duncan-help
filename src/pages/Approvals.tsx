@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApprovals, useDecideApproval, type ApprovalRow, type ApprovalKind } from "@/hooks/useApprovals";
+import { usePurchaseOrders } from "@/hooks/usePurchaseOrders";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,7 @@ export default function Approvals() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: rows = [], isLoading } = useApprovals();
+  const { data: pos = [] } = usePurchaseOrders();
   const decide = useDecideApproval();
 
   const [tab, setTab] = useState<"mine" | "requested" | "all">("mine");
@@ -56,6 +58,22 @@ export default function Approvals() {
   const [search, setSearch] = useState("");
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState("");
+
+  const poCategoryById = useMemo(() => {
+    const m = new Map<string, string>();
+    pos.forEach((p) => m.set(p.id, p.category));
+    return m;
+  }, [pos]);
+
+  const bucketOf = (r: ApprovalRow): "finance" | "marketing" | "other" => {
+    if (r.source_table === "purchase_orders") {
+      const cat = poCategoryById.get(r.source_id);
+      if (cat === "marketing" || cat === "creative") return "marketing";
+      return "finance";
+    }
+    if (r.kind === "cost") return "finance";
+    return "other";
+  };
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
@@ -67,11 +85,27 @@ export default function Approvals() {
     });
   }, [rows, tab, kindFilter, search, user]);
 
-  const grouped = useMemo(() => {
-    const pending = filtered.filter((r) => r.status === "pending");
-    const decided = filtered.filter((r) => r.status !== "pending");
-    return { pending, decided };
-  }, [filtered]);
+  const columns = useMemo(() => {
+    const finance: ApprovalRow[] = [];
+    const marketing: ApprovalRow[] = [];
+    const other: ApprovalRow[] = [];
+    filtered.forEach((r) => {
+      const b = bucketOf(r);
+      if (b === "finance") finance.push(r);
+      else if (b === "marketing") marketing.push(r);
+      else other.push(r);
+    });
+    const sorter = (a: ApprovalRow, b: ApprovalRow) => {
+      if (a.status === "pending" && b.status !== "pending") return -1;
+      if (a.status !== "pending" && b.status === "pending") return 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    };
+    return {
+      finance: finance.sort(sorter),
+      marketing: marketing.sort(sorter),
+      other: other.sort(sorter),
+    };
+  }, [filtered, poCategoryById]);
 
   const myPendingCount = rows.filter((r) => r.status === "pending" && r.approver_user_id === user?.id).length;
 
@@ -204,7 +238,7 @@ export default function Approvals() {
     <AppLayout>
       <main className="flex-1 overflow-y-auto">
         <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />
-        <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-5xl">
+        <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-7xl">
           <div className="mb-6">
             <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1">
               Inbox
@@ -266,23 +300,30 @@ export default function Approvals() {
               </div>
             </Card>
           ) : (
-            <div className="space-y-6">
-              {grouped.pending.length > 0 && (
-                <section>
-                  <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">
-                    Pending ({grouped.pending.length})
-                  </h3>
-                  <div className="space-y-2">{grouped.pending.map(renderRow)}</div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {([
+                { key: "finance", label: "Finance & PO Approvals", rows: columns.finance },
+                { key: "marketing", label: "Marketing & Creative Approvals", rows: columns.marketing },
+                { key: "other", label: "Other Approvals", rows: columns.other },
+              ] as const).map((col) => (
+                <section key={col.key} className="min-w-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                      {col.label}
+                    </h3>
+                    <Badge variant="outline" className="text-[10px]">{col.rows.length}</Badge>
+                  </div>
+                  {col.rows.length === 0 ? (
+                    <Card className="border-dashed">
+                      <div className="py-8 text-center">
+                        <p className="text-xs text-muted-foreground">Nothing here.</p>
+                      </div>
+                    </Card>
+                  ) : (
+                    <div className="space-y-2">{col.rows.map(renderRow)}</div>
+                  )}
                 </section>
-              )}
-              {grouped.decided.length > 0 && (
-                <section>
-                  <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">
-                    Decided ({grouped.decided.length})
-                  </h3>
-                  <div className="space-y-2">{grouped.decided.map(renderRow)}</div>
-                </section>
-              )}
+              ))}
             </div>
           )}
         </div>

@@ -68,6 +68,7 @@ export function useCreatePO() {
       attachment_path?: string;
       notes?: string;
       approver_user_id?: string;
+      secondary_approver_user_id?: string;
     }) => {
       const { data, error } = await supabase
         .from("purchase_orders")

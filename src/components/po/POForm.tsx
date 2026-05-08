@@ -164,18 +164,22 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="total_amount" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Total Amount (£)</FormLabel>
-                <FormControl><Input type="number" step="0.01" min={0.01} {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
+            {!isCreative && (
+              <>
+                <FormField control={form.control} name="total_amount" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Total Amount (£)</FormLabel>
+                    <FormControl><Input type="number" step="0.01" min={0.01} {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
 
-            <div className="rounded-md border border-border bg-secondary/30 px-4 py-3 flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">Total: £{totalAmount.toFixed(2)}</span>
-              <span className="text-xs font-mono text-muted-foreground">{tierLabel}</span>
-            </div>
+                <div className="rounded-md border border-border bg-secondary/30 px-4 py-3 flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground">Total: £{totalAmount.toFixed(2)}</span>
+                  <span className="text-xs font-mono text-muted-foreground">{tierLabel}</span>
+                </div>
+              </>
+            )}
 
             <FormField control={form.control} name="approver_user_id" render={({ field }) => (
               <FormItem>

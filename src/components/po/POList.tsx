@@ -39,34 +39,41 @@ export default function POList() {
   }
 
   return (
-    <div className="space-y-3">
-      {orders.map((po, i) => {
-        const cfg = statusConfig[po.status];
-        const Icon = cfg.icon;
-        return (
-          <motion.div key={po.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-            <Card className="hover:border-primary/30 transition-colors">
-              <CardContent className="py-4 px-5 flex items-center gap-4">
-                <Icon className={`h-5 w-5 shrink-0 ${cfg.color}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-muted-foreground">{po.po_number}</span>
-                    <Badge variant="outline" className="text-[10px]">{po.category}</Badge>
+    <>
+      <div className="space-y-3">
+        {orders.map((po, i) => {
+          const cfg = statusConfig[po.status];
+          const Icon = cfg.icon;
+          return (
+            <motion.div key={po.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+              <Card
+                className="hover:border-primary/30 transition-colors cursor-pointer"
+                onClick={() => setSelected(po)}
+              >
+                <CardContent className="py-4 px-5 flex items-center gap-4">
+                  <Icon className={`h-5 w-5 shrink-0 ${cfg.color}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono text-muted-foreground">{po.po_number}</span>
+                      <Badge variant="outline" className="text-[10px]">{po.category}</Badge>
+                    </div>
+                    <p className="text-sm font-medium text-foreground truncate">{po.vendor_name} — {po.description}</p>
+                    <p className="text-xs text-muted-foreground">{getDeptName(po.department_id)} · {format(new Date(po.created_at), "dd MMM yyyy")}</p>
                   </div>
-                  <p className="text-sm font-medium text-foreground truncate">{po.vendor_name} — {po.description}</p>
-                  <p className="text-xs text-muted-foreground">{getDeptName(po.department_id)} · {format(new Date(po.created_at), "dd MMM yyyy")}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-semibold text-foreground">£{Number(po.total_amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p>
-                  <Badge variant={po.status === "approved" ? "default" : po.status === "rejected" ? "destructive" : "secondary"} className="text-[10px]">
-                    {cfg.label}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        );
-      })}
-    </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-foreground">£{Number(po.total_amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p>
+                    <Badge variant={po.status === "approved" ? "default" : po.status === "rejected" ? "destructive" : "secondary"} className="text-[10px]">
+                      {cfg.label}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          );
+        })}
+      </div>
+      {selected && <PODetailModal po={selected} onClose={() => setSelected(null)} />}
+    </>
   );
 }
+

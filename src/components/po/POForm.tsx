@@ -74,6 +74,11 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
   const totalAmount = Number(form.watch("total_amount")) || 0;
 
   const onSubmit = async (values: FormData) => {
+    if (!isCreative && (!values.total_amount || values.total_amount < 0.01)) {
+      form.setError("total_amount", { message: "Enter an amount" });
+      return;
+    }
+
     let attachment_path: string | undefined;
 
     if (file && user) {
@@ -83,14 +88,16 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
       if (!error) attachment_path = path;
     }
 
+    const amount = isCreative ? 0 : (values.total_amount || 0);
+
     await createPO.mutateAsync({
       department_id: values.department_id,
       vendor_name: values.vendor_name,
       description: values.description,
       category: values.category,
       quantity: 1,
-      unit_price: values.total_amount,
-      total_amount: values.total_amount,
+      unit_price: amount,
+      total_amount: amount,
       delivery_date: values.delivery_date,
       notes: values.notes,
       attachment_path,

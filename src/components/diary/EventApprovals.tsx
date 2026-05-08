@@ -152,22 +152,39 @@ export function EventApprovals({ eventId }: { eventId: string }) {
     load();
   }
 
-  async function setStatus(row: ApprovalRow, status: "approved" | "rejected" | "pending") {
+  async function setStatus(row: ApprovalRow, status: "approved" | "rejected" | "pending", note?: string) {
     setBusyId(row.id);
+    const update: any = {
+      status,
+      decided_at: status === "pending" ? null : new Date().toISOString(),
+      proposed_date: status === "pending" ? row.proposed_date : null,
+      proposed_note: status === "pending" ? row.proposed_note : null,
+    };
+    if (status === "pending") {
+      update.decision_note = null;
+    } else {
+      update.decision_note = note?.trim() ? note.trim() : null;
+    }
     const { error } = await supabase
       .from("key_event_approvals" as any)
-      .update({
-        status,
-        decided_at: status === "pending" ? null : new Date().toISOString(),
-        // Clear any prior counter-proposal when finalising
-        proposed_date: status === "pending" ? row.proposed_date : null,
-        proposed_note: status === "pending" ? row.proposed_note : null,
-      })
+      .update(update)
       .eq("id", row.id);
     setBusyId(null);
     if (error) return toast.error(error.message);
     if (status !== "pending") notify(row.id, "decided");
     load();
+  }
+
+  function openDecide(row: ApprovalRow, action: "approved" | "rejected") {
+    setDecideFor(row.id);
+    setDecideAction(action);
+    setDecideNote("");
+  }
+
+  async function submitDecide(row: ApprovalRow) {
+    await setStatus(row, decideAction, decideNote);
+    setDecideFor(null);
+    setDecideNote("");
   }
 
   async function submitProposed(row: ApprovalRow) {

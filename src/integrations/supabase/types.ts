@@ -3346,6 +3346,7 @@ export type Database = {
         | "travel"
         | "office_supplies"
         | "other"
+        | "creative"
       po_status:
         | "draft"
         | "pending_approval"
@@ -3504,6 +3505,7 @@ export const Constants = {
         "travel",
         "office_supplies",
         "other",
+        "creative",
       ],
       po_status: [
         "draft",

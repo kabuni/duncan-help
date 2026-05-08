@@ -1,0 +1,1 @@
+ALTER TYPE public.po_category ADD VALUE IF NOT EXISTS 'creative';

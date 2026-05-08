@@ -315,9 +315,8 @@ const Integrations = () => {
   const checkAzureDevOpsConnection = async () => {
     try {
       const { supabase } = await import("@/integrations/supabase/client");
-      const { data } = await supabase.rpc("get_company_integrations_status");
-      const row = (data ?? []).find((r: any) => r.integration_id === "azure-devops");
-      setIsAzureDevOpsConnected(row?.status === "connected");
+      const { data } = await supabase.from("azure_devops_tokens").select("id").limit(1);
+      setIsAzureDevOpsConnected(!!(data && data.length > 0));
     } catch {
       setIsAzureDevOpsConnected(false);
     }
@@ -794,6 +793,19 @@ const IntegrationDetail = ({
           () => fastApi("POST", "/drive/api", { action: "disconnect" }),
         );
         toast.success("Google Drive disconnected");
+        onClose();
+        return;
+      }
+
+      if (isAzureDevOps) {
+        const { supabase } = await import("@/integrations/supabase/client");
+        const { error } = await supabase
+          .from("azure_devops_tokens")
+          .delete()
+          .neq("id", "00000000-0000-0000-0000-000000000000");
+        if (error) throw error;
+        await fetchRuntimeStatus();
+        toast.success("Azure DevOps disconnected");
         onClose();
         return;
       }

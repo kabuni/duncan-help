@@ -234,7 +234,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       ? zonedDateTimeToISO(effectiveEndDate, "12:00", "UTC")
       : zonedDateTimeToISO(effectiveEndDate, draft.end_time || draft.start_time || "10:00", tz);
 
-    if (new Date(endISO) <= new Date(startISO)) {
+    if (!draft.all_day && new Date(endISO) <= new Date(startISO)) {
       setSaving(false);
       toast.error("End must be after the start");
       return;

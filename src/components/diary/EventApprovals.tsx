@@ -420,6 +420,12 @@ export function EventApprovals({ eventId }: { eventId: string }) {
                   </div>
                 </div>
 
+                {row.decision_note && (row.status === "approved" || row.status === "rejected") && (
+                  <div className="text-[11px] text-muted-foreground italic border-t border-border/60 pt-1 mt-1">
+                    "{row.decision_note}"
+                  </div>
+                )}
+
                 {/* Counter-proposal panel */}
                 {row.status === "proposed" && row.proposed_date && (
                   <div className="border-t border-border/60 pt-1.5 mt-1 space-y-1">

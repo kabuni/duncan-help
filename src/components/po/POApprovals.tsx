@@ -6,10 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { usePurchaseOrders, useApprovePO } from "@/hooks/usePurchaseOrders";
+import { usePurchaseOrders, useApprovePO, type PurchaseOrder } from "@/hooks/usePurchaseOrders";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
+import PODetailModal from "./PODetailModal";
 
 export default function POApprovals() {
   const { data: orders = [] } = usePurchaseOrders();

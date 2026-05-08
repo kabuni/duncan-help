@@ -123,10 +123,7 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
     onClose();
   };
 
-  const tierLabel =
-    totalAmount < 500 ? "Auto-approved" :
-    totalAmount <= 5000 ? "Simon Wood approval" :
-    "Nimesh + Patrick (dual sign-off)";
+  const tierLabel = !isCreative && totalAmount >= 500 ? "Requires approval" : "";
 
   return (
     <Dialog open onOpenChange={() => onClose()}>

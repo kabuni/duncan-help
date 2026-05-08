@@ -797,6 +797,19 @@ const IntegrationDetail = ({
         return;
       }
 
+      if (isAzureDevOps) {
+        const { supabase } = await import("@/integrations/supabase/client");
+        const { error } = await supabase
+          .from("azure_devops_tokens")
+          .delete()
+          .neq("id", "00000000-0000-0000-0000-000000000000");
+        if (error) throw error;
+        setIsAzureDevOpsConnected(false);
+        toast.success("Azure DevOps disconnected");
+        onClose();
+        return;
+      }
+
       if (isCompany) {
         await companyMutation.mutateAsync({ integrationId: integration.id, action: "disconnect" });
         await fetchRuntimeStatus();

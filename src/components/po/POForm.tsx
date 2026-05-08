@@ -44,7 +44,8 @@ const schema = z.object({
   description: z.string().trim().min(1, "Required").max(1000),
   category: z.enum(["software", "hardware", "services", "marketing", "creative", "travel", "office_supplies", "other"]),
   total_amount: z.coerce.number().optional(),
-  approver_user_ids: z.array(z.string()).min(1, "Select at least one approver").max(2, "Maximum 2 approvers"),
+  approver_user_id: z.string().optional(),
+  approver_user_ids: z.array(z.string()).optional(),
   delivery_date: z.string().optional(),
   notes: z.string().max(1000).optional(),
 });
@@ -59,6 +60,7 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
   const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [approvers, setApprovers] = useState<ApproverOption[]>([]);
+  const [leadershipApprovers, setLeadershipApprovers] = useState<ApproverOption[]>([]);
 
   const isCreative = kind === "creative";
   const allowedCategories = isCreative
@@ -72,9 +74,9 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
         .select("user_id, display_name, role_title")
         .eq("approval_status", "approved")
         .order("display_name");
-      const filtered = (data || [])
-        .filter((p: any) => p.user_id && isLeadership(p.role_title));
-      setApprovers(filtered as ApproverOption[]);
+      const all = (data || []).filter((p: any) => p.user_id) as ApproverOption[];
+      setApprovers(all);
+      setLeadershipApprovers(all.filter(p => isLeadership(p.role_title)));
     })();
   }, []);
 
@@ -83,6 +85,7 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
     defaultValues: {
       total_amount: 0,
       category: isCreative ? "marketing" : "other",
+      approver_user_id: "auto",
       approver_user_ids: [],
     },
   });

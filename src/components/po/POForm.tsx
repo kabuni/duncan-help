@@ -29,8 +29,7 @@ const schema = z.object({
   vendor_name: z.string().trim().min(1, "Required").max(200),
   description: z.string().trim().min(1, "Required").max(1000),
   category: z.enum(["software", "hardware", "services", "marketing", "creative", "travel", "office_supplies", "other"]),
-  quantity: z.coerce.number().int().min(1),
-  unit_price: z.coerce.number().min(0.01),
+  total_amount: z.coerce.number().min(0.01, "Enter an amount"),
   approver_user_id: z.string().optional(),
   delivery_date: z.string().optional(),
   notes: z.string().max(1000).optional(),
@@ -66,15 +65,13 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      quantity: 1,
+      total_amount: 0,
       category: isCreative ? "marketing" : "other",
       approver_user_id: "auto",
     },
   });
 
-  const quantity = form.watch("quantity") ?? 1;
-  const unitPrice = form.watch("unit_price") ?? 0;
-  const totalAmount = quantity * unitPrice;
+  const totalAmount = Number(form.watch("total_amount")) || 0;
 
   const onSubmit = async (values: FormData) => {
     let attachment_path: string | undefined;
@@ -91,9 +88,9 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
       vendor_name: values.vendor_name,
       description: values.description,
       category: values.category,
-      quantity: values.quantity,
-      unit_price: values.unit_price,
-      total_amount: totalAmount,
+      quantity: 1,
+      unit_price: values.total_amount,
+      total_amount: values.total_amount,
       delivery_date: values.delivery_date,
       notes: values.notes,
       attachment_path,
@@ -160,23 +157,13 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
               </FormItem>
             )} />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="quantity" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Quantity</FormLabel>
-                  <FormControl><Input type="number" min={1} {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-
-              <FormField control={form.control} name="unit_price" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Unit Price (£)</FormLabel>
-                  <FormControl><Input type="number" step="0.01" min={0.01} {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-            </div>
+            <FormField control={form.control} name="total_amount" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Total Amount (£)</FormLabel>
+                <FormControl><Input type="number" step="0.01" min={0.01} {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
 
             <div className="rounded-md border border-border bg-secondary/30 px-4 py-3 flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">Total: £{totalAmount.toFixed(2)}</span>

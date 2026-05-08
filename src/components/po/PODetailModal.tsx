@@ -195,7 +195,7 @@ export default function PODetailModal({ po, onClose }: Props) {
                 <Button variant="outline" className="gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
                   onClick={async () => { await cancelPO.mutateAsync(po.id); onClose(); }}
                   disabled={cancelPO.isPending}>
-                  <Ban className="h-3.5 w-3.5" /> Cancel request
+                  <Ban className="h-3.5 w-3.5" /> Delete request
                 </Button>
               )}
               {canApprove && !rejecting && (

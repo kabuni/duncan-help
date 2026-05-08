@@ -166,15 +166,16 @@ export function useCancelPO() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("purchase_orders")
-        .update({ status: "cancelled" })
-        .eq("id", id);
+      // Remove related approvals inbox rows first (no FK cascade).
+      await supabase.from("approvals" as any).delete().eq("source_table", "purchase_orders").eq("source_id", id);
+      const { error } = await supabase.from("purchase_orders").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
-      toast({ title: "Request cancelled" });
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      toast({ title: "Request deleted" });
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });

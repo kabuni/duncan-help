@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
 
     // List projects
     const projectsRes = await fetch(`${orgUrl}/_apis/projects?api-version=7.1`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: authHeader },
     });
     if (!projectsRes.ok) throw new Error(`Failed to list projects: ${projectsRes.status}`);
     const projectsData = await projectsRes.json();
@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
       const wiqlRes = await fetch(`${orgUrl}/${project.name}/_apis/wit/wiql?api-version=7.1`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: authHeader,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
       // Batch get work items (max 200 per call)
       const batchRes = await fetch(
         `${orgUrl}/_apis/wit/workitems?ids=${ids.join(",")}&$expand=all&api-version=7.1`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+        { headers: { Authorization: authHeader } }
       );
 
       if (!batchRes.ok) continue;

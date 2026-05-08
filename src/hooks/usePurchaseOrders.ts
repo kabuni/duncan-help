@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
-export type POCategory = "software" | "hardware" | "services" | "marketing" | "travel" | "office_supplies" | "other";
+export type POCategory = "software" | "hardware" | "services" | "marketing" | "creative" | "travel" | "office_supplies" | "other";
 export type POStatus = "draft" | "pending_approval" | "approved" | "rejected" | "cancelled";
 
 export interface PurchaseOrder {

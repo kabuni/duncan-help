@@ -18,6 +18,7 @@ const categories: { value: POCategory; label: string }[] = [
   { value: "hardware", label: "Hardware" },
   { value: "services", label: "Services" },
   { value: "marketing", label: "Marketing" },
+  { value: "creative", label: "Creative" },
   { value: "travel", label: "Travel" },
   { value: "office_supplies", label: "Office Supplies" },
   { value: "other", label: "Other" },

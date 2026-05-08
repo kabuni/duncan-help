@@ -93,8 +93,8 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
   const totalAmount = Number(form.watch("total_amount")) || 0;
 
   const onSubmit = async (values: FormData) => {
-    if (!values.total_amount || values.total_amount < 0.01) {
-      form.setError("total_amount", { message: isCreative ? "Enter the estimated cost to pre-authorise" : "Enter an amount" });
+    if (!isCreative && (!values.total_amount || values.total_amount < 0.01)) {
+      form.setError("total_amount", { message: "Enter an amount" });
       return;
     }
     if (isCreative && (!values.approver_user_ids || values.approver_user_ids.length === 0)) {
@@ -111,7 +111,7 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
       if (!error) attachment_path = path;
     }
 
-    const amount = values.total_amount || 0;
+    const amount = isCreative ? 0 : (values.total_amount || 0);
 
     const approver_user_id = isCreative
       ? values.approver_user_ids?.[0]

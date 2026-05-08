@@ -105,6 +105,8 @@ export default function POApprovals() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {selected && <PODetailModal po={selected} onClose={() => setSelected(null)} />}
     </>
   );
 }

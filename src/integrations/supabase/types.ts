@@ -124,6 +124,7 @@ export type Database = {
           priority: number | null
           project_name: string | null
           raw_data: Json | null
+          release: string | null
           state: string | null
           synced_at: string
           tags: string | null
@@ -144,6 +145,7 @@ export type Database = {
           priority?: number | null
           project_name?: string | null
           raw_data?: Json | null
+          release?: string | null
           state?: string | null
           synced_at?: string
           tags?: string | null
@@ -164,6 +166,7 @@ export type Database = {
           priority?: number | null
           project_name?: string | null
           raw_data?: Json | null
+          release?: string | null
           state?: string | null
           synced_at?: string
           tags?: string | null

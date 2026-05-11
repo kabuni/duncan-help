@@ -18,6 +18,7 @@ export interface KeyEvent {
   status: string | null;
 
   owner: string | null;
+  collaborators: { profile_id: string | null; display_name: string; role: string }[];
   objective: string | null;
   success_metric: string | null;
   decision_needed: string | null;

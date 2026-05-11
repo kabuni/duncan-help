@@ -176,6 +176,34 @@ Deno.serve(async (req) => {
 
         if (!upsertError) totalSynced++;
       }
+
+      // ---- Apply reconciliation deletes for this project ----
+      if (liveIds !== null) {
+        const canonicalProjectName = project.name;
+        try {
+          const { data: existing, error: existingErr } = await supabaseAdmin
+            .from("azure_work_items")
+            .select("external_id")
+            .eq("project_name", canonicalProjectName);
+          if (!existingErr && existing) {
+            const liveSet = new Set(liveIds);
+            const stale = existing
+              .map((r: any) => Number(r.external_id))
+              .filter((id: number) => Number.isFinite(id) && !liveSet.has(id));
+            if (stale.length > 0) {
+              const { error: delErr, count } = await supabaseAdmin
+                .from("azure_work_items")
+                .delete({ count: "exact" })
+                .eq("project_name", canonicalProjectName)
+                .in("external_id", stale);
+              if (!delErr) totalDeleted += count ?? stale.length;
+              else console.warn(`Delete failed for ${canonicalProjectName}:`, delErr);
+            }
+          }
+        } catch (e) {
+          console.warn(`Reconciliation delete error for ${canonicalProjectName}:`, e);
+        }
+      }
     }
 
     // Update sync log

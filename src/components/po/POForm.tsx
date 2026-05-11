@@ -314,15 +314,30 @@ function CurrencyAmountFields({ form }: { form: any }) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const fetchRate = async (): Promise<number | null> => {
+      // Primary: Frankfurter (new domain)
       try {
-        const res = await fetch("https://api.frankfurter.app/latest?from=GBP&to=INR");
-        const json = await res.json();
-        if (!cancelled && json?.rates?.INR) setRate(json.rates.INR);
-        else if (!cancelled) setRateError(true);
-      } catch {
-        if (!cancelled) setRateError(true);
-      }
+        const res = await fetch("https://api.frankfurter.dev/v1/latest?from=GBP&to=INR");
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.rates?.INR) return json.rates.INR;
+        }
+      } catch {/* fall through */}
+      // Fallback: open.er-api.com
+      try {
+        const res = await fetch("https://open.er-api.com/v6/latest/GBP");
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.rates?.INR) return json.rates.INR;
+        }
+      } catch {/* fall through */}
+      return null;
+    };
+    (async () => {
+      const r = await fetchRate();
+      if (cancelled) return;
+      if (r) setRate(r);
+      else setRateError(true);
     })();
     return () => { cancelled = true; };
   }, []);

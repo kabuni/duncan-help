@@ -183,6 +183,8 @@ const Operations = () => {
       }
       return true;
     });
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+    return [...list].sort((a, b) => collator.compare(a.title || "", b.title || ""));
   }, [workItems, stateFilter, typeFilter, assigneeFilter, projectFilter, releaseFilter, searchQuery, defaultRelease]);
 
   const hasActiveFilters = stateFilter !== "all" || typeFilter !== "all" || assigneeFilter !== "all" || projectFilter !== "all" || releaseFilter !== "all" || searchQuery !== "";

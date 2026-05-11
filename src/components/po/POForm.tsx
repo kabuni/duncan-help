@@ -14,13 +14,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
 const categories: { value: POCategory; label: string }[] = [
-  { value: "software", label: "Software" },
-  { value: "hardware", label: "Hardware" },
-  { value: "services", label: "Services" },
+  { value: "events", label: "Events" },
   { value: "marketing", label: "Marketing" },
+  { value: "social", label: "Social" },
   { value: "creative", label: "Creative" },
-  { value: "travel", label: "Travel" },
-  { value: "office_supplies", label: "Office Supplies" },
+  { value: "manufacturing", label: "Manufacturing" },
   { value: "other", label: "Other" },
 ];
 
@@ -42,7 +40,7 @@ const schema = z.object({
   department_id: z.string().min(1, "Select a department"),
   vendor_name: z.string().trim().min(1, "Required").max(200),
   description: z.string().trim().min(1, "Required").max(1000),
-  category: z.enum(["software", "hardware", "services", "marketing", "creative", "travel", "office_supplies", "other"]),
+  category: z.enum(["events", "marketing", "social", "creative", "manufacturing", "other"]),
   total_amount: z.coerce.number().optional(),
   approver_user_id: z.string().optional(),
   approver_user_ids: z.array(z.string()).optional(),

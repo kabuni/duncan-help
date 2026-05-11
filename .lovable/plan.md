@@ -1,29 +1,28 @@
-## Add a Release filter to Operations → Work Items
+## Goal
+Replace the Category dropdown in the Budget Authorisations (PO) form with these 6 options, in this order:
+Events, Marketing, Social, Creative, Manufacturing, Other.
 
-Add a fifth dropdown filter alongside State, Type, Assignee, and Project on the Operations page work items table. Release values come from the Azure DevOps Planning section on each user story / task — i.e. the work item's **Iteration Path** (`System.IterationPath`), which is the field Azure Boards' Planning panel writes to.
+## Changes
 
-### Source of "Release"
+### 1. Database migration
+Add new values to the `po_category` Postgres enum so the new options can be persisted:
+- `events`
+- `social`
+- `manufacturing`
 
-- Field: `azure_work_items.iteration_path` (already synced from `System.IterationPath`).
-- Display value: the leaf segment after the last `\` (e.g. `duncan\Sprint 9` → `Sprint 9`); items with no leaf fall back to the full path; items with no iteration_path are bucketed as `No release`.
-- Project-aware: only show release options that exist for the current Project filter selection (so picking a project narrows the release list to that project's iterations).
+Legacy values (`software`, `hardware`, `services`, `travel`, `office_supplies`) remain in the enum so existing POs continue to display correctly — they just won't be offered to new submissions.
 
-### Changes (frontend only)
+### 2. `src/components/po/POForm.tsx`
+- Replace the `categories` array with the 6 new options in the requested order.
+- Update the Zod schema's category enum to `["events", "marketing", "social", "creative", "manufacturing", "other"]`.
+- Adjust the default-value logic so the form opens on a valid option (creative dept → `creative`, otherwise `other`).
 
-File: `src/pages/Operations.tsx`
+### 3. `src/hooks/usePurchaseOrders.ts`
+Extend the `POCategory` TypeScript union to include the three new values alongside legacy ones, so both new submissions and historical records typecheck.
 
-1. Add state: `const [releaseFilter, setReleaseFilter] = useState<string>("all");`.
-2. Add helper `getRelease(w)`: returns leaf of `iteration_path`, or `null` if missing.
-3. Extend `filterOptions` to compute `releases` — unique sorted set of `getRelease` values, scoped to the currently active `projectFilter` (so the release dropdown updates when project changes).
-4. Extend `filteredItems` to apply the release filter (`"all"` | `"__none__"` | specific value).
-5. Render a new `<Select>` after the Projects filter, matching styling (`h-9 w-[160px] text-xs`):
-   - `All releases`
-   - `No release`
-   - …discovered releases.
-6. Reset `releaseFilter` to `"all"` when `projectFilter` changes (so a stale release from another project doesn't hide all rows).
+### 4. Audit other surfaces
+Scan for any other UI that renders category labels (lists, filters, badges, exports) and add labels for `events`, `social`, `manufacturing` where needed so they don't render as raw enum strings.
 
-### Out of scope
-
-- No backend, schema, or sync changes — `iteration_path` is already stored.
-- No changes to the Repos tab or Sync Logs section.
-- No persistence of filter state across reloads.
+## Out of scope
+- Re-categorising existing POs that use retired categories.
+- Removing legacy enum values from the database.

@@ -192,13 +192,7 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
 
             {!isCreative && (
               <>
-                <FormField control={form.control} name="total_amount" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Total Amount (£)</FormLabel>
-                    <FormControl><Input type="number" step="0.01" min={0.01} {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
+                <CurrencyAmountFields form={form} />
 
                 <div className="rounded-md border border-border bg-secondary/30 px-4 py-3 flex items-center justify-between">
                   <span className="text-sm font-medium text-foreground">Total: £{totalAmount.toFixed(2)}</span>

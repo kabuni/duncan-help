@@ -14,13 +14,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
 const categories: { value: POCategory; label: string }[] = [
-  { value: "software", label: "Software" },
-  { value: "hardware", label: "Hardware" },
-  { value: "services", label: "Services" },
+  { value: "events", label: "Events" },
   { value: "marketing", label: "Marketing" },
+  { value: "social", label: "Social" },
   { value: "creative", label: "Creative" },
-  { value: "travel", label: "Travel" },
-  { value: "office_supplies", label: "Office Supplies" },
+  { value: "manufacturing", label: "Manufacturing" },
   { value: "other", label: "Other" },
 ];
 

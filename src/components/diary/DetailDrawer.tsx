@@ -549,6 +549,25 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                   <Field label="Notes" value={event.raw_description} />
                 </dl>
 
+                {event.collaborators && event.collaborators.length > 0 && (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1.5">Collaborators</div>
+                    <ul className="flex flex-wrap gap-1.5">
+                      {event.collaborators.map((c, i) => (
+                        <li
+                          key={i}
+                          className="inline-flex items-center gap-1.5 border border-border rounded-md px-2 py-1 text-xs"
+                        >
+                          <span>{c.display_name}</span>
+                          <Badge variant="outline" className="text-[10px]">
+                            {c.role || "Collaborator"}
+                          </Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 <EventAttachments eventId={event.id} />
 
                 <EventApprovals eventId={event.id} />

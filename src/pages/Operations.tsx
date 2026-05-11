@@ -360,16 +360,14 @@ const Operations = () => {
                         </SelectContent>
                       </Select>
                     )}
-                    {filterOptions.releases.length > 0 && (
-                      <Select value={releaseFilter} onValueChange={setReleaseFilter}>
-                        <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue placeholder="All releases" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All releases</SelectItem>
-                          <SelectItem value="__none__">No release</SelectItem>
-                          {filterOptions.releases.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    )}
+                    <Select value={releaseFilter} onValueChange={setReleaseFilter}>
+                      <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue placeholder="All releases" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All releases</SelectItem>
+                        <SelectItem value="__none__">No release</SelectItem>
+                        {filterOptions.releases.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                     {hasActiveFilters && (
                       <button
                         onClick={clearFilters}

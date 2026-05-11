@@ -47,17 +47,23 @@ const PurchaseOrders = () => {
                 <Button onClick={() => setShowForm("creative")} variant="outline" className="gap-2 w-full sm:w-auto">
                   <Plus className="h-4 w-4" /> Marketing & Creative
                 </Button>
+                <Button onClick={() => setShowTravelForm(true)} variant="outline" className="gap-2 w-full sm:w-auto">
+                  <Plane className="h-4 w-4" /> Travel Request
+                </Button>
               </div>
             </div>
           </motion.div>
 
-          <Tabs defaultValue="orders" className="space-y-6">
+          <Tabs defaultValue={initialTab} className="space-y-6">
             <TabsList className="bg-secondary/50 w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
             <TabsTrigger value="orders" className="gap-2 whitespace-nowrap">
               <FileText className="h-3.5 w-3.5" /> My Approval Requests
             </TabsTrigger>
               <TabsTrigger value="approvals" className="gap-2 whitespace-nowrap">
                 <Clock className="h-3.5 w-3.5" /> Approvals
+              </TabsTrigger>
+              <TabsTrigger value="travel" className="gap-2 whitespace-nowrap">
+                <Plane className="h-3.5 w-3.5" /> Travel
               </TabsTrigger>
               <TabsTrigger value="budget" className="gap-2 whitespace-nowrap">
                 <TrendingUp className="h-3.5 w-3.5" /> Budget
@@ -77,6 +83,11 @@ const PurchaseOrders = () => {
               <POApprovals />
             </TabsContent>
 
+            <TabsContent value="travel" className="space-y-6">
+              <TravelList scope="mine" />
+              <TravelList scope="approver" />
+            </TabsContent>
+
             <TabsContent value="budget">
               <BudgetOverview />
             </TabsContent>
@@ -85,11 +96,13 @@ const PurchaseOrders = () => {
               <TabsContent value="admin" className="space-y-6">
                 <DepartmentManager />
                 <BudgetUpload />
+                <TravelApproverSetting />
               </TabsContent>
             )}
           </Tabs>
 
           {showForm && <POForm kind={showForm} onClose={() => setShowForm(null)} />}
+          {showTravelForm && <TravelForm onClose={() => setShowTravelForm(false)} />}
         </div>
       </main>
     </AppLayout>

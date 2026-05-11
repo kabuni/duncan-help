@@ -2577,6 +2577,7 @@ export type Database = {
       travel_requests: {
         Row: {
           accommodation_needed: boolean
+          accommodation_type: string | null
           approved_at: string | null
           approved_by: string | null
           approver_user_id: string | null
@@ -2602,6 +2603,7 @@ export type Database = {
         }
         Insert: {
           accommodation_needed?: boolean
+          accommodation_type?: string | null
           approved_at?: string | null
           approved_by?: string | null
           approver_user_id?: string | null
@@ -2627,6 +2629,7 @@ export type Database = {
         }
         Update: {
           accommodation_needed?: boolean
+          accommodation_type?: string | null
           approved_at?: string | null
           approved_by?: string | null
           approver_user_id?: string | null

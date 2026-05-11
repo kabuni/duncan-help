@@ -62,6 +62,8 @@ export function useCreateTravelRequest() {
       return_date: string;
       transport_mode: TravelTransport;
       accommodation_needed: boolean;
+      accommodation_type?: string | null;
+      approver_user_id?: string | null;
       estimated_cost: number;
       currency?: string;
       notes?: string | null;

@@ -12,15 +12,15 @@ import { useCreateTravelRequest } from "@/hooks/useTravelRequests";
 import { useProfile } from "@/hooks/useProfile";
 import { supabase } from "@/integrations/supabase/client";
 
-const ACCOMMODATION_OPTIONS = ["none", "hotel", "airbnb", "serviced_apartment", "company_provided", "other"] as const;
+const ACCOMMODATION_OPTIONS = ["hotel", "airbnb", "serviced_apartment", "company_provided", "other", "none"] as const;
 
 const ACCOMMODATION_LABEL: Record<string, string> = {
-  none: "None",
   hotel: "Hotel",
   airbnb: "Airbnb",
   serviced_apartment: "Serviced apartment",
   company_provided: "Company provided",
   other: "Other",
+  none: "None",
 };
 
 const schema = z.object({
@@ -55,7 +55,7 @@ export default function TravelForm({ onClose }: { onClose: () => void }) {
     resolver: zodResolver(schema),
     defaultValues: {
       transport_mode: "flight",
-      accommodation_type: "none",
+      accommodation_type: "hotel",
       approver_user_id: "auto",
       currency: "GBP",
       estimated_cost: 0,

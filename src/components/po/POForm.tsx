@@ -40,7 +40,7 @@ const schema = z.object({
   department_id: z.string().min(1, "Select a department"),
   vendor_name: z.string().trim().min(1, "Required").max(200),
   description: z.string().trim().min(1, "Required").max(1000),
-  category: z.enum(["software", "hardware", "services", "marketing", "creative", "travel", "office_supplies", "other"]),
+  category: z.enum(["events", "marketing", "social", "creative", "manufacturing", "other"]),
   total_amount: z.coerce.number().optional(),
   approver_user_id: z.string().optional(),
   approver_user_ids: z.array(z.string()).optional(),

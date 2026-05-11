@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Plus, FileText, CheckCircle, Clock, XCircle, Upload, TrendingUp, Plane } from "lucide-react";
+import { Plus, FileText, CheckCircle, Clock, XCircle, Upload, TrendingUp, Plane, Wallet, Megaphone } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -41,10 +41,10 @@ const PurchaseOrders = () => {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button onClick={() => setShowForm("budget")} className="gap-2">
-                <Plus className="h-4 w-4" /> Budget Authorisation
+                <Wallet className="h-4 w-4" /> Budget Authorisation
               </Button>
               <Button onClick={() => setShowForm("creative")} variant="outline" className="gap-2">
-                <Plus className="h-4 w-4" /> Marketing & Creative
+                <Megaphone className="h-4 w-4" /> Marketing & Creative
               </Button>
               <Button onClick={() => setShowTravelForm(true)} variant="outline" className="gap-2">
                 <Plane className="h-4 w-4" /> Travel Request

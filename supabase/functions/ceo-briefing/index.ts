@@ -1360,8 +1360,12 @@ Deno.serve(async (req) => {
         blocked_prs: 0,
         stale_prs: 0,
         release_risks: 0,
+        commits_7d: 0,
+        files_added_7d: 0,
+        files_removed_7d: 0,
+        active_contributors_7d: 0,
       },
-      (source) => `${Number(source?.open_prs ?? 0)} open PRs · ${Number(source?.blocked_prs ?? 0)} blocked · ${Number(source?.stale_prs ?? 0)} stale across ${Number(source?.repos_scanned ?? 0)} repos`,
+      (source) => `${Number(source?.open_prs ?? 0)} open PRs · ${Number(source?.blocked_prs ?? 0)} blocked · ${Number(source?.stale_prs ?? 0)} stale across ${Number(source?.repos_scanned ?? 0)} repos · ${Number(source?.commits_7d ?? 0)} commits / ${Number(source?.active_contributors_7d ?? 0)} contributors (7d)`,
     );
     console.log(`[ceo-briefing] email_pulse: ${email_pulse ? 'ok' : 'null'} (err=${email_pulse_error}); slack_pulse: ${slack_pulse ? 'ok' : 'null'} (err=${slack_pulse_error}); hubspot: ${normalizedHubspotSignal.status} (err=${normalizedHubspotSignal.degraded_reason}); azure_repos: ${normalizedAzureReposSignal.status} (err=${normalizedAzureReposSignal.degraded_reason})`);
 

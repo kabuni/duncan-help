@@ -156,7 +156,7 @@ const Operations = () => {
   }, [workItems, projectFilter]);
 
   const filteredItems = useMemo(() => {
-    return workItems.filter((w: any) => {
+    const list = workItems.filter((w: any) => {
       if (stateFilter !== "all" && w.state !== stateFilter) return false;
       if (typeFilter !== "all" && w.work_item_type !== typeFilter) return false;
       if (assigneeFilter === "__unassigned__") {

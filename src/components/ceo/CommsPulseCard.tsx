@@ -905,28 +905,7 @@ export default function CommsPulseCard({ emailPulse, slackPulse, hubspotSignal, 
             />
           )}
           {azureReposSignal && (
-            <div className="space-y-2">
-              <ExternalSignalColumn
-                title="Azure Repos"
-                icon={GitBranch}
-                signal={azureReposSignal}
-                primaryMetric={{ label: "Repos", value: Number(azureReposSignal?.repos_scanned || 0) }}
-                secondaryMetric={{ label: "Open / Blocked", value: `${Number(azureReposSignal?.open_prs || 0)} / ${Number(azureReposSignal?.blocked_prs || 0)}` }}
-              />
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                {[
-                  { label: "Commits 7d", value: Number(azureReposSignal?.commits_7d || 0) },
-                  { label: "Files added 7d", value: Number(azureReposSignal?.files_added_7d || 0) },
-                  { label: "Files removed 7d", value: Number(azureReposSignal?.files_removed_7d || 0) },
-                  { label: "Contributors 7d", value: Number(azureReposSignal?.active_contributors_7d || 0) },
-                ].map((m) => (
-                  <div key={m.label} className="rounded border border-border bg-background/60 p-2">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{m.label}</div>
-                    <div className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{m.value.toLocaleString()}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <AzureReposSection signal={azureReposSignal} />
           )}
         </div>
 

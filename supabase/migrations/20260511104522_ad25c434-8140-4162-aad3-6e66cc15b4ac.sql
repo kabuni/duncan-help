@@ -1,0 +1,2 @@
+ALTER TABLE public.approvals DROP CONSTRAINT approvals_source_unique;
+CREATE UNIQUE INDEX approvals_source_unique ON public.approvals (source_table, source_id, COALESCE(approver_user_id, '00000000-0000-0000-0000-000000000000'::uuid));

@@ -70,6 +70,7 @@ const AppContent = () => {
           <Route path="/diary" element={<ProtectedRoute><KeyEventsDiary /></ProtectedRoute>} />
           <Route path="/approvals" element={<ProtectedRoute><Approvals /></ProtectedRoute>} />
           <Route path="/purchase-orders" element={<ProtectedRoute><PurchaseOrders /></ProtectedRoute>} />
+          <Route path="/travel" element={<ProtectedRoute><Travel /></ProtectedRoute>} />
           <Route path="/ceo" element={<Navigate to="/team-briefing" replace />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

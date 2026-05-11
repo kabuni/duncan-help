@@ -20,6 +20,8 @@ export const CATEGORY_META: Record<string, CategoryMeta> = {
   Operations: { label: "Operations", icon: "⚙️", hsl: "220 15% 45%" },
   Releases:   { label: "Releases",   icon: "📦", hsl: "30 85% 50%"  },
   Communication: { label: "Communication", icon: "💬", hsl: "150 60% 45%" },
+  Social:     { label: "Social",     icon: "📱", hsl: "290 70% 55%" },
+  Creative:   { label: "Creative",   icon: "🎨", hsl: "45 90% 55%"  },
   Event:      { label: "Event",      icon: "📌", hsl: "240 10% 50%" },
 };
 

@@ -38,6 +38,12 @@ interface DraftApproval {
   approver_profile_id: string | null;
 }
 
+interface DraftCollaborator {
+  profile_id: string;
+  display_name: string;
+  role: string;
+}
+
 const sanitizeFileName = (fileName: string) => {
   const ext = fileName.includes(".") ? fileName.split(".").pop()?.toLowerCase() ?? "" : "";
   const base = ext ? fileName.slice(0, -(ext.length + 1)) : fileName;

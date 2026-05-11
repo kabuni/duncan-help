@@ -131,6 +131,21 @@ export function useDecideApproval() {
           })
           .eq("id", row.source_id);
         if (error) throw error;
+      } else if (row.source_table === "travel_requests") {
+        const update: any = {
+          status: status === "approved" ? "approved" : "rejected",
+        };
+        if (status === "approved") {
+          update.approved_by = user!.id;
+          update.approved_at = new Date().toISOString();
+        } else {
+          update.rejection_reason = note || "Rejected";
+        }
+        const { error } = await supabase
+          .from("travel_requests" as any)
+          .update(update)
+          .eq("id", row.source_id);
+        if (error) throw error;
       } else {
         // Generic fallback
         const { error } = await supabase

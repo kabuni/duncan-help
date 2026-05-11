@@ -23,6 +23,7 @@ export const CATEGORY_META: Record<string, CategoryMeta> = {
   Social:     { label: "Social",     icon: "📱", hsl: "290 70% 55%" },
   Creative:   { label: "Creative",   icon: "🎨", hsl: "45 90% 55%"  },
   Event:      { label: "Event",      icon: "📌", hsl: "240 10% 50%" },
+  "Super Coaches": { label: "Super Coaches", icon: "🏆", hsl: "165 70% 40%" },
 };
 
 const FALLBACK: CategoryMeta = { label: "Other", icon: "📌", hsl: "240 10% 50%" };

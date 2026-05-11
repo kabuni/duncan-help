@@ -57,6 +57,7 @@ const Sidebar = ({
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [connectedApps, setConnectedApps] = useState<string[]>([]);
   const { data: pendingApprovals = 0 } = useApprovalCount();
+  const { isAdmin, isLoading: rolesLoading } = useIsAdmin();
 
   useEffect(() => {
     const fetchConnected = async () => {

@@ -184,9 +184,9 @@ const Operations = () => {
     });
   }, [workItems, stateFilter, typeFilter, assigneeFilter, projectFilter, searchQuery]);
 
-  const hasActiveFilters = stateFilter !== "all" || typeFilter !== "all" || assigneeFilter !== "all" || projectFilter !== "all" || searchQuery !== "";
+  const hasActiveFilters = stateFilter !== "all" || typeFilter !== "all" || assigneeFilter !== "all" || projectFilter !== "all" || releaseFilter !== "all" || searchQuery !== "";
   const clearFilters = () => {
-    setStateFilter("all"); setTypeFilter("all"); setAssigneeFilter("all"); setProjectFilter("all"); setSearchQuery("");
+    setStateFilter("all"); setTypeFilter("all"); setAssigneeFilter("all"); setProjectFilter("all"); setReleaseFilter("all"); setSearchQuery("");
   };
 
   const handleSync = async (type: "azure") => {

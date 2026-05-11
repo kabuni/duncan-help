@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
       approvals: {
         Row: {
           amount: number | null
@@ -2553,6 +2574,84 @@ export type Database = {
         }
         Relationships: []
       }
+      travel_requests: {
+        Row: {
+          accommodation_needed: boolean
+          approved_at: string | null
+          approved_by: string | null
+          approver_user_id: string | null
+          attachment_path: string | null
+          created_at: string
+          currency: string
+          depart_date: string
+          destination_city: string
+          destination_country: string
+          estimated_cost: number
+          id: string
+          notes: string | null
+          purpose: string
+          reference: string
+          rejection_reason: string | null
+          requester_id: string
+          return_date: string
+          status: Database["public"]["Enums"]["travel_status"]
+          transport_mode: Database["public"]["Enums"]["travel_transport"]
+          traveller_name: string
+          traveller_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          accommodation_needed?: boolean
+          approved_at?: string | null
+          approved_by?: string | null
+          approver_user_id?: string | null
+          attachment_path?: string | null
+          created_at?: string
+          currency?: string
+          depart_date: string
+          destination_city: string
+          destination_country: string
+          estimated_cost?: number
+          id?: string
+          notes?: string | null
+          purpose: string
+          reference: string
+          rejection_reason?: string | null
+          requester_id: string
+          return_date: string
+          status?: Database["public"]["Enums"]["travel_status"]
+          transport_mode?: Database["public"]["Enums"]["travel_transport"]
+          traveller_name: string
+          traveller_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accommodation_needed?: boolean
+          approved_at?: string | null
+          approved_by?: string | null
+          approver_user_id?: string | null
+          attachment_path?: string | null
+          created_at?: string
+          currency?: string
+          depart_date?: string
+          destination_city?: string
+          destination_country?: string
+          estimated_cost?: number
+          id?: string
+          notes?: string | null
+          purpose?: string
+          reference?: string
+          rejection_reason?: string | null
+          requester_id?: string
+          return_date?: string
+          status?: Database["public"]["Enums"]["travel_status"]
+          transport_mode?: Database["public"]["Enums"]["travel_transport"]
+          traveller_name?: string
+          traveller_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       unmapped_users_log: {
         Row: {
           basecamp_name: string
@@ -3362,6 +3461,8 @@ export type Database = {
         | "approved"
         | "rejected"
         | "cancelled"
+      travel_status: "pending_approval" | "approved" | "rejected" | "cancelled"
+      travel_transport: "flight" | "train" | "car" | "other"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3526,6 +3627,8 @@ export const Constants = {
         "rejected",
         "cancelled",
       ],
+      travel_status: ["pending_approval", "approved", "rejected", "cancelled"],
+      travel_transport: ["flight", "train", "car", "other"],
     },
   },
 } as const

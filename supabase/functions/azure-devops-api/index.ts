@@ -125,6 +125,35 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case "get_release_options": {
+        // Aggregate Custom.MVPRelease (and Custom.Release) allowed values across all projects.
+        // Returns: { defaultValue, allowedValues: string[] }
+        const projectsRes = await fetch(`${orgUrl}/_apis/projects?api-version=7.1`, {
+          headers: { Authorization: adoAuthHeader },
+        });
+        const projectsData = await projectsRes.json();
+        const allowed = new Set<string>();
+        let defaultValue: string | null = null;
+        for (const p of projectsData.value || []) {
+          for (const fieldRef of ["Custom.MVPRelease", "Custom.Release"]) {
+            try {
+              const r = await fetch(
+                `${orgUrl}/${p.name}/_apis/wit/workitemtypes/User%20Story/fields/${fieldRef}?$expand=allowedValues&api-version=7.1`,
+                { headers: { Authorization: adoAuthHeader } }
+              );
+              if (!r.ok) continue;
+              const j = await r.json();
+              (j.allowedValues || []).forEach((v: string) => v && allowed.add(v));
+              if (!defaultValue && j.defaultValue) defaultValue = j.defaultValue;
+            } catch {/* ignore per-project errors */}
+          }
+        }
+        return new Response(
+          JSON.stringify({ defaultValue, allowedValues: Array.from(allowed).sort() }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400,

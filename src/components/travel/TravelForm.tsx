@@ -55,7 +55,7 @@ export default function TravelForm({ onClose }: { onClose: () => void }) {
   const onSubmit = async (values: FormData) => {
     setSubmitting(true);
     try {
-      await create.mutateAsync(values);
+      await create.mutateAsync(values as Required<FormData>);
       onClose();
     } finally {
       setSubmitting(false);

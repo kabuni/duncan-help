@@ -304,3 +304,91 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
     </Dialog>
   );
 }
+
+function CurrencyAmountFields({ form }: { form: any }) {
+  const gbp = Number(form.watch("total_amount")) || 0;
+  const [inr, setInr] = useState<string>("");
+  const [rate, setRate] = useState<number | null>(null); // GBP -> INR
+  const [rateError, setRateError] = useState(false);
+  const [lastEdited, setLastEdited] = useState<"gbp" | "inr">("gbp");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("https://api.frankfurter.app/latest?from=GBP&to=INR");
+        const json = await res.json();
+        if (!cancelled && json?.rates?.INR) setRate(json.rates.INR);
+        else if (!cancelled) setRateError(true);
+      } catch {
+        if (!cancelled) setRateError(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // When GBP changes (and last edit was GBP), recompute INR
+  useEffect(() => {
+    if (!rate || lastEdited !== "gbp") return;
+    if (!gbp) { setInr(""); return; }
+    setInr((gbp * rate).toFixed(2));
+  }, [gbp, rate, lastEdited]);
+
+  const onInrChange = (v: string) => {
+    setLastEdited("inr");
+    setInr(v);
+    const n = parseFloat(v);
+    if (!rate || isNaN(n)) {
+      form.setValue("total_amount", 0, { shouldValidate: true });
+      return;
+    }
+    form.setValue("total_amount", Number((n / rate).toFixed(2)), { shouldValidate: true });
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <FormField control={form.control} name="total_amount" render={({ field }) => (
+          <FormItem>
+            <FormLabel>Total Amount (£ GBP)</FormLabel>
+            <FormControl>
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                value={field.value ?? ""}
+                onChange={(e) => {
+                  setLastEdited("gbp");
+                  field.onChange(e.target.value === "" ? 0 : parseFloat(e.target.value));
+                }}
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
+
+        <FormItem>
+          <FormLabel>Total Amount (₹ INR)</FormLabel>
+          <FormControl>
+            <Input
+              type="number"
+              step="0.01"
+              min={0}
+              value={inr}
+              onChange={(e) => onInrChange(e.target.value)}
+              disabled={!rate && !rateError}
+              placeholder={rate ? "" : "Loading rate..."}
+            />
+          </FormControl>
+        </FormItem>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {rate
+          ? `Live rate: £1 = ₹${rate.toFixed(4)} (frankfurter.app). Edit either field — the other updates automatically.`
+          : rateError
+            ? "Could not load live exchange rate. Enter GBP amount only."
+            : "Fetching live exchange rate..."}
+      </p>
+    </div>
+  );
+}

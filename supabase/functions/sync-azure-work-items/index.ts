@@ -87,6 +87,48 @@ Deno.serve(async (req) => {
     let totalSynced = 0;
     let totalDeleted = 0;
 
+    const reconcileDeletedWorkItems = async (projectName: string, liveIds: number[] | null) => {
+      if (liveIds === null) return;
+
+      const liveSet = new Set(liveIds);
+      const stale: number[] = [];
+      let from = 0;
+      const pageSize = 1000;
+
+      while (true) {
+        const { data: existing, error: existingErr } = await supabaseAdmin
+          .from("azure_work_items")
+          .select("external_id")
+          .eq("project_name", projectName)
+          .range(from, from + pageSize - 1);
+
+        if (existingErr) {
+          console.warn(`Failed to read existing work items for ${projectName}:`, existingErr);
+          return;
+        }
+
+        for (const row of existing || []) {
+          const id = Number((row as any).external_id);
+          if (Number.isFinite(id) && !liveSet.has(id)) stale.push(id);
+        }
+
+        if (!existing || existing.length < pageSize) break;
+        from += pageSize;
+      }
+
+      for (let i = 0; i < stale.length; i += 500) {
+        const chunk = stale.slice(i, i + 500);
+        const { error: delErr, count } = await supabaseAdmin
+          .from("azure_work_items")
+          .delete({ count: "exact" })
+          .eq("project_name", projectName)
+          .in("external_id", chunk);
+
+        if (!delErr) totalDeleted += count ?? chunk.length;
+        else console.warn(`Delete failed for ${projectName}:`, delErr);
+      }
+    };
+
     for (const project of projectsData.value || []) {
       const scopedProjectName = String(project.name || "").replace(/'/g, "''");
 
@@ -136,7 +178,10 @@ Deno.serve(async (req) => {
 
       const wiqlData = await wiqlRes.json();
       const ids = (wiqlData.workItems || []).map((w: any) => w.id).slice(0, 200);
-      if (ids.length === 0) continue;
+      if (ids.length === 0) {
+        await reconcileDeletedWorkItems(project.name, liveIds);
+        continue;
+      }
 
       // Batch get work items (max 200 per call)
       const batchRes = await fetch(
@@ -144,7 +189,10 @@ Deno.serve(async (req) => {
         { headers: { Authorization: authHeader } }
       );
 
-      if (!batchRes.ok) continue;
+      if (!batchRes.ok) {
+        await reconcileDeletedWorkItems(project.name, liveIds);
+        continue;
+      }
       const batchData = await batchRes.json();
 
       for (const item of batchData.value || []) {
@@ -178,31 +226,10 @@ Deno.serve(async (req) => {
       }
 
       // ---- Apply reconciliation deletes for this project ----
-      if (liveIds !== null) {
-        const canonicalProjectName = project.name;
-        try {
-          const { data: existing, error: existingErr } = await supabaseAdmin
-            .from("azure_work_items")
-            .select("external_id")
-            .eq("project_name", canonicalProjectName);
-          if (!existingErr && existing) {
-            const liveSet = new Set(liveIds);
-            const stale = existing
-              .map((r: any) => Number(r.external_id))
-              .filter((id: number) => Number.isFinite(id) && !liveSet.has(id));
-            if (stale.length > 0) {
-              const { error: delErr, count } = await supabaseAdmin
-                .from("azure_work_items")
-                .delete({ count: "exact" })
-                .eq("project_name", canonicalProjectName)
-                .in("external_id", stale);
-              if (!delErr) totalDeleted += count ?? stale.length;
-              else console.warn(`Delete failed for ${canonicalProjectName}:`, delErr);
-            }
-          }
-        } catch (e) {
-          console.warn(`Reconciliation delete error for ${canonicalProjectName}:`, e);
-        }
+      try {
+        await reconcileDeletedWorkItems(project.name, liveIds);
+      } catch (e) {
+        console.warn(`Reconciliation delete error for ${project.name}:`, e);
       }
     }
 

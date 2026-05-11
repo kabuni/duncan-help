@@ -111,6 +111,21 @@ const Operations = () => {
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [releaseFilter, setReleaseFilter] = useState<string>("all");
 
+  // Fetch the Release picklist (allowed values + default) from Azure DevOps so the
+  // dropdown shows e.g. "Future" and "7 June - KPL" even when no items have it set yet.
+  const { data: releaseMeta } = useQuery({
+    queryKey: ["azure-release-options"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("azure-devops-api", {
+        body: { action: "get_release_options" },
+      });
+      if (error) throw error;
+      return data as { defaultValue: string | null; allowedValues: string[] };
+    },
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+
   // Reset release filter when project changes (releases are project-scoped)
   useEffect(() => {
     setReleaseFilter("all");
@@ -118,9 +133,14 @@ const Operations = () => {
 
   // Release comes from the Azure DevOps "Release" field on User Stories
   // (Custom.MVPRelease, e.g. "Future", "7 June - KPL"), populated by the sync.
+  // Items without a value fall back to the field's default (typically "Future").
+  const defaultRelease = releaseMeta?.defaultValue || null;
   const getRelease = (w: any): string | null => {
     const r = (w?.release || "").toString().trim();
-    return r || null;
+    if (r) return r;
+    // Treat unset User Stories as the default release (matches Azure UI)
+    if (defaultRelease && w?.work_item_type === "User Story") return defaultRelease;
+    return null;
   };
 
   // Unique filter options

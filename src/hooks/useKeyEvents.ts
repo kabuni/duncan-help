@@ -96,7 +96,7 @@ export function useKeyEvents() {
           .limit(1)
           .maybeSingle(),
       ]);
-      setEvents((ev as any[]) || []);
+      setEvents(((ev as any[]) || []).map((e) => ({ ...e, collaborators: Array.isArray(e.collaborators) ? e.collaborators : [] })));
       setCards((wc as any[]) || []);
       const stRow = Array.isArray(st) ? (st[0] as any) : (st as any);
       setStatus(stRow ? (stRow as DuncanCalendarStatus) : { connected: false, google_account_email: null, calendar_id: null, calendar_name: null, last_updated: null });

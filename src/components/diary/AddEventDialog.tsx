@@ -184,6 +184,9 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     setAppLabel("");
     setAppApprover("none");
     setSyncToPersonal(false);
+    setCollaborators([]);
+    setCollabPerson("");
+    setCollabRole("");
   }
 
   async function uploadFiles(eventId: string, userId: string) {

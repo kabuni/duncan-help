@@ -642,6 +642,10 @@ Deno.serve(async (req) => {
           signals,
           summary,
           metrics_summary: summary,
+          contributors_7d,
+          top_contributor,
+          prev_window,
+          wow,
         };
         break;
       }

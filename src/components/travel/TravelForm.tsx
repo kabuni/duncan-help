@@ -55,7 +55,7 @@ export default function TravelForm({ onClose }: { onClose: () => void }) {
     resolver: zodResolver(schema),
     defaultValues: {
       transport_mode: "flight",
-      accommodation_type: "none",
+      accommodation_type: "hotel",
       approver_user_id: "auto",
       currency: "GBP",
       estimated_cost: 0,

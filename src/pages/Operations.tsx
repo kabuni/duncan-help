@@ -162,6 +162,9 @@ const Operations = () => {
         if (r) releases.add(r);
       }
     });
+    // Merge picklist allowed values from Azure so the dropdown is populated
+    // even when no synced item has the field explicitly set.
+    (releaseMeta?.allowedValues || []).forEach((v) => v && releases.add(v));
     return {
       states: Array.from(states).sort(),
       types: Array.from(types).sort(),
@@ -169,7 +172,7 @@ const Operations = () => {
       projects: Array.from(projects).sort(),
       releases: Array.from(releases).sort(),
     };
-  }, [workItems, projectFilter]);
+  }, [workItems, projectFilter, releaseMeta, defaultRelease]);
 
   const filteredItems = useMemo(() => {
     return workItems.filter((w: any) => {

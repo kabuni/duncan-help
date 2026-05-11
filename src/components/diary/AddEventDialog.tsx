@@ -119,6 +119,9 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
   const [appApprover, setAppApprover] = useState("none");
   const [personalCalConnected, setPersonalCalConnected] = useState(false);
   const [syncToPersonal, setSyncToPersonal] = useState(false);
+  const [collaborators, setCollaborators] = useState<DraftCollaborator[]>([]);
+  const [collabPerson, setCollabPerson] = useState<string>("");
+  const [collabRole, setCollabRole] = useState<string>("");
 
   // Re-seed start/end dates whenever the dialog re-opens with a (possibly new) default date.
   useEffect(() => {

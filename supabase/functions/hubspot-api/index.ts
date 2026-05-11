@@ -1002,7 +1002,26 @@ Deno.serve(async (req) => {
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const verifiedAt = new Date().toISOString();
   const authHeader = req.headers.get("Authorization");
-  const isTrustedInternalCall = !!authHeader && !!SUPABASE_SERVICE_ROLE_KEY && authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`;
+  // Trusted internal calls (e.g. ceo-briefing) authenticate with the service role key.
+  // Accept either an exact match against SUPABASE_SERVICE_ROLE_KEY (legacy) OR a JWT
+  // whose role claim is "service_role" (new signing-keys system).
+  const bearerToken = authHeader ? authHeader.replace(/^Bearer\s+/i, "") : "";
+  let isTrustedInternalCall = !!bearerToken && !!SUPABASE_SERVICE_ROLE_KEY && bearerToken === SUPABASE_SERVICE_ROLE_KEY;
+  if (!isTrustedInternalCall && bearerToken) {
+    try {
+      const parts = bearerToken.split(".");
+      if (parts.length === 3) {
+        const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        const padding = padded.length % 4 ? "=".repeat(4 - (padded.length % 4)) : "";
+        const claims = JSON.parse(atob(padded + padding));
+        if (claims?.role === "service_role") {
+          isTrustedInternalCall = true;
+        }
+      }
+    } catch (_e) {
+      // ignore — fall through to user-JWT validation
+    }
+  }
 
   if (!(action === "team_briefing_summary" && isTrustedInternalCall)) {
     const user = await getUser(req);

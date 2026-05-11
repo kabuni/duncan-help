@@ -1370,6 +1370,7 @@ export type Database = {
           calendar_id: string
           category: string | null
           classification_confidence: number | null
+          collaborators: Json
           created_at: string
           created_by: string | null
           decision_needed: string | null
@@ -1407,6 +1408,7 @@ export type Database = {
           calendar_id: string
           category?: string | null
           classification_confidence?: number | null
+          collaborators?: Json
           created_at?: string
           created_by?: string | null
           decision_needed?: string | null
@@ -1444,6 +1446,7 @@ export type Database = {
           calendar_id?: string
           category?: string | null
           classification_confidence?: number | null
+          collaborators?: Json
           created_at?: string
           created_by?: string | null
           decision_needed?: string | null

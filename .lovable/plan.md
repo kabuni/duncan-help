@@ -1,37 +1,56 @@
-## Diagnosis
+## Goal
+Let event creators add additional people (beyond the single Owner) who play a role on a Planner event — e.g. a Designer + Copywriter on a Creative event, or a Producer + Host on a Marketing event. Each collaborator has a free-text role label.
 
-The error `there is no unique or exclusion constraint matching the ON CONFLICT specification` happens when you add an approver to a Planner event.
+## UX
 
-Inserting into `key_event_approvals` fires the trigger `sync_event_approval_to_inbox`, which mirrors the row into the global `approvals` inbox using:
+**Add Event dialog** — new section under Owner, before Time zone:
 
-```sql
-ON CONFLICT (source_table, source_id) DO UPDATE ...
+```text
+Collaborators (optional)
+┌──────────────────────────────────────────────┐
+│ [Person ▼]   [Role e.g. Designer]   [+ Add]  │
+├──────────────────────────────────────────────┤
+│ • Sarah Chen — Designer              [×]     │
+│ • Mike Patel — Copy                  [×]     │
+└──────────────────────────────────────────────┘
 ```
 
-But the `approvals` table only has one constraint: the primary key on `id`. There is no unique constraint on `(source_table, source_id)`, so Postgres aborts the insert. The error surfaces in the UI as "Couldn't save approver…".
+- Person picker reuses the same approved-profiles list as Owner.
+- Role is a free-text input (no preset list, works for every category).
+- Multiple collaborators allowed, deduped by person.
+- Owner is excluded from the picker (they're already accountable).
 
-This also means PO mirroring and any other source that uses the same trigger pattern is fragile (it works only because no duplicates have been inserted yet, but any re-trigger would fail the same way).
+**Detail drawer** — new "Collaborators" section showing avatar + name + role chip for each person.
 
-## Fix
+**Calendar tooltip** — append a compact line: `+ 2 collaborators: Sarah (Designer), Mike (Copy)`.
 
-Add a unique constraint so the trigger's upsert resolves correctly.
+## Data
+
+Add a single column to `key_events`:
 
 ```sql
--- Remove any pre-existing duplicates first (defensive — should be none)
-DELETE FROM public.approvals a
-USING public.approvals b
-WHERE a.ctid < b.ctid
-  AND a.source_table = b.source_table
-  AND a.source_id    = b.source_id;
-
-ALTER TABLE public.approvals
-  ADD CONSTRAINT approvals_source_unique UNIQUE (source_table, source_id);
+ALTER TABLE public.key_events
+  ADD COLUMN collaborators jsonb NOT NULL DEFAULT '[]';
+-- shape: [{ "profile_id": "uuid", "display_name": "Sarah Chen", "role": "Designer" }]
 ```
 
-No frontend changes needed — the existing `EventApprovals` insert path will start working immediately once the constraint exists.
+Reasons for jsonb (vs new join table):
+- Matches existing pattern (`attendees`, `linked_docs` are already jsonb on this table).
+- No RLS surface to design — inherits `key_events` policies.
+- Reads in one query alongside the event.
 
-## Verification
+## Files to change
 
-1. Open the planner event, add an approver → expect "Approver saved" toast (no error).
-2. Confirm a row appears in the Approvals inbox for the assigned approver.
-3. Re-saving / updating the same approval row continues to upsert cleanly.
+1. **Migration** — add `collaborators` jsonb column.
+2. **`src/components/diary/AddEventDialog.tsx`**
+   - Add `collaborators` to draft state.
+   - New "Collaborators" UI block (person Select + role Input + Add button + list with remove).
+   - Include `collaborators` in the `key_events` insert.
+3. **`src/components/diary/DetailDrawer.tsx`** — render collaborators section; allow add/remove if user can edit the event (mirror existing edit affordances).
+4. **Calendar event tooltip** — wherever tooltip text is composed for events (likely in the page that renders FullCalendar / list view), append the collaborators line. *(Will locate during implementation — `src/pages/KeyEventsDiary.tsx` is the entry point.)*
+5. **`src/integrations/supabase/types.ts`** auto-regenerates after the migration.
+
+## Out of scope
+- No notifications to collaborators (separate decision; can be a follow-up).
+- No category-specific role presets — kept fully free-text per your choice.
+- Owner field stays as-is (single accountable person).

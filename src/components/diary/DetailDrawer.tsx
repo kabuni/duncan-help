@@ -93,6 +93,9 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string>("");
   const [owners, setOwners] = useState<{ display_name: string; user_id?: string }[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; display_name: string | null }[]>([]);
+  const [collabPerson, setCollabPerson] = useState<string>("");
+  const [collabRole, setCollabRole] = useState<string>("");
   const [form, setForm] = useState({
     event_name: "",
     category: "Event",
@@ -105,6 +108,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     end_date: "",
     end_time: "",
     start_tz: DEFAULT_TZ,
+    collaborators: [] as { profile_id: string | null; display_name: string; role: string }[],
   });
 
   useEffect(() => {
@@ -125,6 +129,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
         end_date: isoToDateInTz(event.end_at, tz),
         end_time: isoToTimeInTz(event.end_at, tz),
         start_tz: tz,
+        collaborators: Array.isArray((event as any).collaborators) ? (event as any).collaborators : [],
       });
     }
   }, [event?.id]);
@@ -137,11 +142,12 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
       setCurrentUserId(uid);
       const { data } = await supabase
         .from("profiles")
-        .select("display_name, user_id")
+        .select("id, display_name, user_id")
         .eq("approval_status", "approved")
         .order("display_name");
       const list = ((data || []) as any).filter((p: any) => p.display_name);
       setOwners(list);
+      setProfiles(list.map((p: any) => ({ id: p.id, display_name: p.display_name })));
       const me = list.find((p: any) => p.user_id === uid);
       setCurrentUserName(me?.display_name || "");
     })();
@@ -232,6 +238,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
         is_complete: isComplete,
         risk_level: isComplete ? "green" : "amber",
         risk_reason: isComplete ? null : `Missing ${missing.join(", ")}`,
+        collaborators: form.collaborators,
       })
       .eq("id", event.id);
 
@@ -424,6 +431,78 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                   <Textarea rows={3} value={form.raw_description} onChange={(e) => setForm({ ...form, raw_description: e.target.value })} />
                 </div>
 
+                <div className="space-y-1.5">
+                  <Label>Collaborators</Label>
+                  <p className="text-[11px] text-muted-foreground -mt-1">
+                    Others who play a role on this event. The Owner stays accountable.
+                  </p>
+                  {form.collaborators.length > 0 && (
+                    <ul className="space-y-1">
+                      {form.collaborators.map((c, i) => (
+                        <li key={i} className="flex items-center gap-2 text-xs border border-border rounded-md px-2 py-1">
+                          <span className="truncate">{c.display_name}</span>
+                          <Badge variant="outline" className="text-[10px]">{c.role || "Collaborator"}</Badge>
+                          <button
+                            type="button"
+                            onClick={() => setForm((f) => ({ ...f, collaborators: f.collaborators.filter((_, idx) => idx !== i) }))}
+                            className="text-muted-foreground hover:text-destructive shrink-0 ml-auto"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="border border-dashed border-border rounded-md p-2 space-y-1.5">
+                    <div className="flex gap-1.5">
+                      <Select value={collabPerson} onValueChange={setCollabPerson}>
+                        <SelectTrigger className="h-8 text-xs flex-1">
+                          <SelectValue placeholder="Pick a person" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {profiles
+                            .filter((p) => p.display_name && p.display_name !== form.owner)
+                            .filter((p) => !form.collaborators.some((c) => c.profile_id === p.id))
+                            .sort((a, b) => (a.display_name || "").localeCompare(b.display_name || ""))
+                            .map((p) => (
+                              <SelectItem key={p.id} value={p.id} className="text-xs">
+                                {p.display_name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        value={collabRole}
+                        onChange={(e) => setCollabRole(e.target.value)}
+                        placeholder="Role (e.g. Designer)"
+                        className="h-8 text-xs flex-1"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs"
+                        disabled={!collabPerson}
+                        onClick={() => {
+                          const p = profiles.find((x) => x.id === collabPerson);
+                          if (!p) return;
+                          setForm((f) => ({
+                            ...f,
+                            collaborators: [
+                              ...f.collaborators,
+                              { profile_id: p.id, display_name: p.display_name || "Unnamed", role: collabRole.trim() },
+                            ],
+                          }));
+                          setCollabPerson("");
+                          setCollabRole("");
+                        }}
+                      >
+                        <Plus className="h-3 w-3 mr-1" /> Add
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="sticky bottom-0 -mx-6 px-6 py-3 bg-background border-t border-border flex gap-2 mt-4">
                   <Button onClick={saveEdits} disabled={saving || !form.event_name.trim() || !form.owner.trim()} className="flex-1">
                     {saving ? "Saving…" : "Save changes"}
@@ -469,6 +548,25 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                   <Field label="Location" value={event.location} />
                   <Field label="Notes" value={event.raw_description} />
                 </dl>
+
+                {event.collaborators && event.collaborators.length > 0 && (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1.5">Collaborators</div>
+                    <ul className="flex flex-wrap gap-1.5">
+                      {event.collaborators.map((c, i) => (
+                        <li
+                          key={i}
+                          className="inline-flex items-center gap-1.5 border border-border rounded-md px-2 py-1 text-xs"
+                        >
+                          <span>{c.display_name}</span>
+                          <Badge variant="outline" className="text-[10px]">
+                            {c.role || "Collaborator"}
+                          </Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 <EventAttachments eventId={event.id} />
 

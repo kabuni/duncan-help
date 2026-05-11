@@ -506,7 +506,13 @@ export default function KeyEventsDiary() {
                     const uk = formatTimeInTz(ev.start_at, "Europe/London");
                     const ind = formatTimeInTz(ev.start_at, "Asia/Kolkata");
                     const times = ev.all_day ? "All day" : `UK ${uk} · IN ${ind}`;
-                    return `${ev.event_name || ev.title} · ${times}${ev.owner ? ` · ${ev.owner}` : ""}`;
+                    const ownerStr = ev.owner ? ` · ${ev.owner}` : "";
+                    const collabs = (ev.collaborators || []).slice(0, 3)
+                      .map((c) => `${c.display_name}${c.role ? ` (${c.role})` : ""}`)
+                      .join(", ");
+                    const more = (ev.collaborators?.length || 0) > 3 ? ` +${(ev.collaborators?.length || 0) - 3} more` : "";
+                    const collabStr = collabs ? `\n+ ${ev.collaborators!.length} collaborator${ev.collaborators!.length === 1 ? "" : "s"}: ${collabs}${more}` : "";
+                    return `${ev.event_name || ev.title} · ${times}${ownerStr}${collabStr}`;
                   }}
                 />
               )}

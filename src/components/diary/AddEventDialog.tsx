@@ -38,6 +38,12 @@ interface DraftApproval {
   approver_profile_id: string | null;
 }
 
+interface DraftCollaborator {
+  profile_id: string;
+  display_name: string;
+  role: string;
+}
+
 const sanitizeFileName = (fileName: string) => {
   const ext = fileName.includes(".") ? fileName.split(".").pop()?.toLowerCase() ?? "" : "";
   const base = ext ? fileName.slice(0, -(ext.length + 1)) : fileName;
@@ -113,6 +119,9 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
   const [appApprover, setAppApprover] = useState("none");
   const [personalCalConnected, setPersonalCalConnected] = useState(false);
   const [syncToPersonal, setSyncToPersonal] = useState(false);
+  const [collaborators, setCollaborators] = useState<DraftCollaborator[]>([]);
+  const [collabPerson, setCollabPerson] = useState<string>("");
+  const [collabRole, setCollabRole] = useState<string>("");
 
   // Re-seed start/end dates whenever the dialog re-opens with a (possibly new) default date.
   useEffect(() => {
@@ -175,6 +184,9 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     setAppLabel("");
     setAppApprover("none");
     setSyncToPersonal(false);
+    setCollaborators([]);
+    setCollabPerson("");
+    setCollabRole("");
   }
 
   async function uploadFiles(eventId: string, userId: string) {
@@ -273,6 +285,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
         attendees: [],
         deleted_in_google: false,
         created_by: authUser?.id ?? null,
+        collaborators,
       })
       .select("id")
       .single();
@@ -515,6 +528,80 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
               rows={3}
               placeholder="Optional context"
             />
+          </div>
+
+          <div className="col-span-2 space-y-1.5">
+            <Label>Collaborators</Label>
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              Add others who play a role on this event (e.g. Designer, Copy, Producer). The Owner stays accountable.
+            </p>
+            {collaborators.length > 0 && (
+              <ul className="space-y-1">
+                {collaborators.map((c, i) => (
+                  <li key={i} className="flex items-center gap-2 text-xs border border-border rounded-md px-2 py-1">
+                    <span className="truncate">{c.display_name}</span>
+                    <Badge variant="outline" className="text-[10px]">{c.role || "Collaborator"}</Badge>
+                    <button
+                      type="button"
+                      onClick={() => setCollaborators((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="text-muted-foreground hover:text-destructive shrink-0 ml-auto"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="border border-dashed border-border rounded-md p-2 space-y-1.5">
+              <div className="flex gap-1.5">
+                <Select value={collabPerson} onValueChange={setCollabPerson}>
+                  <SelectTrigger className="h-8 text-xs flex-1">
+                    <SelectValue placeholder="Pick a person" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {profiles
+                      .slice()
+                      .filter((p) => p.display_name && p.display_name !== draft.owner)
+                      .filter((p) => !collaborators.some((c) => c.profile_id === p.id))
+                      .sort((a, b) => (a.display_name || "").localeCompare(b.display_name || ""))
+                      .map((p) => (
+                        <SelectItem key={p.id} value={p.id} className="text-xs">
+                          {p.display_name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  value={collabRole}
+                  onChange={(e) => setCollabRole(e.target.value)}
+                  placeholder="Role (e.g. Designer)"
+                  className="h-8 text-xs flex-1"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  disabled={!collabPerson}
+                  onClick={() => {
+                    const p = profiles.find((x) => x.id === collabPerson);
+                    if (!p) return;
+                    setCollaborators((prev) => [
+                      ...prev,
+                      {
+                        profile_id: p.id,
+                        display_name: p.display_name || "Unnamed",
+                        role: collabRole.trim(),
+                      },
+                    ]);
+                    setCollabPerson("");
+                    setCollabRole("");
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Add
+                </Button>
+              </div>
+            </div>
           </div>
 
           <div className="col-span-2 space-y-1.5">

@@ -285,6 +285,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
         attendees: [],
         deleted_in_google: false,
         created_by: authUser?.id ?? null,
+        collaborators,
       })
       .select("id")
       .single();

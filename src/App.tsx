@@ -31,6 +31,7 @@ import CEOBriefing from "./pages/CEOBriefing";
 import KeyEventsDiary from "./pages/KeyEventsDiary";
 import Approvals from "./pages/Approvals";
 import PurchaseOrders from "./pages/PurchaseOrders";
+import Travel from "./pages/Travel";
 import SlackCallback from "./pages/SlackCallback";
 import NotFound from "./pages/NotFound";
 

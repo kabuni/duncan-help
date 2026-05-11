@@ -30,27 +30,25 @@ const PurchaseOrders = () => {
         <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />
 
         <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-6xl">
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-6">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-              <div>
-                <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1">
-                  Approvals
-                </p>
-                <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
-                  <span className="text-primary glow-text">Authorisation</span>
-                </h2>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <Button onClick={() => setShowForm("budget")} className="gap-2 w-full sm:w-auto">
-                  <Plus className="h-4 w-4" /> Budget Authorisation
-                </Button>
-                <Button onClick={() => setShowForm("creative")} variant="outline" className="gap-2 w-full sm:w-auto">
-                  <Plus className="h-4 w-4" /> Marketing & Creative
-                </Button>
-                <Button onClick={() => setShowTravelForm(true)} variant="outline" className="gap-2 w-full sm:w-auto">
-                  <Plane className="h-4 w-4" /> Travel Request
-                </Button>
-              </div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-6 space-y-5">
+            <div>
+              <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1">
+                Approvals
+              </p>
+              <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+                <span className="text-primary glow-text">Authorisation</span>
+              </h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => setShowForm("budget")} className="gap-2">
+                <Plus className="h-4 w-4" /> Budget Authorisation
+              </Button>
+              <Button onClick={() => setShowForm("creative")} variant="outline" className="gap-2">
+                <Plus className="h-4 w-4" /> Marketing & Creative
+              </Button>
+              <Button onClick={() => setShowTravelForm(true)} variant="outline" className="gap-2">
+                <Plane className="h-4 w-4" /> Travel Request
+              </Button>
             </div>
           </motion.div>
 

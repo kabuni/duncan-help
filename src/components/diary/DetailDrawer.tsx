@@ -93,6 +93,9 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string>("");
   const [owners, setOwners] = useState<{ display_name: string; user_id?: string }[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; display_name: string | null }[]>([]);
+  const [collabPerson, setCollabPerson] = useState<string>("");
+  const [collabRole, setCollabRole] = useState<string>("");
   const [form, setForm] = useState({
     event_name: "",
     category: "Event",
@@ -105,6 +108,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
     end_date: "",
     end_time: "",
     start_tz: DEFAULT_TZ,
+    collaborators: [] as { profile_id: string | null; display_name: string; role: string }[],
   });
 
   useEffect(() => {

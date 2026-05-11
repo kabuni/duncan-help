@@ -85,9 +85,37 @@ Deno.serve(async (req) => {
     const projectsData = await projectsRes.json();
 
     let totalSynced = 0;
+    let totalDeleted = 0;
 
     for (const project of projectsData.value || []) {
       const scopedProjectName = String(project.name || "").replace(/'/g, "''");
+
+      // ---- Reconciliation: fetch ALL live work item IDs for this project ----
+      // We use this to delete rows from azure_work_items that no longer exist in Azure DevOps.
+      let liveIds: number[] | null = null;
+      try {
+        const allRes = await fetch(`${orgUrl}/${project.name}/_apis/wit/wiql?api-version=7.1`, {
+          method: "POST",
+          headers: { Authorization: authHeader, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `SELECT [System.Id] FROM workitems WHERE [System.TeamProject] = '${scopedProjectName}'`,
+          }),
+        });
+        if (allRes.ok) {
+          const allData = await allRes.json();
+          const items = allData.workItems || [];
+          // Azure WIQL caps at ~20,000 results — only reconcile if we are clearly under the cap
+          if (items.length < 19500) {
+            liveIds = items.map((w: any) => Number(w.id)).filter((n: number) => Number.isFinite(n));
+          } else {
+            console.warn(`Skipping reconciliation for ${project.name}: result set too large (${items.length})`);
+          }
+        } else {
+          console.warn(`Reconciliation WIQL failed for ${project.name}: ${allRes.status}`);
+        }
+      } catch (e) {
+        console.warn(`Reconciliation WIQL error for ${project.name}:`, e);
+      }
 
       // Query recent work items (changed in last 30 days)
       const wiqlRes = await fetch(`${orgUrl}/${project.name}/_apis/wit/wiql?api-version=7.1`, {
@@ -148,6 +176,34 @@ Deno.serve(async (req) => {
 
         if (!upsertError) totalSynced++;
       }
+
+      // ---- Apply reconciliation deletes for this project ----
+      if (liveIds !== null) {
+        const canonicalProjectName = project.name;
+        try {
+          const { data: existing, error: existingErr } = await supabaseAdmin
+            .from("azure_work_items")
+            .select("external_id")
+            .eq("project_name", canonicalProjectName);
+          if (!existingErr && existing) {
+            const liveSet = new Set(liveIds);
+            const stale = existing
+              .map((r: any) => Number(r.external_id))
+              .filter((id: number) => Number.isFinite(id) && !liveSet.has(id));
+            if (stale.length > 0) {
+              const { error: delErr, count } = await supabaseAdmin
+                .from("azure_work_items")
+                .delete({ count: "exact" })
+                .eq("project_name", canonicalProjectName)
+                .in("external_id", stale);
+              if (!delErr) totalDeleted += count ?? stale.length;
+              else console.warn(`Delete failed for ${canonicalProjectName}:`, delErr);
+            }
+          }
+        } catch (e) {
+          console.warn(`Reconciliation delete error for ${canonicalProjectName}:`, e);
+        }
+      }
     }
 
     // Update sync log
@@ -162,7 +218,7 @@ Deno.serve(async (req) => {
       { onConflict: "integration_id" }
     );
 
-    return new Response(JSON.stringify({ success: true, records_synced: totalSynced }), {
+    return new Response(JSON.stringify({ success: true, records_synced: totalSynced, records_deleted: totalDeleted }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {

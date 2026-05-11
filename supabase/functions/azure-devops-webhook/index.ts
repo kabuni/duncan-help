@@ -32,8 +32,18 @@ Deno.serve(async (req) => {
     if (eventType.startsWith("workitem.")) {
       const fields = resource.fields || resource.revision?.fields || {};
       const workItemId = resource.workItemId || resource.id || resource.revision?.id;
+      const projectName =
+        resource.revision?.fields?.["System.TeamProject"] ||
+        fields["System.TeamProject"] ||
+        null;
 
-      if (workItemId) {
+      if (workItemId && eventType === "workitem.deleted") {
+        // Remove the row from our mirror table
+        let q = supabaseAdmin.from("azure_work_items").delete().eq("external_id", workItemId);
+        if (projectName) q = q.eq("project_name", projectName);
+        const { error: delErr } = await q;
+        if (delErr) console.error("Webhook delete failed:", delErr);
+      } else if (workItemId) {
         await supabaseAdmin.from("azure_work_items").upsert(
           {
             external_id: workItemId,
@@ -48,7 +58,7 @@ Deno.serve(async (req) => {
             description: (fields["System.Description"] || "").substring(0, 5000),
             created_date: fields["System.CreatedDate"],
             changed_date: fields["System.ChangedDate"],
-            project_name: resource.revision?.fields?.["System.TeamProject"] || null,
+            project_name: projectName,
             raw_data: payload,
             synced_at: new Date().toISOString(),
           },

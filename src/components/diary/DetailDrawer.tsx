@@ -142,11 +142,12 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
       setCurrentUserId(uid);
       const { data } = await supabase
         .from("profiles")
-        .select("display_name, user_id")
+        .select("id, display_name, user_id")
         .eq("approval_status", "approved")
         .order("display_name");
       const list = ((data || []) as any).filter((p: any) => p.display_name);
       setOwners(list);
+      setProfiles(list.map((p: any) => ({ id: p.id, display_name: p.display_name })));
       const me = list.find((p: any) => p.user_id === uid);
       setCurrentUserName(me?.display_name || "");
     })();

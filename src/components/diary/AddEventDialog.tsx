@@ -605,6 +605,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
           </div>
 
           <div className="col-span-2 space-y-1.5">
+            <Label>Attachments</Label>
             <div className="flex items-center gap-2">
               <Button
                 type="button"

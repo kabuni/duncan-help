@@ -420,36 +420,150 @@ Deno.serve(async (req) => {
           }
         }
 
-        // ---- Last-7d commit metrics (per-repo, file-change counts as line proxy) ----
-        const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        let commits7d = 0;
-        let filesAdded7d = 0;
-        let filesRemoved7d = 0;
-        const contributors7d = new Set<string>();
+        // ---- Commit metrics for current (last 7d) and previous (8-14d) windows ----
+        const nowMs = Date.now();
+        const sevenDaysAgoIso = new Date(nowMs - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const fourteenDaysAgoIso = new Date(nowMs - 14 * 24 * 60 * 60 * 1000).toISOString();
         let commitMetricsPartial = false;
 
-        for (const r of repoList) {
-          try {
-            const url =
-              `${orgUrl}/${encodeURIComponent(r.project)}/_apis/git/repositories/${r.id}/commits` +
-              `?searchCriteria.fromDate=${encodeURIComponent(sevenDaysAgoIso)}` +
-              `&searchCriteria.includeLinks=false` +
-              `&searchCriteria.$top=1000` +
-              `&api-version=7.1`;
-            const cRes = await adoFetch(url, accessToken);
-            for (const c of cRes.value || []) {
+        type AuthorAgg = {
+          author: string;
+          email?: string;
+          commits: number;
+          files_added: number;
+          files_edited: number;
+          files_removed: number;
+          repos: Set<string>;
+        };
+        const mkAgg = (author: string, email?: string): AuthorAgg => ({
+          author, email,
+          commits: 0, files_added: 0, files_edited: 0, files_removed: 0,
+          repos: new Set<string>(),
+        });
+
+        const curByAuthor = new Map<string, AuthorAgg>();
+        const prevByAuthor = new Map<string, number>(); // key -> commits
+
+        let commits7d = 0, filesAdded7d = 0, filesRemoved7d = 0, filesEdited7d = 0;
+        let commitsPrev7d = 0, filesAddedPrev7d = 0, filesRemovedPrev7d = 0;
+        const contributors7d = new Set<string>();
+        const contributorsPrev7d = new Set<string>();
+
+        const fetchCommits = async (r: { project: string; id: string; name: string }, fromIso: string, toIso?: string) => {
+          let url =
+            `${orgUrl}/${encodeURIComponent(r.project)}/_apis/git/repositories/${r.id}/commits` +
+            `?searchCriteria.fromDate=${encodeURIComponent(fromIso)}` +
+            `&searchCriteria.includeLinks=false` +
+            `&searchCriteria.$top=1000` +
+            `&api-version=7.1`;
+          if (toIso) url += `&searchCriteria.toDate=${encodeURIComponent(toIso)}`;
+          const cRes = await adoFetch(url, accessToken);
+          return cRes.value || [];
+        };
+
+        await Promise.all(repoList.map(async (r) => {
+          const repoLabel = `${r.project}/${r.name}`;
+          const [curRes, prevRes] = await Promise.allSettled([
+            fetchCommits(r, sevenDaysAgoIso),
+            fetchCommits(r, fourteenDaysAgoIso, sevenDaysAgoIso),
+          ]);
+
+          if (curRes.status === "fulfilled") {
+            for (const c of curRes.value) {
               commits7d += 1;
-              const who = c.author?.email || c.author?.name;
-              if (who) contributors7d.add(String(who).toLowerCase());
+              const email = c.author?.email ? String(c.author.email).toLowerCase() : undefined;
+              const name = c.author?.name || c.author?.email || "unknown";
+              const key = email || name.toLowerCase();
+              if (email || name) contributors7d.add(key);
               const cc = c.changeCounts || {};
-              filesAdded7d += Number(cc.Add || 0);
-              filesRemoved7d += Number(cc.Delete || 0);
+              const add = Number(cc.Add || 0), edit = Number(cc.Edit || 0), del = Number(cc.Delete || 0);
+              filesAdded7d += add;
+              filesRemoved7d += del;
+              filesEdited7d += edit;
+              let agg = curByAuthor.get(key);
+              if (!agg) { agg = mkAgg(name, email); curByAuthor.set(key, agg); }
+              agg.commits += 1;
+              agg.files_added += add;
+              agg.files_edited += edit;
+              agg.files_removed += del;
+              agg.repos.add(repoLabel);
             }
-          } catch (e) {
+          } else {
             commitMetricsPartial = true;
-            console.warn(`briefing_summary: commits scan failed for ${r.project}/${r.name}`, e);
+            console.warn(`briefing_summary: current commits scan failed for ${repoLabel}`, curRes.reason);
           }
-        }
+
+          if (prevRes.status === "fulfilled") {
+            for (const c of prevRes.value) {
+              commitsPrev7d += 1;
+              const email = c.author?.email ? String(c.author.email).toLowerCase() : undefined;
+              const name = c.author?.name || c.author?.email || "unknown";
+              const key = email || name.toLowerCase();
+              if (email || name) contributorsPrev7d.add(key);
+              const cc = c.changeCounts || {};
+              filesAddedPrev7d += Number(cc.Add || 0);
+              filesRemovedPrev7d += Number(cc.Delete || 0);
+              prevByAuthor.set(key, (prevByAuthor.get(key) || 0) + 1);
+            }
+          } else {
+            commitMetricsPartial = true;
+            console.warn(`briefing_summary: previous commits scan failed for ${repoLabel}`, prevRes.reason);
+          }
+        }));
+
+        // Build contributor list with WoW deltas + per-author trend.
+        const trendOf = (cur: number, prev: number): "up" | "down" | "flat" => {
+          if (cur === prev) return "flat";
+          if (prev === 0) return cur > 0 ? "up" : "flat";
+          const pct = ((cur - prev) / prev) * 100;
+          if (pct >= 5) return "up";
+          if (pct <= -5) return "down";
+          return "flat";
+        };
+
+        const contributors_7d = Array.from(curByAuthor.entries()).map(([key, a]) => {
+          const prevCommits = prevByAuthor.get(key) || 0;
+          const lines_changed = a.files_added + a.files_edited + a.files_removed;
+          return {
+            author: a.author,
+            email: a.email,
+            commits: a.commits,
+            files_added: a.files_added,
+            files_edited: a.files_edited,
+            files_removed: a.files_removed,
+            lines_changed,
+            repos: Array.from(a.repos).sort(),
+            commits_prev_7d: prevCommits,
+            trend: trendOf(a.commits, prevCommits),
+          };
+        }).sort((x, y) => y.commits - x.commits || y.lines_changed - x.lines_changed);
+
+        const top_contributor = contributors_7d.length > 0
+          ? { author: contributors_7d[0].author, commits: contributors_7d[0].commits, lines_changed: contributors_7d[0].lines_changed }
+          : null;
+
+        const pct = (cur: number, prev: number) =>
+          prev === 0 ? (cur > 0 ? 100 : 0) : Math.round(((cur - prev) / prev) * 1000) / 10;
+
+        const wow = {
+          commits_delta: commits7d - commitsPrev7d,
+          commits_pct: pct(commits7d, commitsPrev7d),
+          files_added_delta: filesAdded7d - filesAddedPrev7d,
+          files_added_pct: pct(filesAdded7d, filesAddedPrev7d),
+          files_removed_delta: filesRemoved7d - filesRemovedPrev7d,
+          files_removed_pct: pct(filesRemoved7d, filesRemovedPrev7d),
+          contributors_delta: contributors7d.size - contributorsPrev7d.size,
+          trend: trendOf(commits7d, commitsPrev7d),
+        };
+
+        const prev_window = {
+          commits_7d: commitsPrev7d,
+          files_added_7d: filesAddedPrev7d,
+          files_removed_7d: filesRemovedPrev7d,
+          active_contributors_7d: contributorsPrev7d.size,
+          since: fourteenDaysAgoIso,
+          until: sevenDaysAgoIso,
+        };
 
         // Org-wide active PRs (single call instead of per-repo).
         let openPrs = 0;
@@ -528,6 +642,10 @@ Deno.serve(async (req) => {
           signals,
           summary,
           metrics_summary: summary,
+          contributors_7d,
+          top_contributor,
+          prev_window,
+          wow,
         };
         break;
       }

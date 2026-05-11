@@ -486,6 +486,13 @@ Deno.serve(async (req) => {
         }
 
         const reposScanned = repoList.length;
+        const projectNames = Array.from(new Set(repoList.map((r) => r.project))).sort();
+        const repoFullNames = repoList.map((r) => `${r.project}/${r.name}`).sort();
+        console.log(
+          `briefing_summary: scanned ${projectNames.length} projects, ${reposScanned} repos`,
+          { projects: projectNames, repos: repoFullNames },
+        );
+
         const summary = reposScanned === 0
           ? "Azure Repos connected but no repositories were available to scan."
           : `${openPrs} open PRs, ${blockedPrs} blocked drafts, and ${stalePrs} stale PRs across ${reposScanned} repositories.`;
@@ -516,6 +523,8 @@ Deno.serve(async (req) => {
           files_added_7d: filesAdded7d,
           files_removed_7d: filesRemoved7d,
           active_contributors_7d: contributors7d.size,
+          scanned_projects: projectNames,
+          scanned_repos: repoFullNames,
           signals,
           summary,
           metrics_summary: summary,

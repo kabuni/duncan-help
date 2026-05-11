@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useApprovalCount } from "@/hooks/useApprovals";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 
 const integrationMeta: Record<string, { label: string; icon: React.ElementType }> = {
   "slack": { label: "Slack", icon: MessageSquare },
@@ -56,6 +57,7 @@ const Sidebar = ({
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [connectedApps, setConnectedApps] = useState<string[]>([]);
   const { data: pendingApprovals = 0 } = useApprovalCount();
+  const { isAdmin, isLoading: rolesLoading } = useIsAdmin();
 
   useEffect(() => {
     const fetchConnected = async () => {
@@ -203,18 +205,20 @@ const Sidebar = ({
           )}
         </RouterNavLink>
 
-        <RouterNavLink
-          to="/operations"
-          onClick={() => onMobileClose?.()}
-          className={({ isActive }) =>
-            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
-              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )
-          }
-        >
-          <GitBranch className="h-4 w-4" />
-          Operations
-        </RouterNavLink>
+        {(isAdmin || rolesLoading) && (
+          <RouterNavLink
+            to="/operations"
+            onClick={() => onMobileClose?.()}
+            className={({ isActive }) =>
+              cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              )
+            }
+          >
+            <GitBranch className="h-4 w-4" />
+            Operations
+          </RouterNavLink>
+        )}
 
         <RouterNavLink
           to="/purchase-orders"

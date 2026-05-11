@@ -156,7 +156,7 @@ const Operations = () => {
   }, [workItems, projectFilter]);
 
   const filteredItems = useMemo(() => {
-    return workItems.filter((w: any) => {
+    const list = workItems.filter((w: any) => {
       if (stateFilter !== "all" && w.state !== stateFilter) return false;
       if (typeFilter !== "all" && w.work_item_type !== typeFilter) return false;
       if (assigneeFilter === "__unassigned__") {
@@ -183,6 +183,8 @@ const Operations = () => {
       }
       return true;
     });
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+    return [...list].sort((a, b) => collator.compare(a.title || "", b.title || ""));
   }, [workItems, stateFilter, typeFilter, assigneeFilter, projectFilter, releaseFilter, searchQuery, defaultRelease]);
 
   const hasActiveFilters = stateFilter !== "all" || typeFilter !== "all" || assigneeFilter !== "all" || projectFilter !== "all" || releaseFilter !== "all" || searchQuery !== "";

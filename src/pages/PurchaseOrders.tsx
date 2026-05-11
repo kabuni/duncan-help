@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Plus, FileText, CheckCircle, Clock, XCircle, Upload, TrendingUp } from "lucide-react";
+import { Plus, FileText, CheckCircle, Clock, XCircle, Upload, TrendingUp, Plane } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -12,10 +13,16 @@ import POApprovals from "@/components/po/POApprovals";
 import BudgetOverview from "@/components/po/BudgetOverview";
 import BudgetUpload from "@/components/po/BudgetUpload";
 import DepartmentManager from "@/components/po/DepartmentManager";
+import TravelForm from "@/components/travel/TravelForm";
+import TravelList from "@/components/travel/TravelList";
+import TravelApproverSetting from "@/components/travel/TravelApproverSetting";
 
 const PurchaseOrders = () => {
   const [showForm, setShowForm] = useState<null | "budget" | "creative">(null);
+  const [showTravelForm, setShowTravelForm] = useState(false);
   const { isAdmin } = useIsAdmin();
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") === "travel" ? "travel" : "orders";
 
   return (
     <AppLayout>

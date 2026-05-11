@@ -67,28 +67,50 @@ export default function POList() {
           const Icon = cfg.icon;
           return (
             <motion.div key={po.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-              <Card
-                className="hover:border-primary/30 transition-colors cursor-pointer"
-                onClick={() => setSelected(po)}
-              >
-                <CardContent className="py-4 px-5 flex items-center gap-4">
-                  <Icon className={`h-5 w-5 shrink-0 ${cfg.color}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-muted-foreground">{po.po_number}</span>
-                      <Badge variant="outline" className="text-[10px]">{po.category}</Badge>
-                    </div>
-                    <p className="text-sm font-medium text-foreground truncate">{po.vendor_name} — {po.description}</p>
-                    <p className="text-xs text-muted-foreground">{getDeptName(po.department_id)} · {format(new Date(po.created_at), "dd MMM yyyy")}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold text-foreground">£{Number(po.total_amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p>
-                    <Badge variant={po.status === "approved" ? "default" : po.status === "rejected" ? "destructive" : "secondary"} className="text-[10px]">
-                      {cfg.label}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
+              {(() => {
+                const isCreative = po.category === "marketing" || po.category === "creative";
+                const kindLabel = isCreative ? "Marketing & Creative" : "Budget";
+                return (
+                  <Card
+                    className={`hover:border-primary/30 transition-colors cursor-pointer border-l-4 ${
+                      isCreative ? "border-l-fuchsia-500" : "border-l-emerald-500"
+                    }`}
+                    onClick={() => setSelected(po)}
+                  >
+                    <CardContent className="py-4 px-5 flex items-center gap-4">
+                      <Icon className={`h-5 w-5 shrink-0 ${cfg.color}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-mono text-muted-foreground">{po.po_number}</span>
+                          <Badge
+                            className={`text-[10px] ${
+                              isCreative
+                                ? "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/30"
+                                : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                            }`}
+                            variant="outline"
+                          >
+                            {kindLabel}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] capitalize">{po.category}</Badge>
+                        </div>
+                        <p className="text-sm font-medium text-foreground truncate">{po.vendor_name} — {po.description}</p>
+                        <p className="text-xs text-muted-foreground">{getDeptName(po.department_id)} · {format(new Date(po.created_at), "dd MMM yyyy")}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        {isCreative ? (
+                          <p className="text-xs text-muted-foreground italic">Sign-off</p>
+                        ) : (
+                          <p className="text-sm font-semibold text-foreground">£{Number(po.total_amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p>
+                        )}
+                        <Badge variant={po.status === "approved" ? "default" : po.status === "rejected" ? "destructive" : "secondary"} className="text-[10px]">
+                          {cfg.label}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
             </motion.div>
           );
         })}

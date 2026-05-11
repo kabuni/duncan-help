@@ -1,0 +1,1 @@
+ALTER TABLE public.travel_requests ADD COLUMN IF NOT EXISTS accommodation_type text;

@@ -238,6 +238,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
         is_complete: isComplete,
         risk_level: isComplete ? "green" : "amber",
         risk_reason: isComplete ? null : `Missing ${missing.join(", ")}`,
+        collaborators: form.collaborators,
       })
       .eq("id", event.id);
 

@@ -37,6 +37,7 @@ const KIND_LABEL: Record<ApprovalKind, string> = {
   release: "Release",
   hire: "Hire",
   contract: "Contract",
+  travel: "Travel",
   other: "Other",
 };
 

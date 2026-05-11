@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
-export type ApprovalKind = "cost" | "event_date" | "release" | "hire" | "contract" | "other";
+export type ApprovalKind = "cost" | "event_date" | "release" | "hire" | "contract" | "travel" | "other";
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "changes_requested" | "cancelled";
 
 export interface ApprovalRow {
@@ -131,6 +131,21 @@ export function useDecideApproval() {
           })
           .eq("id", row.source_id);
         if (error) throw error;
+      } else if (row.source_table === "travel_requests") {
+        const update: any = {
+          status: status === "approved" ? "approved" : "rejected",
+        };
+        if (status === "approved") {
+          update.approved_by = user!.id;
+          update.approved_at = new Date().toISOString();
+        } else {
+          update.rejection_reason = note || "Rejected";
+        }
+        const { error } = await supabase
+          .from("travel_requests" as any)
+          .update(update)
+          .eq("id", row.source_id);
+        if (error) throw error;
       } else {
         // Generic fallback
         const { error } = await supabase
@@ -148,6 +163,7 @@ export function useDecideApproval() {
       qc.invalidateQueries({ queryKey: ["approvals"] });
       qc.invalidateQueries({ queryKey: ["approvals-count"] });
       qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+      qc.invalidateQueries({ queryKey: ["travel-requests"] });
       toast.success(vars.status === "approved" ? "Approved" : "Rejected");
     },
     onError: (e: any) => toast.error(e.message),

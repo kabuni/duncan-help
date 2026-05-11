@@ -1,36 +1,75 @@
-## Plan: remove deleted Azure DevOps work items from Duncan
+## Travel Approval Process
 
-### What will change
-1. **Full-sync reconciliation**
-   - Update `sync-azure-work-items` so each project does two Azure queries:
-     - the existing recent-items query for fast upserts;
-     - a project-wide live ID query for deletion reconciliation.
-   - After a successful project-wide query, delete rows from `azure_work_items` for that project where `external_id` is no longer returned by Azure DevOps.
-   - Skip deletion for a project if the live-ID query fails, returns an unsafe/truncated response, or cannot identify the project reliably.
+A new Travel Request type that captures full trip details, requires a fixed approver (CEO/Ops), and shows up in the existing Approvals inbox alongside Purchase Orders and Key Events.
 
-2. **Webhook delete handling**
-   - Update `azure-devops-webhook` to handle `workitem.deleted` events by deleting the matching database row.
-   - Use `external_id` first, and include `project_name` when Azure provides it.
-   - Keep existing upsert behavior for `workitem.created`, `workitem.updated`, and restored/revision-style events.
+### 1. Database (`travel_requests` table)
 
-3. **Sync result reporting**
-   - Return `records_deleted` from `sync-azure-work-items` along with `records_synced`.
-   - Log deletion counts in function output/audit details without changing the database schema unless needed.
+Fields:
+- Traveller (`traveller_user_id`, plus `traveller_name` snapshot)
+- Trip purpose, destination (city + country)
+- Depart date, return date
+- Transport mode (flight / train / car / other), accommodation needed (bool)
+- Estimated cost + currency (default GBP)
+- Notes, attachment_path (quotes/itinerary)
+- Status (`pending_approval` / `approved` / `rejected` / `cancelled`)
+- Fixed approver fields (`approver_user_id`, `approved_by`, `approved_at`, `rejection_reason`)
+- Standard `requester_id`, `created_at`, `updated_at`, request reference number (auto-generated `TR-####`)
 
-4. **Immediate cleanup path**
-   - Once implemented, running **Sync DevOps** in Operations will reconcile the table and remove stale deleted stories from the Work Items list.
+RLS:
+- Requesters can view/create their own requests
+- Approver and admins can view all and update status
+- Admins can manage everything
 
-### Safety rules
-- No UI changes.
-- No broad database wipe: deletion only happens per project after Azure confirms the current live IDs for that project.
-- If Azure is unavailable or the live-ID query fails, the function will upsert recent changes but leave existing rows untouched for that project.
-- No changes to `src/integrations/supabase/types.ts` or generated backend client files.
+Trigger:
+- On insert/update, mirror into `approvals` table with `kind='other'` (or new `kind='travel'` enum value), `source_table='travel_requests'`, `link_path='/travel'`, populating title (`"Travel: <destination> (<dates>)"`), summary, amount/currency, approver_user_id.
+- Reuse the same status-sync pattern as POs so decisions in either place stay aligned.
+
+Approver routing:
+- Add a `travel_approver_user_id` setting in a small config table (or reuse `ceo_action_routing` / a single-row settings table). Admin picks the fixed approver in Settings; the trigger reads it.
+
+### 2. Approval kind
+
+Extend `ApprovalKind` (TS) and the `approval_kind` enum (Postgres) with `travel`. Update `KIND_LABEL` in `Approvals.tsx` to include "Travel". `bucketOf` routes travel into the **Other** column (or a new column — see open question).
+
+### 3. Frontend
+
+**New page `/travel`** (added to sidebar under Approvals area):
+- Tabs mirroring PurchaseOrders: My Requests / Approvals / (Admin)
+- "New Travel Request" button opens `TravelForm` dialog
+- `TravelList` shows the user's requests with status badges
+- `TravelApprovals` shows requests awaiting the current user (approver view)
+- Admin tab: pick the fixed approver
+
+**Decision wiring** in `useApprovals.ts`:
+- Extend `useDecideApproval` with a branch for `source_table === 'travel_requests'` that updates the source row (status, approved_by/at, rejection_reason) and the inbox row, mirroring the PO branch.
+
+**Cancel** mirrors `useCancelPO`: deletes inbox rows then the travel row.
+
+### 4. Notifications
+
+Reuse the existing approval notification pattern (Slack DM via `notify-event-approval` or a small `send-travel-approval-email` edge function modeled on `send-po-approval-email`). Fire-and-forget on submit and on decision.
+
+### Files to add
+
+```text
+src/pages/Travel.tsx
+src/hooks/useTravelRequests.ts
+src/components/travel/TravelForm.tsx
+src/components/travel/TravelList.tsx
+src/components/travel/TravelApprovals.tsx
+src/components/travel/TravelApproverSetting.tsx   (admin)
+supabase/functions/send-travel-approval-email/index.ts   (optional, mirrors PO)
+```
 
 ### Files to update
-- `supabase/functions/sync-azure-work-items/index.ts`
-- `supabase/functions/azure-devops-webhook/index.ts`
 
-### Validation
-- Check the function compiles structurally by reviewing TypeScript syntax.
-- Trigger or inspect the sync result path so the response includes both synced and deleted counts.
-- Confirm Operations continues reading from `azure_work_items` unchanged.
+- `src/App.tsx` — register `/travel` route
+- `src/components/Sidebar.tsx` — add Travel nav entry
+- `src/pages/Approvals.tsx` — add `travel` to `KIND_LABEL`, optional bucket
+- `src/hooks/useApprovals.ts` — `ApprovalKind` union + decide branch
+- Migration: new table + enum value + RLS + trigger + settings row
+
+### Open questions (small)
+
+1. Should Travel get its own column in the Approvals inbox board, or stay in **Other**?
+2. Should there be an auto-approve threshold (e.g. trips under £200) like POs, or always require approval? Current assumption: **always require approval**.

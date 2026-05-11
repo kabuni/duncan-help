@@ -523,6 +523,8 @@ Deno.serve(async (req) => {
           files_added_7d: filesAdded7d,
           files_removed_7d: filesRemoved7d,
           active_contributors_7d: contributors7d.size,
+          scanned_projects: projectNames,
+          scanned_repos: repoFullNames,
           signals,
           summary,
           metrics_summary: summary,

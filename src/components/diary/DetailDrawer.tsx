@@ -129,6 +129,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
         end_date: isoToDateInTz(event.end_at, tz),
         end_time: isoToTimeInTz(event.end_at, tz),
         start_tz: tz,
+        collaborators: Array.isArray((event as any).collaborators) ? (event as any).collaborators : [],
       });
     }
   }, [event?.id]);

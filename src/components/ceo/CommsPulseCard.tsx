@@ -126,6 +126,34 @@ interface Props {
     files_added_7d?: number;
     files_removed_7d?: number;
     active_contributors_7d?: number;
+    contributors_7d?: Array<{
+      author: string;
+      email?: string;
+      commits: number;
+      files_added: number;
+      files_edited: number;
+      files_removed: number;
+      lines_changed: number;
+      repos?: string[];
+      commits_prev_7d: number;
+      trend: "up" | "down" | "flat";
+    }>;
+    top_contributor?: { author: string; commits: number; lines_changed: number } | null;
+    prev_window?: {
+      commits_7d?: number;
+      files_added_7d?: number;
+      files_removed_7d?: number;
+      active_contributors_7d?: number;
+      since?: string;
+      until?: string;
+    } | null;
+    wow?: {
+      commits_delta?: number; commits_pct?: number;
+      files_added_delta?: number; files_added_pct?: number;
+      files_removed_delta?: number; files_removed_pct?: number;
+      contributors_delta?: number;
+      trend?: "up" | "down" | "flat";
+    } | null;
   } | null;
 }
 

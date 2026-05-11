@@ -133,6 +133,7 @@ Deno.serve(async (req) => {
               assigned_to: fields["System.AssignedTo"]?.displayName || null,
               area_path: fields["System.AreaPath"],
               iteration_path: fields["System.IterationPath"],
+              release: fields["Custom.MVPRelease"] || fields["Custom.Release"] || null,
               priority: fields["Microsoft.VSTS.Common.Priority"],
               tags: fields["System.Tags"],
               description: (fields["System.Description"] || "").substring(0, 5000),

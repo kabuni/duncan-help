@@ -82,7 +82,7 @@ export default function POForm({ onClose, kind = "budget" }: { onClose: () => vo
     resolver: zodResolver(schema),
     defaultValues: {
       total_amount: 0,
-      category: isCreative ? "marketing" : "other",
+      category: isCreative ? "creative" : "events",
       approver_user_id: "auto",
       approver_user_ids: [],
     },

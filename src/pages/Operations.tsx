@@ -116,14 +116,11 @@ const Operations = () => {
     setReleaseFilter("all");
   }, [projectFilter]);
 
-  // Derive a "Release" label from iteration_path (Azure Boards Planning section).
-  // e.g. "duncan\Sprint 9" -> "Sprint 9"; "kabuni-mvp" -> "kabuni-mvp"; null/"" -> null
+  // Release comes from the Azure DevOps "Release" field on User Stories
+  // (Custom.MVPRelease, e.g. "Future", "7 June - KPL"), populated by the sync.
   const getRelease = (w: any): string | null => {
-    const ip = (w?.iteration_path || "").toString().trim();
-    if (!ip) return null;
-    const parts = ip.split("\\").map((s: string) => s.trim()).filter(Boolean);
-    if (parts.length === 0) return null;
-    return parts.length > 1 ? parts[parts.length - 1] : parts[0];
+    const r = (w?.release || "").toString().trim();
+    return r || null;
   };
 
   // Unique filter options
@@ -182,7 +179,7 @@ const Operations = () => {
       }
       return true;
     });
-  }, [workItems, stateFilter, typeFilter, assigneeFilter, projectFilter, searchQuery]);
+  }, [workItems, stateFilter, typeFilter, assigneeFilter, projectFilter, releaseFilter, searchQuery]);
 
   const hasActiveFilters = stateFilter !== "all" || typeFilter !== "all" || assigneeFilter !== "all" || projectFilter !== "all" || releaseFilter !== "all" || searchQuery !== "";
   const clearFilters = () => {

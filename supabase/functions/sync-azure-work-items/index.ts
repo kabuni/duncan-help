@@ -218,7 +218,7 @@ Deno.serve(async (req) => {
       { onConflict: "integration_id" }
     );
 
-    return new Response(JSON.stringify({ success: true, records_synced: totalSynced }), {
+    return new Response(JSON.stringify({ success: true, records_synced: totalSynced, records_deleted: totalDeleted }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {

@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
-export type ApprovalKind = "cost" | "event_date" | "release" | "hire" | "contract" | "other";
+export type ApprovalKind = "cost" | "event_date" | "release" | "hire" | "contract" | "travel" | "other";
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "changes_requested" | "cancelled";
 
 export interface ApprovalRow {

@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
-import { Mail } from "lucide-react";
+import { Mail, Phone, MapPin, Building2, ChevronDown, ChevronUp } from "lucide-react";
 
 interface Rsvp {
   id: string;
   email: string;
   display_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  organisation_type: string | null;
+  organisation_name: string | null;
+  state: string | null;
   status: "yes" | "no" | "maybe";
   source: string;
   responded_at: string;
@@ -18,37 +24,41 @@ const statusColor: Record<string, string> = {
   maybe: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",
 };
 
+const orgLabel: Record<string, string> = {
+  school: "School",
+  media: "Media",
+  company: "Company",
+  other: "Other",
+};
+
+const FIELDS = ["first_name", "last_name", "phone", "email", "organisation_type", "organisation_name", "state"] as const;
+
 export function EventRsvps({ eventId }: { eventId: string }) {
   const [rsvps, setRsvps] = useState<Rsvp[]>([]);
   const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    const load = async () => {
       const { data } = await supabase
         .from("event_rsvps" as any)
-        .select("id,email,display_name,status,source,responded_at")
+        .select("*")
         .eq("event_id", eventId)
         .order("responded_at", { ascending: false });
       if (mounted) {
         setRsvps((data as any) || []);
         setLoading(false);
       }
-    })();
+    };
+    load();
 
     const channel = supabase
       .channel(`rsvps-${eventId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "event_rsvps", filter: `event_id=eq.${eventId}` },
-        async () => {
-          const { data } = await supabase
-            .from("event_rsvps" as any)
-            .select("id,email,display_name,status,source,responded_at")
-            .eq("event_id", eventId)
-            .order("responded_at", { ascending: false });
-          setRsvps((data as any) || []);
-        }
+        load
       )
       .subscribe();
 
@@ -65,6 +75,9 @@ export function EventRsvps({ eventId }: { eventId: string }) {
     {} as Record<string, number>
   );
 
+  const missingFor = (r: Rsvp) =>
+    FIELDS.filter((f) => !((r as any)[f] && String((r as any)[f]).trim().length > 0));
+
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
@@ -74,25 +87,78 @@ export function EventRsvps({ eventId }: { eventId: string }) {
       </div>
       {rsvps.length === 0 ? (
         <div className="text-xs text-muted-foreground border border-dashed border-border rounded-md p-3">
-          No RSVPs yet. Teammates can email <span className="font-mono">duncan@kabuni.com</span> to RSVP.
+          No RSVPs yet. Attendees email <span className="font-mono">duncan@kabuni.com</span> with their first name, last name, phone (with country code), email, school / media / company name, and Indian state.
         </div>
       ) : (
-        <ul className="flex flex-wrap gap-1.5">
-          {rsvps.map((r) => (
-            <li
-              key={r.id}
-              className={`inline-flex items-center gap-1.5 border rounded-md px-2 py-1 text-xs ${statusColor[r.status] || ""}`}
-              title={`${r.email} · via ${r.source}`}
-            >
-              <span>{r.display_name || r.email}</span>
-              <Badge variant="outline" className="text-[10px] capitalize bg-background/40">
-                {r.status}
-              </Badge>
-              {r.source === "email" && <Mail className="h-3 w-3 opacity-60" />}
-            </li>
-          ))}
+        <ul className="flex flex-col gap-1.5">
+          {rsvps.map((r) => {
+            const missing = missingFor(r);
+            const open = openId === r.id;
+            return (
+              <li key={r.id} className="border border-border rounded-md text-xs overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setOpenId(open ? null : r.id)}
+                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 ${statusColor[r.status]}`}
+                >
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-medium truncate">{r.display_name || r.email}</span>
+                    {r.organisation_name && (
+                      <span className="opacity-75 truncate">· {r.organisation_name}</span>
+                    )}
+                    {r.source === "email" && <Mail className="h-3 w-3 opacity-60 shrink-0" />}
+                  </span>
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    {missing.length > 0 && (
+                      <Badge variant="outline" className="text-[10px] bg-background/40">
+                        {missing.length} missing
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-[10px] capitalize bg-background/40">
+                      {r.status}
+                    </Badge>
+                    {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  </span>
+                </button>
+                {open && (
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-1 px-3 py-2 bg-background">
+                    <div className="col-span-2 grid grid-cols-2 gap-x-3 gap-y-1">
+                      <Detail label="First name" value={r.first_name} />
+                      <Detail label="Last name" value={r.last_name} />
+                    </div>
+                    <Detail label="Email" value={r.email} icon={<Mail className="h-3 w-3" />} />
+                    <Detail label="Phone" value={r.phone} icon={<Phone className="h-3 w-3" />} />
+                    <Detail
+                      label={r.organisation_type ? orgLabel[r.organisation_type] : "Organisation"}
+                      value={r.organisation_name}
+                      icon={<Building2 className="h-3 w-3" />}
+                    />
+                    <Detail label="State" value={r.state} icon={<MapPin className="h-3 w-3" />} />
+                    {missing.length > 0 && (
+                      <div className="col-span-2 mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                        Awaiting: {missing.map((f) => f.replace("_", " ")).join(", ")} (Duncan has emailed the attendee for these)
+                      </div>
+                    )}
+                  </dl>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
+    </div>
+  );
+}
+
+function Detail({ label, value, icon }: { label: string; value: string | null; icon?: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+        {icon}{label}
+      </dt>
+      <dd className={`truncate ${value ? "" : "text-muted-foreground italic"}`}>
+        {value || "—"}
+      </dd>
     </div>
   );
 }

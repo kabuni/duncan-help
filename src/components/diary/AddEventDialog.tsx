@@ -553,9 +553,9 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
               </ul>
             )}
             <div className="border border-dashed border-border rounded-md p-2 space-y-1.5">
-              <div className="flex gap-1.5">
-                <Select value={collabPerson} onValueChange={setCollabPerson}>
-                  <SelectTrigger className="h-8 text-xs flex-1">
+              <div className="flex flex-col sm:flex-row gap-1.5">
+                <Select key={`collab-${collaborators.length}`} value={collabPerson} onValueChange={setCollabPerson}>
+                  <SelectTrigger className="h-8 text-xs flex-1 min-w-0">
                     <SelectValue placeholder="Pick a person" />
                   </SelectTrigger>
                   <SelectContent>
@@ -575,13 +575,13 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
                   value={collabRole}
                   onChange={(e) => setCollabRole(e.target.value)}
                   placeholder="Role (e.g. Designer)"
-                  className="h-8 text-xs flex-1"
+                  className="h-8 text-xs flex-1 min-w-0"
                 />
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="h-8 text-xs"
+                  className="h-8 text-xs shrink-0"
                   disabled={!collabPerson}
                   onClick={() => {
                     const p = profiles.find((x) => x.id === collabPerson);

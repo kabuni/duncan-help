@@ -1364,6 +1364,12 @@ Deno.serve(async (req) => {
         files_added_7d: 0,
         files_removed_7d: 0,
         active_contributors_7d: 0,
+        contributors_7d: [],
+        top_contributor: null,
+        prev_window: null,
+        wow: null,
+        scanned_projects: [],
+        scanned_repos: [],
       },
       (source) => `${Number(source?.open_prs ?? 0)} open PRs · ${Number(source?.blocked_prs ?? 0)} blocked · ${Number(source?.stale_prs ?? 0)} stale across ${Number(source?.repos_scanned ?? 0)} repos · ${Number(source?.commits_7d ?? 0)} commits / ${Number(source?.active_contributors_7d ?? 0)} contributors (7d)`,
     );

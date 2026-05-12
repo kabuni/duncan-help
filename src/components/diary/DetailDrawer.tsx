@@ -24,6 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 import { EventAttachments } from "./EventAttachments";
 import { EventApprovals } from "./EventApprovals";
+import { EventRsvps } from "./EventRsvps";
 import { TimezonePicker, zonedDateTimeToISO, isoToDateInTz, isoToTimeInTz } from "./TimezonePicker";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -567,6 +568,8 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                 )}
 
                 <EventAttachments eventId={event.id} />
+
+                <EventRsvps eventId={event.id} />
 
                 <EventApprovals eventId={event.id} />
 

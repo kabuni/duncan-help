@@ -321,7 +321,7 @@ Deno.serve(async (req) => {
         if (!attendeeEmail) missing.push("Email address");
         if (!match.organisation_type) missing.push("School / Media / Company");
         if (!match.organisation_name) missing.push("Organisation name");
-        if (!match.state) missing.push("State in India");
+        if (!match.location) missing.push("City / region you're travelling from");
 
         // Email reply: confirmation or request for missing details
         const replySubject = subjectHdr.toLowerCase().startsWith("re:") ? subjectHdr : `Re: ${subjectHdr}`;

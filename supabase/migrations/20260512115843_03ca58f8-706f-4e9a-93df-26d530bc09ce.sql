@@ -1,0 +1,1 @@
+DELETE FROM public.event_rsvps WHERE source = 'email' AND responded_at >= '2026-05-12 11:50:00+00';

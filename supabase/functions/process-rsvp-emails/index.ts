@@ -326,7 +326,7 @@ Deno.serve(async (req) => {
         // Email reply: confirmation or request for missing details
         const replySubject = subjectHdr.toLowerCase().startsWith("re:") ? subjectHdr : `Re: ${subjectHdr}`;
         const replyBody = missing.length === 0
-          ? `Hi ${match.first_name || senderName || "there"},\n\nYour RSVP for "${ev.title}"${where} on ${when} is confirmed (${match.status.toUpperCase()}).\n\nWe have your details on file:\n- Name: ${match.first_name} ${match.last_name}\n- Phone: ${match.phone}\n- ${match.organisation_type === "school" ? "School" : match.organisation_type === "media" ? "Media" : "Company"}: ${match.organisation_name}\n- State: ${match.state}\n\nSee you there.\n\n— Duncan`
+          ? `Hi ${match.first_name || senderName || "there"},\n\nYour RSVP for "${ev.title}"${where} on ${when} is confirmed (${match.status.toUpperCase()}).\n\nWe have your details on file:\n- Name: ${match.first_name} ${match.last_name}\n- Phone: ${match.phone}\n- ${match.organisation_type === "school" ? "School" : match.organisation_type === "media" ? "Media" : "Company"}: ${match.organisation_name}\n- Travelling from: ${match.location}\n\nSee you there.\n\n— Duncan`
           : `Hi ${match.first_name || senderName || "there"},\n\nThanks for your RSVP for "${ev.title}"${where} on ${when}. Status recorded: ${match.status.toUpperCase()}.\n\nTo complete your registration, please reply with the following details:\n${missing.map((f) => `- ${f}`).join("\n")}\n\n— Duncan`;
         await sendGmailReply(token, attendeeEmail, replySubject, replyBody, threadId, messageIdHdr);
 

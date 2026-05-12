@@ -13,7 +13,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useApprovalCount } from "@/hooks/useApprovals";
-import { useIsAdmin } from "@/hooks/useUserRoles";
 
 const integrationMeta: Record<string, { label: string; icon: React.ElementType }> = {
   "slack": { label: "Slack", icon: MessageSquare },

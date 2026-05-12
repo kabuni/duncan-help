@@ -77,6 +77,31 @@ async function sendSlackDM(slackId: string, text: string) {
   } catch (e) { console.error("slack dm error", e); }
 }
 
+function encodeRfc2822(to: string, subject: string, body: string, inReplyTo?: string, references?: string): string {
+  const lines = [
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    'MIME-Version: 1.0',
+  ];
+  if (inReplyTo) lines.push(`In-Reply-To: ${inReplyTo}`);
+  if (references) lines.push(`References: ${references}`);
+  lines.push('', body);
+  const raw = lines.join('\r\n');
+  return btoa(unescape(encodeURIComponent(raw))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function sendGmailReply(token: string, to: string, subject: string, body: string, threadId?: string, inReplyTo?: string) {
+  try {
+    const raw = encodeRfc2822(to, subject, body, inReplyTo, inReplyTo);
+    await fetch(`${GMAIL_API}/messages/send`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(threadId ? { raw, threadId } : { raw }),
+    });
+  } catch (e) { console.error("gmail send error", e); }
+}
+
 async function aiMatch(emailText: string, candidates: any[]): Promise<{
   event_id: string | null;
   status: string;

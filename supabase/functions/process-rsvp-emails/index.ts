@@ -10,12 +10,25 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SLACK_GATEWAY_URL = "https://connector-gateway.lovable.dev/slack/api";
 const APP_URL = Deno.env.get("APP_URL") || "https://duncan.help";
 
+const RSVP_MAILBOX = "duncan@kabuni.com";
+
 async function getAccessToken(admin: any): Promise<string | null> {
   const clientId = Deno.env.get("GMAIL_CLIENT_ID");
   const clientSecret = Deno.env.get("GMAIL_CLIENT_SECRET");
   if (!clientId || !clientSecret) return null;
-  const { data } = await admin.from("gmail_tokens").select("*").limit(1).maybeSingle();
-  if (!data) return null;
+  // HARD LOCK: only operate on the duncan@kabuni.com mailbox.
+  // Never fall back to any other connected user's Gmail token — doing so
+  // would send replies from their personal account.
+  const { data } = await admin
+    .from("gmail_tokens")
+    .select("*")
+    .ilike("email_address", RSVP_MAILBOX)
+    .limit(1)
+    .maybeSingle();
+  if (!data) {
+    console.warn(`[process-rsvp-emails] no gmail_tokens row for ${RSVP_MAILBOX} — aborting`);
+    return null;
+  }
   if (new Date(data.token_expiry) > new Date()) return data.access_token;
   const r = await fetch(TOKEN_URL, {
     method: "POST",

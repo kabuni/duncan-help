@@ -310,7 +310,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
         }).catch(() => {});
 
-        const when = ev.when ? new Date(ev.when).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }) + " IST" : "TBD";
+        const when = ev.when ? new Date(ev.when).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/London" }) + " (London time)" : "TBD";
         const where = ev.location ? ` (${ev.location})` : "";
 
         // Required fields and what's missing

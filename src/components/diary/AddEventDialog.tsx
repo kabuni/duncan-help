@@ -57,7 +57,6 @@ const sanitizeFileName = (fileName: string) => {
   return ext ? `${safe}.${ext}` : safe;
 };
 
-import { CATEGORY_LIST } from "./categoryMeta";
 const CATEGORIES = [...CATEGORY_LIST, "Other"];
 
 interface Props {

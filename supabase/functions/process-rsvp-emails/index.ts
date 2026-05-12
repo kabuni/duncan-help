@@ -241,7 +241,7 @@ Deno.serve(async (req) => {
         if (!looksLikeRsvp) { summary.skipped++; continue; }
 
         const match = await aiMatch(emailText, candidates);
-        if (!match || !match.event_id || match.confidence < 0.55) {
+        if (!match || !match.event_id || match.confidence < 0.75) {
           summary.skipped++;
           summary.errors.push(`No match for ${senderEmail}: ${match?.reason || "n/a"}`);
           continue;

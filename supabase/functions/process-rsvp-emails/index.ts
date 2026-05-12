@@ -131,7 +131,7 @@ async function aiMatch(emailText: string, candidates: any[]): Promise<{
 } | null> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) return null;
-  const sys = `You decide whether an inbound email is a clear RSVP for one of the listed events in India, and extract attendee details. Return STRICT JSON:
+  const sys = `You decide whether an inbound email is a clear RSVP for one of the listed events, and extract attendee details. Events can be anywhere in the world — do NOT assume any specific country. Return STRICT JSON:
 {
   "event_id": "<uuid of the event the sender is RSVPing to, or null>",
   "status": "yes|no|maybe",
@@ -139,22 +139,22 @@ async function aiMatch(emailText: string, candidates: any[]): Promise<{
   "reason": "short",
   "first_name": "<string or null>",
   "last_name": "<string or null>",
-  "phone": "<full international format e.g. +919812345678 or null>",
+  "phone": "<full international format e.g. +447700900000 or null>",
   "email": "<best email for the attendee or null>",
   "organisation_type": "school|media|company|other or null",
   "organisation_name": "<string or null>",
-  "state": "<Indian state name (e.g. Maharashtra) or null>",
-  "missing_fields": ["any of: first_name,last_name,phone,email,organisation_type,organisation_name,state"]
+  "location": "<city, region or country the attendee is travelling from, or null>",
+  "missing_fields": ["any of: first_name,last_name,phone,email,organisation_type,organisation_name,location"]
 }
 
 STRICT RULES — set event_id to null and confidence < 0.5 unless ALL of these are true:
-1. The sender is RSVPing for THEMSELVES (not forwarding, not asking a question, not just discussing the event).
-2. They explicitly state attendance intent (yes/no/maybe — phrases like "I'd like to attend", "count me in", "I won't make it", "tentative", "RSVP yes", etc.).
-3. The email clearly identifies ONE specific event from the candidate list — by event name, by date (e.g. "7 June", "June 7th"), or by city/location. If the email is ambiguous about which event, return null.
+1. The email is an inbound RSVP request or response addressed to the recipient (duncan@kabuni.com). Auto-generated calendar accept/decline notifications from Google Calendar / Outlook are NOT RSVPs — return null for those.
+2. The sender is RSVPing for THEMSELVES with explicit attendance intent (yes/no/maybe — e.g. "I'd like to attend", "count me in", "I won't make it", "tentative", "RSVP yes").
+3. The email clearly identifies ONE specific event from the candidate list — by event name, by date (e.g. "7 June", "June 7th"), or by city/location. If ambiguous, return null.
 
-Discussion, planning, logistics, replies about the event, or generic greetings are NOT RSVPs — return null.
+Discussion, planning, logistics, internal calendar invites, or generic greetings are NOT RSVPs — return null.
 
-Always normalise phone to +<country code><number> with no spaces. Map school/college/university => school; news/tv/journalist/press => media; brand/corp/firm/startup => company.`;
+Match events by name/date/location ONLY. Never reject an event because of its country. Always normalise phone to +<country code><number> with no spaces. Map school/college/university => school; news/tv/journalist/press => media; brand/corp/firm/startup => company.`;
   const user = `Email:\n${emailText.slice(0, 4000)}\n\nCandidate events (JSON, with ISO start dates):\n${JSON.stringify(candidates)}`;
   try {
     const r = await fetch("https://api.openai.com/v1/chat/completions", {

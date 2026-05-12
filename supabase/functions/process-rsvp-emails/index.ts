@@ -235,6 +235,14 @@ Deno.serve(async (req) => {
         const body = extractBody(msg.payload);
         const emailText = `From: ${senderName} <${senderEmail}>\nSubject: ${subjectHdr}\n\n${body}`;
 
+        // Skip Google/Outlook calendar auto-notifications outright — these are never RSVPs
+        // to planner events; they're internal meeting accept/decline pings.
+        const subjLower = subjectHdr.toLowerCase();
+        const isCalendarAuto =
+          /^(accepted|declined|tentatively accepted|tentative|invitation|updated invitation|canceled event|cancelled event):/i.test(subjectHdr) ||
+          fromHdr.toLowerCase().includes("calendar-notification@google.com");
+        if (isCalendarAuto) { summary.skipped++; continue; }
+
         // Cheap pre-filter: only call the LLM for emails that look like RSVPs.
         const lower = `${subjectHdr}\n${body}`.toLowerCase();
         const intentHints = [

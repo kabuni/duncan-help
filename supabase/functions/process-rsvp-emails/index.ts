@@ -183,9 +183,10 @@ Deno.serve(async (req) => {
       category: e.category,
     }));
 
-    // Search for RSVP-style emails (last 30 days, unread)
-    const q = encodeURIComponent('newer_than:30d (subject:RSVP OR subject:attend OR subject:attending OR "want to attend" OR "would like to attend" OR "I will attend" OR "count me in" OR "I\'ll be there")');
-    const listUrl = `${GMAIL_API}/messages?maxResults=25&q=${q}`;
+    // Search broadly for any recent personal email (last 30 days). The AI filter decides
+    // whether each one is an RSVP. We exclude obvious automated/list mail.
+    const q = encodeURIComponent('newer_than:30d -in:chats -in:drafts -category:promotions -category:social -category:updates -category:forums -from:noreply -from:no-reply -from:notifications -from:notification');
+    const listUrl = `${GMAIL_API}/messages?maxResults=50&q=${q}`;
     const listRes = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } });
     if (!listRes.ok) throw new Error(`Gmail list failed: ${listRes.status}`);
     const list = await listRes.json();
@@ -211,6 +212,25 @@ Deno.serve(async (req) => {
 
         const body = extractBody(msg.payload);
         const emailText = `From: ${senderName} <${senderEmail}>\nSubject: ${subjectHdr}\n\n${body}`;
+
+        // Cheap pre-filter: only call the LLM for emails that look like RSVPs.
+        const lower = `${subjectHdr}\n${body}`.toLowerCase();
+        const intentHints = [
+          "rsvp", "attend", "attending", "join", "register", "registration",
+          "count me in", "i'll be there", "i will be there", "interested in",
+          "would like to come", "want to come", "save me a seat", "sign me up",
+          "confirm my", "i'm in", "confirming attendance",
+        ];
+        const eventHints = candidates.flatMap((c: any) => {
+          const out: string[] = [];
+          if (c.title) out.push(String(c.title).toLowerCase());
+          if (c.location) out.push(String(c.location).toLowerCase().split(",")[0].trim());
+          return out;
+        });
+        const looksLikeRsvp =
+          intentHints.some((h) => lower.includes(h)) ||
+          eventHints.some((h) => h && h.length > 3 && lower.includes(h));
+        if (!looksLikeRsvp) { summary.skipped++; continue; }
 
         const match = await aiMatch(emailText, candidates);
         if (!match || !match.event_id || match.confidence < 0.55) {

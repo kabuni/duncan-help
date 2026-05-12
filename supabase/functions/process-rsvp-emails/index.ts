@@ -118,9 +118,9 @@ async function aiMatch(emailText: string, candidates: any[]): Promise<{
 } | null> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) return null;
-  const sys = `You parse an inbound RSVP email for an event in India and return STRICT JSON:
+  const sys = `You decide whether an inbound email is a clear RSVP for one of the listed events in India, and extract attendee details. Return STRICT JSON:
 {
-  "event_id": "<uuid of matched event or null>",
+  "event_id": "<uuid of the event the sender is RSVPing to, or null>",
   "status": "yes|no|maybe",
   "confidence": 0-1,
   "reason": "short",
@@ -131,10 +131,18 @@ async function aiMatch(emailText: string, candidates: any[]): Promise<{
   "organisation_type": "school|media|company|other or null",
   "organisation_name": "<string or null>",
   "state": "<Indian state name (e.g. Maharashtra) or null>",
-  "missing_fields": ["list of any of: first_name,last_name,phone,email,organisation_type,organisation_name,state that are missing"]
+  "missing_fields": ["any of: first_name,last_name,phone,email,organisation_type,organisation_name,state"]
 }
-Use null event_id if no clear match. Always normalise phone to +<country code><number> with no spaces. Map school/college/university => school, news/tv/journalist/press => media, brand/corp/firm/startup => company.`;
-  const user = `Email:\n${emailText.slice(0, 4000)}\n\nCandidate events (JSON):\n${JSON.stringify(candidates)}`;
+
+STRICT RULES — set event_id to null and confidence < 0.5 unless ALL of these are true:
+1. The sender is RSVPing for THEMSELVES (not forwarding, not asking a question, not just discussing the event).
+2. They explicitly state attendance intent (yes/no/maybe — phrases like "I'd like to attend", "count me in", "I won't make it", "tentative", "RSVP yes", etc.).
+3. The email clearly identifies ONE specific event from the candidate list — by event name, by date (e.g. "7 June", "June 7th"), or by city/location. If the email is ambiguous about which event, return null.
+
+Discussion, planning, logistics, replies about the event, or generic greetings are NOT RSVPs — return null.
+
+Always normalise phone to +<country code><number> with no spaces. Map school/college/university => school; news/tv/journalist/press => media; brand/corp/firm/startup => company.`;
+  const user = `Email:\n${emailText.slice(0, 4000)}\n\nCandidate events (JSON, with ISO start dates):\n${JSON.stringify(candidates)}`;
   try {
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -183,9 +191,10 @@ Deno.serve(async (req) => {
       category: e.category,
     }));
 
-    // Search broadly for any recent personal email (last 30 days). The AI filter decides
-    // whether each one is an RSVP. We exclude obvious automated/list mail.
-    const q = encodeURIComponent('newer_than:30d -in:chats -in:drafts -category:promotions -category:social -category:updates -category:forums -from:noreply -from:no-reply -from:notifications -from:notification');
+    // The connected mailbox IS duncan@kabuni.com, so anything in this inbox was received by Duncan
+    // (via To, CC, BCC, alias or forward). We just exclude self-sent and obvious automated mail.
+    // The AI matcher then strictly decides whether each email is a real RSVP.
+    const q = encodeURIComponent('newer_than:30d -from:duncan@kabuni.com -in:chats -in:drafts -in:sent -category:promotions -category:social -category:updates -category:forums -from:noreply -from:no-reply -from:notifications -from:notification');
     const listUrl = `${GMAIL_API}/messages?maxResults=50&q=${q}`;
     const listRes = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } });
     if (!listRes.ok) throw new Error(`Gmail list failed: ${listRes.status}`);
@@ -233,9 +242,9 @@ Deno.serve(async (req) => {
         if (!looksLikeRsvp) { summary.skipped++; continue; }
 
         const match = await aiMatch(emailText, candidates);
-        if (!match || !match.event_id || match.confidence < 0.55) {
+        if (!match || !match.event_id || match.confidence < 0.6) {
           summary.skipped++;
-          summary.errors.push(`No match for ${senderEmail}: ${match?.reason || "n/a"}`);
+          summary.errors.push(`No match for ${senderEmail} (subject: ${subjectHdr.slice(0,80)}): conf=${match?.confidence ?? "n/a"} reason=${match?.reason || "n/a"}`);
           continue;
         }
 

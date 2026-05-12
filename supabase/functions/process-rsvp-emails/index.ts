@@ -183,9 +183,9 @@ Deno.serve(async (req) => {
       category: e.category,
     }));
 
-    // Search broadly for any recent personal email (last 30 days). The AI filter decides
-    // whether each one is an RSVP. We exclude obvious automated/list mail.
-    const q = encodeURIComponent('newer_than:30d -in:chats -in:drafts -category:promotions -category:social -category:updates -category:forums -from:noreply -from:no-reply -from:notifications -from:notification');
+    // Only scan emails addressed TO duncan@kabuni.com (not other inboxes/aliases),
+    // and exclude anything Duncan itself sent. AI then decides if it's an RSVP.
+    const q = encodeURIComponent('newer_than:30d to:duncan@kabuni.com -from:duncan@kabuni.com -in:chats -in:drafts -in:sent -category:promotions -category:social -category:updates -category:forums -from:noreply -from:no-reply -from:notifications -from:notification');
     const listUrl = `${GMAIL_API}/messages?maxResults=50&q=${q}`;
     const listRes = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } });
     if (!listRes.ok) throw new Error(`Gmail list failed: ${listRes.status}`);

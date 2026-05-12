@@ -461,40 +461,58 @@ Deno.serve(async (req) => {
           return cRes.value || [];
         };
 
-        await Promise.all(repoList.map(async (r) => {
-          const repoLabel = `${r.project}/${r.name}`;
-          const [curRes, prevRes] = await Promise.allSettled([
-            fetchCommits(r, sevenDaysAgoIso),
-            fetchCommits(r, fourteenDaysAgoIso, sevenDaysAgoIso),
-          ]);
-
-          if (curRes.status === "fulfilled") {
-            for (const c of curRes.value) {
-              commits7d += 1;
-              const email = c.author?.email ? String(c.author.email).toLowerCase() : undefined;
-              const name = c.author?.name || c.author?.email || "unknown";
-              const key = email || name.toLowerCase();
-              if (email || name) contributors7d.add(key);
-              const cc = c.changeCounts || {};
-              const add = Number(cc.Add || 0), edit = Number(cc.Edit || 0), del = Number(cc.Delete || 0);
-              filesAdded7d += add;
-              filesRemoved7d += del;
-              filesEdited7d += edit;
-              let agg = curByAuthor.get(key);
-              if (!agg) { agg = mkAgg(name, email); curByAuthor.set(key, agg); }
-              agg.commits += 1;
-              agg.files_added += add;
-              agg.files_edited += edit;
-              agg.files_removed += del;
-              agg.repos.add(repoLabel);
+        // Limit concurrency to avoid hammering ADO and reduce overall latency.
+        const runWithConcurrency = async <T,>(items: T[], limit: number, fn: (item: T) => Promise<void>) => {
+          let i = 0;
+          const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+            while (i < items.length) {
+              const idx = i++;
+              try { await fn(items[idx]); } catch (_) { /* per-item handlers already guard */ }
             }
-          } else {
+          });
+          await Promise.all(workers);
+        };
+
+        await runWithConcurrency(repoList, 8, async (r) => {
+          const repoLabel = `${r.project}/${r.name}`;
+
+          // Current window first; only scan previous window if this repo had recent activity.
+          let curCommits: any[] = [];
+          try {
+            curCommits = await fetchCommits(r, sevenDaysAgoIso);
+          } catch (e) {
             commitMetricsPartial = true;
-            console.warn(`briefing_summary: current commits scan failed for ${repoLabel}`, curRes.reason);
+            console.warn(`briefing_summary: current commits scan failed for ${repoLabel}`, e);
+            return;
           }
 
-          if (prevRes.status === "fulfilled") {
-            for (const c of prevRes.value) {
+          for (const c of curCommits) {
+            commits7d += 1;
+            const email = c.author?.email ? String(c.author.email).toLowerCase() : undefined;
+            const name = c.author?.name || c.author?.email || "unknown";
+            const key = email || name.toLowerCase();
+            if (email || name) contributors7d.add(key);
+            const cc = c.changeCounts || {};
+            const add = Number(cc.Add || 0), edit = Number(cc.Edit || 0), del = Number(cc.Delete || 0);
+            filesAdded7d += add;
+            filesRemoved7d += del;
+            filesEdited7d += edit;
+            let agg = curByAuthor.get(key);
+            if (!agg) { agg = mkAgg(name, email); curByAuthor.set(key, agg); }
+            agg.commits += 1;
+            agg.files_added += add;
+            agg.files_edited += edit;
+            agg.files_removed += del;
+            agg.repos.add(repoLabel);
+          }
+
+          // Skip previous-window scan entirely for repos with no current activity —
+          // they cannot affect WoW deltas in a meaningful way and add a lot of latency.
+          if (curCommits.length === 0) return;
+
+          try {
+            const prevCommits = await fetchCommits(r, fourteenDaysAgoIso, sevenDaysAgoIso);
+            for (const c of prevCommits) {
               commitsPrev7d += 1;
               const email = c.author?.email ? String(c.author.email).toLowerCase() : undefined;
               const name = c.author?.name || c.author?.email || "unknown";
@@ -505,11 +523,11 @@ Deno.serve(async (req) => {
               filesRemovedPrev7d += Number(cc.Delete || 0);
               prevByAuthor.set(key, (prevByAuthor.get(key) || 0) + 1);
             }
-          } else {
+          } catch (e) {
             commitMetricsPartial = true;
-            console.warn(`briefing_summary: previous commits scan failed for ${repoLabel}`, prevRes.reason);
+            console.warn(`briefing_summary: previous commits scan failed for ${repoLabel}`, e);
           }
-        }));
+        });
 
         // Build contributor list with WoW deltas + per-author trend.
         const trendOf = (cur: number, prev: number): "up" | "down" | "flat" => {

@@ -126,7 +126,7 @@ async function aiMatch(emailText: string, candidates: any[]): Promise<{
   email: string | null;
   organisation_type: string | null;
   organisation_name: string | null;
-  state: string | null;
+  location: string | null;
   missing_fields: string[];
 } | null> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");

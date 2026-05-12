@@ -40,10 +40,8 @@ const FIELD_LABELS: Record<string, string> = {
   owner: "Owner",
 };
 
-const CATEGORIES = [
-  "Event", "Holiday", "Marketing", "Launch", "Investor",
-  "Product", "Operations", "Travel", "Releases", "Other",
-];
+import { CATEGORY_LIST } from "./categoryMeta";
+const CATEGORIES = [...CATEGORY_LIST, "Other"];
 
 function fmt(iso: string | null, allDay = false, tz?: string | null) {
   if (!iso) return "—";

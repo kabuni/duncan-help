@@ -280,21 +280,6 @@ Deno.serve(async (req) => {
           : `Hi ${match.first_name || senderName || "there"},\n\nThanks for your RSVP for "${ev.title}"${where} on ${when}. Status recorded: ${match.status.toUpperCase()}.\n\nTo complete your registration, please reply with the following details:\n${missing.map((f) => `- ${f}`).join("\n")}\n\n— Duncan`;
         await sendGmailReply(token, attendeeEmail, replySubject, replyBody, threadId, messageIdHdr);
 
-        // Slack DM if attendee is a Duncan user
-        if (profile?.id) {
-          const { data: map } = await admin
-            .from("user_notification_mappings")
-            .select("slack_user_identifier,is_active")
-            .eq("duncan_user_id", profile.id)
-            .maybeSingle();
-          if (map?.is_active && map.slack_user_identifier) {
-            const missingNote = missing.length ? `\n_Missing: ${missing.join(", ")}_` : "";
-            await sendSlackDM(
-              map.slack_user_identifier,
-              `:calendar: RSVP recorded — *${ev.title}*${where} on ${when}.\nStatus: *${match.status.toUpperCase()}*${missingNote}\n${APP_URL}/diary?event=${match.event_id}`
-            );
-          }
-        }
       } catch (e) {
         summary.errors.push(String(e));
       }

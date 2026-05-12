@@ -664,12 +664,18 @@ export type Database = {
           display_name: string | null
           email: string
           event_id: string
+          first_name: string | null
           gmail_message_id: string | null
           id: string
+          last_name: string | null
           notes: string | null
+          organisation_name: string | null
+          organisation_type: string | null
+          phone: string | null
           profile_id: string | null
           responded_at: string
           source: string
+          state: string | null
           status: string
           updated_at: string
         }
@@ -678,12 +684,18 @@ export type Database = {
           display_name?: string | null
           email: string
           event_id: string
+          first_name?: string | null
           gmail_message_id?: string | null
           id?: string
+          last_name?: string | null
           notes?: string | null
+          organisation_name?: string | null
+          organisation_type?: string | null
+          phone?: string | null
           profile_id?: string | null
           responded_at?: string
           source?: string
+          state?: string | null
           status?: string
           updated_at?: string
         }
@@ -692,12 +704,18 @@ export type Database = {
           display_name?: string | null
           email?: string
           event_id?: string
+          first_name?: string | null
           gmail_message_id?: string | null
           id?: string
+          last_name?: string | null
           notes?: string | null
+          organisation_name?: string | null
+          organisation_type?: string | null
+          phone?: string | null
           profile_id?: string | null
           responded_at?: string
           source?: string
+          state?: string | null
           status?: string
           updated_at?: string
         }

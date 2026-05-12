@@ -242,9 +242,9 @@ Deno.serve(async (req) => {
         if (!looksLikeRsvp) { summary.skipped++; continue; }
 
         const match = await aiMatch(emailText, candidates);
-        if (!match || !match.event_id || match.confidence < 0.75) {
+        if (!match || !match.event_id || match.confidence < 0.6) {
           summary.skipped++;
-          summary.errors.push(`No match for ${senderEmail}: ${match?.reason || "n/a"}`);
+          summary.errors.push(`No match for ${senderEmail} (subject: ${subjectHdr.slice(0,80)}): conf=${match?.confidence ?? "n/a"} reason=${match?.reason || "n/a"}`);
           continue;
         }
 

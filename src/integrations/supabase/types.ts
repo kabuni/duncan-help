@@ -658,6 +658,66 @@ export type Database = {
         }
         Relationships: []
       }
+      event_rsvps: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string
+          event_id: string
+          gmail_message_id: string | null
+          id: string
+          notes: string | null
+          profile_id: string | null
+          responded_at: string
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email: string
+          event_id: string
+          gmail_message_id?: string | null
+          id?: string
+          notes?: string | null
+          profile_id?: string | null
+          responded_at?: string
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string
+          event_id?: string
+          gmail_message_id?: string | null
+          id?: string
+          notes?: string | null
+          profile_id?: string | null
+          responded_at?: string
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_rsvps_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "key_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_rsvps_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feature_request_attachments: {
         Row: {
           created_at: string

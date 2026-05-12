@@ -77,10 +77,38 @@ async function sendSlackDM(slackId: string, text: string) {
   } catch (e) { console.error("slack dm error", e); }
 }
 
-async function aiMatch(emailText: string, candidates: any[]): Promise<{ event_id: string | null; status: string; confidence: number; reason: string } | null> {
+async function aiMatch(emailText: string, candidates: any[]): Promise<{
+  event_id: string | null;
+  status: string;
+  confidence: number;
+  reason: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
+  organisation_type: string | null;
+  organisation_name: string | null;
+  state: string | null;
+  missing_fields: string[];
+} | null> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) return null;
-  const sys = `You match an inbound RSVP email to one upcoming event. Return STRICT JSON: {"event_id":"<uuid or null>","status":"yes|no|maybe","confidence":0-1,"reason":"short"}. Use null event_id if no clear match.`;
+  const sys = `You parse an inbound RSVP email for an event in India and return STRICT JSON:
+{
+  "event_id": "<uuid of matched event or null>",
+  "status": "yes|no|maybe",
+  "confidence": 0-1,
+  "reason": "short",
+  "first_name": "<string or null>",
+  "last_name": "<string or null>",
+  "phone": "<full international format e.g. +919812345678 or null>",
+  "email": "<best email for the attendee or null>",
+  "organisation_type": "school|media|company|other or null",
+  "organisation_name": "<string or null>",
+  "state": "<Indian state name (e.g. Maharashtra) or null>",
+  "missing_fields": ["list of any of: first_name,last_name,phone,email,organisation_type,organisation_name,state that are missing"]
+}
+Use null event_id if no clear match. Always normalise phone to +<country code><number> with no spaces. Map school/college/university => school, news/tv/journalist/press => media, brand/corp/firm/startup => company.`;
   const user = `Email:\n${emailText.slice(0, 4000)}\n\nCandidate events (JSON):\n${JSON.stringify(candidates)}`;
   try {
     const r = await fetch("https://api.openai.com/v1/chat/completions", {

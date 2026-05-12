@@ -204,6 +204,8 @@ Deno.serve(async (req) => {
         const headers = msg.payload?.headers || [];
         const fromHdr = headers.find((h: any) => h.name?.toLowerCase() === "from")?.value || "";
         const subjectHdr = headers.find((h: any) => h.name?.toLowerCase() === "subject")?.value || "";
+        const messageIdHdr = headers.find((h: any) => h.name?.toLowerCase() === "message-id")?.value || "";
+        const threadId = msg.threadId as string | undefined;
         const { email: senderEmail, name: senderName } = parseFromHeader(fromHdr);
         if (!senderEmail) { summary.skipped++; continue; }
 
@@ -217,20 +219,30 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        const ev = candidates.find((c: any) => c.id === match.event_id)!;
+        const attendeeEmail = (match.email || senderEmail).toLowerCase();
+
         // Find profile by email
         const { data: profile } = await admin
           .from("profiles")
           .select("id,display_name")
-          .ilike("email", senderEmail)
+          .ilike("email", attendeeEmail)
           .maybeSingle();
 
-        const display = profile?.display_name || senderName || senderEmail;
+        const fullName = [match.first_name, match.last_name].filter(Boolean).join(" ").trim();
+        const display = fullName || profile?.display_name || senderName || attendeeEmail;
 
         const { error: upErr } = await admin.from("event_rsvps").upsert({
           event_id: match.event_id,
           profile_id: profile?.id || null,
-          email: senderEmail,
+          email: attendeeEmail,
           display_name: display,
+          first_name: match.first_name,
+          last_name: match.last_name,
+          phone: match.phone,
+          organisation_type: match.organisation_type,
+          organisation_name: match.organisation_name,
+          state: match.state,
           status: ["yes", "no", "maybe"].includes(match.status) ? match.status : "yes",
           source: "email",
           notes: subjectHdr,
@@ -248,7 +260,27 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
         }).catch(() => {});
 
-        // Slack DM confirmation
+        const when = ev.when ? new Date(ev.when).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }) + " IST" : "TBD";
+        const where = ev.location ? ` (${ev.location})` : "";
+
+        // Required fields and what's missing
+        const missing: string[] = [];
+        if (!match.first_name) missing.push("First name");
+        if (!match.last_name) missing.push("Last name");
+        if (!match.phone) missing.push("Phone (with country code, e.g. +91…)");
+        if (!attendeeEmail) missing.push("Email address");
+        if (!match.organisation_type) missing.push("School / Media / Company");
+        if (!match.organisation_name) missing.push("Organisation name");
+        if (!match.state) missing.push("State in India");
+
+        // Email reply: confirmation or request for missing details
+        const replySubject = subjectHdr.toLowerCase().startsWith("re:") ? subjectHdr : `Re: ${subjectHdr}`;
+        const replyBody = missing.length === 0
+          ? `Hi ${match.first_name || senderName || "there"},\n\nYour RSVP for "${ev.title}"${where} on ${when} is confirmed (${match.status.toUpperCase()}).\n\nWe have your details on file:\n- Name: ${match.first_name} ${match.last_name}\n- Phone: ${match.phone}\n- ${match.organisation_type === "school" ? "School" : match.organisation_type === "media" ? "Media" : "Company"}: ${match.organisation_name}\n- State: ${match.state}\n\nSee you there.\n\n— Duncan`
+          : `Hi ${match.first_name || senderName || "there"},\n\nThanks for your RSVP for "${ev.title}"${where} on ${when}. Status recorded: ${match.status.toUpperCase()}.\n\nTo complete your registration, please reply with the following details:\n${missing.map((f) => `- ${f}`).join("\n")}\n\n— Duncan`;
+        await sendGmailReply(token, attendeeEmail, replySubject, replyBody, threadId, messageIdHdr);
+
+        // Slack DM if attendee is a Duncan user
         if (profile?.id) {
           const { data: map } = await admin
             .from("user_notification_mappings")
@@ -256,12 +288,10 @@ Deno.serve(async (req) => {
             .eq("duncan_user_id", profile.id)
             .maybeSingle();
           if (map?.is_active && map.slack_user_identifier) {
-            const ev = candidates.find((c: any) => c.id === match.event_id)!;
-            const when = ev.when ? new Date(ev.when).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "TBD";
-            const where = ev.location ? ` (${ev.location})` : "";
+            const missingNote = missing.length ? `\n_Missing: ${missing.join(", ")}_` : "";
             await sendSlackDM(
               map.slack_user_identifier,
-              `:calendar: RSVP recorded — *${ev.title}*${where} on ${when}.\nStatus: *${match.status.toUpperCase()}*\n${APP_URL}/diary?event=${match.event_id}`
+              `:calendar: RSVP recorded — *${ev.title}*${where} on ${when}.\nStatus: *${match.status.toUpperCase()}*${missingNote}\n${APP_URL}/diary?event=${match.event_id}`
             );
           }
         }

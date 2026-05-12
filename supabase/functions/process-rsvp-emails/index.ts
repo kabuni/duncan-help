@@ -292,7 +292,7 @@ Deno.serve(async (req) => {
           phone: match.phone,
           organisation_type: match.organisation_type,
           organisation_name: match.organisation_name,
-          state: match.state,
+          state: match.location,
           status: ["yes", "no", "maybe"].includes(match.status) ? match.status : "yes",
           source: "email",
           notes: subjectHdr,

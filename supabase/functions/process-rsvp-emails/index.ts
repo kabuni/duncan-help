@@ -488,7 +488,10 @@ Deno.serve(async (req) => {
         if (!match.location) missing.push("City / region you're travelling from");
 
         // Email reply: confirmation or request for missing details
-        const replySubject = subjectHdr.toLowerCase().startsWith("re:") ? subjectHdr : `Re: ${subjectHdr}`;
+        // Normalise unicode dashes (en/em/minus/hyphen variants) to a plain ASCII hyphen
+        // so the Subject header stays 7-bit-safe and Gmail doesn't render mojibake.
+        const asciiSubject = subjectHdr.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g, "-");
+        const replySubject = asciiSubject.toLowerCase().startsWith("re:") ? asciiSubject : `Re: ${asciiSubject}`;
         const firstName = match.first_name || senderName?.split(" ")[0] || "there";
         const statusUpper = match.status.toUpperCase();
         const orgLabel = match.organisation_type === "school" ? "School" : match.organisation_type === "media" ? "Media" : "Company";

@@ -1,46 +1,50 @@
-## Goal
+## Plan: Auto-schedule `process-rsvp-emails` every 5 minutes
 
-RSVP confirmation/missing-detail emails for the **Kabuni Showcase Mumbai** event (7 June, Jio Centre, Mumbai) should display the full schedule in **India Standard Time** only — no UK time — and use the correct event name as it appears in the planner.
+### What to do
+Create a Supabase migration that:
+1. Enables `pg_cron` and `pg_net` extensions (idempotent).
+2. Unschedules any prior job named `process-rsvp-emails-every-5min` (idempotent re-run safety).
+3. Schedules a new cron job `process-rsvp-emails-every-5min` running `*/5 * * * *` that POSTs to `https://rfwvemsjwytxxhwowpqh.supabase.co/functions/v1/process-rsvp-emails` with the project anon key in the `apikey` and `Authorization` headers.
 
-## Changes (all in `supabase/functions/process-rsvp-emails/index.ts`)
+No code changes. The "Scan RSVPs" button in `KeyEventsDiary.tsx` stays as a manual override. Deduplication continues to rely on the existing `gmail_message_id` check inside the edge function — no schema change needed.
 
-### 1. Time formatting
-- Replace the current `Europe/London` formatter with `Asia/Kolkata`.
-- Output format: `Sat, 7 Jun 2026 · 12:00 IST` (no "London time" suffix, no UK conversion anywhere).
+### Why this is safe
+- The edge function already skips any Gmail message whose `gmail_message_id` exists in `event_rsvps`, so overlapping cron + manual runs cannot create duplicate RSVP rows.
+- `verify_jwt = false` is already set for `process-rsvp-emails` in `supabase/config.toml`, so the cron HTTP call needs no user JWT.
 
-### 2. Event-specific schedule block
-For events whose title matches **"Kabuni Showcase Mumbai"** (case-insensitive), inject a fixed agenda into the email instead of a single start time:
+### Where the schedule lives & how to change it
+- **Created in:** the new migration file under `supabase/migrations/` (timestamped, e.g. `..._schedule_process_rsvp_emails.sql`).
+- **Job name:** `process-rsvp-emails-every-5min` (visible in `cron.job`).
+- **To change cadence:** write a new migration that calls `cron.unschedule('process-rsvp-emails-every-5min')` then `cron.schedule(...)` with the new expression. Common alternatives: `*/10 * * * *` (10 min), `*/15 * * * *` (15 min), `0 * * * *` (hourly).
+- **To pause:** migration with `select cron.unschedule('process-rsvp-emails-every-5min');`.
+- **To inspect runs:** `select * from cron.job_run_details where jobname = 'process-rsvp-emails-every-5min' order by start_time desc limit 20;`
 
+### SQL to be applied
+```sql
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+select cron.unschedule('process-rsvp-emails-every-5min')
+where exists (select 1 from cron.job where jobname = 'process-rsvp-emails-every-5min');
+
+select cron.schedule(
+  'process-rsvp-emails-every-5min',
+  '*/5 * * * *',
+  $$
+  select net.http_post(
+    url := 'https://rfwvemsjwytxxhwowpqh.supabase.co/functions/v1/process-rsvp-emails',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'apikey', '<anon key>',
+      'Authorization', 'Bearer <anon key>'
+    ),
+    body := jsonb_build_object('trigger', 'cron', 'at', now())
+  );
+  $$
+);
 ```
-12:00 – 13:00 IST   Lunch
-13:00 – 15:00 IST   Kabuni Launch (main event)
-15:00 – 16:00 IST   High tea
-```
 
-Rendered as a styled mini-table in the HTML email, and as plain bullet lines in the text fallback.
-
-The "When" highlight row becomes: `Saturday, 7 June · 12:00 – 16:00 IST`
-The "Where" highlight row uses the planner's location, falling back to `Jio Centre, Mumbai` for this event.
-
-For all other events, keep the current single-line "When" behaviour but in IST (or whatever timezone the planner stores — for now we standardise on IST since the only live event is Mumbai).
-
-### 3. Event name
-No code change needed for the title itself — the email already uses `ev.title` from the planner record. Action item for the user (outside this plan): rename the planner entry to **"Kabuni Showcase Mumbai"** if it isn't already, so the email subject/heading reflect it. The matcher already accepts the new name.
-
-### 4. Greeting copy
-Confirmed-state greeting becomes:
-> "You're confirmed for **Kabuni Showcase Mumbai**, {firstName} 🎉"
-
-Intro line:
-> "We've got you down for **Kabuni Showcase Mumbai** at Jio Centre, Mumbai on Saturday 7 June. Here's the running order for the day."
-
-### 5. Plain-text fallback
-Mirror the same IST schedule as a clean bulleted list so non-HTML clients see the same info.
-
-## Out of scope
-- No DB migration — purely email rendering.
-- No change to matcher logic, suppression, or cron schedule.
-- No UI changes in the EventRsvps panel (it doesn't show event time).
-
-## Deploy
-After edits: deploy `process-rsvp-emails` and trigger one manual run to verify formatting against a real RSVP thread.
+### Out of scope (per request)
+- No edge function code changes.
+- No new dedupe key (still per `gmail_message_id`).
+- No audit log table.

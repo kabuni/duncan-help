@@ -14,7 +14,7 @@ import { useKeyEvents, type KeyEvent, type WorkstreamCard } from "@/hooks/useKey
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
-import { RefreshCw, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { RefreshCw, Plus, ChevronLeft, ChevronRight, Mail } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 

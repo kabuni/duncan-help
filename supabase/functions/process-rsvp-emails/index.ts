@@ -194,6 +194,7 @@ function renderHtmlEmail(opts: {
             ${highlightRows}
           </table>
         </td></tr>` : ""}
+        ${scheduleBlock ? `<tr><td style="padding:0 32px;">${scheduleBlock}</td></tr>` : ""}
         <tr><td style="padding:8px 32px 0;">${missingBlock}</td></tr>
         ${ctaNote ? `<tr><td style="padding:12px 32px 0;color:#6b7280;font-size:13px;line-height:1.6;">${escapeHtml(ctaNote)}</td></tr>` : ""}
         <tr><td style="padding:20px 32px 28px;">

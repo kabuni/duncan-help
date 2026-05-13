@@ -1,46 +1,46 @@
-## Problem
+## Goal
 
-The Team Briefing's Azure Repos card already has UI to show developer-level contributions, top contributor, lines changed, and week-over-week trend (in `CommsPulseCard.tsx` → `AzureReposSection`). The `azure-repos-api` edge function already computes all of these (`contributors_7d`, `top_contributor`, `prev_window`, `wow`) in its `briefing_summary` action.
+RSVP confirmation/missing-detail emails for the **Kabuni Showcase Mumbai** event (7 June, Jio Centre, Mumbai) should display the full schedule in **India Standard Time** only — no UK time — and use the correct event name as it appears in the planner.
 
-The data is being **dropped in transit** by `ceo-briefing/index.ts`:
+## Changes (all in `supabase/functions/process-rsvp-emails/index.ts`)
 
-1. `normalizeExternalSignal` (lines 1312-1337) only retains keys listed in `defaults` — `contributors_7d`, `top_contributor`, `prev_window`, `wow` are not in defaults, so they are stripped.
-2. The final `parsed.payload.azure_repos_signal = { ... }` object (lines 3781-3802) only echoes a fixed set of fields — same four are missing.
+### 1. Time formatting
+- Replace the current `Europe/London` formatter with `Asia/Kolkata`.
+- Output format: `Sat, 7 Jun 2026 · 12:00 IST` (no "London time" suffix, no UK conversion anywhere).
 
-That's why the contributor table, top-contributor line, and WoW trend chips never render.
+### 2. Event-specific schedule block
+For events whose title matches **"Kabuni Showcase Mumbai"** (case-insensitive), inject a fixed agenda into the email instead of a single start time:
 
-## Fix
+```
+12:00 – 13:00 IST   Lunch
+13:00 – 15:00 IST   Kabuni Launch (main event)
+15:00 – 16:00 IST   High tea
+```
 
-Forward the missing fields through `ceo-briefing` end-to-end so the existing UI lights up. No UI changes needed.
+Rendered as a styled mini-table in the HTML email, and as plain bullet lines in the text fallback.
 
-### supabase/functions/ceo-briefing/index.ts
+The "When" highlight row becomes: `Saturday, 7 June · 12:00 – 16:00 IST`
+The "Where" highlight row uses the planner's location, falling back to `Jio Centre, Mumbai` for this event.
 
-1. Extend the `normalizedAzureReposSignal` defaults block (around line 1357) to include:
-   - `contributors_7d: []`
-   - `top_contributor: null`
-   - `prev_window: null`
-   - `wow: null`
-   - `scanned_projects: []`
-   - `scanned_repos: []`
-   
-   This way `normalizeExternalSignal` preserves them when the upstream signal supplies them.
+For all other events, keep the current single-line "When" behaviour but in IST (or whatever timezone the planner stores — for now we standardise on IST since the only live event is Mumbai).
 
-2. Extend the final `parsed.payload.azure_repos_signal` assembly (around lines 3781-3802) to add:
-   - `contributors_7d: (normalizedAzureReposSignal as any).contributors_7d`
-   - `top_contributor: (normalizedAzureReposSignal as any).top_contributor`
-   - `prev_window: (normalizedAzureReposSignal as any).prev_window`
-   - `wow: (normalizedAzureReposSignal as any).wow`
+### 3. Event name
+No code change needed for the title itself — the email already uses `ev.title` from the planner record. Action item for the user (outside this plan): rename the planner entry to **"Kabuni Showcase Mumbai"** if it isn't already, so the email subject/heading reflect it. The matcher already accepts the new name.
 
-3. Deploy `ceo-briefing` after the edit.
+### 4. Greeting copy
+Confirmed-state greeting becomes:
+> "You're confirmed for **Kabuni Showcase Mumbai**, {firstName} 🎉"
 
-### Verification
+Intro line:
+> "We've got you down for **Kabuni Showcase Mumbai** at Jio Centre, Mumbai on Saturday 7 June. Here's the running order for the day."
 
-- Regenerate the Team Briefing as an admin user.
-- Confirm the Azure Repos card now shows: top contributor line, contributor table (commits, lines changed, trend chip per author), and the WoW trend sentence ("Activity is increasing/slowing …").
-- Check `supabase--edge_function_logs` for `azure-repos-api` and `ceo-briefing` to ensure no new errors.
+### 5. Plain-text fallback
+Mirror the same IST schedule as a clean bulleted list so non-HTML clients see the same info.
 
 ## Out of scope
+- No DB migration — purely email rendering.
+- No change to matcher logic, suppression, or cron schedule.
+- No UI changes in the EventRsvps panel (it doesn't show event time).
 
-- The card UI itself (already built).
-- Backend metric computation (already implemented in `azure-repos-api`).
-- Adding new metrics beyond what the user listed (lines, top contributor, WoW, trend, per-developer). Everything they asked for is already produced upstream.
+## Deploy
+After edits: deploy `process-rsvp-emails` and trigger one manual run to verify formatting against a real RSVP thread.

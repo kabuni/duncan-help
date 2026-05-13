@@ -209,7 +209,23 @@ function renderHtmlEmail(opts: {
 </body></html>`;
 }
 
-async function sendGmailReply(token: string, to: string, subject: string, text: string, html: string, threadId?: string, inReplyTo?: string) {
+interface GmailSendResult {
+  ok: boolean;
+  status: number;
+  messageId?: string;
+  threadId?: string;
+  error?: string;
+}
+
+async function sendGmailReply(
+  token: string,
+  to: string,
+  subject: string,
+  text: string,
+  html: string,
+  threadId?: string,
+  inReplyTo?: string,
+): Promise<GmailSendResult> {
   try {
     const raw = encodeRfc2822Html(to, subject, text, html, "Duncan", inReplyTo, inReplyTo);
     const r = await fetch(`${GMAIL_API}/messages/send`, {
@@ -217,8 +233,29 @@ async function sendGmailReply(token: string, to: string, subject: string, text: 
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(threadId ? { raw, threadId } : { raw }),
     });
-    if (!r.ok) console.error("gmail send error", r.status, await r.text());
-  } catch (e) { console.error("gmail send error", e); }
+    const bodyText = await r.text();
+    if (!r.ok) {
+      console.error("[process-rsvp-emails] gmail send FAILED", {
+        to,
+        status: r.status,
+        body: bodyText,
+      });
+      return { ok: false, status: r.status, error: `HTTP ${r.status}: ${bodyText}` };
+    }
+    let parsed: any = {};
+    try { parsed = bodyText ? JSON.parse(bodyText) : {}; } catch { /* ignore */ }
+    console.log("[process-rsvp-emails] gmail send OK", {
+      to,
+      status: r.status,
+      messageId: parsed.id,
+      threadId: parsed.threadId,
+    });
+    return { ok: true, status: r.status, messageId: parsed.id, threadId: parsed.threadId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[process-rsvp-emails] gmail send EXCEPTION", { to, error: msg });
+    return { ok: false, status: 0, error: msg };
+  }
 }
 
 async function aiMatch(emailText: string, candidates: any[]): Promise<{
@@ -496,7 +533,21 @@ Deno.serve(async (req) => {
           ? `Hi ${firstName},\n\nYour RSVP for "${ev.title}"${whereText} on ${whenLabel} is confirmed (${statusUpper}).\n${scheduleText}\nWe have your details on file:\n- Name: ${match.first_name || ""} ${match.last_name || ""}\n- Phone: ${match.phone || "—"}\n- ${orgLabel}: ${match.organisation_name || "—"}\n- Travelling from: ${match.location || "—"}\n\nSee you there.\n\n— Duncan`
           : `Hi ${firstName},\n\nThanks for your RSVP for "${ev.title}"${whereText} on ${whenLabel}. Status recorded: ${statusUpper}.\n${scheduleText}\nTo complete your registration, please reply with the following details:\n${missing.map((f) => `- ${f}`).join("\n")}\n\n— Duncan`;
 
-        await sendGmailReply(token, attendeeEmail, replySubject, textBody, html, threadId, messageIdHdr);
+        const sendResult = await sendGmailReply(token, attendeeEmail, replySubject, textBody, html, threadId, messageIdHdr);
+        const replyUpdate = sendResult.ok
+          ? { reply_sent_at: new Date().toISOString(), reply_message_id: sendResult.messageId ?? null, reply_error: null }
+          : { reply_error: (sendResult.error ?? `HTTP ${sendResult.status}`).slice(0, 2000) };
+        const { error: replyUpdErr } = await admin
+          .from("event_rsvps")
+          .update(replyUpdate)
+          .eq("gmail_message_id", m.id);
+        if (replyUpdErr) {
+          console.error("[process-rsvp-emails] failed to persist reply status", { gmail_message_id: m.id, error: replyUpdErr.message });
+          summary.errors.push(`reply-status-update: ${replyUpdErr.message}`);
+        }
+        if (!sendResult.ok) {
+          summary.errors.push(`gmail-send ${attendeeEmail}: ${sendResult.error}`);
+        }
 
       } catch (e) {
         summary.errors.push(String(e));

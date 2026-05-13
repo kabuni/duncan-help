@@ -90,28 +90,118 @@ async function sendSlackDM(slackId: string, text: string) {
   } catch (e) { console.error("slack dm error", e); }
 }
 
-function encodeRfc2822(to: string, subject: string, body: string, inReplyTo?: string, references?: string): string {
+function escapeHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function encodeRfc2822Html(to: string, subject: string, text: string, html: string, fromName: string, inReplyTo?: string, references?: string): string {
+  const boundary = `=_dunc_${Math.random().toString(36).slice(2)}`;
   const lines = [
+    `From: "${fromName}" <duncan@kabuni.com>`,
     `To: ${to}`,
     `Subject: ${subject}`,
-    'Content-Type: text/plain; charset="UTF-8"',
     'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
   if (inReplyTo) lines.push(`In-Reply-To: ${inReplyTo}`);
   if (references) lines.push(`References: ${references}`);
-  lines.push('', body);
+  lines.push(
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: 7bit',
+    '',
+    text,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    'Content-Transfer-Encoding: 7bit',
+    '',
+    html,
+    '',
+    `--${boundary}--`,
+    ''
+  );
   const raw = lines.join('\r\n');
   return btoa(unescape(encodeURIComponent(raw))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-async function sendGmailReply(token: string, to: string, subject: string, body: string, threadId?: string, inReplyTo?: string) {
+function renderHtmlEmail(opts: {
+  greeting: string;
+  intro: string;
+  highlights?: { label: string; value: string }[];
+  missing?: string[];
+  closing?: string;
+  ctaNote?: string;
+}): string {
+  const { greeting, intro, highlights = [], missing = [], closing, ctaNote } = opts;
+  const highlightRows = highlights
+    .map(
+      (h) => `
+        <tr>
+          <td style="padding:8px 0;color:#6b7280;font-size:13px;width:140px;vertical-align:top;">${escapeHtml(h.label)}</td>
+          <td style="padding:8px 0;color:#111827;font-size:14px;font-weight:500;">${escapeHtml(h.value)}</td>
+        </tr>`
+    )
+    .join("");
+
+  const missingBlock = missing.length
+    ? `
+      <div style="margin:24px 0 8px;padding:16px 18px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;">
+        <div style="font-size:13px;font-weight:600;color:#92400e;margin-bottom:8px;">A few details to complete your RSVP</div>
+        <ul style="margin:0;padding-left:18px;color:#78350f;font-size:13px;line-height:1.7;">
+          ${missing.map((m) => `<li>${escapeHtml(m)}</li>`).join("")}
+        </ul>
+        <div style="margin-top:10px;font-size:12px;color:#92400e;">Just reply to this email with the details above and we'll take care of the rest.</div>
+      </div>`
+    : `
+      <div style="margin:24px 0 8px;padding:16px 18px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;color:#065f46;font-size:14px;">
+        ✅ You're all set — your RSVP is fully confirmed.
+      </div>`;
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f4f6;padding:32px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+        <tr><td style="padding:28px 32px 0;">
+          <div style="display:inline-block;padding:6px 12px;background:#111827;color:#fff;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;">Duncan · Kabuni</div>
+        </td></tr>
+        <tr><td style="padding:20px 32px 8px;">
+          <h1 style="margin:0 0 6px;font-size:22px;line-height:1.3;color:#111827;font-weight:600;">${escapeHtml(greeting)}</h1>
+          <p style="margin:0;color:#4b5563;font-size:15px;line-height:1.6;">${escapeHtml(intro)}</p>
+        </td></tr>
+        ${highlights.length ? `<tr><td style="padding:20px 32px 0;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;">
+            ${highlightRows}
+          </table>
+        </td></tr>` : ""}
+        <tr><td style="padding:8px 32px 0;">${missingBlock}</td></tr>
+        ${ctaNote ? `<tr><td style="padding:12px 32px 0;color:#6b7280;font-size:13px;line-height:1.6;">${escapeHtml(ctaNote)}</td></tr>` : ""}
+        <tr><td style="padding:20px 32px 28px;">
+          <p style="margin:0;color:#4b5563;font-size:14px;line-height:1.6;">${escapeHtml(closing || "See you there.")}</p>
+          <p style="margin:18px 0 0;color:#111827;font-size:14px;font-weight:600;">— Duncan</p>
+          <p style="margin:2px 0 0;color:#9ca3af;font-size:12px;">Operational intelligence · Kabuni</p>
+        </td></tr>
+      </table>
+      <div style="max-width:560px;margin:14px auto 0;color:#9ca3af;font-size:11px;text-align:center;">You're receiving this because you emailed duncan@kabuni.com about an event.</div>
+    </td></tr>
+  </table>
+</body></html>`;
+}
+
+async function sendGmailReply(token: string, to: string, subject: string, text: string, html: string, threadId?: string, inReplyTo?: string) {
   try {
-    const raw = encodeRfc2822(to, subject, body, inReplyTo, inReplyTo);
-    await fetch(`${GMAIL_API}/messages/send`, {
+    const raw = encodeRfc2822Html(to, subject, text, html, "Duncan", inReplyTo, inReplyTo);
+    const r = await fetch(`${GMAIL_API}/messages/send`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(threadId ? { raw, threadId } : { raw }),
     });
+    if (!r.ok) console.error("gmail send error", r.status, await r.text());
   } catch (e) { console.error("gmail send error", e); }
 }
 

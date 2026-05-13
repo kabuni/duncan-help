@@ -210,6 +210,7 @@ export default function KeyEventsDiary() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<Date | null>(null);
+  const [scanningRsvps, setScanningRsvps] = useState(false);
   const [viewTz, setViewTzState] = useState<ViewTz>(() => {
     if (typeof window === "undefined") return "Europe/London";
     return (localStorage.getItem(VIEW_TZ_KEY) as ViewTz | null) || detectDefaultViewTz();

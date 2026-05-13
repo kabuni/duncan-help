@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { useKeyEvents, type KeyEvent, type WorkstreamCard } from "@/hooks/useKeyEvents";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { RefreshCw, Plus, ChevronLeft, ChevronRight, Mail } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";

@@ -416,8 +416,29 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
         }).catch(() => {});
 
-        const when = ev.when ? new Date(ev.when).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/London" }) + " (London time)" : "TBD";
-        const where = ev.location ? ` (${ev.location})` : "";
+        // Format date in IST. No UK time anywhere.
+        const fmtDateIST = (iso: string) =>
+          new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Kolkata" });
+        const fmtTimeIST = (iso: string) =>
+          new Date(iso).toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" });
+
+        const titleLower = (ev.title || "").toLowerCase();
+        const isMumbaiShowcase = titleLower.includes("kabuni showcase mumbai") || titleLower.includes("showcase mumbai");
+
+        // Per-event schedule. Mumbai showcase has a fixed running order in IST.
+        let schedule: { time: string; label: string }[] = [];
+        let whenLabel = ev.when ? `${fmtDateIST(ev.when)} · ${fmtTimeIST(ev.when)} IST` : "TBD";
+        let whereValue = ev.location || "";
+
+        if (isMumbaiShowcase) {
+          schedule = [
+            { time: "12:00 – 13:00 IST", label: "Lunch" },
+            { time: "13:00 – 15:00 IST", label: "Kabuni Launch (main event)" },
+            { time: "15:00 – 16:00 IST", label: "High tea" },
+          ];
+          whenLabel = ev.when ? `${fmtDateIST(ev.when)} · 12:00 – 16:00 IST` : "Saturday, 7 June · 12:00 – 16:00 IST";
+          whereValue = whereValue || "Jio Centre, Mumbai";
+        }
 
         // Required fields and what's missing
         const missing: string[] = [];
@@ -437,30 +458,43 @@ Deno.serve(async (req) => {
 
         const highlights: { label: string; value: string }[] = [
           { label: "Event", value: ev.title },
-          { label: "When", value: when },
+          { label: "When", value: whenLabel },
         ];
-        if (ev.location) highlights.push({ label: "Where", value: ev.location });
+        if (whereValue) highlights.push({ label: "Where", value: whereValue });
         highlights.push({ label: "Status", value: statusUpper });
         if (match.first_name || match.last_name) highlights.push({ label: "Name", value: `${match.first_name || ""} ${match.last_name || ""}`.trim() });
         if (match.phone) highlights.push({ label: "Phone", value: match.phone });
         if (match.organisation_name) highlights.push({ label: orgLabel, value: match.organisation_name });
         if (match.location) highlights.push({ label: "Travelling from", value: match.location });
 
-        const intro = missing.length === 0
-          ? `Your RSVP for "${ev.title}" is fully confirmed. Here's what we have on file.`
-          : `Thanks for your RSVP for "${ev.title}" — your status is recorded as ${statusUpper}. We just need a few more details to complete your registration.`;
+        const intro = isMumbaiShowcase
+          ? (missing.length === 0
+              ? `We've got you down for ${ev.title} at ${whereValue} on ${whenLabel.split(" · ")[0]}. Here's the running order for the day.`
+              : `Thanks for your RSVP for ${ev.title} at ${whereValue} on ${whenLabel.split(" · ")[0]} — your status is recorded as ${statusUpper}. Here's the running order, and we just need a few more details from you.`)
+          : (missing.length === 0
+              ? `Your RSVP for "${ev.title}" is fully confirmed. Here's what we have on file.`
+              : `Thanks for your RSVP for "${ev.title}" — your status is recorded as ${statusUpper}. We just need a few more details to complete your registration.`);
+
+        const greeting = missing.length === 0
+          ? (isMumbaiShowcase ? `You're confirmed for Kabuni Showcase Mumbai, ${firstName} 🎉` : `You're confirmed, ${firstName} 🎉`)
+          : `Thanks, ${firstName} — almost there`;
 
         const html = renderHtmlEmail({
-          greeting: missing.length === 0 ? `You're confirmed, ${firstName} 🎉` : `Thanks, ${firstName} — almost there`,
+          greeting,
           intro,
           highlights,
+          schedule,
           missing,
           closing: missing.length === 0 ? "Looking forward to seeing you there." : "Reply to this email with the missing details and you'll be all set.",
         });
 
+        const scheduleText = schedule.length
+          ? `\nRunning order:\n${schedule.map((s) => `  ${s.time}  —  ${s.label}`).join("\n")}\n`
+          : "";
+        const whereText = whereValue ? ` (${whereValue})` : "";
         const textBody = missing.length === 0
-          ? `Hi ${firstName},\n\nYour RSVP for "${ev.title}"${where} on ${when} is confirmed (${statusUpper}).\n\nWe have your details on file:\n- Name: ${match.first_name || ""} ${match.last_name || ""}\n- Phone: ${match.phone || "—"}\n- ${orgLabel}: ${match.organisation_name || "—"}\n- Travelling from: ${match.location || "—"}\n\nSee you there.\n\n— Duncan`
-          : `Hi ${firstName},\n\nThanks for your RSVP for "${ev.title}"${where} on ${when}. Status recorded: ${statusUpper}.\n\nTo complete your registration, please reply with the following details:\n${missing.map((f) => `- ${f}`).join("\n")}\n\n— Duncan`;
+          ? `Hi ${firstName},\n\nYour RSVP for "${ev.title}"${whereText} on ${whenLabel} is confirmed (${statusUpper}).\n${scheduleText}\nWe have your details on file:\n- Name: ${match.first_name || ""} ${match.last_name || ""}\n- Phone: ${match.phone || "—"}\n- ${orgLabel}: ${match.organisation_name || "—"}\n- Travelling from: ${match.location || "—"}\n\nSee you there.\n\n— Duncan`
+          : `Hi ${firstName},\n\nThanks for your RSVP for "${ev.title}"${whereText} on ${whenLabel}. Status recorded: ${statusUpper}.\n${scheduleText}\nTo complete your registration, please reply with the following details:\n${missing.map((f) => `- ${f}`).join("\n")}\n\n— Duncan`;
 
         await sendGmailReply(token, attendeeEmail, replySubject, textBody, html, threadId, messageIdHdr);
 

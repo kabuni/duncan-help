@@ -533,7 +533,21 @@ Deno.serve(async (req) => {
           ? `Hi ${firstName},\n\nYour RSVP for "${ev.title}"${whereText} on ${whenLabel} is confirmed (${statusUpper}).\n${scheduleText}\nWe have your details on file:\n- Name: ${match.first_name || ""} ${match.last_name || ""}\n- Phone: ${match.phone || "—"}\n- ${orgLabel}: ${match.organisation_name || "—"}\n- Travelling from: ${match.location || "—"}\n\nSee you there.\n\n— Duncan`
           : `Hi ${firstName},\n\nThanks for your RSVP for "${ev.title}"${whereText} on ${whenLabel}. Status recorded: ${statusUpper}.\n${scheduleText}\nTo complete your registration, please reply with the following details:\n${missing.map((f) => `- ${f}`).join("\n")}\n\n— Duncan`;
 
-        await sendGmailReply(token, attendeeEmail, replySubject, textBody, html, threadId, messageIdHdr);
+        const sendResult = await sendGmailReply(token, attendeeEmail, replySubject, textBody, html, threadId, messageIdHdr);
+        const replyUpdate = sendResult.ok
+          ? { reply_sent_at: new Date().toISOString(), reply_message_id: sendResult.messageId ?? null, reply_error: null }
+          : { reply_error: (sendResult.error ?? `HTTP ${sendResult.status}`).slice(0, 2000) };
+        const { error: replyUpdErr } = await admin
+          .from("event_rsvps")
+          .update(replyUpdate)
+          .eq("gmail_message_id", m.id);
+        if (replyUpdErr) {
+          console.error("[process-rsvp-emails] failed to persist reply status", { gmail_message_id: m.id, error: replyUpdErr.message });
+          summary.errors.push(`reply-status-update: ${replyUpdErr.message}`);
+        }
+        if (!sendResult.ok) {
+          summary.errors.push(`gmail-send ${attendeeEmail}: ${sendResult.error}`);
+        }
 
       } catch (e) {
         summary.errors.push(String(e));

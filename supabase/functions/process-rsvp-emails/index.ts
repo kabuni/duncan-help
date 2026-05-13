@@ -209,7 +209,23 @@ function renderHtmlEmail(opts: {
 </body></html>`;
 }
 
-async function sendGmailReply(token: string, to: string, subject: string, text: string, html: string, threadId?: string, inReplyTo?: string) {
+interface GmailSendResult {
+  ok: boolean;
+  status: number;
+  messageId?: string;
+  threadId?: string;
+  error?: string;
+}
+
+async function sendGmailReply(
+  token: string,
+  to: string,
+  subject: string,
+  text: string,
+  html: string,
+  threadId?: string,
+  inReplyTo?: string,
+): Promise<GmailSendResult> {
   try {
     const raw = encodeRfc2822Html(to, subject, text, html, "Duncan", inReplyTo, inReplyTo);
     const r = await fetch(`${GMAIL_API}/messages/send`, {
@@ -217,8 +233,29 @@ async function sendGmailReply(token: string, to: string, subject: string, text: 
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(threadId ? { raw, threadId } : { raw }),
     });
-    if (!r.ok) console.error("gmail send error", r.status, await r.text());
-  } catch (e) { console.error("gmail send error", e); }
+    const bodyText = await r.text();
+    if (!r.ok) {
+      console.error("[process-rsvp-emails] gmail send FAILED", {
+        to,
+        status: r.status,
+        body: bodyText,
+      });
+      return { ok: false, status: r.status, error: `HTTP ${r.status}: ${bodyText}` };
+    }
+    let parsed: any = {};
+    try { parsed = bodyText ? JSON.parse(bodyText) : {}; } catch { /* ignore */ }
+    console.log("[process-rsvp-emails] gmail send OK", {
+      to,
+      status: r.status,
+      messageId: parsed.id,
+      threadId: parsed.threadId,
+    });
+    return { ok: true, status: r.status, messageId: parsed.id, threadId: parsed.threadId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[process-rsvp-emails] gmail send EXCEPTION", { to, error: msg });
+    return { ok: false, status: 0, error: msg };
+  }
 }
 
 async function aiMatch(emailText: string, candidates: any[]): Promise<{

@@ -415,10 +415,38 @@ Deno.serve(async (req) => {
 
         // Email reply: confirmation or request for missing details
         const replySubject = subjectHdr.toLowerCase().startsWith("re:") ? subjectHdr : `Re: ${subjectHdr}`;
-        const replyBody = missing.length === 0
-          ? `Hi ${match.first_name || senderName || "there"},\n\nYour RSVP for "${ev.title}"${where} on ${when} is confirmed (${match.status.toUpperCase()}).\n\nWe have your details on file:\n- Name: ${match.first_name} ${match.last_name}\n- Phone: ${match.phone}\n- ${match.organisation_type === "school" ? "School" : match.organisation_type === "media" ? "Media" : "Company"}: ${match.organisation_name}\n- Travelling from: ${match.location}\n\nSee you there.\n\n— Duncan`
-          : `Hi ${match.first_name || senderName || "there"},\n\nThanks for your RSVP for "${ev.title}"${where} on ${when}. Status recorded: ${match.status.toUpperCase()}.\n\nTo complete your registration, please reply with the following details:\n${missing.map((f) => `- ${f}`).join("\n")}\n\n— Duncan`;
-        await sendGmailReply(token, attendeeEmail, replySubject, replyBody, threadId, messageIdHdr);
+        const firstName = match.first_name || senderName?.split(" ")[0] || "there";
+        const statusUpper = match.status.toUpperCase();
+        const orgLabel = match.organisation_type === "school" ? "School" : match.organisation_type === "media" ? "Media" : "Company";
+
+        const highlights: { label: string; value: string }[] = [
+          { label: "Event", value: ev.title },
+          { label: "When", value: when },
+        ];
+        if (ev.location) highlights.push({ label: "Where", value: ev.location });
+        highlights.push({ label: "Status", value: statusUpper });
+        if (match.first_name || match.last_name) highlights.push({ label: "Name", value: `${match.first_name || ""} ${match.last_name || ""}`.trim() });
+        if (match.phone) highlights.push({ label: "Phone", value: match.phone });
+        if (match.organisation_name) highlights.push({ label: orgLabel, value: match.organisation_name });
+        if (match.location) highlights.push({ label: "Travelling from", value: match.location });
+
+        const intro = missing.length === 0
+          ? `Your RSVP for "${ev.title}" is fully confirmed. Here's what we have on file.`
+          : `Thanks for your RSVP for "${ev.title}" — your status is recorded as ${statusUpper}. We just need a few more details to complete your registration.`;
+
+        const html = renderHtmlEmail({
+          greeting: missing.length === 0 ? `You're confirmed, ${firstName} 🎉` : `Thanks, ${firstName} — almost there`,
+          intro,
+          highlights,
+          missing,
+          closing: missing.length === 0 ? "Looking forward to seeing you there." : "Reply to this email with the missing details and you'll be all set.",
+        });
+
+        const textBody = missing.length === 0
+          ? `Hi ${firstName},\n\nYour RSVP for "${ev.title}"${where} on ${when} is confirmed (${statusUpper}).\n\nWe have your details on file:\n- Name: ${match.first_name || ""} ${match.last_name || ""}\n- Phone: ${match.phone || "—"}\n- ${orgLabel}: ${match.organisation_name || "—"}\n- Travelling from: ${match.location || "—"}\n\nSee you there.\n\n— Duncan`
+          : `Hi ${firstName},\n\nThanks for your RSVP for "${ev.title}"${where} on ${when}. Status recorded: ${statusUpper}.\n\nTo complete your registration, please reply with the following details:\n${missing.map((f) => `- ${f}`).join("\n")}\n\n— Duncan`;
+
+        await sendGmailReply(token, attendeeEmail, replySubject, textBody, html, threadId, messageIdHdr);
 
       } catch (e) {
         summary.errors.push(String(e));

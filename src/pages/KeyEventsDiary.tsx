@@ -13,8 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import { useKeyEvents, type KeyEvent, type WorkstreamCard } from "@/hooks/useKeyEvents";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { RefreshCw, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { RefreshCw, Plus, ChevronLeft, ChevronRight, Mail } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
@@ -210,6 +211,7 @@ export default function KeyEventsDiary() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<Date | null>(null);
+  const [scanningRsvps, setScanningRsvps] = useState(false);
   const [viewTz, setViewTzState] = useState<ViewTz>(() => {
     if (typeof window === "undefined") return "Europe/London";
     return (localStorage.getItem(VIEW_TZ_KEY) as ViewTz | null) || detectDefaultViewTz();
@@ -287,6 +289,25 @@ export default function KeyEventsDiary() {
   function handleSelectItem(item: CalItem) {
     setSelectedEvent(item.resource.data);
     setDrawerOpen(true);
+  }
+
+  async function scanRsvps() {
+    setScanningRsvps(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("process-rsvp-emails");
+      if (error) throw error;
+      const summary = data as { scanned?: number; rsvps?: number; skipped?: number; errors?: string[] } | null;
+      if (summary?.errors && summary.errors.length > 0) {
+        toast.warning(`RSVP scan completed with ${summary.errors.length} error(s)`);
+        console.warn("RSVP scan errors:", summary.errors);
+      } else {
+        toast.success(`RSVP scan complete — ${summary?.rsvps ?? 0} new, ${summary?.skipped ?? 0} skipped`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "RSVP scan failed");
+    } finally {
+      setScanningRsvps(false);
+    }
   }
 
   const eventPropGetter = (item: CalItem) => {
@@ -406,6 +427,18 @@ export default function KeyEventsDiary() {
                 <Button className="flex-1 sm:flex-none whitespace-nowrap" variant="outline" size="sm" onClick={sync} disabled={syncing}>
                   <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", syncing && "animate-spin")} />
                   {syncing ? "Syncing…" : "Sync"}
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  className="flex-1 sm:flex-none whitespace-nowrap"
+                  variant="outline"
+                  size="sm"
+                  onClick={scanRsvps}
+                  disabled={scanningRsvps}
+                >
+                  <Mail className={cn("h-3.5 w-3.5 mr-1.5", scanningRsvps && "animate-pulse")} />
+                  {scanningRsvps ? "Scanning RSVPs…" : "Scan RSVPs"}
                 </Button>
               )}
               <Button className="flex-1 sm:flex-none whitespace-nowrap" size="sm" variant="outline" onClick={() => { setAddDate(new Date()); setAddOpen(true); }}>

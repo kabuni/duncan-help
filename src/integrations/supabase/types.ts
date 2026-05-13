@@ -673,6 +673,9 @@ export type Database = {
           organisation_type: string | null
           phone: string | null
           profile_id: string | null
+          reply_error: string | null
+          reply_message_id: string | null
+          reply_sent_at: string | null
           responded_at: string
           source: string
           state: string | null
@@ -693,6 +696,9 @@ export type Database = {
           organisation_type?: string | null
           phone?: string | null
           profile_id?: string | null
+          reply_error?: string | null
+          reply_message_id?: string | null
+          reply_sent_at?: string | null
           responded_at?: string
           source?: string
           state?: string | null
@@ -713,6 +719,9 @@ export type Database = {
           organisation_type?: string | null
           phone?: string | null
           profile_id?: string | null
+          reply_error?: string | null
+          reply_message_id?: string | null
+          reply_sent_at?: string | null
           responded_at?: string
           source?: string
           state?: string | null

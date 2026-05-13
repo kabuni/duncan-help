@@ -132,10 +132,25 @@ function renderHtmlEmail(opts: {
   greeting: string;
   intro: string;
   highlights?: { label: string; value: string }[];
+  schedule?: { time: string; label: string }[];
   missing?: string[];
   closing?: string;
   ctaNote?: string;
 }): string {
+  const { schedule = [] } = opts;
+  const scheduleBlock = schedule.length
+    ? `
+      <div style="margin:20px 0 0;padding:18px 20px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
+        <div style="font-size:11px;font-weight:600;color:#6b7280;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:12px;">Running order</div>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          ${schedule.map((s, i) => `
+            <tr>
+              <td style="padding:${i === 0 ? "0" : "10px"} 0 ${i === schedule.length - 1 ? "0" : "10px"};border-top:${i === 0 ? "none" : "1px solid #e5e7eb"};color:#111827;font-size:13px;font-weight:600;width:140px;vertical-align:top;font-variant-numeric:tabular-nums;">${escapeHtml(s.time)}</td>
+              <td style="padding:${i === 0 ? "0" : "10px"} 0 ${i === schedule.length - 1 ? "0" : "10px"};border-top:${i === 0 ? "none" : "1px solid #e5e7eb"};color:#374151;font-size:14px;">${escapeHtml(s.label)}</td>
+            </tr>`).join("")}
+        </table>
+      </div>`
+    : "";
   const { greeting, intro, highlights = [], missing = [], closing, ctaNote } = opts;
   const highlightRows = highlights
     .map(

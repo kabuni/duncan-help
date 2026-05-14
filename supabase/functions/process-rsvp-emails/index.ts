@@ -297,7 +297,9 @@ STRICT RULES — set event_id to null and confidence < 0.5 unless ALL of these a
 
 Discussion, planning, logistics, internal calendar invites, or generic greetings are NOT RSVPs — return null.
 
-Match events by name/date/location ONLY. Never reject an event because of its country. Always normalise phone to +<country code><number> with no spaces. Map school/college/university => school; news/tv/journalist/press => media; brand/corp/firm/startup => company.`;
+Match events by name/date/location ONLY. Never reject an event because of its country. Always normalise phone to +<country code><number> with no spaces. Map school/college/university => school; news/tv/journalist/press => media; brand/corp/firm/startup => company.
+
+LITERAL EXTRACTION ONLY: Set first_name, last_name, phone, email, organisation_type, organisation_name, and location to null UNLESS the attendee literally states the value in this email (signature blocks count). NEVER infer or guess any of these values from the event venue, the subject line, the sender's email domain, the event location, or general context. If the attendee did not write it, return null for that field — do not fill in plausible defaults. The Mumbai venue, the event city, or where the event is held must NEVER be used to populate "location" (which is where the attendee is travelling FROM).`;
   const user = `Email:\n${emailText.slice(0, 4000)}\n\nCandidate events (JSON, with ISO start dates):\n${JSON.stringify(candidates)}`;
   try {
     const r = await fetch("https://api.openai.com/v1/chat/completions", {

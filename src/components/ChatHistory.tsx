@@ -104,7 +104,7 @@ const ChatHistory = ({
               onNewChat();
               onMobileClose?.();
             }}
-            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-primary hover:bg-primary/5 transition-colors mb-1"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-primary hover:bg-primary/5 transition-colors mb-2"
           >
             <Plus className="h-3.5 w-3.5" />
             New Chat
@@ -117,9 +117,11 @@ const ChatHistory = ({
           ) : (
             groups
               .filter((g) => g.items.length > 0)
-              .map((group) => (
-                <div key={group.label} className="mb-2">
-                  <p className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/60">
+              .map((group, groupIdx) => {
+                const isOlder = groupIdx >= 2;
+                return (
+                <div key={group.label} className="mb-3">
+                  <p className="px-3 pt-2 pb-1.5 text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">
                     {group.label}
                   </p>
                   {group.items.map((chat) => {
@@ -128,10 +130,13 @@ const ChatHistory = ({
                       <div
                         key={chat.id}
                         className={cn(
-                          "group flex items-center gap-1 rounded-md px-2 py-1.5 text-xs transition-colors",
+                          "group flex items-center gap-1 rounded-md px-2 py-2 text-xs transition-colors",
                           activeChatId === chat.id && !isEditing
                             ? "bg-primary/10 text-primary font-medium"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                            : cn(
+                                "hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+                                isOlder ? "text-sidebar-foreground/60" : "text-sidebar-foreground"
+                              ),
                           !isEditing && "cursor-pointer"
                         )}
                       >
@@ -223,7 +228,9 @@ const ChatHistory = ({
                     );
                   })}
                 </div>
-              ))
+                );
+              })
+
           )}
         </div>
       )}

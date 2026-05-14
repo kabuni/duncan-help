@@ -133,7 +133,7 @@ export function EventRsvps({ eventId }: { eventId: string }) {
                       value={r.organisation_name}
                       icon={<Building2 className="h-3 w-3" />}
                     />
-                    <Detail label="State" value={r.state} icon={<MapPin className="h-3 w-3" />} />
+                    <Detail label="City / Region" value={r.state} icon={<MapPin className="h-3 w-3" />} />
                     {missing.length > 0 && (
                       <div className="col-span-2 mt-1 text-[11px] text-amber-600 dark:text-amber-400">
                         Awaiting: {missing.map((f) => f.replace("_", " ")).join(", ")} (Duncan has emailed the attendee for these)

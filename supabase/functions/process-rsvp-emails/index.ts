@@ -362,9 +362,13 @@ Deno.serve(async (req) => {
 
     for (const m of messages) {
       try {
-        // Skip if already processed
-        const { data: existing } = await admin.from("event_rsvps").select("id").eq("gmail_message_id", m.id).maybeSingle();
-        if (existing) { summary.skipped++; continue; }
+        // Skip if this Gmail message has already been processed (dedup ledger)
+        const { data: alreadyProcessed } = await admin
+          .from("event_rsvp_messages")
+          .select("id")
+          .eq("gmail_message_id", m.id)
+          .maybeSingle();
+        if (alreadyProcessed) { summary.skipped++; continue; }
 
         const msgRes = await fetch(`${GMAIL_API}/messages/${m.id}?format=full`, { headers: { Authorization: `Bearer ${token}` } });
         if (!msgRes.ok) continue;

@@ -1,0 +1,1 @@
+UPDATE public.event_rsvps SET state = 'Bangalore' WHERE id = '545e6623-950d-4e79-bf4b-4a5b46a841f1';

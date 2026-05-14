@@ -97,6 +97,15 @@ const Sidebar = ({
     onMobileClose?.();
   };
 
+  const navItemClass = ({ isActive }: { isActive: boolean }) =>
+    cn(
+      "group relative flex items-center gap-3 rounded-md pl-4 pr-3 py-2.5 text-sm font-medium transition-all duration-200",
+      "before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[2px] before:rounded-r-full before:bg-primary before:transition-all before:duration-200",
+      isActive
+        ? "bg-primary/10 text-primary before:opacity-100 before:scale-y-100"
+        : "text-sidebar-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground before:opacity-0 before:scale-y-50 [&_svg]:text-muted-foreground hover:[&_svg]:text-foreground"
+    );
+
   const sidebarContent = (
     <aside className={cn(
       "flex h-full w-64 flex-col border-r border-border bg-sidebar",

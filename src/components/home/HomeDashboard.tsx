@@ -55,6 +55,27 @@ const Stat = ({ label, value, hint }: { label: string; value: React.ReactNode; h
   </div>
 );
 
+const SHOWCASE_EVENT_ID = "e942181b-c52a-42a4-a0c2-1e2fdf499ed7";
+
+function RsvpSummaryTile() {
+  const { data, loading } = useRsvpStats(SHOWCASE_EVENT_ID);
+  if (loading) return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
+  const s = data ?? { total: 0, confirmed: 0, maybe: 0, declined: 0, missingInfo: 0 };
+  return (
+    <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+      <Stat label="Total Registrations" value={s.total} />
+      <Stat label="Confirmed" value={s.confirmed} />
+      <Stat label="Maybe" value={s.maybe} />
+      <Stat label="Declined" value={s.declined} />
+      <Stat
+        label="Missing Information"
+        value={s.missingInfo}
+        hint={s.missingInfo > 0 ? "Duncan has emailed attendees" : undefined}
+      />
+    </div>
+  );
+}
+
 export const HomeDashboard = ({ userName }: { userName: string }) => {
   const navigate = useNavigate();
   const ga = useGAHomeSummary();

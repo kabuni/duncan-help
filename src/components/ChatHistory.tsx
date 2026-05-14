@@ -228,7 +228,9 @@ const ChatHistory = ({
                     );
                   })}
                 </div>
-              ))
+                );
+              })
+
           )}
         </div>
       )}

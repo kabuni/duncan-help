@@ -658,6 +658,50 @@ export type Database = {
         }
         Relationships: []
       }
+      event_rsvp_messages: {
+        Row: {
+          created_at: string
+          gmail_message_id: string
+          gmail_thread_id: string | null
+          id: string
+          outcome: string | null
+          processed_at: string
+          rsvp_id: string | null
+          sender_email: string | null
+          subject: string | null
+        }
+        Insert: {
+          created_at?: string
+          gmail_message_id: string
+          gmail_thread_id?: string | null
+          id?: string
+          outcome?: string | null
+          processed_at?: string
+          rsvp_id?: string | null
+          sender_email?: string | null
+          subject?: string | null
+        }
+        Update: {
+          created_at?: string
+          gmail_message_id?: string
+          gmail_thread_id?: string | null
+          id?: string
+          outcome?: string | null
+          processed_at?: string
+          rsvp_id?: string | null
+          sender_email?: string | null
+          subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_rsvp_messages_rsvp_id_fkey"
+            columns: ["rsvp_id"]
+            isOneToOne: false
+            referencedRelation: "event_rsvps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_rsvps: {
         Row: {
           created_at: string
@@ -665,8 +709,11 @@ export type Database = {
           email: string
           event_id: string
           first_name: string | null
+          follow_up_count: number
           gmail_message_id: string | null
+          gmail_thread_id: string | null
           id: string
+          last_inbound_message_id: string | null
           last_name: string | null
           notes: string | null
           organisation_name: string | null
@@ -688,8 +735,11 @@ export type Database = {
           email: string
           event_id: string
           first_name?: string | null
+          follow_up_count?: number
           gmail_message_id?: string | null
+          gmail_thread_id?: string | null
           id?: string
+          last_inbound_message_id?: string | null
           last_name?: string | null
           notes?: string | null
           organisation_name?: string | null
@@ -711,8 +761,11 @@ export type Database = {
           email?: string
           event_id?: string
           first_name?: string | null
+          follow_up_count?: number
           gmail_message_id?: string | null
+          gmail_thread_id?: string | null
           id?: string
+          last_inbound_message_id?: string | null
           last_name?: string | null
           notes?: string | null
           organisation_name?: string | null

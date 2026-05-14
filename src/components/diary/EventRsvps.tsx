@@ -87,7 +87,7 @@ export function EventRsvps({ eventId }: { eventId: string }) {
       </div>
       {rsvps.length === 0 ? (
         <div className="text-xs text-muted-foreground border border-dashed border-border rounded-md p-3">
-          No RSVPs yet. Attendees email <span className="font-mono">duncan@kabuni.com</span> with their first name, last name, phone (with country code), email, school / media / company name, and Indian state.
+          No RSVPs yet. Attendees email <span className="font-mono">duncan@kabuni.com</span> with their first name, last name, phone (with country code), email, school / media / company name, and city / region.
         </div>
       ) : (
         <ul className="flex flex-col gap-1.5">
@@ -133,7 +133,7 @@ export function EventRsvps({ eventId }: { eventId: string }) {
                       value={r.organisation_name}
                       icon={<Building2 className="h-3 w-3" />}
                     />
-                    <Detail label="State" value={r.state} icon={<MapPin className="h-3 w-3" />} />
+                    <Detail label="City / Region" value={r.state} icon={<MapPin className="h-3 w-3" />} />
                     {missing.length > 0 && (
                       <div className="col-span-2 mt-1 text-[11px] text-amber-600 dark:text-amber-400">
                         Awaiting: {missing.map((f) => f.replace("_", " ")).join(", ")} (Duncan has emailed the attendee for these)

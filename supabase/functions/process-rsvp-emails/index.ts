@@ -531,7 +531,7 @@ Deno.serve(async (req) => {
           .select("first_name,last_name,phone,email,organisation_type,organisation_name,state,status")
           .eq("id", rsvpId)
           .single();
-        const r = rsvpRow || {};
+        const r: any = rsvpRow || {};
 
         // Mark as read
         await fetch(`${GMAIL_API}/messages/${m.id}/modify`, {

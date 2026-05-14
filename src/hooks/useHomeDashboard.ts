@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -206,4 +207,68 @@ export function useProjectsStats() {
       };
     },
   });
+}
+
+export type RsvpStats = {
+  total: number;
+  confirmed: number;
+  maybe: number;
+  declined: number;
+  missingInfo: number;
+};
+
+const RSVP_FIELDS = ["first_name", "last_name", "phone", "email", "organisation_type", "organisation_name", "state"] as const;
+
+export function useRsvpStats(eventId: string) {
+  const [data, setData] = useState<RsvpStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const compute = useCallback((rows: any[]): RsvpStats => {
+    const total = rows.length;
+    const confirmed = rows.filter((r) => r.status === "yes").length;
+    const maybe = rows.filter((r) => r.status === "maybe").length;
+    const declined = rows.filter((r) => r.status === "no").length;
+    const missingInfo = rows.filter((r) =>
+      RSVP_FIELDS.some((f) => !r[f] || String(r[f]).trim().length === 0)
+    ).length;
+    return { total, confirmed, maybe, declined, missingInfo };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      setLoading(true);
+      const { data: rows } = await supabase
+        .from("event_rsvps" as any)
+        .select("*")
+        .eq("event_id", eventId);
+      if (mounted) {
+        setData(compute((rows as any[]) || []));
+        setLoading(false);
+      }
+    };
+    load();
+
+    const channel = supabase
+      .channel(`home-rsvps-${eventId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "event_rsvps", filter: `event_id=eq.${eventId}` },
+        async () => {
+          const { data: rows } = await supabase
+            .from("event_rsvps" as any)
+            .select("*")
+            .eq("event_id", eventId);
+          if (mounted) setData(compute((rows as any[]) || []));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [eventId, compute]);
+
+  return { data, loading };
 }

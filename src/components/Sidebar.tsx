@@ -141,187 +141,123 @@ const Sidebar = ({
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 min-h-0 overflow-y-auto space-y-1 px-3 py-4">
-        <RouterNavLink
-          to="/"
-          end
-          onClick={() => onMobileClose?.()}
-          className={({ isActive }) =>
-            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
-              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )
-          }
-        >
-          <LayoutDashboard className="h-4 w-4" />
-          Dashboard
-        </RouterNavLink>
-
-        <RouterNavLink
-          to="/projects"
-          onClick={() => onMobileClose?.()}
-          className={({ isActive }) =>
-            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
-              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )
-          }
-        >
-          <Layers className="h-4 w-4" />
-          Projects
-        </RouterNavLink>
-
-        <RouterNavLink
-          to="/workstreams"
-          onClick={() => onMobileClose?.()}
-          className={({ isActive }) =>
-            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
-              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )
-          }
-        >
-          <LayoutDashboard className="h-4 w-4" />
-          Workstreams
-        </RouterNavLink>
-        <RouterNavLink
-          to="/diary"
-          onClick={() => onMobileClose?.()}
-          className={({ isActive }) =>
-            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
-              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )
-          }
-        >
-          <Calendar className="h-4 w-4" />
-          Planner
-        </RouterNavLink>
-
-        <RouterNavLink
-          to="/approvals"
-          onClick={() => onMobileClose?.()}
-          className={({ isActive }) =>
-            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
-              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )
-          }
-        >
-          <Inbox className="h-4 w-4" />
-          <span className="flex-1">Approvals</span>
-          {pendingApprovals > 0 && (
-            <span className="ml-auto rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
-              {pendingApprovals}
-            </span>
-          )}
-        </RouterNavLink>
-
-        <RouterNavLink
-          to="/operations"
-          onClick={() => onMobileClose?.()}
-          className={({ isActive }) =>
-            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
-              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )
-          }
-        >
-          <GitBranch className="h-4 w-4" />
-          Operations
-        </RouterNavLink>
-
-        <RouterNavLink
-          to="/purchase-orders"
-          onClick={() => onMobileClose?.()}
-          className={({ isActive }) =>
-            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
-              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )
-          }
-        >
-          <Receipt className="h-4 w-4" />
-          Authorisation Requests
-        </RouterNavLink>
-
-        {canViewBriefing(user?.email) && (
-          <RouterNavLink
-            to="/team-briefing"
-            onClick={() => onMobileClose?.()}
-            className={({ isActive }) =>
-              cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
-                isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              )
-            }
-          >
-            <Crown className="h-4 w-4" />
-            Team Briefing
+      <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4">
+        <div className="space-y-0.5">
+          <RouterNavLink to="/" end onClick={() => onMobileClose?.()} className={navItemClass}>
+            <LayoutDashboard className="h-4 w-4 transition-colors" />
+            Dashboard
           </RouterNavLink>
-        )}
 
+          <RouterNavLink to="/projects" onClick={() => onMobileClose?.()} className={navItemClass}>
+            <Layers className="h-4 w-4 transition-colors" />
+            Projects
+          </RouterNavLink>
 
-        <div>
-          <button
-            onClick={() => setIntegrationsOpen(!integrationsOpen)}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
-              "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          <RouterNavLink to="/workstreams" onClick={() => onMobileClose?.()} className={navItemClass}>
+            <LayoutDashboard className="h-4 w-4 transition-colors" />
+            Workstreams
+          </RouterNavLink>
+
+          <RouterNavLink to="/diary" onClick={() => onMobileClose?.()} className={navItemClass}>
+            <Calendar className="h-4 w-4 transition-colors" />
+            Planner
+          </RouterNavLink>
+
+          <RouterNavLink to="/approvals" onClick={() => onMobileClose?.()} className={navItemClass}>
+            <Inbox className="h-4 w-4 transition-colors" />
+            <span className="flex-1">Approvals</span>
+            {pendingApprovals > 0 && (
+              <span className="ml-auto rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
+                {pendingApprovals}
+              </span>
             )}
-          >
-            <Plug className="h-4 w-4" />
-            <span className="flex-1 text-left">Integrations</span>
-            <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform duration-200", integrationsOpen && "rotate-180")} />
-          </button>
-          {integrationsOpen && (
-            <div className="ml-4 mt-1 space-y-0.5 border-l border-border pl-3">
-              {connectedApps.length === 0 ? (
-                <p className="px-3 py-2 text-[11px] text-muted-foreground">No apps connected</p>
-              ) : (
-                connectedApps.map(id => {
-                  const meta = integrationMeta[id];
-                  if (!meta) return null;
-                  const Icon = meta.icon;
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => handleNavigate("/integrations")}
-                      className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                    >
-                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="flex-1 text-left truncate">{meta.label}</span>
-                      <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
-                    </button>
-                  );
-                })
-              )}
-              <button
-                onClick={() => handleNavigate("/integrations")}
-                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-[11px] font-medium text-primary hover:bg-primary/5 transition-colors"
-              >
-                Manage all →
-              </button>
-            </div>
+          </RouterNavLink>
+
+          <RouterNavLink to="/operations" onClick={() => onMobileClose?.()} className={navItemClass}>
+            <GitBranch className="h-4 w-4 transition-colors" />
+            Operations
+          </RouterNavLink>
+
+          <RouterNavLink to="/purchase-orders" onClick={() => onMobileClose?.()} className={navItemClass}>
+            <Receipt className="h-4 w-4 transition-colors" />
+            Authorisation Requests
+          </RouterNavLink>
+
+          {canViewBriefing(user?.email) && (
+            <RouterNavLink to="/team-briefing" onClick={() => onMobileClose?.()} className={navItemClass}>
+              <Crown className="h-4 w-4 transition-colors" />
+              Team Briefing
+            </RouterNavLink>
           )}
+
+          <div>
+            <button
+              onClick={() => setIntegrationsOpen(!integrationsOpen)}
+              className="group flex w-full items-center gap-3 rounded-md pl-4 pr-3 py-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground transition-all duration-200 [&_svg]:text-muted-foreground hover:[&_svg]:text-foreground"
+            >
+              <Plug className="h-4 w-4 transition-colors" />
+              <span className="flex-1 text-left">Integrations</span>
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", integrationsOpen && "rotate-180")} />
+            </button>
+            {integrationsOpen && (
+              <div className="ml-4 mt-1 space-y-0.5 border-l border-border pl-3">
+                {connectedApps.length === 0 ? (
+                  <p className="px-3 py-2 text-[11px] text-muted-foreground">No apps connected</p>
+                ) : (
+                  connectedApps.map(id => {
+                    const meta = integrationMeta[id];
+                    if (!meta) return null;
+                    const Icon = meta.icon;
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => handleNavigate("/integrations")}
+                        className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground transition-colors"
+                      >
+                        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="flex-1 text-left truncate">{meta.label}</span>
+                        <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                      </button>
+                    );
+                  })
+                )}
+                <button
+                  onClick={() => handleNavigate("/integrations")}
+                  className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-[11px] font-medium text-primary hover:bg-primary/5 transition-colors"
+                >
+                  Manage all →
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Chat History */}
-        <ChatHistory
-          chats={chatOps.chats}
-          activeChatId={chatOps.activeChatId}
-          onSelectChat={(id) => {
-            chatOps.setActiveChatId(id);
-            onSelectChat?.(id);
-            navigate("/");
-            onMobileClose?.();
-          }}
-          onNewChat={() => {
-            chatOps.startNewChat();
-            onNewChat?.();
-            navigate("/");
-            onMobileClose?.();
-          }}
-          onDeleteChat={chatOps.deleteChat}
-          onRenameChat={chatOps.updateTitle}
-          onMobileClose={onMobileClose}
-        />
+        {/* Chat History — separated from main nav */}
+        <div className="mt-6 pt-4 border-t border-border/60">
+          <ChatHistory
+            chats={chatOps.chats}
+            activeChatId={chatOps.activeChatId}
+            onSelectChat={(id) => {
+              chatOps.setActiveChatId(id);
+              onSelectChat?.(id);
+              navigate("/");
+              onMobileClose?.();
+            }}
+            onNewChat={() => {
+              chatOps.startNewChat();
+              onNewChat?.();
+              navigate("/");
+              onMobileClose?.();
+            }}
+            onDeleteChat={chatOps.deleteChat}
+            onRenameChat={chatOps.updateTitle}
+            onMobileClose={onMobileClose}
+          />
+        </div>
       </nav>
 
       {/* User */}
-      <div className="border-t border-border px-4 py-4 space-y-2">
+      <div className="border-t border-border bg-sidebar-accent/20 px-4 py-4 space-y-2">
         {user && (
           <div className="flex items-center justify-between">
             <div className="min-w-0">

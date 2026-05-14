@@ -5719,12 +5719,16 @@ Format as a natural, readable summary with clear sections. If a section has no d
                 .maybeSingle();
 
               if (existing) {
+                const newPrompt = existing.prompt_tokens + estimatedPromptTokens;
+                const newCompletion = existing.completion_tokens + estimatedCompletionTokens;
                 await supabaseAdmin
                   .from("token_usage")
                   .update({
-                    prompt_tokens: existing.prompt_tokens + estimatedPromptTokens,
-                    completion_tokens: existing.completion_tokens + estimatedCompletionTokens,
-                    total_tokens: existing.total_tokens + estimatedTotal,
+                    prompt_tokens: newPrompt,
+                    completion_tokens: newCompletion,
+                    // Always derive total from prompt + completion to preserve the
+                    // arithmetic invariant enforced by the DB CHECK constraint.
+                    total_tokens: newPrompt + newCompletion,
                     request_count: existing.request_count + 1,
                   })
                   .eq("id", existing.id);
@@ -5736,7 +5740,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
                     usage_date: today,
                     prompt_tokens: estimatedPromptTokens,
                     completion_tokens: estimatedCompletionTokens,
-                    total_tokens: estimatedTotal,
+                    // Derived value — never written independently.
+                    total_tokens: estimatedPromptTokens + estimatedCompletionTokens,
                     request_count: 1,
                   });
               }

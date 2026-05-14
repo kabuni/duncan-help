@@ -87,7 +87,7 @@ export function EventRsvps({ eventId }: { eventId: string }) {
       </div>
       {rsvps.length === 0 ? (
         <div className="text-xs text-muted-foreground border border-dashed border-border rounded-md p-3">
-          No RSVPs yet. Attendees email <span className="font-mono">duncan@kabuni.com</span> with their first name, last name, phone (with country code), email, school / media / company name, and Indian state.
+          No RSVPs yet. Attendees email <span className="font-mono">duncan@kabuni.com</span> with their first name, last name, phone (with country code), email, school / media / company name, and city / region.
         </div>
       ) : (
         <ul className="flex flex-col gap-1.5">

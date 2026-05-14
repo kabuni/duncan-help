@@ -431,26 +431,107 @@ Deno.serve(async (req) => {
         const fullName = [match.first_name, match.last_name].filter(Boolean).join(" ").trim();
         const display = fullName || profile?.display_name || senderName || attendeeEmail;
 
-        const { error: upErr } = await admin.from("event_rsvps").upsert({
-          event_id: match.event_id,
-          profile_id: profile?.id || null,
-          email: attendeeEmail,
-          display_name: display,
-          first_name: match.first_name,
-          last_name: match.last_name,
-          phone: match.phone,
-          organisation_type: match.organisation_type,
-          organisation_name: match.organisation_name,
-          state: match.location,
-          status: ["yes", "no", "maybe"].includes(match.status) ? match.status : "yes",
-          source: "email",
-          notes: subjectHdr,
-          gmail_message_id: m.id,
-          responded_at: new Date().toISOString(),
-        }, { onConflict: "gmail_message_id" });
+        // Look for an existing RSVP in the same Gmail thread, then fall back to (event_id, email).
+        let existingRsvp: any = null;
+        if (threadId) {
+          const { data } = await admin
+            .from("event_rsvps")
+            .select("*")
+            .eq("gmail_thread_id", threadId)
+            .maybeSingle();
+          if (data) existingRsvp = data;
+        }
+        if (!existingRsvp) {
+          const { data } = await admin
+            .from("event_rsvps")
+            .select("*")
+            .eq("event_id", match.event_id)
+            .ilike("email", attendeeEmail)
+            .maybeSingle();
+          if (data) existingRsvp = data;
+        }
 
-        if (upErr) { summary.errors.push(upErr.message); continue; }
+        const isFollowUp = !!existingRsvp;
+        const nowIso = new Date().toISOString();
+        const isEmpty = (v: any) => v === null || v === undefined || (typeof v === "string" && v.trim() === "");
+        // Merge helper: only fill new value when existing field is empty AND new value is non-null.
+        const mergeField = (oldVal: any, newVal: any) => (isEmpty(oldVal) && !isEmpty(newVal) ? newVal : oldVal);
+
+        let rsvpId: string;
+        const validStatus = ["yes", "no", "maybe"].includes(match.status) ? match.status : "yes";
+
+        if (isFollowUp) {
+          const merged = {
+            profile_id: existingRsvp.profile_id || profile?.id || null,
+            display_name: existingRsvp.display_name || (([match.first_name, match.last_name].filter(Boolean).join(" ").trim()) || profile?.display_name || senderName || attendeeEmail),
+            first_name: mergeField(existingRsvp.first_name, match.first_name),
+            last_name: mergeField(existingRsvp.last_name, match.last_name),
+            phone: mergeField(existingRsvp.phone, match.phone),
+            organisation_type: mergeField(existingRsvp.organisation_type, match.organisation_type),
+            organisation_name: mergeField(existingRsvp.organisation_name, match.organisation_name),
+            state: mergeField(existingRsvp.state, match.location),
+            // Status: only overwrite when sender provides a fresh explicit one; default keeps prior value.
+            status: validStatus,
+            gmail_thread_id: existingRsvp.gmail_thread_id || threadId || null,
+            last_inbound_message_id: m.id,
+            follow_up_count: (existingRsvp.follow_up_count || 0) + 1,
+            responded_at: nowIso,
+          };
+          const { error: updErr } = await admin
+            .from("event_rsvps")
+            .update(merged)
+            .eq("id", existingRsvp.id);
+          if (updErr) { summary.errors.push(`rsvp-update: ${updErr.message}`); continue; }
+          rsvpId = existingRsvp.id;
+        } else {
+          const fullName = [match.first_name, match.last_name].filter(Boolean).join(" ").trim();
+          const display = fullName || profile?.display_name || senderName || attendeeEmail;
+          const { data: inserted, error: insErr } = await admin
+            .from("event_rsvps")
+            .insert({
+              event_id: match.event_id,
+              profile_id: profile?.id || null,
+              email: attendeeEmail,
+              display_name: display,
+              first_name: match.first_name,
+              last_name: match.last_name,
+              phone: match.phone,
+              organisation_type: match.organisation_type,
+              organisation_name: match.organisation_name,
+              state: match.location,
+              status: validStatus,
+              source: "email",
+              notes: subjectHdr,
+              gmail_message_id: m.id,
+              gmail_thread_id: threadId || null,
+              last_inbound_message_id: m.id,
+              follow_up_count: 0,
+              responded_at: nowIso,
+            })
+            .select("id")
+            .single();
+          if (insErr || !inserted) { summary.errors.push(`rsvp-insert: ${insErr?.message || "unknown"}`); continue; }
+          rsvpId = inserted.id;
+        }
         summary.rsvps++;
+
+        // Log this Gmail message in the dedup ledger so it isn't reprocessed.
+        await admin.from("event_rsvp_messages").insert({
+          gmail_message_id: m.id,
+          gmail_thread_id: threadId || null,
+          rsvp_id: rsvpId,
+          sender_email: senderEmail,
+          subject: subjectHdr,
+          outcome: isFollowUp ? "follow_up" : "new_rsvp",
+        });
+
+        // Re-read the merged row so missing[] reflects the FINAL state.
+        const { data: rsvpRow } = await admin
+          .from("event_rsvps")
+          .select("first_name,last_name,phone,email,organisation_type,organisation_name,state,status")
+          .eq("id", rsvpId)
+          .single();
+        const r = rsvpRow || {};
 
         // Mark as read
         await fetch(`${GMAIL_API}/messages/${m.id}/modify`, {
@@ -468,7 +549,6 @@ Deno.serve(async (req) => {
         const titleLower = (ev.title || "").toLowerCase();
         const isMumbaiShowcase = titleLower.includes("kabuni showcase mumbai") || titleLower.includes("showcase mumbai");
 
-        // Per-event schedule. Mumbai showcase has a fixed running order in IST.
         let schedule: { time: string; label: string }[] = [];
         let whenLabel = ev.when ? `${fmtDateIST(ev.when)} · ${fmtTimeIST(ev.when)} IST` : "TBD";
         let whereValue = ev.location || "";
@@ -483,24 +563,21 @@ Deno.serve(async (req) => {
           whereValue = whereValue || "Jio Centre, Mumbai";
         }
 
-        // Required fields and what's missing
+        // Required fields and what's still missing AFTER merge
         const missing: string[] = [];
-        if (!match.first_name) missing.push("First name");
-        if (!match.last_name) missing.push("Last name");
-        if (!match.phone) missing.push("Phone (with country code, e.g. +91…)");
-        if (!attendeeEmail) missing.push("Email address");
-        if (!match.organisation_type) missing.push("School / Media / Company");
-        if (!match.organisation_name) missing.push("Organisation name");
-        if (!match.location) missing.push("City / region you're travelling from");
+        if (isEmpty(r.first_name)) missing.push("First name");
+        if (isEmpty(r.last_name)) missing.push("Last name");
+        if (isEmpty(r.phone)) missing.push("Phone (with country code, e.g. +91…)");
+        if (isEmpty(r.email)) missing.push("Email address");
+        if (isEmpty(r.organisation_type)) missing.push("School / Media / Company");
+        if (isEmpty(r.organisation_name)) missing.push("Organisation name");
+        if (isEmpty(r.state)) missing.push("City / region you're travelling from");
 
-        // Email reply: confirmation or request for missing details
-        // Normalise unicode dashes (en/em/minus/hyphen variants) to a plain ASCII hyphen
-        // so the Subject header stays 7-bit-safe and Gmail doesn't render mojibake.
         const asciiSubject = subjectHdr.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g, "-");
         const replySubject = asciiSubject.toLowerCase().startsWith("re:") ? asciiSubject : `Re: ${asciiSubject}`;
-        const firstName = match.first_name || senderName?.split(" ")[0] || "there";
-        const statusUpper = match.status.toUpperCase();
-        const orgLabel = match.organisation_type === "school" ? "School" : match.organisation_type === "media" ? "Media" : "Company";
+        const firstName = r.first_name || senderName?.split(" ")[0] || "there";
+        const statusUpper = String(r.status || validStatus).toUpperCase();
+        const orgLabel = r.organisation_type === "school" ? "School" : r.organisation_type === "media" ? "Media" : "Company";
 
         const highlights: { label: string; value: string }[] = [
           { label: "Event", value: ev.title },
@@ -508,21 +585,26 @@ Deno.serve(async (req) => {
         ];
         if (whereValue) highlights.push({ label: "Where", value: whereValue });
         highlights.push({ label: "Status", value: statusUpper });
-        if (match.first_name || match.last_name) highlights.push({ label: "Name", value: `${match.first_name || ""} ${match.last_name || ""}`.trim() });
-        if (match.phone) highlights.push({ label: "Phone", value: match.phone });
-        if (match.organisation_name) highlights.push({ label: orgLabel, value: match.organisation_name });
-        if (match.location) highlights.push({ label: "Travelling from", value: match.location });
+        if (r.first_name || r.last_name) highlights.push({ label: "Name", value: `${r.first_name || ""} ${r.last_name || ""}`.trim() });
+        if (r.phone) highlights.push({ label: "Phone", value: r.phone });
+        if (r.organisation_name) highlights.push({ label: orgLabel, value: r.organisation_name });
+        if (r.state) highlights.push({ label: "Travelling from", value: r.state });
 
-        const intro = isMumbaiShowcase
-          ? (missing.length === 0
-              ? `We've got you down for ${ev.title} at ${whereValue} on ${whenLabel.split(" · ")[0]}. Here's the running order for the day.`
-              : `Thanks for your RSVP for ${ev.title} at ${whereValue} on ${whenLabel.split(" · ")[0]} — your status is recorded as ${statusUpper}. Here's the running order, and we just need a few more details from you.`)
-          : (missing.length === 0
-              ? `Your RSVP for "${ev.title}" is fully confirmed. Here's what we have on file.`
-              : `Thanks for your RSVP for "${ev.title}" — your status is recorded as ${statusUpper}. We just need a few more details to complete your registration.`);
+        const allComplete = missing.length === 0;
+        const intro = isFollowUp
+          ? (allComplete
+              ? `Thanks — your RSVP for "${ev.title}" is now complete. Here's what we have on file.`
+              : `Thanks for the update on your RSVP for "${ev.title}". We still need a few more details to complete your registration.`)
+          : (isMumbaiShowcase
+              ? (allComplete
+                  ? `We've got you down for ${ev.title} at ${whereValue} on ${whenLabel.split(" · ")[0]}. Here's the running order for the day.`
+                  : `Thanks for your RSVP for ${ev.title} at ${whereValue} on ${whenLabel.split(" · ")[0]} — your status is recorded as ${statusUpper}. Here's the running order, and we just need a few more details from you.`)
+              : (allComplete
+                  ? `Your RSVP for "${ev.title}" is fully confirmed. Here's what we have on file.`
+                  : `Thanks for your RSVP for "${ev.title}" — your status is recorded as ${statusUpper}. We just need a few more details to complete your registration.`));
 
-        const greeting = missing.length === 0
-          ? (isMumbaiShowcase ? `You're confirmed for Kabuni Showcase Mumbai, ${firstName} 🎉` : `You're confirmed, ${firstName} 🎉`)
+        const greeting = allComplete
+          ? (isFollowUp ? `Thanks, ${firstName} — your RSVP is now complete` : (isMumbaiShowcase ? `You're confirmed for Kabuni Showcase Mumbai, ${firstName} 🎉` : `You're confirmed, ${firstName} 🎉`))
           : `Thanks, ${firstName} — almost there`;
 
         const html = renderHtmlEmail({
@@ -531,16 +613,16 @@ Deno.serve(async (req) => {
           highlights,
           schedule,
           missing,
-          closing: missing.length === 0 ? "Looking forward to seeing you there." : "Reply to this email with the missing details and you'll be all set.",
+          closing: allComplete ? "Looking forward to seeing you there." : "Reply to this email with the missing details and you'll be all set.",
         });
 
         const scheduleText = schedule.length
           ? `\nRunning order:\n${schedule.map((s) => `  ${s.time}  —  ${s.label}`).join("\n")}\n`
           : "";
         const whereText = whereValue ? ` (${whereValue})` : "";
-        const textBody = missing.length === 0
-          ? `Hi ${firstName},\n\nYour RSVP for "${ev.title}"${whereText} on ${whenLabel} is confirmed (${statusUpper}).\n${scheduleText}\nWe have your details on file:\n- Name: ${match.first_name || ""} ${match.last_name || ""}\n- Phone: ${match.phone || "—"}\n- ${orgLabel}: ${match.organisation_name || "—"}\n- Travelling from: ${match.location || "—"}\n\nSee you there.\n\n— Duncan`
-          : `Hi ${firstName},\n\nThanks for your RSVP for "${ev.title}"${whereText} on ${whenLabel}. Status recorded: ${statusUpper}.\n${scheduleText}\nTo complete your registration, please reply with the following details:\n${missing.map((f) => `- ${f}`).join("\n")}\n\n— Duncan`;
+        const textBody = allComplete
+          ? `Hi ${firstName},\n\n${isFollowUp ? `Thanks — your RSVP is now complete.` : `Your RSVP for "${ev.title}"${whereText} on ${whenLabel} is confirmed (${statusUpper}).`}\n${scheduleText}\nWe have your details on file:\n- Name: ${r.first_name || ""} ${r.last_name || ""}\n- Phone: ${r.phone || "—"}\n- ${orgLabel}: ${r.organisation_name || "—"}\n- Travelling from: ${r.state || "—"}\n\nSee you there.\n\n— Duncan`
+          : `Hi ${firstName},\n\nThanks. We still need the following details to complete your RSVP for "${ev.title}"${whereText}:\n${missing.map((f) => `- ${f}`).join("\n")}\n\nJust reply to this email with the details above.\n\n— Duncan`;
 
         const sendResult = await sendGmailReply(token, attendeeEmail, replySubject, textBody, html, threadId, messageIdHdr);
         const replyUpdate = sendResult.ok
@@ -549,14 +631,15 @@ Deno.serve(async (req) => {
         const { error: replyUpdErr } = await admin
           .from("event_rsvps")
           .update(replyUpdate)
-          .eq("gmail_message_id", m.id);
+          .eq("id", rsvpId);
         if (replyUpdErr) {
-          console.error("[process-rsvp-emails] failed to persist reply status", { gmail_message_id: m.id, error: replyUpdErr.message });
+          console.error("[process-rsvp-emails] failed to persist reply status", { rsvp_id: rsvpId, error: replyUpdErr.message });
           summary.errors.push(`reply-status-update: ${replyUpdErr.message}`);
         }
         if (!sendResult.ok) {
           summary.errors.push(`gmail-send ${attendeeEmail}: ${sendResult.error}`);
         }
+
 
       } catch (e) {
         summary.errors.push(String(e));

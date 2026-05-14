@@ -193,6 +193,23 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
         </TileShell>
       </div>
 
+      {/* RSVP SUMMARY — Kabuni Showcase Mumbai */}
+      <TileShell delay={0.125}>
+        <TileHeader
+          icon={CalendarCheck}
+          label="Kabuni Showcase Mumbai · RSVP Status"
+          action={
+            <button
+              onClick={() => navigate("/diary?event=e942181b-c52a-42a4-a0c2-1e2fdf499ed7")}
+              className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5"
+            >
+              Open <ExternalLink className="h-2.5 w-2.5" />
+            </button>
+          }
+        />
+        <RsvpSummaryTile />
+      </TileShell>
+
       {/* HIRES / WORKSTREAMS / PROJECTS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <TileShell delay={0.15}>

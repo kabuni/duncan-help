@@ -22,6 +22,7 @@ export interface Project {
   user_id: string;
   name: string;
   system_prompt: string | null;
+  note_template: string | null;
   created_at: string;
 }
 

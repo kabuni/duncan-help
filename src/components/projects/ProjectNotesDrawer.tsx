@@ -9,11 +9,12 @@ import { formatDistanceToNow } from "date-fns";
 
 interface Props {
   projectId: string;
+  template?: string | null;
   open: boolean;
   onClose: () => void;
 }
 
-export function ProjectNotesDrawer({ projectId, open, onClose }: Props) {
+export function ProjectNotesDrawer({ projectId, template, open, onClose }: Props) {
   const { notes, loading, createNote, updateNote, deleteNote } = useProjectNotes(open ? projectId : null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [title, setTitle] = useState("");

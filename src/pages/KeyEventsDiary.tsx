@@ -501,7 +501,7 @@ export default function KeyEventsDiary() {
           {loading ? (
             <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
           ) : (
-            <div className="min-h-[60vh] md:min-h-[78vh] min-w-0 overflow-visible">
+            <div className="min-h-[900px] md:min-h-[820px] min-w-0 overflow-visible">
               {isMobile ? (
                 <MobileAgenda
                   items={calItems}

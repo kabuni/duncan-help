@@ -185,7 +185,18 @@ export function useWorkstreamCards(filters?: {
       if (filters?.status) query = query.eq("status", filters.status);
       if (filters?.priority) query = query.eq("priority", filters.priority);
       if (filters?.project_tag) query = query.eq("project_tag", filters.project_tag);
-      if (filters?.search) query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+      if (filters?.search) {
+        const term = filters.search.replace(/[(),]/g, " ");
+        // Find cards whose tasks (or subtasks) match the search term
+        const { data: matchingTasks } = await supabase
+          .from("workstream_tasks")
+          .select("card_id")
+          .or(`title.ilike.%${term}%,description.ilike.%${term}%`);
+        const taskCardIds = Array.from(new Set((matchingTasks || []).map((t: any) => t.card_id).filter(Boolean)));
+        const orParts = [`title.ilike.%${term}%`, `description.ilike.%${term}%`];
+        if (taskCardIds.length > 0) orParts.push(`id.in.(${taskCardIds.join(",")})`);
+        query = query.or(orParts.join(","));
+      }
 
       const { data: cards, error } = await query;
       if (error) throw error;

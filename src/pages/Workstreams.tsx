@@ -128,7 +128,7 @@ const Workstreams = () => {
               <Input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search cards…"
+                placeholder="Search cards & tasks…"
                 className="pl-9 h-9 text-sm"
               />
             </div>

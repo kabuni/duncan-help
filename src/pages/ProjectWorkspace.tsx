@@ -847,7 +847,6 @@ export default function ProjectWorkspace() {
             </div>
           </div>
           <DialogFooter>
-          <DialogFooter>
             <Button variant="outline" onClick={() => setShowSettings(false)}>Cancel</Button>
             <Button onClick={saveSettings} disabled={!editName.trim()}>Save</Button>
           </DialogFooter>

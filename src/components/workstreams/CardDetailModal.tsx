@@ -491,6 +491,7 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                         onToggleSubtask={(sub) => handleToggleTask(sub)}
                         onDeleteSubtask={(sub) => deleteTask.mutate({ id: sub.id, card_id: sub.card_id })}
                         onUpdateSubtaskDueDate={(sub, d) => updateTask.mutate({ id: sub.id, card_id: sub.card_id, due_date: d })}
+                        onUpdateSubtaskAssignees={(sub, ids) => updateTaskAssignees.mutate({ taskId: sub.id, cardId: sub.card_id, userIds: ids })}
                       />
                     ))}
 
@@ -535,6 +536,7 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                               onToggleSubtask={(sub) => handleToggleTask(sub)}
                               onDeleteSubtask={(sub) => deleteTask.mutate({ id: sub.id, card_id: sub.card_id })}
                               onUpdateSubtaskDueDate={(sub, d) => updateTask.mutate({ id: sub.id, card_id: sub.card_id, due_date: d })}
+                              onUpdateSubtaskAssignees={(sub, ids) => updateTaskAssignees.mutate({ taskId: sub.id, cardId: sub.card_id, userIds: ids })}
                             />
                           ))}
                         </div>
@@ -635,7 +637,7 @@ function MetaField({ icon, label, value, children }: {
 
 function TaskRow({
   task, users, currentUserId, onToggle, onDelete, onUpdateAssignees, onUpdateDueDate, onSetStatus,
-  onAddSubtask, onToggleSubtask, onDeleteSubtask, onUpdateSubtaskDueDate,
+  onAddSubtask, onToggleSubtask, onDeleteSubtask, onUpdateSubtaskDueDate, onUpdateSubtaskAssignees,
 }: {
   task: WorkstreamTask;
   users: UserProfile[];
@@ -649,6 +651,7 @@ function TaskRow({
   onToggleSubtask?: (sub: WorkstreamTask) => void;
   onDeleteSubtask?: (sub: WorkstreamTask) => void;
   onUpdateSubtaskDueDate?: (sub: WorkstreamTask, date: string | null) => void;
+  onUpdateSubtaskAssignees?: (sub: WorkstreamTask, ids: string[]) => void;
 }) {
   const subtasks = task.subtasks || [];
   const isSubtask = !!task.parent_task_id;
@@ -803,9 +806,11 @@ function TaskRow({
             <SubtaskRow
               key={sub.id}
               sub={sub}
+              users={users}
               onToggle={() => onToggleSubtask?.(sub)}
               onDelete={() => onDeleteSubtask?.(sub)}
               onUpdateDueDate={(d) => onUpdateSubtaskDueDate?.(sub, d)}
+              onUpdateAssignees={(ids) => onUpdateSubtaskAssignees?.(sub, ids)}
             />
           ))}
 
@@ -1034,12 +1039,14 @@ function TaskCommentRow({
 }
 
 function SubtaskRow({
-  sub, onToggle, onDelete, onUpdateDueDate,
+  sub, users, onToggle, onDelete, onUpdateDueDate, onUpdateAssignees,
 }: {
   sub: WorkstreamTask;
+  users: UserProfile[];
   onToggle: () => void;
   onDelete: () => void;
   onUpdateDueDate: (date: string | null) => void;
+  onUpdateAssignees: (ids: string[]) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -1082,7 +1089,21 @@ function SubtaskRow({
       {expanded && (
         <div className="mt-2 ml-6 pl-3 border-l border-border/40 space-y-2 pb-2">
           <div className="flex items-center gap-2">
-            <Label className="text-[10px] text-muted-foreground flex items-center gap-1 shrink-0">
+            <Label className="text-[10px] text-muted-foreground flex items-center gap-1 shrink-0 w-20">
+              <Users className="h-3 w-3" /> Assignees
+            </Label>
+            <div className="flex-1 max-w-[240px]">
+              <MultiAssigneeSelect
+                users={users}
+                selectedIds={(sub.assignees || []).map(a => a.user_id)}
+                onChange={onUpdateAssignees}
+                compact
+                placeholder="Assign people…"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label className="text-[10px] text-muted-foreground flex items-center gap-1 shrink-0 w-20">
               <CalendarDays className="h-3 w-3" /> Due date
             </Label>
             <Input

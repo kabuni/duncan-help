@@ -4,14 +4,15 @@ import { motion } from "framer-motion";
 import {
   Plus, Search, Filter, LayoutGrid, List, Loader2,
   AlertTriangle, Clock, User, CheckCircle2, Target,
-  CalendarDays, ArrowUpDown,
+  CalendarDays, ArrowUpDown, ListChecks,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { useWorkstreamCards, useUserProfiles, type WorkstreamCard, type CardStatus } from "@/hooks/useWorkstreams";
+import { useWorkstreamCards, useUserProfiles, useTasksByAssignee, type WorkstreamCard, type CardStatus, type AssignedTask } from "@/hooks/useWorkstreams";
 
 import { isPast, isThisWeek } from "date-fns";
 import KanbanBoard from "@/components/workstreams/KanbanBoard";
@@ -20,7 +21,7 @@ import CreateCardDialog from "@/components/workstreams/CreateCardDialog";
 import { StatusBadge, priorityConfig, getStatusBorderClass } from "@/components/workstreams/StatusBadge";
 import { format } from "date-fns";
 
-type ViewMode = "board" | "list";
+type ViewMode = "board" | "list" | "tasks";
 
 const Workstreams = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -180,12 +181,27 @@ const Workstreams = () => {
                 >
                   <List className="h-3.5 w-3.5" /> List
                 </button>
+                <button
+                  onClick={() => setViewMode("tasks")}
+                  className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all ${
+                    viewMode === "tasks" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <ListChecks className="h-3.5 w-3.5" /> Tasks
+                </button>
               </div>
             </div>
           </motion.div>
 
           {/* Content */}
-          {isLoading ? (
+          {viewMode === "tasks" ? (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+              <TasksByPersonView
+                users={users || []}
+                onCardClick={(cardId) => setSelectedCardId(cardId)}
+              />
+            </motion.div>
+          ) : isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
@@ -368,6 +384,138 @@ function ListView({ cards, onCardClick }: { cards: WorkstreamCard[]; onCardClick
           </div>
         );
       })}
+    </div>
+  );
+}
+
+interface UserOption { user_id: string; display_name: string | null }
+
+function TasksByPersonView({ users, onCardClick }: { users: UserOption[]; onCardClick: (cardId: string) => void }) {
+  const [assigneeId, setAssigneeId] = useState<string>("");
+  const [includeCompleted, setIncludeCompleted] = useState(false);
+  const [taskSearch, setTaskSearch] = useState("");
+  const { data: tasks, isLoading } = useTasksByAssignee(assigneeId || null, {
+    includeCompleted,
+    search: taskSearch,
+  });
+
+  const grouped = useMemo(() => {
+    const map: Record<string, AssignedTask[]> = {};
+    (tasks || []).forEach(t => {
+      (map[t.card_id] ||= []).push(t);
+    });
+    return map;
+  }, [tasks]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-border bg-card/60 p-4">
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-muted-foreground" />
+          <Select value={assigneeId || undefined} onValueChange={setAssigneeId}>
+            <SelectTrigger className="h-9 w-[220px] text-sm">
+              <SelectValue placeholder="Choose a person…" />
+            </SelectTrigger>
+            <SelectContent>
+              {users.map(u => (
+                <SelectItem key={u.user_id} value={u.user_id}>
+                  {u.display_name || "Unnamed"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="relative flex-1 sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={taskSearch}
+            onChange={e => setTaskSearch(e.target.value)}
+            placeholder="Filter tasks…"
+            className="pl-9 h-9 text-sm"
+            disabled={!assigneeId}
+          />
+        </div>
+
+        <label className="flex items-center gap-2 text-xs text-muted-foreground sm:ml-auto cursor-pointer">
+          <Switch checked={includeCompleted} onCheckedChange={setIncludeCompleted} />
+          Show completed
+        </label>
+      </div>
+
+      {!assigneeId ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <ListChecks className="h-12 w-12 text-muted-foreground/30 mb-4" />
+          <p className="text-sm text-muted-foreground">Select a person to see their tasks</p>
+        </div>
+      ) : isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+      ) : !tasks || tasks.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <CheckCircle2 className="h-12 w-12 text-muted-foreground/30 mb-4" />
+          <p className="text-sm text-muted-foreground">
+            No {includeCompleted ? "" : "open "}tasks assigned
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-[11px] font-mono text-muted-foreground">
+            {tasks.length} task{tasks.length === 1 ? "" : "s"} across {Object.keys(grouped).length} card{Object.keys(grouped).length === 1 ? "" : "s"}
+          </p>
+          {Object.entries(grouped).map(([cardId, list]) => {
+            const first = list[0];
+            return (
+              <div key={cardId} className="rounded-lg border border-border bg-card overflow-hidden">
+                <button
+                  onClick={() => onCardClick(cardId)}
+                  className="w-full flex items-center justify-between gap-3 px-4 py-2.5 bg-secondary/40 hover:bg-secondary/60 transition-colors text-left"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Target className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-semibold text-foreground truncate">{first.card_title}</span>
+                    {first.card_project_tag && (
+                      <span className="text-[9px] font-mono bg-secondary text-muted-foreground px-1.5 py-0.5 rounded">
+                        {first.card_project_tag}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground shrink-0">{list.length} task{list.length === 1 ? "" : "s"}</span>
+                </button>
+                <ul className="divide-y divide-border">
+                  {list.map(t => {
+                    const overdue = t.due_date && !t.completed && isPast(new Date(t.due_date));
+                    return (
+                      <li
+                        key={t.id}
+                        onClick={() => onCardClick(cardId)}
+                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/30 cursor-pointer"
+                      >
+                        <CheckCircle2 className={`h-3.5 w-3.5 shrink-0 ${t.completed ? "text-emerald-500" : "text-muted-foreground/40"}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm truncate ${t.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                            {t.parent_task_id && <span className="text-muted-foreground/60 mr-1">↳</span>}
+                            {t.title}
+                          </p>
+                          {t.description && (
+                            <p className="text-[11px] text-muted-foreground truncate">{t.description}</p>
+                          )}
+                        </div>
+                        {t.due_date && (
+                          <span className={`text-[10px] flex items-center gap-1 shrink-0 ${overdue ? "text-red-500" : "text-muted-foreground"}`}>
+                            <CalendarDays className="h-3 w-3" /> {format(new Date(t.due_date), "MMM d")}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

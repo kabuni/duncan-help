@@ -50,7 +50,9 @@ export function ProjectNotesDrawer({ projectId, open, onClose }: Props) {
   }, [title, content]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNew = async () => {
-    const note = await createNote();
+    const today = new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    const template = `# Meeting / topic\n_Date: ${today}_\n\n## Context\n- \n\n## Discussion\n- \n\n## Decisions\n- \n\n## Action items\n- [ ] \n\n## Open questions\n- \n`;
+    const note = await createNote(`Note — ${today}`, template);
     if (note) setActiveId(note.id);
   };
 

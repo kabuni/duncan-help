@@ -286,12 +286,17 @@ export default function ProjectWorkspace() {
   const openSettings = () => {
     setEditName(project?.name || "");
     setEditPrompt(project?.system_prompt || "");
+    setEditTemplate((project as any)?.note_template || "");
     setShowSettings(true);
   };
 
   const saveSettings = async () => {
     if (!projectId) return;
-    await updateProject(projectId, { name: editName.trim(), system_prompt: editPrompt.trim() || null });
+    await updateProject(projectId, {
+      name: editName.trim(),
+      system_prompt: editPrompt.trim() || null,
+      note_template: editTemplate.trim() || null,
+    });
     setShowSettings(false);
   };
 

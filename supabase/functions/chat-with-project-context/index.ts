@@ -170,6 +170,29 @@ Deno.serve(async (req) => {
       console.error("RAG retrieval failed (non-fatal):", ragErr);
     }
 
+    // 5b. Fetch project notes (user-authored knowledge area)
+    let notesBlock = "";
+    try {
+      const { data: notes } = await supabase
+        .from("project_notes")
+        .select("title, content, pinned, updated_at")
+        .eq("project_id", chat.project_id)
+        .order("pinned", { ascending: false })
+        .order("updated_at", { ascending: false })
+        .limit(30);
+      if (notes && notes.length > 0) {
+        const rendered = notes
+          .map((n: any) => {
+            const body = (n.content || "").slice(0, 4000);
+            return `### ${n.pinned ? "📌 " : ""}${n.title || "Untitled note"}\n${body}`;
+          })
+          .join("\n\n---\n\n");
+        notesBlock = `\n\n## PROJECT NOTES\nThe team has captured the following notes inside this project. Treat them as authoritative context:\n\n${rendered}\n`;
+      }
+    } catch (notesErr) {
+      console.error("Notes fetch failed (non-fatal):", notesErr);
+    }
+
     // 6. Fetch last 20 messages from the CURRENT chat for live conversation context
     const { data: history, error: historyError } = await supabase
       .from("chat_messages")
@@ -267,6 +290,7 @@ Deno.serve(async (req) => {
       projectContextHeader +
       customProjectPrompt +
       fileContextBlock +
+      notesBlock +
       priorChatsBlock;
 
     const aiMessages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: any }> = [

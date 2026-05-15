@@ -935,6 +935,7 @@ export default function ProjectWorkspace() {
       {projectId && (
         <ProjectNotesDrawer
           projectId={projectId}
+          template={(project as any)?.note_template || null}
           open={showNotes}
           onClose={() => setShowNotes(false)}
         />

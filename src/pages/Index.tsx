@@ -316,6 +316,7 @@ const Index = () => {
   const handleChatSubmit = useCallback(async (input: string, attachments: ChatAttachment[]) => {
     if (savingRef.current) return;
     savingRef.current = true;
+    setNewChatMode(false);
 
     let chatId = chatOps.activeChatId;
 

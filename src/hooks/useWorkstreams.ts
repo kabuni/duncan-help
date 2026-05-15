@@ -815,6 +815,75 @@ export function useRespondToAssignment() {
   });
 }
 
+// Tasks assigned to a specific user (across every card). Includes subtasks.
+export interface AssignedTask extends WorkstreamTask {
+  card_title: string;
+  card_status: CardStatus;
+  card_project_tag: string | null;
+}
+
+export function useTasksByAssignee(
+  assigneeId: string | null,
+  opts?: { includeCompleted?: boolean; search?: string },
+) {
+  const includeCompleted = opts?.includeCompleted ?? false;
+  const search = opts?.search?.trim() || "";
+  return useQuery({
+    queryKey: ["tasks-by-assignee", assigneeId, includeCompleted, search],
+    enabled: !!assigneeId,
+    queryFn: async () => {
+      if (!assigneeId) return [] as AssignedTask[];
+
+      // Task IDs from the multi-assignee join table
+      const { data: joinRows } = await supabase
+        .from("workstream_task_assignees")
+        .select("task_id")
+        .eq("user_id", assigneeId);
+      const joinTaskIds = (joinRows || []).map((r: any) => r.task_id);
+
+      // Tasks that match either the legacy single assignee_id OR the join table
+      let tq = supabase
+        .from("workstream_tasks")
+        .select("*")
+        .order("due_date", { ascending: true, nullsFirst: false });
+      const orParts = [`assignee_id.eq.${assigneeId}`];
+      if (joinTaskIds.length > 0) {
+        orParts.push(`id.in.(${joinTaskIds.join(",")})`);
+      }
+      tq = tq.or(orParts.join(","));
+      if (!includeCompleted) tq = tq.eq("completed", false);
+      if (search) {
+        const like = `%${search.replace(/[%,()]/g, " ").trim()}%`;
+        tq = tq.or(`title.ilike.${like},description.ilike.${like}`);
+      }
+      const { data: tasks, error } = await tq;
+      if (error) throw error;
+      const rows = tasks || [];
+      if (rows.length === 0) return [] as AssignedTask[];
+
+      const cardIds = [...new Set(rows.map((t: any) => t.card_id))];
+      const { data: cards } = await supabase
+        .from("workstream_cards")
+        .select("id, title, status, project_tag")
+        .in("id", cardIds);
+      const cardMap: Record<string, any> = (cards || []).reduce(
+        (acc, c: any) => ({ ...acc, [c.id]: c }),
+        {},
+      );
+
+      return rows
+        .filter((t: any) => cardMap[t.card_id]) // skip orphaned/archived
+        .map((t: any) => ({
+          ...t,
+          status: (t.status || (t.completed ? "done" : "not_started")) as CardStatus,
+          card_title: cardMap[t.card_id]?.title || "",
+          card_status: cardMap[t.card_id]?.status as CardStatus,
+          card_project_tag: cardMap[t.card_id]?.project_tag ?? null,
+        })) as AssignedTask[];
+    },
+  });
+}
+
 // Distinct project tags derived from existing cards (admin can extend at create time).
 export function useProjectTags() {
   return useQuery({

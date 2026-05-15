@@ -910,6 +910,14 @@ export default function ProjectWorkspace() {
           onJumpToChat={(id) => setActiveChatId(id)}
         />
       )}
+
+      {projectId && (
+        <ProjectNotesDrawer
+          projectId={projectId}
+          open={showNotes}
+          onClose={() => setShowNotes(false)}
+        />
+      )}
     </div>
   );
 }

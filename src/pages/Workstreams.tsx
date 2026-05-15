@@ -181,6 +181,14 @@ const Workstreams = () => {
                 >
                   <List className="h-3.5 w-3.5" /> List
                 </button>
+                <button
+                  onClick={() => setViewMode("tasks")}
+                  className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all ${
+                    viewMode === "tasks" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <ListChecks className="h-3.5 w-3.5" /> Tasks
+                </button>
               </div>
             </div>
           </motion.div>

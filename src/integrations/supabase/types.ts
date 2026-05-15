@@ -2206,11 +2206,57 @@ export type Database = {
           },
         ]
       }
+      project_note_folders: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          parent_folder_id: string | null
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+          parent_folder_id?: string | null
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          parent_folder_id?: string | null
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_note_folders_parent_folder_id_fkey"
+            columns: ["parent_folder_id"]
+            isOneToOne: false
+            referencedRelation: "project_note_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_note_folders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_notes: {
         Row: {
           content: string
           created_at: string
           created_by: string
+          folder_id: string | null
           id: string
           pinned: boolean
           project_id: string
@@ -2221,6 +2267,7 @@ export type Database = {
           content?: string
           created_at?: string
           created_by: string
+          folder_id?: string | null
           id?: string
           pinned?: boolean
           project_id: string
@@ -2231,6 +2278,7 @@ export type Database = {
           content?: string
           created_at?: string
           created_by?: string
+          folder_id?: string | null
           id?: string
           pinned?: boolean
           project_id?: string
@@ -2238,6 +2286,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "project_notes_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "project_note_folders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_notes_project_id_fkey"
             columns: ["project_id"]

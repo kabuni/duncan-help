@@ -186,16 +186,27 @@ export function useWorkstreamCards(filters?: {
       if (filters?.priority) query = query.eq("priority", filters.priority);
       if (filters?.project_tag) query = query.eq("project_tag", filters.project_tag);
       if (filters?.search) {
-        const term = filters.search.replace(/[(),]/g, " ");
-        // Find cards whose tasks (or subtasks) match the search term
-        const { data: matchingTasks } = await supabase
-          .from("workstream_tasks")
-          .select("card_id")
-          .or(`title.ilike.%${term}%,description.ilike.%${term}%`);
-        const taskCardIds = Array.from(new Set((matchingTasks || []).map((t: any) => t.card_id).filter(Boolean)));
-        const orParts = [`title.ilike.%${term}%`, `description.ilike.%${term}%`];
-        if (taskCardIds.length > 0) orParts.push(`id.in.(${taskCardIds.join(",")})`);
-        query = query.or(orParts.join(","));
+        const term = filters.search.replace(/[%,()]/g, " ").trim();
+        if (term) {
+          const like = `%${term}%`;
+          // Cards whose own title/description match
+          const [cardMatch, taskMatch] = await Promise.all([
+            supabase
+              .from("workstream_cards")
+              .select("id")
+              .is("archived_at", null)
+              .or(`title.ilike.${like},description.ilike.${like}`),
+            supabase
+              .from("workstream_tasks")
+              .select("card_id")
+              .or(`title.ilike.${like},description.ilike.${like}`),
+          ]);
+          const ids = new Set<string>();
+          (cardMatch.data || []).forEach((c: any) => c.id && ids.add(c.id));
+          (taskMatch.data || []).forEach((t: any) => t.card_id && ids.add(t.card_id));
+          if (ids.size === 0) return [];
+          query = query.in("id", Array.from(ids));
+        }
       }
 
       const { data: cards, error } = await query;

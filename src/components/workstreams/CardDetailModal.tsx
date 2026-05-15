@@ -491,6 +491,7 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                         onToggleSubtask={(sub) => handleToggleTask(sub)}
                         onDeleteSubtask={(sub) => deleteTask.mutate({ id: sub.id, card_id: sub.card_id })}
                         onUpdateSubtaskDueDate={(sub, d) => updateTask.mutate({ id: sub.id, card_id: sub.card_id, due_date: d })}
+                        onUpdateSubtaskAssignees={(sub, ids) => updateTaskAssignees.mutate({ taskId: sub.id, cardId: sub.card_id, userIds: ids })}
                       />
                     ))}
 

@@ -316,6 +316,7 @@ const Index = () => {
   const handleChatSubmit = useCallback(async (input: string, attachments: ChatAttachment[]) => {
     if (savingRef.current) return;
     savingRef.current = true;
+    setNewChatMode(false);
 
     let chatId = chatOps.activeChatId;
 
@@ -383,9 +384,12 @@ const Index = () => {
     handleChatSubmit(prompt, []);
   };
 
+  const [newChatMode, setNewChatMode] = useState(false);
+
   const handleClearChat = useCallback(() => {
     clearMessages();
     chatOps.startNewChat();
+    setNewChatMode(true);
   }, [clearMessages, chatOps]);
 
   const hasMessages = messages.length > 0;
@@ -396,10 +400,11 @@ const Index = () => {
       <Sidebar
         mobileOpen={mobileMenuOpen}
         onMobileClose={() => setMobileMenuOpen(false)}
-        onSelectChat={(id) => chatOps.setActiveChatId(id)}
+        onSelectChat={(id) => { chatOps.setActiveChatId(id); setNewChatMode(false); }}
         onNewChat={() => {
           clearMessages();
           chatOps.startNewChat();
+          setNewChatMode(true);
         }}
         chatOps={chatOps}
       />
@@ -464,17 +469,21 @@ const Index = () => {
         {/* Content area */}
         <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 sm:px-8 py-4 sm:py-6">
           {!hasMessages ? (
-            <div className="mx-auto w-full max-w-3xl flex flex-col items-center justify-center min-h-full text-center px-4 py-12">
-              <div className="h-14 w-14 rounded-2xl overflow-hidden border border-primary/20 mb-5">
-                <img src={duncanAvatar} alt="Duncan" className="h-full w-full object-cover object-[50%_30%] scale-150" />
+            newChatMode ? (
+              <div className="mx-auto w-full max-w-3xl flex flex-col items-center justify-center min-h-full text-center px-4 py-12">
+                <div className="h-14 w-14 rounded-2xl overflow-hidden border border-primary/20 mb-5">
+                  <img src={duncanAvatar} alt="Duncan" className="h-full w-full object-cover object-[50%_30%] scale-150" />
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-semibold text-foreground tracking-tight">
+                  {getGreeting()}, {userDisplayName.split(" ")[0] || "there"}
+                </h1>
+                <p className="mt-2 text-sm text-muted-foreground max-w-md">
+                  Ask me anything, or start with what's on your mind.
+                </p>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-semibold text-foreground tracking-tight">
-                {getGreeting()}, {userDisplayName.split(" ")[0] || "there"}
-              </h1>
-              <p className="mt-2 text-sm text-muted-foreground max-w-md">
-                Ask me anything, or start with what's on your mind.
-              </p>
-            </div>
+            ) : (
+              <HomeDashboard userName={userDisplayName.split(" ")[0] || "you"} />
+            )
           ) : (
             <div className="mx-auto max-w-3xl space-y-6 sm:space-y-8">
               <AnimatePresence initial={false}>

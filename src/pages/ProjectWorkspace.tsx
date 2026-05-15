@@ -111,6 +111,7 @@ export default function ProjectWorkspace() {
   const [openTaskCount, setOpenTaskCount] = useState(0);
   const [editName, setEditName] = useState("");
   const [editPrompt, setEditPrompt] = useState("");
+  const [editTemplate, setEditTemplate] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [manualDeselect, setManualDeselect] = useState(false);
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
@@ -285,12 +286,17 @@ export default function ProjectWorkspace() {
   const openSettings = () => {
     setEditName(project?.name || "");
     setEditPrompt(project?.system_prompt || "");
+    setEditTemplate((project as any)?.note_template || "");
     setShowSettings(true);
   };
 
   const saveSettings = async () => {
     if (!projectId) return;
-    await updateProject(projectId, { name: editName.trim(), system_prompt: editPrompt.trim() || null });
+    await updateProject(projectId, {
+      name: editName.trim(),
+      system_prompt: editPrompt.trim() || null,
+      note_template: editTemplate.trim() || null,
+    });
     setShowSettings(false);
   };
 
@@ -824,6 +830,21 @@ export default function ProjectWorkspace() {
                 rows={6}
               />
             </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                Note Template <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <Textarea
+                value={editTemplate}
+                onChange={(e) => setEditTemplate(e.target.value)}
+                placeholder={"# Topic\n\n## Context\n- \n\n## Decisions\n- \n\n## Action items\n- [ ] \n"}
+                rows={8}
+                className="font-mono text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Used as the starting content when you create a new note in this project. Leave blank to use the default.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSettings(false)}>Cancel</Button>
@@ -914,6 +935,7 @@ export default function ProjectWorkspace() {
       {projectId && (
         <ProjectNotesDrawer
           projectId={projectId}
+          template={(project as any)?.note_template || null}
           open={showNotes}
           onClose={() => setShowNotes(false)}
         />

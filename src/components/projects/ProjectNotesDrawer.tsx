@@ -9,11 +9,12 @@ import { formatDistanceToNow } from "date-fns";
 
 interface Props {
   projectId: string;
+  template?: string | null;
   open: boolean;
   onClose: () => void;
 }
 
-export function ProjectNotesDrawer({ projectId, open, onClose }: Props) {
+export function ProjectNotesDrawer({ projectId, template, open, onClose }: Props) {
   const { notes, loading, createNote, updateNote, deleteNote } = useProjectNotes(open ? projectId : null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -51,8 +52,11 @@ export function ProjectNotesDrawer({ projectId, open, onClose }: Props) {
 
   const handleNew = async () => {
     const today = new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-    const template = `# Meeting / topic\n_Date: ${today}_\n\n## Context\n- \n\n## Discussion\n- \n\n## Decisions\n- \n\n## Action items\n- [ ] \n\n## Open questions\n- \n`;
-    const note = await createNote(`Note — ${today}`, template);
+    const defaultTpl = `# Meeting / topic\n_Date: ${today}_\n\n## Context\n- \n\n## Discussion\n- \n\n## Decisions\n- \n\n## Action items\n- [ ] \n\n## Open questions\n- \n`;
+    const tpl = (template && template.trim().length > 0)
+      ? template.replace(/\{\{\s*date\s*\}\}/gi, today)
+      : defaultTpl;
+    const note = await createNote(`Note — ${today}`, tpl);
     if (note) setActiveId(note.id);
   };
 

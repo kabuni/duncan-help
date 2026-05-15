@@ -591,6 +591,27 @@ Deno.serve(async (req) => {
         if (r.state) highlights.push({ label: "Travelling from", value: r.state });
 
         const allComplete = missing.length === 0;
+
+        // Skip sending another completion email if the RSVP was already complete
+        // on a prior reply and we've already sent the confirmation in this thread.
+        const prevMissingCount = existingRsvp ? [
+          existingRsvp.first_name,
+          existingRsvp.last_name,
+          existingRsvp.phone,
+          existingRsvp.email,
+          existingRsvp.organisation_type,
+          existingRsvp.organisation_name,
+          existingRsvp.state,
+        ].filter((v) => isEmpty(v)).length : 7;
+        const wasAlreadyComplete = prevMissingCount === 0;
+        const alreadySentConfirmation = !!existingRsvp?.reply_sent_at;
+        const skipSend = allComplete && wasAlreadyComplete && alreadySentConfirmation;
+
+        if (skipSend) {
+          console.log("[process-rsvp-emails] skipping duplicate completion email", { rsvp_id: rsvpId, thread_id: threadId });
+          continue;
+        }
+
         const intro = isFollowUp
           ? (allComplete
               ? `Thanks — your RSVP for "${ev.title}" is now complete. Here's what we have on file.`

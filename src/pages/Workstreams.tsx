@@ -21,7 +21,7 @@ import CreateCardDialog from "@/components/workstreams/CreateCardDialog";
 import { StatusBadge, priorityConfig, getStatusBorderClass } from "@/components/workstreams/StatusBadge";
 import { format } from "date-fns";
 
-type ViewMode = "board" | "list";
+type ViewMode = "board" | "list" | "tasks";
 
 const Workstreams = () => {
   const [searchParams, setSearchParams] = useSearchParams();

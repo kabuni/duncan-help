@@ -79,7 +79,7 @@ export function useProjectNotes(projectId: string | null) {
     };
   }, [projectId, fetchNotes]);
 
-  const createNote = async (title = "Untitled note", content = "") => {
+  const createNote = async (title = "Untitled note", content = "", folder_id: string | null = null) => {
     if (!projectId) return null;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { toast.error("Not signed in"); return null; }
@@ -92,13 +92,13 @@ export function useProjectNotes(projectId: string | null) {
       title,
       content,
       pinned: false,
+      folder_id,
       created_at: now,
       updated_at: now,
     };
     localIdsRef.current.add(optimistic.id);
     setNotes((prev) => [optimistic, ...prev]);
 
-    // Fire-and-forget insert — reconcile on error
     supabase
       .from("project_notes" as any)
       .insert(optimistic)
@@ -115,7 +115,7 @@ export function useProjectNotes(projectId: string | null) {
 
   const updateNote = async (
     id: string,
-    patch: Partial<Pick<ProjectNote, "title" | "content" | "pinned">>,
+    patch: Partial<Pick<ProjectNote, "title" | "content" | "pinned" | "folder_id">>,
   ) => {
     // Optimistic update
     setNotes((prev) =>

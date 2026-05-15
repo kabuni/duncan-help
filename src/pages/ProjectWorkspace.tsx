@@ -2,8 +2,9 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Plus, MessageSquare, Send, Loader2, Settings2, Users,
-  Upload, FileText, Sparkles, Trash2, RefreshCw, PanelRightOpen, X, Menu, ListChecks, Pencil, Check,
+  Upload, FileText, Sparkles, Trash2, RefreshCw, PanelRightOpen, X, Menu, ListChecks, Pencil, Check, StickyNote,
 } from "lucide-react";
+import { ProjectNotesDrawer } from "@/components/projects/ProjectNotesDrawer";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Sidebar, { MobileMenuButton } from "@/components/Sidebar";
@@ -106,6 +107,7 @@ export default function ProjectWorkspace() {
   const [showFiles, setShowFiles] = useState(false);
   const [showCollaborate, setShowCollaborate] = useState(false);
   const [showTasks, setShowTasks] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
   const [openTaskCount, setOpenTaskCount] = useState(0);
   const [editName, setEditName] = useState("");
   const [editPrompt, setEditPrompt] = useState("");
@@ -375,6 +377,10 @@ export default function ProjectWorkspace() {
           <Button variant="ghost" size="sm" onClick={() => setShowFiles(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Files">
             <FileText className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Files{files.length > 0 && ` (${files.length})`}</span>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setShowNotes(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Notes">
+            <StickyNote className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Notes</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setShowTasks(true)} className="gap-1.5 text-xs px-2 sm:px-3 relative" aria-label="Tasks">
             <ListChecks className="h-3.5 w-3.5" />

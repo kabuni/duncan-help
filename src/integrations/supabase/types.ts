@@ -2201,6 +2201,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          note_template: string | null
           system_prompt: string | null
           user_id: string
         }
@@ -2208,6 +2209,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          note_template?: string | null
           system_prompt?: string | null
           user_id: string
         }
@@ -2215,6 +2217,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          note_template?: string | null
           system_prompt?: string | null
           user_id?: string
         }

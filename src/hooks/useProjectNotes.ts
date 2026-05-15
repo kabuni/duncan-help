@@ -50,23 +50,32 @@ export function useProjectNotes(projectId: string | null) {
 
   useEffect(() => {
     if (!projectId) return;
-    const ch = supabase
-      .channel(`project_notes:${projectId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "project_notes", filter: `project_id=eq.${projectId}` },
-        (payload: any) => {
-          const row = (payload.new || payload.old) as ProjectNote | undefined;
-          // If this change was just initiated locally, skip — our optimistic state is already correct
-          if (row && localIdsRef.current.has(row.id)) {
-            localIdsRef.current.delete(row.id);
-            return;
-          }
-          fetchNotes();
-        },
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel(`project_notes:${projectId}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "project_notes", filter: `project_id=eq.${projectId}` },
+          (payload: any) => {
+            const row = (payload.new || payload.old) as ProjectNote | undefined;
+            if (row && localIdsRef.current.has(row.id)) {
+              localIdsRef.current.delete(row.id);
+              return;
+            }
+            fetchNotes();
+          },
+        )
+        .subscribe();
+    } catch (e) {
+      console.warn("project_notes realtime subscribe failed", e);
+    }
+    return () => {
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+        channel = null;
+      }
+    };
   }, [projectId, fetchNotes]);
 
   const createNote = async (title = "Untitled note", content = "") => {

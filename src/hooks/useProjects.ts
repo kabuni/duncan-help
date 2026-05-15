@@ -99,7 +99,7 @@ export function useProjects() {
     return data as Project;
   }, [session, toast]);
 
-  const updateProject = useCallback(async (id: string, updates: { name?: string; system_prompt?: string | null }) => {
+  const updateProject = useCallback(async (id: string, updates: { name?: string; system_prompt?: string | null; note_template?: string | null }) => {
     const { error } = await supabase.from("projects").update(updates).eq("id", id);
     if (error) {
       toast({ title: "Error", description: "Failed to update project", variant: "destructive" });

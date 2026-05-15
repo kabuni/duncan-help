@@ -386,6 +386,16 @@ const Index = () => {
 
   const [newChatMode, setNewChatMode] = useState(false);
 
+  useEffect(() => {
+    const handler = () => {
+      clearMessages();
+      chatOps.startNewChat();
+      setNewChatMode(false);
+    };
+    window.addEventListener("duncan:show-dashboard", handler);
+    return () => window.removeEventListener("duncan:show-dashboard", handler);
+  }, [clearMessages, chatOps]);
+
   const handleClearChat = useCallback(() => {
     clearMessages();
     chatOps.startNewChat();

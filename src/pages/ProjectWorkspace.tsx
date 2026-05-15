@@ -111,6 +111,7 @@ export default function ProjectWorkspace() {
   const [openTaskCount, setOpenTaskCount] = useState(0);
   const [editName, setEditName] = useState("");
   const [editPrompt, setEditPrompt] = useState("");
+  const [editTemplate, setEditTemplate] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [manualDeselect, setManualDeselect] = useState(false);
   const [editingChatId, setEditingChatId] = useState<string | null>(null);

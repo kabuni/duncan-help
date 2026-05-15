@@ -383,9 +383,12 @@ const Index = () => {
     handleChatSubmit(prompt, []);
   };
 
+  const [newChatMode, setNewChatMode] = useState(false);
+
   const handleClearChat = useCallback(() => {
     clearMessages();
     chatOps.startNewChat();
+    setNewChatMode(true);
   }, [clearMessages, chatOps]);
 
   const hasMessages = messages.length > 0;
@@ -396,10 +399,11 @@ const Index = () => {
       <Sidebar
         mobileOpen={mobileMenuOpen}
         onMobileClose={() => setMobileMenuOpen(false)}
-        onSelectChat={(id) => chatOps.setActiveChatId(id)}
+        onSelectChat={(id) => { chatOps.setActiveChatId(id); setNewChatMode(false); }}
         onNewChat={() => {
           clearMessages();
           chatOps.startNewChat();
+          setNewChatMode(true);
         }}
         chatOps={chatOps}
       />

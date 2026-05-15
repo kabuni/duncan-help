@@ -4,14 +4,15 @@ import { motion } from "framer-motion";
 import {
   Plus, Search, Filter, LayoutGrid, List, Loader2,
   AlertTriangle, Clock, User, CheckCircle2, Target,
-  CalendarDays, ArrowUpDown,
+  CalendarDays, ArrowUpDown, ListChecks,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { useWorkstreamCards, useUserProfiles, type WorkstreamCard, type CardStatus } from "@/hooks/useWorkstreams";
+import { useWorkstreamCards, useUserProfiles, useTasksByAssignee, type WorkstreamCard, type CardStatus, type AssignedTask } from "@/hooks/useWorkstreams";
 
 import { isPast, isThisWeek } from "date-fns";
 import KanbanBoard from "@/components/workstreams/KanbanBoard";

@@ -30,7 +30,7 @@ export function RichNoteEditor({ value, onChange, placeholder }: Props) {
     editorProps: {
       attributes: {
         class:
-          "prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-full px-4 py-2 leading-snug [&_p]:my-1 [&_h1]:my-2 [&_h2]:my-2 [&_h3]:my-1.5 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_li_p]:my-0 [&_blockquote]:my-2 [&_pre]:my-2 [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]_p]:m-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:gap-2 [&_ul[data-type=taskList]_li>label]:mt-0.5",
+          "prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-full px-4 py-2 leading-snug prose-p:my-1 prose-headings:my-2 prose-h1:my-2 prose-h2:my-2 prose-h3:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-blockquote:my-2 prose-pre:my-2 [&_li>p]:my-0 [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]_p]:m-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:gap-2 [&_ul[data-type=taskList]_li>label]:mt-0.5",
       },
     },
     onUpdate: ({ editor }) => onChange(editor.getHTML()),

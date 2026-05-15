@@ -194,7 +194,14 @@ const Workstreams = () => {
           </motion.div>
 
           {/* Content */}
-          {isLoading ? (
+          {viewMode === "tasks" ? (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+              <TasksByPersonView
+                users={users || []}
+                onCardClick={(cardId) => setSelectedCardId(cardId)}
+              />
+            </motion.div>
+          ) : isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>

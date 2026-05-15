@@ -830,6 +830,26 @@ export default function ProjectWorkspace() {
                 rows={6}
               />
             </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                Note Template <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <Textarea
+                value={editTemplate}
+                onChange={(e) => setEditTemplate(e.target.value)}
+                placeholder={"# Topic\n\n## Context\n- \n\n## Decisions\n- \n\n## Action items\n- [ ] \n"}
+                rows={8}
+                className="font-mono text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Used as the starting content when you create a new note in this project. Leave blank to use the default.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSettings(false)}>Cancel</Button>
+            <Button onClick={saveSettings} disabled={!editName.trim()}>Save</Button>
+          </DialogFooter>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSettings(false)}>Cancel</Button>

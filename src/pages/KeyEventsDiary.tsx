@@ -363,7 +363,7 @@ export default function KeyEventsDiary() {
 
   return (
     <AppLayout>
-      <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 min-h-[calc(100dvh-3.5rem)] overflow-y-auto overflow-x-hidden">
+      <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 h-[calc(100dvh-3.5rem)] md:h-[100dvh] min-h-0 overflow-y-auto overflow-x-hidden">
         <header className="space-y-1 shrink-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight">Duncan Planner</h1>
@@ -497,11 +497,11 @@ export default function KeyEventsDiary() {
           </div>
         </div>
 
-        <Card className="p-2 sm:p-3 flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
+        <Card className="p-2 sm:p-3 shrink-0 min-w-0 flex flex-col overflow-visible">
           {loading ? (
             <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
           ) : (
-            <div className="flex-1 min-h-[60vh] md:min-h-[78vh] min-w-0 overflow-hidden">
+            <div className="min-h-[60vh] md:min-h-[78vh] min-w-0 overflow-visible">
               {isMobile ? (
                 <MobileAgenda
                   items={calItems}

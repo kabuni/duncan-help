@@ -217,9 +217,20 @@ export function useWorkstreamCards(filters?: {
 
       // Fetch task counts, card assignees, and owner profiles in parallel
       const [tasksRes, cardAssigneesRes] = await Promise.all([
-        supabase.from("workstream_tasks").select("card_id, completed, status, parent_task_id").in("card_id", cardIds),
+        supabase.from("workstream_tasks").select("id, card_id, completed, status, parent_task_id, assignee_id").in("card_id", cardIds),
         supabase.from("workstream_card_assignees").select("card_id, user_id, assignment_status, responded_at, decline_reason").in("card_id", cardIds),
       ]);
+
+      // Fetch task-level multi-assignees so the assignee filter can match cards by task/subtask.
+      const allTaskIds = (tasksRes.data || []).map((t: any) => t.id).filter(Boolean);
+      let taskAssigneesRows: Array<{ task_id: string; user_id: string }> = [];
+      if (allTaskIds.length > 0) {
+        const { data } = await supabase
+          .from("workstream_task_assignees")
+          .select("task_id, user_id")
+          .in("task_id", allTaskIds);
+        taskAssigneesRows = data || [];
+      }
 
       // Collect all user IDs for profile resolution
       const allUserIds = new Set<string>();
@@ -238,13 +249,26 @@ export function useWorkstreamCards(filters?: {
       // Aggregate task counts + group raw tasks per card for overall-status computation
       const taskCounts: Record<string, { total: number; completed: number }> = {};
       const tasksByCard: Record<string, Array<{ status?: string | null; completed?: boolean }>> = {};
+      // Build cardId -> Set<userId> from task.assignee_id (covers tasks + subtasks via parent linkage on card_id)
+      const taskAssigneeUsersByCard: Record<string, Set<string>> = {};
+      const taskIdToCardId: Record<string, string> = {};
       (tasksRes.data || []).forEach((t: any) => {
+        taskIdToCardId[t.id] = t.card_id;
+        if (t.assignee_id) {
+          (taskAssigneeUsersByCard[t.card_id] ||= new Set()).add(t.assignee_id);
+        }
         if (t.parent_task_id) return; // only count top-level tasks for card rollup
         if (!taskCounts[t.card_id]) taskCounts[t.card_id] = { total: 0, completed: 0 };
         taskCounts[t.card_id].total++;
         if (t.completed) taskCounts[t.card_id].completed++;
         if (!tasksByCard[t.card_id]) tasksByCard[t.card_id] = [];
         tasksByCard[t.card_id].push({ status: t.status, completed: t.completed });
+      });
+      // Fold workstream_task_assignees rows into the same map
+      taskAssigneesRows.forEach(ta => {
+        const cardId = taskIdToCardId[ta.task_id];
+        if (!cardId) return;
+        (taskAssigneeUsersByCard[cardId] ||= new Set()).add(ta.user_id);
       });
 
       // Aggregate card assignees
@@ -254,12 +278,14 @@ export function useWorkstreamCards(filters?: {
         cardAssigneeMap[a.card_id].push({ user_id: a.user_id, display_name: profileMap[a.user_id] || "Unknown", assignment_status: a.assignment_status, responded_at: a.responded_at, decline_reason: a.decline_reason });
       });
 
-      // Filter by assignee if needed (check both owner_id and card_assignees)
+      // Filter by assignee if needed — check card owner, card assignees, and any task/subtask assignee
       let filteredCards = cards;
       if (filters?.assignee) {
+        const target = filters.assignee;
         filteredCards = cards.filter(c =>
-          c.owner_id === filters.assignee ||
-          (cardAssigneeMap[c.id] || []).some(a => a.user_id === filters.assignee)
+          c.owner_id === target ||
+          (cardAssigneeMap[c.id] || []).some(a => a.user_id === target) ||
+          (taskAssigneeUsersByCard[c.id]?.has(target) ?? false)
         );
       }
 

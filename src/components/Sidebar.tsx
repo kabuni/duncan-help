@@ -305,7 +305,7 @@ const Sidebar = ({
           onNewChat={() => {
             chatOps.startNewChat();
             onNewChat?.();
-            navigate("/");
+            navigate("/", { state: { newChat: true } });
             onMobileClose?.();
           }}
           onDeleteChat={chatOps.deleteChat}

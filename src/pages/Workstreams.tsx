@@ -230,7 +230,11 @@ const Workstreams = () => {
           onOpenChange={(v) => { setShowCreate(v); if (!v) setPrefillTag(undefined); }}
           prefillTag={prefillTag}
         />
-        <CardDetailModal cardId={selectedCardId} onClose={() => setSelectedCardId(null)} />
+        <CardDetailModal
+          cardId={selectedCardId}
+          onClose={() => setSelectedCardId(null)}
+          assigneeFilter={filterAssignee !== "all" ? filterAssignee : undefined}
+        />
       </main>
     </AppLayout>
   );

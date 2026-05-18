@@ -1357,6 +1357,104 @@ export type Database = {
         }
         Relationships: []
       }
+      kb_document_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string
+          document_id: string
+          embedding: string | null
+          id: string
+          metadata: Json
+          token_count: number | null
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string
+          document_id: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          token_count?: number | null
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          document_id?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          token_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kb_document_chunks_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "kb_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kb_documents: {
+        Row: {
+          blob_path: string | null
+          blob_url: string | null
+          category: string | null
+          chunk_count: number
+          created_at: string
+          error_message: string | null
+          file_name: string
+          file_type: string
+          id: string
+          owner_id: string
+          scope: string
+          status: string
+          subcategory: string | null
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          blob_path?: string | null
+          blob_url?: string | null
+          category?: string | null
+          chunk_count?: number
+          created_at?: string
+          error_message?: string | null
+          file_name: string
+          file_type: string
+          id?: string
+          owner_id: string
+          scope: string
+          status?: string
+          subcategory?: string | null
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          blob_path?: string | null
+          blob_url?: string | null
+          category?: string | null
+          chunk_count?: number
+          created_at?: string
+          error_message?: string | null
+          file_name?: string
+          file_type?: string
+          id?: string
+          owner_id?: string
+          scope?: string
+          status?: string
+          subcategory?: string | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       key_event_approvals: {
         Row: {
           approval_type: string
@@ -3700,6 +3798,23 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      match_documents: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          p_user_id?: string
+          query_embedding: string
+        }
+        Returns: {
+          chunk_index: number
+          content: string
+          document_id: string
+          document_title: string
+          id: string
+          metadata: Json
+          similarity: number
+        }[]
       }
       match_project_chunks: {
         Args: {

@@ -385,6 +385,7 @@ const Index = () => {
   };
 
   const [newChatMode, setNewChatMode] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const handler = () => {
@@ -395,6 +396,16 @@ const Index = () => {
     window.addEventListener("duncan:show-dashboard", handler);
     return () => window.removeEventListener("duncan:show-dashboard", handler);
   }, [clearMessages, chatOps]);
+
+  useEffect(() => {
+    if ((location.state as any)?.newChat) {
+      clearMessages();
+      chatOps.startNewChat();
+      setNewChatMode(true);
+      window.history.replaceState({}, document.title);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
 
   const handleClearChat = useCallback(() => {
     clearMessages();

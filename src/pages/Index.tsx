@@ -8,7 +8,7 @@ import FeatureRequestModal from "@/components/FeatureRequestModal";
 import ReactMarkdown from "react-markdown";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
 import remarkGfm from "remark-gfm";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import Sidebar, { MobileMenuButton } from "@/components/Sidebar";
 import WelcomeModal from "@/components/WelcomeModal";
 import { useNormanChat } from "@/hooks/useNormanChat";
@@ -385,6 +385,7 @@ const Index = () => {
   };
 
   const [newChatMode, setNewChatMode] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const handler = () => {
@@ -395,6 +396,16 @@ const Index = () => {
     window.addEventListener("duncan:show-dashboard", handler);
     return () => window.removeEventListener("duncan:show-dashboard", handler);
   }, [clearMessages, chatOps]);
+
+  useEffect(() => {
+    if ((location.state as any)?.newChat) {
+      clearMessages();
+      chatOps.startNewChat();
+      setNewChatMode(true);
+      window.history.replaceState({}, document.title);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
 
   const handleClearChat = useCallback(() => {
     clearMessages();

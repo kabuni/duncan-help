@@ -69,28 +69,27 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
     return (card.assignees || []).find(a => a.user_id === user.id) || null;
   }, [card, user]);
 
-  if (!cardId) return null;
-
   const rawTasks = data?.tasks || [];
   const tasks = useMemo(() => {
     if (!assigneeFilter) return rawTasks;
     const matches = (t: WorkstreamTask) =>
-      t.assignee_id === assigneeFilter ||
-      (t.assignees || []).some(a => a.user_id === assigneeFilter);
+      t?.assignee_id === assigneeFilter ||
+      (t?.assignees || []).some(a => a?.user_id === assigneeFilter);
     const out: WorkstreamTask[] = [];
-    for (const t of rawTasks) {
+    for (const t of (rawTasks || [])) {
+      if (!t) continue;
       const taskMatch = matches(t);
       const matchingSubs = (t.subtasks || []).filter(matches);
       if (taskMatch) {
-        // Keep all subtasks for context when the parent task itself matches.
         out.push(t);
       } else if (matchingSubs.length > 0) {
-        // Parent doesn't match — keep it visible but show only the matching subtasks.
         out.push({ ...t, subtasks: matchingSubs });
       }
     }
     return out;
   }, [rawTasks, assigneeFilter]);
+
+  if (!cardId) return null;
   const comments = data?.comments || [];
   const activity = data?.activity || [];
 

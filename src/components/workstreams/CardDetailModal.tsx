@@ -32,9 +32,10 @@ import { useAuth } from "@/hooks/useAuth";
 interface CardDetailModalProps {
   cardId: string | null;
   onClose: () => void;
+  assigneeFilter?: string;
 }
 
-export default function CardDetailModal({ cardId, onClose }: CardDetailModalProps) {
+export default function CardDetailModal({ cardId, onClose, assigneeFilter }: CardDetailModalProps) {
   const { user } = useAuth();
   const { data, isLoading } = useWorkstreamCard(cardId);
   const { data: users } = useUserProfiles();

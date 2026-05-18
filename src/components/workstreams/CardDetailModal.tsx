@@ -32,9 +32,10 @@ import { useAuth } from "@/hooks/useAuth";
 interface CardDetailModalProps {
   cardId: string | null;
   onClose: () => void;
+  assigneeFilter?: string;
 }
 
-export default function CardDetailModal({ cardId, onClose }: CardDetailModalProps) {
+export default function CardDetailModal({ cardId, onClose, assigneeFilter }: CardDetailModalProps) {
   const { user } = useAuth();
   const { data, isLoading } = useWorkstreamCard(cardId);
   const { data: users } = useUserProfiles();
@@ -70,7 +71,26 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
 
   if (!cardId) return null;
 
-  const tasks = data?.tasks || [];
+  const rawTasks = data?.tasks || [];
+  const tasks = useMemo(() => {
+    if (!assigneeFilter) return rawTasks;
+    const matches = (t: WorkstreamTask) =>
+      t.assignee_id === assigneeFilter ||
+      (t.assignees || []).some(a => a.user_id === assigneeFilter);
+    const out: WorkstreamTask[] = [];
+    for (const t of rawTasks) {
+      const taskMatch = matches(t);
+      const matchingSubs = (t.subtasks || []).filter(matches);
+      if (taskMatch) {
+        // Keep all subtasks for context when the parent task itself matches.
+        out.push(t);
+      } else if (matchingSubs.length > 0) {
+        // Parent doesn't match — keep it visible but show only the matching subtasks.
+        out.push({ ...t, subtasks: matchingSubs });
+      }
+    }
+    return out;
+  }, [rawTasks, assigneeFilter]);
   const comments = data?.comments || [];
   const activity = data?.activity || [];
 

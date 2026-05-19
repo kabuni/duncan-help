@@ -619,6 +619,104 @@ export type Database = {
         }
         Relationships: []
       }
+      document_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string
+          document_id: string
+          embedding: string | null
+          id: string
+          metadata: Json
+          token_count: number | null
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string
+          document_id: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          token_count?: number | null
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          document_id?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          token_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_chunks_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          blob_path: string
+          blob_url: string
+          category: string | null
+          chunk_count: number
+          created_at: string
+          error_message: string | null
+          file_name: string
+          file_type: string
+          id: string
+          owner_id: string
+          scope: string
+          status: string
+          subcategory: string | null
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          blob_path?: string
+          blob_url?: string
+          category?: string | null
+          chunk_count?: number
+          created_at?: string
+          error_message?: string | null
+          file_name: string
+          file_type: string
+          id?: string
+          owner_id: string
+          scope: string
+          status?: string
+          subcategory?: string | null
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          blob_path?: string
+          blob_url?: string
+          category?: string | null
+          chunk_count?: number
+          created_at?: string
+          error_message?: string | null
+          file_name?: string
+          file_type?: string
+          id?: string
+          owner_id?: string
+          scope?: string
+          status?: string
+          subcategory?: string | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       duncan_calendar_tokens: {
         Row: {
           access_token: string

@@ -135,7 +135,7 @@ async function embedBatch(inputs: string[]): Promise<number[][]> {
   const r = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: { Authorization: `Bearer ${OPENAI_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "text-embedding-3-small", input: inputs }),
+    body: JSON.stringify({ model: "text-embedding-3-small", input: inputs, dimensions: 1024 }),
   });
   if (!r.ok) throw new Error(`OpenAI embeddings ${r.status}: ${await r.text()}`);
   const j = await r.json();

@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
     const embRes = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
       headers: { Authorization: `Bearer ${OPENAI_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "text-embedding-3-small", input: query }),
+      body: JSON.stringify({ model: "text-embedding-3-small", input: query, dimensions: 1024 }),
     });
     if (!embRes.ok) {
       return new Response(JSON.stringify({ error: `embedding ${embRes.status}` }), {

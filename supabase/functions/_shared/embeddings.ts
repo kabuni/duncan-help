@@ -34,7 +34,7 @@ async function callOnce(text: string, key: string): Promise<number[]> {
     resp = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: EMBEDDING_MODEL, input: text }),
+      body: JSON.stringify({ model: EMBEDDING_MODEL, input: text, dimensions: 1024 }),
       signal: ctrl.signal,
     });
   } catch (e: any) {

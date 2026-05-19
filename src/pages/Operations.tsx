@@ -240,6 +240,13 @@ const Operations = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
+                <a
+                  href="/recruitment"
+                  className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Recruitment
+                </a>
                 <button
                   onClick={() => handleSync("azure")}
                   disabled={syncing === "azure"}

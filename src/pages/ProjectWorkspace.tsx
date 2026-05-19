@@ -328,8 +328,7 @@ export default function ProjectWorkspace() {
   if (projectsLoading) {
     return (
       <div className="flex h-screen overflow-hidden bg-background">
-        <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-        <main className="flex-1 lg:ml-64 flex items-center justify-center">
+        <main className="flex-1 flex items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </main>
       </div>
@@ -340,8 +339,7 @@ export default function ProjectWorkspace() {
   if (!project) {
     return (
       <div className="flex h-screen overflow-hidden bg-background">
-        <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-        <main className="flex-1 lg:ml-64 flex flex-col items-center justify-center gap-3">
+        <main className="flex-1 flex flex-col items-center justify-center gap-3">
           <p className="text-sm text-muted-foreground">Project not found</p>
           <Button variant="outline" size="sm" onClick={() => navigate("/projects")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -357,11 +355,10 @@ export default function ProjectWorkspace() {
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-background">
-      <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-      <main className="flex-1 lg:ml-64 flex flex-col min-h-0 overflow-hidden">
+      <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Header */}
         <header className="flex items-center gap-1.5 sm:gap-3 border-b border-border px-2 sm:px-4 py-3 shrink-0">
-          <MobileMenuButton onClick={() => setMobileOpen(true)} />
+          
           <button onClick={() => navigate("/projects")} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">
             <ArrowLeft className="h-4 w-4" />
           </button>

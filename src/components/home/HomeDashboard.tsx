@@ -76,6 +76,79 @@ function RsvpSummaryTile() {
   );
 }
 
+const STATUS_STYLES: Record<string, string> = {
+  red: "bg-destructive/10 text-destructive border-destructive/20",
+  amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  green: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+  not_started: "bg-muted text-muted-foreground border-border",
+  done: "bg-muted text-muted-foreground border-border",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  red: "Off track",
+  amber: "At risk",
+  green: "On track",
+  not_started: "Not started",
+  done: "Done",
+};
+
+function MyPendingTasksTile() {
+  const navigate = useNavigate();
+  const { data, isLoading } = useMyPendingTasks();
+  const tasks = (data ?? []).slice(0, 8);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return (
+    <TileShell delay={0.13}>
+      <TileHeader
+        icon={ListChecks}
+        label={`My Pending Tasks${data?.length ? ` · ${data.length}` : ""}`}
+        action={
+          <button
+            onClick={() => navigate("/workstreams")}
+            className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5"
+          >
+            Open <ExternalLink className="h-2.5 w-2.5" />
+          </button>
+        }
+      />
+      {isLoading ? (
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      ) : tasks.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No pending tasks. You're all clear.</p>
+      ) : (
+        <div className="divide-y divide-border/40">
+          {tasks.map((t) => {
+            const due = t.due_date ? new Date(t.due_date + "T00:00:00") : null;
+            const overdue = due ? due < today : false;
+            return (
+              <button
+                key={t.id}
+                onClick={() => navigate(`/workstreams?card=${t.card_id}`)}
+                className="w-full text-left flex items-center gap-3 py-2 hover:bg-muted/30 rounded-md px-1 -mx-1 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-medium text-foreground truncate">{t.title}</div>
+                  <div className="text-[10px] text-muted-foreground truncate">{t.card_title}</div>
+                </div>
+                <div className="shrink-0 flex items-center gap-2">
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${STATUS_STYLES[t.status] || STATUS_STYLES.not_started}`}>
+                    {STATUS_LABEL[t.status] || t.status}
+                  </span>
+                  <span className={`text-[10px] tabular-nums ${overdue ? "text-destructive font-semibold" : "text-muted-foreground"}`}>
+                    {due ? due.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "No date"}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </TileShell>
+  );
+}
+
 export const HomeDashboard = ({ userName }: { userName: string }) => {
   const navigate = useNavigate();
   const ga = useGAHomeSummary();

@@ -16,6 +16,61 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
+function parseConnectionString(connStr: string): { accountName: string; accountKey: string; containerName: string } {
+  const parts: Record<string, string> = {};
+  for (const part of connStr.trim().split(";")) {
+    const idx = part.indexOf("=");
+    if (idx > 0) parts[part.slice(0, idx).trim()] = part.slice(idx + 1).trim();
+  }
+  if (!parts.AccountName || !parts.AccountKey) throw new Error("Invalid Azure Storage connection string");
+  return {
+    accountName: parts.AccountName,
+    accountKey: parts.AccountKey,
+    containerName: Deno.env.get("AZURE_STORAGE_CONTAINER") || "duncanstorage01",
+  };
+}
+
+async function createSharedKeySignature(
+  accountName: string,
+  accountKey: string,
+  method: string,
+  path: string,
+  headers: Record<string, string>,
+): Promise<string> {
+  const canonicalizedHeaders = Object.keys(headers)
+    .filter((k) => k.toLowerCase().startsWith("x-ms-"))
+    .sort()
+    .map((k) => `${k.toLowerCase()}:${headers[k]}`)
+    .join("\n");
+  const stringToSign = [method, "", "", "", "", "", "", "", "", "", "", "", canonicalizedHeaders, `/${accountName}${path}`].join("\n");
+  const keyBytes = Uint8Array.from(atob(accountKey), (c) => c.charCodeAt(0));
+  const cryptoKey = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signatureBytes = await crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(stringToSign));
+  const signature = btoa(String.fromCharCode(...new Uint8Array(signatureBytes)));
+  return `SharedKey ${accountName}:${signature}`;
+}
+
+async function downloadBlobBytes(doc: any): Promise<Uint8Array> {
+  const connectionString = Deno.env.get("AZURE_STORAGE_CONNECTION_STRING");
+  if (!connectionString || !doc.blob_path) {
+    const dl = await fetch(doc.blob_url);
+    if (!dl.ok) throw new Error(`Download failed ${dl.status}: ${await dl.text()}`);
+    return new Uint8Array(await dl.arrayBuffer());
+  }
+
+  const { accountName, accountKey, containerName } = parseConnectionString(connectionString);
+  const encodedPath = String(doc.blob_path).split("/").map(encodeURIComponent).join("/");
+  const path = `/${containerName}/${encodedPath}`;
+  const headers: Record<string, string> = {
+    "x-ms-date": new Date().toUTCString(),
+    "x-ms-version": "2023-11-03",
+  };
+  headers.Authorization = await createSharedKeySignature(accountName, accountKey, "GET", path, headers);
+  const dl = await fetch(`https://${accountName}.blob.core.windows.net${path}`, { method: "GET", headers });
+  if (!dl.ok) throw new Error(`Azure download failed ${dl.status}: ${await dl.text()}`);
+  return new Uint8Array(await dl.arrayBuffer());
+}
+
 // ~4 chars/token rough; 500 tokens ≈ 2000 chars; overlap 100 tok ≈ 400 chars
 const CHUNK_CHARS = 2000;
 const OVERLAP_CHARS = 400;
@@ -80,7 +135,7 @@ async function embedBatch(inputs: string[]): Promise<number[][]> {
   const r = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: { Authorization: `Bearer ${OPENAI_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "text-embedding-3-small", input: inputs }),
+    body: JSON.stringify({ model: "text-embedding-3-small", input: inputs, dimensions: 1024 }),
   });
   if (!r.ok) throw new Error(`OpenAI embeddings ${r.status}: ${await r.text()}`);
   const j = await r.json();
@@ -93,10 +148,8 @@ async function process(document_id: string) {
   if (docErr || !doc) throw new Error(`Document not found: ${document_id}`);
 
   try {
-    // Download from Azure
-    const dl = await fetch(doc.blob_url);
-    if (!dl.ok) throw new Error(`Download failed ${dl.status}`);
-    const bytes = new Uint8Array(await dl.arrayBuffer());
+    // Download from Azure using SharedKey when available, because the container is private.
+    const bytes = await downloadBlobBytes(doc);
 
     const text = await extractText(bytes, doc.file_type);
     const chunks = chunkText(text);

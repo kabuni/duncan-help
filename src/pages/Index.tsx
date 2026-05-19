@@ -423,26 +423,15 @@ const Index = () => {
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="flex min-h-[100dvh] bg-background">
+    <div className="flex h-full bg-background">
       <WelcomeModal />
-      <Sidebar
-        mobileOpen={mobileMenuOpen}
-        onMobileClose={() => setMobileMenuOpen(false)}
-        onSelectChat={(id) => { chatOps.setActiveChatId(id); setNewChatMode(false); }}
-        onNewChat={() => {
-          clearMessages();
-          chatOps.startNewChat();
-          setNewChatMode(true);
-        }}
-        chatOps={chatOps}
-      />
-      <main className="lg:ml-64 flex-1 flex flex-col h-[100dvh] w-full">
+      <main className="flex-1 flex flex-col h-full w-full">
         <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />
 
         {/* Header */}
         <div className="relative z-10 flex items-center gap-3 border-b border-border px-4 sm:px-8 py-3 sm:py-4">
-          <MobileMenuButton onClick={() => setMobileMenuOpen(true)} />
           <div className="flex-1 min-w-0">
+
             <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
               {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
             </p>

@@ -1,0 +1,577 @@
+{
+  "info": {
+    "name": "Duncan API",
+    "description": "Kabuni's Duncan platform FastAPI backend",
+    "_postman_id": "duncan-api-v1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000" },
+    { "key": "access_token", "value": "" },
+    { "key": "refresh_token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Sign Up",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/signup",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@kabuni.com\",\n  \"password\": \"password123\",\n  \"display_name\": \"Test User\",\n  \"role_title\": \"Developer\",\n  \"department\": \"Engineering\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sign In",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.access_token) {",
+                  "  pm.collectionVariables.set('access_token', json.access_token);",
+                  "  pm.collectionVariables.set('refresh_token', json.refresh_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/signin",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@kabuni.com\",\n  \"password\": \"password123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Me",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/auth/me",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/refresh",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sign Out",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/signout",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/change-password",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"password123\",\n  \"new_password\": \"newpassword456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Request Password Reset",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/password-reset/request",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@kabuni.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "[Admin] List Pending Users",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/auth/admin/pending-users",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "[Admin] Approve User",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/admin/approve/USER_ID",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "[Admin] Set User Roles",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/admin/roles/USER_ID",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roles\": [\"user\"]\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "Norman Chat (SSE Stream)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/norman-chat",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "text/event-stream" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"What are my current workstream tasks?\" }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Generate Chat Title",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/generate-chat-title",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"What are my overdue tasks?\" }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Get General Chats",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/general-chats",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "Create General Chat",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/general-chats",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"New Conversation\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "Get Projects",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/get-projects",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "Create Project",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/create-project",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Q1 2026 Launch\",\n  \"description\": \"Product launch project\",\n  \"color\": \"#6366f1\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Project Chats",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/get-project-chats?project_id=PROJECT_ID",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "Create Project Chat",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/create-project-chat?project_id=PROJECT_ID",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Planning Session\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workstreams",
+      "item": [
+        {
+          "name": "Get Workstream Cards",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/workstream-cards",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "Create Workstream Card",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/workstream-cards",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"PROJECT_ID\",\n  \"title\": \"Design landing page\",\n  \"description\": \"Create new landing page designs\",\n  \"status\": \"green\",\n  \"due_date\": \"2026-05-30\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Workstream Card",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/workstream-cards/CARD_ID",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"yellow\",\n  \"description\": \"Updated description\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Check Overdue Tasks",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/check-overdue-tasks",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Recruitment",
+      "item": [
+        {
+          "name": "Get Job Roles",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/job-roles",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "Get Candidates",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/candidates",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "Generate JD",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/generate-jd",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"job_title\": \"Senior Software Engineer\",\n  \"department\": \"Engineering\",\n  \"seniority\": \"Senior\",\n  \"required_skills\": [\"Python\", \"React\", \"PostgreSQL\"],\n  \"key_responsibilities\": [\"Build backend APIs\", \"Code review\", \"Mentor juniors\"]\n}"
+            }
+          }
+        },
+        {
+          "name": "Score CV Values",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/score-cv-values",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cv_text\": \"John Smith - 10 years experience in software engineering...\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Meetings & Briefings",
+      "item": [
+        {
+          "name": "Get Meetings",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/meetings",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "Daily Briefing",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/daily-briefing",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "CEO Briefing Status",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/ceo-briefing-status",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "Mark Briefing Shown",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/mark-briefing-shown",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"briefing_id\": \"BRIEFING_ID\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Storage",
+      "item": [
+        {
+          "name": "Download Blob (Authenticated Proxy)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/azure-blob-api/download?path=projects/PROJECT_ID/filename.pdf",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "List Blobs",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/azure-blob-api/list?prefix=projects/",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Gmail",
+      "item": [
+        {
+          "name": "Gmail Auth URL",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/gmail/gmail-auth",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        },
+        {
+          "name": "Gmail Status",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/gmail/gmail-api",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"STATUS\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Gmail List Emails",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/gmail/gmail-api",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"LIST\",\n  \"query\": \"is:unread\",\n  \"max_results\": 10\n}"
+            }
+          }
+        },
+        {
+          "name": "Gmail Auto Draft",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/gmail/gmail-auto-draft",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"original_email\": \"Hi, I wanted to follow up on the project status...\",\n  \"tone\": \"professional\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Integrations",
+      "item": [
+        {
+          "name": "Basecamp Status",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/basecamp-api",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"STATUS\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Azure DevOps Status",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/azure-devops-api",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"STATUS\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Slack Send Message",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/slack-send-message",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"#general\",\n  \"text\": \"Test message from Duncan\"\n}"
+            }
+          }
+        },
+        {
+          "name": "ElevenLabs Scribe Token",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/elevenlabs-scribe-token",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Test Claude",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/test-claude",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Hello! Are you working?\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Notifications",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/notifications",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -22,3 +22,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+fastapi-backend/.env
+fastapi-backend/duncan/

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Plug, Settings, LogOut, X, ChevronDown, CheckCircle2, Mail, FileText, MessageSquare, Calendar, FolderOpen, GitBranch, Zap, Menu, Layers, Megaphone, Crown, Inbox, Receipt } from "lucide-react";
+import { LayoutDashboard, Plug, Settings, LogOut, X, ChevronDown, CheckCircle2, Mail, FileText, MessageSquare, Calendar, FolderOpen, GitBranch, Zap, Menu, Layers, Megaphone, Crown, Inbox, Receipt, BookOpen } from "lucide-react";
 import { canViewBriefing } from "@/lib/ceoAccess";
 import ChatHistory from "@/components/ChatHistory";
 import { useGeneralChats } from "@/hooks/useGeneralChats";
@@ -191,6 +191,20 @@ const Sidebar = ({
           <Calendar className="h-4 w-4" />
           Planner
         </RouterNavLink>
+
+        <RouterNavLink
+          to="/knowledge-base"
+          onClick={() => onMobileClose?.()}
+          className={({ isActive }) =>
+            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )
+          }
+        >
+          <BookOpen className="h-4 w-4" />
+          Knowledge Base
+        </RouterNavLink>
+
 
         <RouterNavLink
           to="/approvals"

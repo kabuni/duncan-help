@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApprovals, useDecideApproval, type ApprovalRow, type ApprovalKind } from "@/hooks/useApprovals";
@@ -196,37 +197,39 @@ export default function Approvals() {
           </div>
 
           {isRejecting && (
-            <div className="mt-2 flex gap-2 items-center border-t border-border pt-2">
-              <Input
+            <div className="mt-2 flex flex-col gap-2 border-t border-border pt-2">
+              <Textarea
                 placeholder="Reason (required)"
                 value={rejectNote}
                 onChange={(e) => setRejectNote(e.target.value)}
-                className="h-8 text-xs flex-1"
+                className="min-h-24 text-xs resize-y"
                 autoFocus
               />
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs"
-                onClick={() => {
-                  setRejectingId(null);
-                  setRejectNote("");
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                className="h-8 text-xs"
-                disabled={!rejectNote.trim() || decide.isPending}
-                onClick={async () => {
-                  await decide.mutateAsync({ row: r, status: "rejected", note: rejectNote.trim() });
-                  setRejectingId(null);
-                  setRejectNote("");
-                }}
-              >
-                Confirm reject
-              </Button>
+              <div className="flex justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => {
+                    setRejectingId(null);
+                    setRejectNote("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 text-xs"
+                  disabled={!rejectNote.trim() || decide.isPending}
+                  onClick={async () => {
+                    await decide.mutateAsync({ row: r, status: "rejected", note: rejectNote.trim() });
+                    setRejectingId(null);
+                    setRejectNote("");
+                  }}
+                >
+                  Confirm reject
+                </Button>
+              </div>
             </div>
           )}
         </Card>

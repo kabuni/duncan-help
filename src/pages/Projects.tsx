@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Plus, FolderOpen, Loader2, ArrowRight, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import Sidebar, { MobileMenuButton } from "@/components/Sidebar";
 import { useProjects } from "@/hooks/useProjects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +11,6 @@ import { format } from "date-fns";
 export default function Projects() {
   const navigate = useNavigate();
   const { projects, loading, createProject, deleteProject } = useProjects();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPrompt, setNewPrompt] = useState("");

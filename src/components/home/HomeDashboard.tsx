@@ -2,10 +2,10 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
   Globe2, TrendingUp, TrendingDown, Users, Briefcase, FolderKanban,
-  AlertTriangle, Share2, BarChart3, ExternalLink, Loader2, CalendarCheck,
+  AlertTriangle, Share2, BarChart3, ExternalLink, Loader2, CalendarCheck, ListChecks,
 } from "lucide-react";
 import {
-  useGAHomeSummary, useHiresStats, useWorkstreamsStats, useProjectsStats, useSocialStats, useRsvpStats,
+  useGAHomeSummary, useHiresStats, useWorkstreamsStats, useProjectsStats, useSocialStats, useRsvpStats, useMyPendingTasks,
 } from "@/hooks/useHomeDashboard";
 
 const formatNumber = (n: number) => new Intl.NumberFormat("en-US").format(Math.round(n));

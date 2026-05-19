@@ -148,10 +148,8 @@ async function process(document_id: string) {
   if (docErr || !doc) throw new Error(`Document not found: ${document_id}`);
 
   try {
-    // Download from Azure
-    const dl = await fetch(doc.blob_url);
-    if (!dl.ok) throw new Error(`Download failed ${dl.status}`);
-    const bytes = new Uint8Array(await dl.arrayBuffer());
+    // Download from Azure using SharedKey when available, because the container is private.
+    const bytes = await downloadBlobBytes(doc);
 
     const text = await extractText(bytes, doc.file_type);
     const chunks = chunkText(text);

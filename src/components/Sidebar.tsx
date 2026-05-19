@@ -48,8 +48,7 @@ const Sidebar = ({
   onNewChat?: () => void;
   chatOps?: ReturnType<typeof useGeneralChats>;
 }) => {
-  const internalChatOps = useGeneralChats();
-  const chatOps = externalChatOps || internalChatOps;
+  const chatOps = useGeneralChatsContext();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);

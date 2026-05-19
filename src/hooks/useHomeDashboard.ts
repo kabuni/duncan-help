@@ -26,6 +26,16 @@ export type HiresStats = {
   interviewsThisWeek: number;
 };
 
+export type MyTask = {
+  id: string;
+  title: string;
+  status: string;
+  completed: boolean;
+  due_date: string | null;
+  card_id: string;
+  card_title: string;
+};
+
 export type WorkstreamsStats = {
   active: number;
   red: number;
@@ -271,4 +281,61 @@ export function useRsvpStats(eventId: string) {
   }, [eventId, compute]);
 
   return { data, loading };
+}
+
+export function useMyPendingTasks() {
+  const { user } = useAuth();
+  return useQuery<MyTask[]>({
+    queryKey: ["home-dashboard", "my-pending-tasks", user?.id],
+    enabled: !!user,
+    staleTime: FIVE_MIN,
+    queryFn: async () => {
+      const uid = user!.id;
+      const [directRes, multiRes] = await Promise.all([
+        supabase
+          .from("workstream_tasks")
+          .select("id, title, status, completed, due_date, card_id")
+          .eq("assignee_id", uid)
+          .eq("completed", false),
+        (supabase as any)
+          .from("workstream_task_assignees")
+          .select("task_id, workstream_tasks!inner(id, title, status, completed, due_date, card_id)")
+          .eq("user_id", uid),
+      ]);
+
+      const byId = new Map<string, any>();
+      (directRes.data || []).forEach((t: any) => byId.set(t.id, t));
+      (multiRes.data || []).forEach((row: any) => {
+        const t = row.workstream_tasks;
+        if (t && !t.completed) byId.set(t.id, t);
+      });
+      const tasks = Array.from(byId.values());
+      if (tasks.length === 0) return [];
+
+      const cardIds = Array.from(new Set(tasks.map((t) => t.card_id).filter(Boolean)));
+      const { data: cards } = await supabase
+        .from("workstream_cards")
+        .select("id, title")
+        .in("id", cardIds);
+      const cardMap: Record<string, string> = {};
+      (cards || []).forEach((c: any) => { cardMap[c.id] = c.title; });
+
+      return tasks
+        .map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          completed: t.completed,
+          due_date: t.due_date,
+          card_id: t.card_id,
+          card_title: cardMap[t.card_id] || "Workstream",
+        }))
+        .sort((a, b) => {
+          if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date);
+          if (a.due_date) return -1;
+          if (b.due_date) return 1;
+          return 0;
+        });
+    },
+  });
 }

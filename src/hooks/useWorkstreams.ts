@@ -47,9 +47,12 @@ export interface TaskBreakdown {
  * is normalized to "done" to handle inconsistent legacy rows.
  */
 export function getOverallStatus(
-  tasks: Array<{ status?: CardStatus | string | null; completed?: boolean }> | undefined | null
+  tasks: Array<{ status?: CardStatus | string | null; completed?: boolean }> | undefined | null,
+  manualStatus?: CardStatus | null
 ): CardStatus {
-  if (!tasks || tasks.length === 0) return "not_started";
+  // Manual status is authoritative when explicitly set (not the default "not_started").
+  if (manualStatus && manualStatus !== "not_started") return manualStatus;
+  if (!tasks || tasks.length === 0) return manualStatus || "not_started";
 
   let hasRed = false;
   let hasAmber = false;

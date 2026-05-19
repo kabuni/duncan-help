@@ -138,7 +138,11 @@ const Sidebar = ({
           end
           onClick={() => {
             onMobileClose?.();
-            window.dispatchEvent(new CustomEvent("duncan:show-dashboard"));
+            window.dispatchEvent(
+              new CustomEvent("duncan:show-dashboard", {
+                detail: { explicit: true },
+              })
+            );
           }}
           className={({ isActive }) =>
             cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",

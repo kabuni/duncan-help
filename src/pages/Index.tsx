@@ -384,11 +384,16 @@ const Index = () => {
     handleChatSubmit(prompt, []);
   };
 
-  const [newChatMode, setNewChatMode] = useState(false);
   const location = useLocation();
+  const [newChatMode, setNewChatMode] = useState(
+    () => !!(location.state as any)?.newChat
+  );
 
   useEffect(() => {
-    const handler = () => {
+    const handler = (event: Event) => {
+      const explicit = (event as CustomEvent).detail?.explicit === true;
+      if (!explicit) return;
+
       clearMessages();
       chatOps.startNewChat();
       setNewChatMode(false);
@@ -402,7 +407,10 @@ const Index = () => {
       clearMessages();
       chatOps.startNewChat();
       setNewChatMode(true);
-      window.history.replaceState({}, document.title);
+      navigate(location.pathname, {
+        replace: true,
+        state: {},
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.key]);

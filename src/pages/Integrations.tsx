@@ -7,7 +7,6 @@ import {
   GitBranch, HardDrive
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
-import AppLayout from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -455,7 +454,7 @@ const Integrations = () => {
   const companyDocs = companyIntegrations.reduce((sum, c) => sum + (c.documents_ingested ?? 0), 0);
   const totalDocs = userDocs + companyDocs;
   return (
-    <AppLayout>
+    <>
       <main className="flex-1 overflow-y-auto">
         <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />
 
@@ -588,7 +587,7 @@ const Integrations = () => {
           )}
         </AnimatePresence>
       </main>
-    </AppLayout>
+    </>
   );
 };
 

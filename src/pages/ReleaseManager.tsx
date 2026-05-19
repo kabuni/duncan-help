@@ -1,5 +1,4 @@
 import { useState } from "react";
-import AppLayout from "@/components/AppLayout";
 import { useReleases, useCreateRelease, useUpdateRelease, usePublishRelease, useDeleteRelease, Release } from "@/hooks/useReleases";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { Button } from "@/components/ui/button";
@@ -46,7 +45,7 @@ export default function ReleaseManager() {
   const [summary, setSummary] = useState("");
   const [changes, setChanges] = useState<{ type: string; description: string }[]>([{ type: "feature", description: "" }]);
 
-  if (rolesLoading) return <AppLayout><div className="flex items-center justify-center h-64"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div></AppLayout>;
+  if (rolesLoading) return <><div className="flex items-center justify-center h-64"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div></>;
   if (!isAdmin) return <Navigate to="/" replace />;
 
   const resetForm = () => {
@@ -86,7 +85,7 @@ export default function ReleaseManager() {
   const published = releases.filter((r) => r.status === "published");
 
   return (
-    <AppLayout>
+    <>
       <div className="max-w-4xl mx-auto py-6 sm:py-8 px-4 sm:px-6 space-y-6 sm:space-y-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
@@ -260,7 +259,7 @@ export default function ReleaseManager() {
           </DialogContent>
         </Dialog>
       </div>
-    </AppLayout>
+    </>
   );
 }
 

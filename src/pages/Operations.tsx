@@ -8,7 +8,6 @@ import {
   GitPullRequest, GitCommit, FolderGit2, Building2,
 } from "lucide-react";
 import SuppliersDirectory from "@/components/suppliers/SuppliersDirectory";
-import AppLayout from "@/components/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -226,7 +225,7 @@ const Operations = () => {
   const blockedItems = workItems.filter((w: any) => w.tags?.toLowerCase().includes("blocked")).length;
 
   return (
-    <AppLayout>
+    <>
       <main className="flex-1 overflow-y-auto">
         <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />
 
@@ -733,7 +732,7 @@ const Operations = () => {
           </Tabs>
         </div>
       </main>
-    </AppLayout>
+    </>
   );
 };
 

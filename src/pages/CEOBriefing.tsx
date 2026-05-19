@@ -3,7 +3,6 @@ import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { canViewBriefing, canGenerateBriefing } from "@/lib/ceoAccess";
-import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -55,7 +54,7 @@ const CEOBriefing = () => {
     ? briefing.execution_score - previous.execution_score : null;
 
   return (
-    <AppLayout>
+    <>
       <div className="mx-auto max-w-5xl w-full px-4 md:px-8 py-6 space-y-6 min-w-0 overflow-x-hidden">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 min-w-0">
@@ -595,7 +594,7 @@ const CEOBriefing = () => {
           </>
         )}
       </div>
-    </AppLayout>
+    </>
   );
 };
 

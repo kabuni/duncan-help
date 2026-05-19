@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { fastApi, withFastApi } from "@/lib/fastApiClient";
 import { hasExternalApiBase } from "@/lib/apiConfig";
 import { useQuery } from "@tanstack/react-query";
-import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -495,7 +494,7 @@ const Recruitment = () => {
     .slice(0, 3);
 
   return (
-    <AppLayout>
+    <>
       <main className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -979,7 +978,7 @@ const Recruitment = () => {
           </DialogContent>
         </Dialog>
       </main>
-    </AppLayout>
+    </>
   );
 };
 

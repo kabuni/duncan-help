@@ -136,7 +136,7 @@ const Index = () => {
   const briefingTriggered = useRef(false);
   const [briefingError, setBriefingError] = useState(false);
   const [briefingTimestamp, setBriefingTimestamp] = useState<string | null>(null);
-  const chatOps = useGeneralChats();
+  const chatOps = useGeneralChatsContext();
   const { profile } = useProfile();
   const userDisplayName = profile?.display_name || "You";
   const userAvatarUrl = profile?.avatar_url || null;

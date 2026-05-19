@@ -26,6 +26,16 @@ export type HiresStats = {
   interviewsThisWeek: number;
 };
 
+export type MyTask = {
+  id: string;
+  title: string;
+  status: string;
+  completed: boolean;
+  due_date: string | null;
+  card_id: string;
+  card_title: string;
+};
+
 export type WorkstreamsStats = {
   active: number;
   red: number;

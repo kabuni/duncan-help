@@ -72,8 +72,12 @@ export default function KBDropzone({
           type="file"
           multiple
           accept=".pdf,.docx,.xlsx,.txt,.csv"
-          className="hidden"
-          onChange={(e) => e.target.files && addFiles(e.target.files)}
+          className="sr-only"
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => {
+            if (e.target.files) addFiles(e.target.files);
+            e.target.value = "";
+          }}
         />
       </div>
 

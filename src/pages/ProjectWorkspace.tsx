@@ -7,7 +7,7 @@ import {
 import { ProjectNotesDrawer } from "@/components/projects/ProjectNotesDrawer";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import Sidebar, { MobileMenuButton } from "@/components/Sidebar";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useProjects, useProjectChats, useProjectChat, useProjectFiles, useProjectMembers } from "@/hooks/useProjects";
 import { useUserProfiles } from "@/hooks/useWorkstreams";

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Mail, PenSquare, Inbox, Loader2, ExternalLink, AlertTriangle, CheckCircle2, Unplug } from "lucide-react";
-import AppLayout from "@/components/AppLayout";
 import GmailInbox from "@/components/gmail/GmailInbox";
 import GmailReader from "@/components/gmail/GmailReader";
 import GmailCompose from "@/components/gmail/GmailCompose";
@@ -19,17 +18,17 @@ const Gmail = () => {
   // Not connected state
   if (statusLoading) {
     return (
-      <AppLayout>
+      <>
         <div className="flex items-center justify-center h-full">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
-      </AppLayout>
+      </>
     );
   }
 
   if (!status?.connected) {
     return (
-      <AppLayout>
+      <>
         <div className="flex items-center justify-center h-full">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -66,14 +65,14 @@ const Gmail = () => {
             </p>
           </motion.div>
         </div>
-      </AppLayout>
+      </>
     );
   }
 
   // Token expired state
   if (status.expired) {
     return (
-      <AppLayout>
+      <>
         <div className="flex items-center justify-center h-full">
           <motion.div
             initial={{ opacity: 0 }}
@@ -96,12 +95,12 @@ const Gmail = () => {
             </button>
           </motion.div>
         </div>
-      </AppLayout>
+      </>
     );
   }
 
   return (
-    <AppLayout>
+    <>
       <main className="flex flex-col h-full overflow-hidden">
         {/* Top bar */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-6 py-3 border-b border-border bg-card/50 backdrop-blur-sm shrink-0">
@@ -183,7 +182,7 @@ const Gmail = () => {
           )}
         </div>
       </main>
-    </AppLayout>
+    </>
   );
 };
 

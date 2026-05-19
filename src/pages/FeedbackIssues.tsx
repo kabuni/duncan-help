@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -96,7 +95,7 @@ const FeedbackIssues = () => {
 
   if (submitted) {
     return (
-      <AppLayout>
+      <>
         <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
           <Card className="max-w-md w-full text-center">
             <CardContent className="pt-8 pb-8 space-y-4">
@@ -107,12 +106,12 @@ const FeedbackIssues = () => {
             </CardContent>
           </Card>
         </main>
-      </AppLayout>
+      </>
     );
   }
 
   return (
-    <AppLayout>
+    <>
       <main className="flex-1 overflow-y-auto p-4 sm:p-8">
         <div className="max-w-2xl mx-auto space-y-6">
           <div>
@@ -194,7 +193,7 @@ const FeedbackIssues = () => {
           </form>
         </div>
       </main>
-    </AppLayout>
+    </>
   );
 };
 

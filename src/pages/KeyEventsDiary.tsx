@@ -6,7 +6,6 @@ import { enUS } from "date-fns/locale";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "@/components/diary/calendar.css";
 
-import AppLayout from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -362,7 +361,7 @@ export default function KeyEventsDiary() {
   };
 
   return (
-    <AppLayout>
+    <>
       <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 h-[calc(100dvh-3.5rem)] md:h-[100dvh] min-h-0 overflow-y-auto overflow-x-hidden">
         <header className="space-y-1 shrink-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -570,6 +569,6 @@ export default function KeyEventsDiary() {
           onCreated={refresh}
         />
       </div>
-    </AppLayout>
+    </>
   );
 }

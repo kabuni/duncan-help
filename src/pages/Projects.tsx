@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Plus, FolderOpen, Loader2, ArrowRight, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import Sidebar, { MobileMenuButton } from "@/components/Sidebar";
 import { useProjects } from "@/hooks/useProjects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +11,6 @@ import { format } from "date-fns";
 export default function Projects() {
   const navigate = useNavigate();
   const { projects, loading, createProject, deleteProject } = useProjects();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPrompt, setNewPrompt] = useState("");
@@ -32,13 +30,11 @@ export default function Projects() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-      <main className="flex-1 lg:ml-64 flex flex-col min-h-0">
+    <div className="flex h-full overflow-hidden bg-background">
+      <main className="flex-1 flex flex-col min-h-0">
         {/* Header */}
         <header className="flex items-center justify-between border-b border-border px-6 py-4 shrink-0">
           <div className="flex items-center gap-3">
-            <MobileMenuButton onClick={() => setMobileOpen(true)} />
             <div>
               <h1 className="text-xl font-bold text-foreground">Projects</h1>
               <p className="text-xs text-muted-foreground">Isolated AI workspaces with persistent context</p>
@@ -49,6 +45,7 @@ export default function Projects() {
             New Project
           </Button>
         </header>
+
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">

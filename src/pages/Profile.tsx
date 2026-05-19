@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { User, Briefcase, Building2, Save, Loader2, Camera } from "lucide-react";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
-import AppLayout from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -79,16 +78,16 @@ const Profile = () => {
 
   if (isLoading) {
     return (
-      <AppLayout>
+      <>
         <main className="flex-1 flex items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </main>
-      </AppLayout>
+      </>
     );
   }
 
   return (
-    <AppLayout>
+    <>
       <main className="flex-1 overflow-y-auto">
         <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />
 
@@ -216,7 +215,7 @@ const Profile = () => {
           </p>
         </div>
       </main>
-    </AppLayout>
+    </>
   );
 };
 

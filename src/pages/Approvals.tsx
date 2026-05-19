@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Check, X, Clock, ShieldCheck, XCircle, CalendarClock, ExternalLink, Inbox, Filter } from "lucide-react";
-import AppLayout from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -236,7 +235,7 @@ export default function Approvals() {
   };
 
   return (
-    <AppLayout>
+    <>
       <main className="flex-1 overflow-y-auto">
         <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />
         <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-7xl">
@@ -329,6 +328,6 @@ export default function Approvals() {
           )}
         </div>
       </main>
-    </AppLayout>
+    </>
   );
 }

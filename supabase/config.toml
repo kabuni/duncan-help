@@ -185,3 +185,12 @@ verify_jwt = false
 
 [functions.ceo-briefing]
 verify_jwt = false
+
+[functions.upload-to-azure]
+verify_jwt = false
+
+[functions.process-document]
+verify_jwt = false
+
+[functions.query-knowledge-base]
+verify_jwt = false

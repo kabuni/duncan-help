@@ -47,9 +47,12 @@ export interface TaskBreakdown {
  * is normalized to "done" to handle inconsistent legacy rows.
  */
 export function getOverallStatus(
-  tasks: Array<{ status?: CardStatus | string | null; completed?: boolean }> | undefined | null
+  tasks: Array<{ status?: CardStatus | string | null; completed?: boolean }> | undefined | null,
+  manualStatus?: CardStatus | null
 ): CardStatus {
-  if (!tasks || tasks.length === 0) return "not_started";
+  // Manual status is authoritative when explicitly set (not the default "not_started").
+  if (manualStatus && manualStatus !== "not_started") return manualStatus;
+  if (!tasks || tasks.length === 0) return manualStatus || "not_started";
 
   let hasRed = false;
   let hasAmber = false;
@@ -299,7 +302,7 @@ export function useWorkstreamCards(filters?: {
           tasks_completed: taskCounts[c.id]?.completed || 0,
           owner_name: c.owner_id ? profileMap[c.owner_id] : undefined,
           assignees: cardAssigneeMap[c.id] || [],
-          overall_status: getOverallStatus(cardTasks),
+          overall_status: getOverallStatus(cardTasks, c.status as CardStatus),
           task_breakdown: getTaskBreakdown(cardTasks),
         };
       }) as WorkstreamCard[];
@@ -405,7 +408,7 @@ export function useWorkstreamCard(cardId: string | null) {
             priority: card.priority as CardPriority,
             owner_name: card.owner_id ? profileMap[card.owner_id] : undefined,
             assignees: cardAssignees.map((a: any) => ({ user_id: a.user_id, display_name: profileMap[a.user_id] || "Unknown", assignment_status: a.assignment_status, responded_at: a.responded_at, decline_reason: a.decline_reason })),
-            overall_status: getOverallStatus(topLevel),
+            overall_status: getOverallStatus(topLevel, card.status as CardStatus),
             task_breakdown: getTaskBreakdown(topLevel),
           } as WorkstreamCard,
           tasks: nestedTasks,
@@ -438,7 +441,7 @@ export function useWorkstreamCard(cardId: string | null) {
           priority: card.priority as CardPriority,
           owner_name: card.owner_id ? profileMap[card.owner_id] : undefined,
           assignees: cardAssignees.map((a: any) => ({ user_id: a.user_id, display_name: profileMap[a.user_id] || "Unknown", assignment_status: a.assignment_status, responded_at: a.responded_at, decline_reason: a.decline_reason })),
-          overall_status: getOverallStatus([]),
+          overall_status: getOverallStatus([], card.status as CardStatus),
           task_breakdown: getTaskBreakdown([]),
         } as WorkstreamCard,
         tasks: [] as WorkstreamTask[],

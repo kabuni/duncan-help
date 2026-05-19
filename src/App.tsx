@@ -33,6 +33,7 @@ import Approvals from "./pages/Approvals";
 import PurchaseOrders from "./pages/PurchaseOrders";
 
 import SlackCallback from "./pages/SlackCallback";
+import KnowledgeBase from "./pages/KnowledgeBase";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();

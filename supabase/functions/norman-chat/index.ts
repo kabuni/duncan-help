@@ -4427,8 +4427,6 @@ Format as a natural, readable summary with clear sections. If a section has no d
     }
 
     const SIMPLE_INPUT_PATTERNS = [/^hi[!.?\s]*$/i, /^hello[!.?\s]*$/i, /^how are you[?.!\s]*$/i];
-    const MAX_TOOL_ROUNDS = isVoiceMode ? 2 : 3;
-    const MAX_EXECUTION_TIME_MS = 45_000;
 
     function extractPlainText(content: unknown): string {
       if (typeof content === "string") return content;
@@ -4443,6 +4441,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     const latestUserMessage = [...messages].reverse().find((message: any) => message?.role === "user");
     const latestUserText = extractPlainText(latestUserMessage?.content).trim();
+
+    // Phase 1: cap rounds at 2 by default; allow 3 only for voice or explicit deep-analysis intents.
+    const DEEP_INTENT_RE = /\b(analy[sz]e|deep\s*dive|compare|cross[-\s]?reference|investigate|audit|thorough|comprehensive)\b/i;
+    const allowExtraRound = isVoiceMode || DEEP_INTENT_RE.test(latestUserText);
+    const MAX_TOOL_ROUNDS = allowExtraRound ? 3 : 2;
+    const MAX_EXECUTION_TIME_MS = 90_000;
     // Broad: any user message mentioning meetings/calls + an intent verb (fetch/get/show/give/what)
     // OR meeting-notes/summary/discussions phrasing — triggers source disambiguation.
     const SOURCE_AMBIGUOUS_MEETING_RE = /\b(meeting|meetings|call|calls)\b.*\b(notes?|summary|summaries|discussion|discussions|recording|recordings|transcript|transcripts)\b|\b(fetch|get|show|give\s+me|grab|pull|what\s+were|what\s+did|what\s+meetings)\b.*\b(meeting|meetings|call|calls)\b|\b(my\s+)?(latest|recent|last|today'?s|yesterday'?s|this\s+week'?s)\s+(meeting|meetings|call|calls)\b/i;
@@ -5134,7 +5138,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
        };
     }
 
-    const TOOL_EXECUTION_TIMEOUT_MS = 20_000;
+    const TOOL_EXECUTION_TIMEOUT_MS = 10_000;
+    const PLAUD_SYNC_INTENT_RE = /\b(sync|refresh|import|pull\s+(new|latest)|update)\b[\s\S]{0,40}\bplaud\b/i;
 
     function createStructuredToolResult(toolName: string, result: any, status: "success" | "no_data" | "partial" | "hard_error" = "success") {
       return {
@@ -5232,7 +5237,32 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const lovableContribToolNames = ["update_lovable_contributors"];
       const toolResults: any[] = [];
 
-      for (const tc of toolCalls) {
+      // Phase 1: run all tools in this round in parallel (Promise.allSettled preserves order).
+      // Each tool has its own 10s timeout via withToolTimeout. A small semaphore caps concurrency at 5.
+      const CONCURRENCY = 5;
+      let activeCount = 0;
+      const pending: Array<() => void> = [];
+      const acquire = () =>
+        new Promise<void>((resolve) => {
+          if (activeCount < CONCURRENCY) {
+            activeCount++;
+            resolve();
+          } else {
+            pending.push(() => {
+              activeCount++;
+              resolve();
+            });
+          }
+        });
+      const release = () => {
+        activeCount--;
+        const next = pending.shift();
+        if (next) next();
+      };
+
+      const runOne = async (tc: any): Promise<any> => {
+        await acquire();
+        try {
         try {
           const parsedArguments = parseToolArguments(tc);
           const rawArguments = parsedArguments.rawArguments;
@@ -5287,7 +5317,16 @@ Format as a natural, readable summary with clear sections. If a section has no d
               console.log(`Basecamp tool ${tc.function.name} result preview:`, JSON.stringify(result).slice(0, 500));
             }
           } else if (meetingToolNames.includes(tc.function.name)) {
-              result = await withToolTimeout(tc.function.name, executeMeetingTool(tc.function.name, args, supabaseAdmin, supabaseUser, supabaseUrl, authHeader || "", userId || "", meetingFlowState));
+              // Phase 1: hard server-side guard on the slow Plaud sync. Only run when the user
+              // explicitly asked for a sync/refresh/import/update of Plaud data.
+              if (tc.function.name === "fetch_plaud_meetings" && !PLAUD_SYNC_INTENT_RE.test(latestUserText)) {
+                console.log("BLOCKED fetch_plaud_meetings — no explicit sync intent in user message");
+                result = createStructuredToolResult(tc.function.name, {
+                  message: "Skipped Plaud sync. This is a slow operation and only runs when the user explicitly asks to sync, refresh, import, or update Plaud meeting data. Use list_meetings / search_meeting_transcripts / get_meeting instead for existing data.",
+                }, "no_data");
+              } else {
+                result = await withToolTimeout(tc.function.name, executeMeetingTool(tc.function.name, args, supabaseAdmin, supabaseUser, supabaseUrl, authHeader || "", userId || "", meetingFlowState));
+              }
           } else if (azureDevOpsToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeAzureDevOpsTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));
           } else if (azureReposToolNames.includes(tc.function.name)) {
@@ -5348,7 +5387,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
           });
 
           if (provider === "anthropic") {
-            toolResults.push({
+            return {
               role: "user",
               content: [
                 {
@@ -5357,14 +5396,13 @@ Format as a natural, readable summary with clear sections. If a section has no d
                   content: finalContent,
                 },
               ],
-            });
-          } else {
-            toolResults.push({
-              role: "tool",
-              tool_call_id: tc?.id,
-              content: finalContent,
-            });
+            };
           }
+          return {
+            role: "tool",
+            tool_call_id: tc?.id,
+            content: finalContent,
+          };
         } catch (error: any) {
           const toolError = error instanceof Error ? error : new Error(String(error));
           console.error(`Tool ${tc.function.name} threw error:`, toolError.message, toolError.stack);
@@ -5378,22 +5416,14 @@ Format as a natural, readable summary with clear sections. If a section has no d
             : createStructuredToolResult(toolName, { error: toolError.message }, "hard_error");
           const finalContent = JSON.stringify(errorResult) || "{}";
 
-          console.log("TOOL RESULT RAW:", errorResult);
-          console.log("TOOL RESULT TYPE:", typeof errorResult);
-          console.log("ADDING TOOL MESSAGE:");
-          console.log("tool_call_id:", tc?.id);
-          console.log("tool_name:", tc?.function?.name);
-          console.log("content:", finalContent);
-          console.log("content_length:", finalContent?.length);
-
-          console.log("TOOL RESULT SENT:", {
+          console.log("TOOL ERROR SENT:", {
             provider,
             tool_id: tc?.id,
             content_length: finalContent.length,
           });
 
           if (provider === "anthropic") {
-            toolResults.push({
+            return {
               role: "user",
               content: [
                 {
@@ -5402,16 +5432,23 @@ Format as a natural, readable summary with clear sections. If a section has no d
                   content: finalContent,
                 },
               ],
-            });
-          } else {
-            toolResults.push({
-              role: "tool",
-              tool_call_id: tc?.id,
-              content: finalContent,
-            });
+            };
           }
+          return {
+            role: "tool",
+            tool_call_id: tc?.id,
+            content: finalContent,
+          };
+        } finally {
+          release();
         }
-      }
+      };
+
+      // Run all tools concurrently; order matches `toolCalls` (required by OpenAI tool_call_id pairing).
+      const settled = await Promise.all(toolCalls.map((tc: any) => runOne(tc)));
+      for (const r of settled) toolResults.push(r);
+
+
 
       return toolResults;
     }
@@ -5680,7 +5717,11 @@ Format as a natural, readable summary with clear sections. If a section has no d
             }
 
             if (allToolResultsNoData) {
-              console.log("ALL TOOL RESULTS WERE NO_DATA/PARTIAL — requesting graceful synthesis instead of more tool churn");
+              console.log("ALL TOOL RESULTS WERE NO_DATA/PARTIAL — injecting strict no-speculation directive");
+              conversationMessages.push({
+                role: "system",
+                content: "All tool calls returned no matching data. Respond with a brief, plain statement that you couldn't find the requested information in the connected sources, and (optionally) suggest one concrete next step the user can take (e.g. connect an integration, broaden the date range, check spelling). Do NOT invent meetings, emails, events, candidates, invoices, or any other records. Do NOT summarise hypothetical content. Do NOT call more tools.",
+              });
             }
             console.log("FINAL LLM INPUT (last 3 messages):");
             console.log(JSON.stringify(conversationMessages.slice(-3), null, 2));

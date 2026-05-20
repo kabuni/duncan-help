@@ -283,7 +283,8 @@ export function useNormanChat() {
         // Build the messages array for the API
         const userContent = buildUserContent(input, safeAttachments);
         const apiMessages = [
-          ...messages.map((m) => ({ role: m.role, content: m.content })),
+          // Phase 1: bound chat history to the last HISTORY_WINDOW messages to cap token bloat.
+          ...messages.slice(-HISTORY_WINDOW).map((m) => ({ role: m.role, content: m.content })),
           { role: "user", content: userContent },
         ];
 

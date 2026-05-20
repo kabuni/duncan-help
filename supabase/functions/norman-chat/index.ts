@@ -4272,21 +4272,27 @@ serve(async (req) => {
     }
     userId = user.id;
     userEmail = user.email || "";
-    calendarAccessToken = await getCalendarAccessToken(userId, supabaseAdmin);
-    slackConnection = await getSlackConnection(userId, supabaseAdmin);
 
-    // Check Azure Blob Storage availability
+    // Phase 1.5: parallelize pre-LLM warm-up (integrations + forms) instead of sequential awaits.
+    const [
+      calendarTokenResult,
+      slackResult,
+      notionResult,
+      basecampResult,
+      formsResult,
+    ] = await Promise.all([
+      getCalendarAccessToken(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] calendar:", e); return null; }),
+      getSlackConnection(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] slack:", e); return null; }),
+      getNotionToken(supabaseAdmin).catch((e) => { console.warn("[warmup] notion:", e); return null; }),
+      isBasecampConnected(supabaseAdmin).catch((e) => { console.warn("[warmup] basecamp:", e); return false; }),
+      supabaseAdmin.from("google_forms").select("id, name, description, fields"),
+    ]);
+    calendarAccessToken = calendarTokenResult;
+    slackConnection = slackResult;
+    notionToken = notionResult;
+    basecampConnected = !!basecampResult;
     azureStorageAvailable = !!getAzureStorageConfig();
-
-    // Get Notion token (company-wide)
-    notionToken = await getNotionToken(supabaseAdmin);
-
-    // Check Basecamp connection (company-wide)
-    basecampConnected = await isBasecampConnected(supabaseAdmin);
-    // Get available Google Forms and inject into system prompt
-    const { data: googleForms } = await supabaseAdmin
-      .from("google_forms")
-      .select("id, name, description, fields");
+    const googleForms = formsResult?.data;
 
     // Adjust system prompt based on mode and integration availability
     let systemContent = SYSTEM_PROMPT + `\n\nCurrent date and time: ${new Date().toISOString()} (UTC).`;

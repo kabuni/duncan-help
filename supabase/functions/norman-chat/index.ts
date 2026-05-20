@@ -5350,7 +5350,6 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const runOne = async (tc: any): Promise<any> => {
         await acquire();
         try {
-        try {
           const parsedArguments = parseToolArguments(tc);
           const rawArguments = parsedArguments.rawArguments;
           const args = parsedArguments.args;

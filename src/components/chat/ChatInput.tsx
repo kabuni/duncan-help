@@ -199,7 +199,7 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress, pla
 
   return (
     <div className="relative z-10 border-t border-border px-8 py-4">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-6xl">
         {/* Extraction progress indicator */}
         {extractionProgress && (
           <div className="flex items-center gap-2 mb-3 text-xs text-primary animate-pulse">

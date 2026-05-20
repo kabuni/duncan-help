@@ -4427,10 +4427,6 @@ Format as a natural, readable summary with clear sections. If a section has no d
     }
 
     const SIMPLE_INPUT_PATTERNS = [/^hi[!.?\s]*$/i, /^hello[!.?\s]*$/i, /^how are you[?.!\s]*$/i];
-    const DEEP_INTENT_RE = /\b(analy[sz]e|deep\s*dive|compare|cross[-\s]?reference|investigate|audit|thorough|comprehensive)\b/i;
-    const allowExtraRound = isVoiceMode || DEEP_INTENT_RE.test(extractPlainText(latestUserMessage?.content));
-    const MAX_TOOL_ROUNDS = allowExtraRound ? 3 : 2;
-    const MAX_EXECUTION_TIME_MS = 90_000;
 
     function extractPlainText(content: unknown): string {
       if (typeof content === "string") return content;
@@ -4445,6 +4441,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     const latestUserMessage = [...messages].reverse().find((message: any) => message?.role === "user");
     const latestUserText = extractPlainText(latestUserMessage?.content).trim();
+
+    // Phase 1: cap rounds at 2 by default; allow 3 only for voice or explicit deep-analysis intents.
+    const DEEP_INTENT_RE = /\b(analy[sz]e|deep\s*dive|compare|cross[-\s]?reference|investigate|audit|thorough|comprehensive)\b/i;
+    const allowExtraRound = isVoiceMode || DEEP_INTENT_RE.test(latestUserText);
+    const MAX_TOOL_ROUNDS = allowExtraRound ? 3 : 2;
+    const MAX_EXECUTION_TIME_MS = 90_000;
     // Broad: any user message mentioning meetings/calls + an intent verb (fetch/get/show/give/what)
     // OR meeting-notes/summary/discussions phrasing — triggers source disambiguation.
     const SOURCE_AMBIGUOUS_MEETING_RE = /\b(meeting|meetings|call|calls)\b.*\b(notes?|summary|summaries|discussion|discussions|recording|recordings|transcript|transcripts)\b|\b(fetch|get|show|give\s+me|grab|pull|what\s+were|what\s+did|what\s+meetings)\b.*\b(meeting|meetings|call|calls)\b|\b(my\s+)?(latest|recent|last|today'?s|yesterday'?s|this\s+week'?s)\s+(meeting|meetings|call|calls)\b/i;

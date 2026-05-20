@@ -5587,7 +5587,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
         const recoveryResponse = await fetchAIWithRetry({
           messages: recoveryMessages,
           stream: true,
-          tools,
+          tools: filteredTools,
           force_provider: provider,
         });
 
@@ -5723,7 +5723,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
                 currentResponse = await fetchAIWithRetry({
                   messages: sanitizeConversationMessages(conversationMessages),
                   stream: true,
-                  tools,
+                  tools: filteredTools,
                 });
                 continue;
               }
@@ -5839,7 +5839,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               model: CHAT_MODEL,
               messages: sanitizeConversationMessages(conversationMessages),
               stream: true,
-              tools,
+              tools: filteredTools,
             });
             console.log("LLM RESPONSE RECEIVED:");
             console.log({
@@ -5911,7 +5911,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
             const finalResponse = await fetchAIWithRetry({
               messages: finalMessages,
               stream: true,
-              tools,
+              tools: filteredTools,
             });
 
             const finalResult = await consumeSSEStream(finalResponse, enqueue);

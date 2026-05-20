@@ -5237,7 +5237,32 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const lovableContribToolNames = ["update_lovable_contributors"];
       const toolResults: any[] = [];
 
-      for (const tc of toolCalls) {
+      // Phase 1: run all tools in this round in parallel (Promise.allSettled preserves order).
+      // Each tool has its own 10s timeout via withToolTimeout. A small semaphore caps concurrency at 5.
+      const CONCURRENCY = 5;
+      let activeCount = 0;
+      const pending: Array<() => void> = [];
+      const acquire = () =>
+        new Promise<void>((resolve) => {
+          if (activeCount < CONCURRENCY) {
+            activeCount++;
+            resolve();
+          } else {
+            pending.push(() => {
+              activeCount++;
+              resolve();
+            });
+          }
+        });
+      const release = () => {
+        activeCount--;
+        const next = pending.shift();
+        if (next) next();
+      };
+
+      const runOne = async (tc: any): Promise<any> => {
+        await acquire();
+        try {
         try {
           const parsedArguments = parseToolArguments(tc);
           const rawArguments = parsedArguments.rawArguments;

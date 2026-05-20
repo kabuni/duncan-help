@@ -5101,7 +5101,11 @@ Format as a natural, readable summary with clear sections. If a section has no d
       };
     }
 
-    const response = await fetchAIWithRetry(requestBody);
+    // Phase 2b: skip the initial LLM round when this request is just executing
+    // a previously-confirmed write action — the executeWriteId branch below
+    // handles it without any model tokens.
+    const response = executeWriteId ? null as any : await fetchAIWithRetry(requestBody);
+
     console.log("LLM RESPONSE OBJECT", {
       round: 0,
       responseType: typeof response,

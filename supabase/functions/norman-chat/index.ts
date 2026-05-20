@@ -4223,6 +4223,74 @@ async function executeCalendarTool(
   }
 }
 
+// ============================================================
+// Phase 2: write-tool confirmation infrastructure
+// ============================================================
+const WRITE_TOOLS = new Set<string>([
+  "send_gmail_email",
+  "send_slack_message",
+  "create_calendar_event",
+  "update_calendar_event",
+  "create_xero_invoice",
+  "approve_xero_invoice_payment",
+  "create_workstream_card",
+  "update_workstream_card",
+  "submit_google_form",
+  "update_planner_event_meta",
+]);
+
+const WRITE_TOOL_LABELS: Record<string, string> = {
+  send_gmail_email: "Send email via Gmail",
+  send_slack_message: "Post message to Slack",
+  create_calendar_event: "Create calendar event",
+  update_calendar_event: "Update calendar event",
+  create_xero_invoice: "Create Xero invoice",
+  approve_xero_invoice_payment: "Approve Xero invoice payment",
+  create_workstream_card: "Create workstream card",
+  update_workstream_card: "Update workstream card",
+  submit_google_form: "Submit Google Form",
+  update_planner_event_meta: "Update planner event",
+};
+
+function summarizeWriteAction(toolName: string, args: any): string {
+  const label = WRITE_TOOL_LABELS[toolName] || toolName;
+  try {
+    switch (toolName) {
+      case "send_gmail_email":
+        return `${label} to ${args?.to || "?"} — "${(args?.subject || "(no subject)").toString().slice(0, 80)}"`;
+      case "send_slack_message":
+        return `${label} in #${args?.channel || args?.channel_id || "?"}: "${String(args?.text || "").slice(0, 120)}"`;
+      case "create_calendar_event":
+        return `${label}: "${args?.summary || args?.title || "(untitled)"}" at ${args?.start || args?.start_time || "?"}`;
+      case "update_calendar_event":
+        return `${label} ${args?.event_id || args?.eventId || "?"}`;
+      case "create_xero_invoice":
+        return `${label} for ${args?.contact_name || args?.contactName || "?"} — ${args?.total || ""}`;
+      case "approve_xero_invoice_payment":
+        return `${label} ${args?.invoice_id || args?.invoiceId || "?"}`;
+      case "create_workstream_card":
+        return `${label}: "${args?.title || "(untitled)"}"`;
+      case "update_workstream_card":
+        return `${label} ${args?.card_id || args?.id || "?"}`;
+      case "submit_google_form":
+        return `${label} ${args?.form_id || args?.id || "?"}`;
+      case "update_planner_event_meta":
+        return `${label} ${args?.event_id || args?.id || "?"}`;
+      default:
+        return label;
+    }
+  } catch {
+    return label;
+  }
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });

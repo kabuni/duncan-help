@@ -5872,7 +5872,62 @@ Format as a natural, readable summary with clear sections. If a section has no d
       }
     };
 
+    // ====================================================================
+    // Phase 2b: executeWriteId path — invoked by confirm-chat-write after
+    // the user has explicitly confirmed a pending write action.
+    // ====================================================================
+    if (typeof executeWriteId === "string" && executeWriteId.length > 0) {
+      const { data: row, error: rowErr } = await supabaseAdmin
+        .from("chat_write_pending")
+        .select("*")
+        .eq("id", executeWriteId)
+        .maybeSingle();
+      if (rowErr || !row) {
+        return new Response(JSON.stringify({ error: "Pending action not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (row.user_id !== userId) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (row.status === "executed" && row.result) {
+        return new Response(JSON.stringify({ ok: true, result: row.result, alreadyExecuted: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!["pending", "confirmed"].includes(row.status)) {
+        return new Response(JSON.stringify({ error: `Cannot execute: status=${row.status}` }), {
+          status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const syntheticToolCall = {
+        id: `call_exec_${executeWriteId}`,
+        type: "function",
+        function: { name: row.tool_name, arguments: JSON.stringify(row.tool_args ?? {}) },
+      };
+
+      try {
+        const results = await executeToolCalls([syntheticToolCall], "openai", { bypassWriteConfirm: true });
+        const content = (results?.[0] as any)?.content;
+        let parsed: any = null;
+        try { parsed = typeof content === "string" ? JSON.parse(content) : content; } catch { parsed = { raw: content }; }
+        const ok = parsed?.status !== "hard_error";
+        return new Response(JSON.stringify({ ok, result: parsed }), {
+          status: ok ? 200 : 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ ok: false, error: e?.message || "Execution failed" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const stream = new ReadableStream({
+
       async start(controller) {
         const enqueue = (chunk: string) => controller.enqueue(encoder.encode(chunk));
         const emitDuncanEvent = (evt: any) => {

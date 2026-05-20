@@ -4806,9 +4806,18 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const DATA_INTENT_RE = /\b(meeting|email|inbox|calendar|event|workstream|task|planner|kpi|metric|invoice|xero|devops|work item|drive|document|slack|candidate|recruit|brief|status|summary|report)\b/i;
     const isDataIntent = intentMatched || DATA_INTENT_RE.test(latestUserText);
 
+    if (isDataIntent && !isVoiceMode && !mustAskMeetingSource && mode !== "briefing" && filteredTools.length > 0) {
+      // Phase 1.5 tool-first guardrail: forbid speculation, require tool grounding.
+      systemContent += `\n\n## TOOL-FIRST GUARDRAIL\nThe user is asking about real-time or factual data (meetings, emails, calendar, workstreams, planner, analytics, documents, Slack, Xero, DevOps, recruitment, etc.). You MUST call an appropriate tool to ground your answer. If the relevant integration isn't connected OR a tool returns no matching data, say so plainly in one or two sentences and suggest a concrete next step — NEVER invent meetings, emails, events, candidates, invoices, tasks, or any other records. NEVER summarise hypothetical content.`;
+      // Rebuild the first request's messages with the updated system prompt.
+      requestBody.messages = [
+        { role: "system", content: systemContent },
+        ...messages,
+      ];
+    }
+
     if (mode !== "briefing" && !shouldBypassTools && filteredTools.length > 0) {
       requestBody.tools = filteredTools;
-      // Encourage tool grounding for data intents on the very first round (non-voice).
       if (isDataIntent && !isVoiceMode && !mustAskMeetingSource) {
         requestBody.tool_choice = "auto";
       }

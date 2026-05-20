@@ -4289,6 +4289,30 @@ async function sha256Hex(input: string): Promise<string> {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Phase 2b: simple in-memory per-tool circuit breaker. After N consecutive
+// failures in a single isolate, that tool is "open" (skipped) for COOLDOWN_MS.
+const TOOL_FAILURES = new Map<string, { fails: number; openUntil: number }>();
+const CIRCUIT_THRESHOLD = 3;
+const CIRCUIT_COOLDOWN_MS = 60_000;
+function circuitIsOpen(name: string): boolean {
+  const s = TOOL_FAILURES.get(name);
+  return !!s && s.openUntil > Date.now();
+}
+function recordToolFailure(name: string) {
+  const s = TOOL_FAILURES.get(name) ?? { fails: 0, openUntil: 0 };
+  s.fails += 1;
+  if (s.fails >= CIRCUIT_THRESHOLD) {
+    s.openUntil = Date.now() + CIRCUIT_COOLDOWN_MS;
+    s.fails = 0;
+  }
+  TOOL_FAILURES.set(name, s);
+}
+function recordToolSuccess(name: string) {
+  TOOL_FAILURES.delete(name);
+}
+
+
+
 
 
 serve(async (req) => {
@@ -4297,12 +4321,13 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode, userProfile, voiceMode } = await req.json();
+    const { messages, mode, userProfile, voiceMode, executeWriteId } = await req.json();
     const isVoiceMode = voiceMode === true;
     const CHAT_MODEL = isVoiceMode ? "gpt-4o-mini" : "gpt-4o";
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
 
     if (!OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY is not configured");
@@ -5076,34 +5101,41 @@ Format as a natural, readable summary with clear sections. If a section has no d
       };
     }
 
-    const response = await fetchAIWithRetry(requestBody);
-    console.log("LLM RESPONSE OBJECT", {
-      round: 0,
-      responseType: typeof response,
-      hasBody: response.body !== null,
-    });
+    // Phase 2b: skip the initial LLM round when this request is just executing
+    // a previously-confirmed write action — the executeWriteId branch below
+    // handles it without any model tokens.
+    const response = executeWriteId ? null as any : await fetchAIWithRetry(requestBody);
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        console.error("AI rate limit exceeded after retries");
+    if (!executeWriteId) {
+      console.log("LLM RESPONSE OBJECT", {
+        round: 0,
+        responseType: typeof response,
+        hasBody: response.body !== null,
+      });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          console.error("AI rate limit exceeded after retries");
+          return new Response(
+            JSON.stringify({ error: "Rate limit exceeded. Please try again shortly." }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        if (response.status === 402) {
+          return new Response(
+            JSON.stringify({ error: "AI credits exhausted. Please add funds in workspace settings." }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const text = await response.text();
+        console.error("AI gateway error:", response.status, text);
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again shortly." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI gateway error" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add funds in workspace settings." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const text = await response.text();
-      console.error("AI gateway error:", response.status, text);
-      return new Response(
-        JSON.stringify({ error: "AI gateway error" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
+
 
     // Consume an OpenAI-shaped SSE stream while optionally forwarding each chunk to the client
     // immediately. We suppress upstream [DONE] so norman-chat emits it only once after the final round.
@@ -5370,7 +5402,14 @@ Format as a natural, readable summary with clear sections. If a section has no d
       return "openai";
     }
 
-    async function executeToolCalls(toolCalls: any[], provider: "anthropic" | "openai"): Promise<any[]> {
+    async function executeToolCalls(
+      toolCalls: any[],
+      provider: "anthropic" | "openai",
+      opts: { emit?: (event: any) => void; bypassWriteConfirm?: boolean } = {}
+    ): Promise<any[]> {
+      const emit = opts.emit ?? (() => {});
+      const bypassWriteConfirm = !!opts.bypassWriteConfirm;
+
       const calendarToolNames = ["list_calendar_events", "create_calendar_event", "update_calendar_event", "delete_calendar_event"];
       const documentToolNames = ["search_documents", "read_document", "list_documents"];
       const notionToolNames = ["search_notion", "query_notion_database", "get_notion_page_content"];
@@ -5439,7 +5478,100 @@ Format as a natural, readable summary with clear sections. If a section has no d
             throw new Error(invalidReason);
           }
 
+          const toolNameForEvent = tc?.function?.name ?? "unknown_tool";
+
+          // Phase 2b: circuit breaker — short-circuit known-broken tools
+          if (circuitIsOpen(toolNameForEvent)) {
+            emit({ duncan_event: "tool_end", id: tc?.id, name: toolNameForEvent, status: "circuit_open" });
+            const cbResult = createStructuredToolResult(toolNameForEvent, {
+              error: `Tool '${toolNameForEvent}' is temporarily disabled after repeated failures. Try again in a minute or use an alternative source.`,
+            }, "hard_error");
+            const finalContent = JSON.stringify(cbResult);
+            if (provider === "anthropic") {
+              return { role: "user", content: [{ type: "tool_result", tool_use_id: tc?.id, content: finalContent }] };
+            }
+            return { role: "tool", tool_call_id: tc?.id, content: finalContent };
+          }
+
+          emit({ duncan_event: "tool_start", id: tc?.id, name: toolNameForEvent });
+
+          // Phase 2b: write-tool interception. Queue a pending row, emit a
+          // tool_pending event so the UI can render a Confirm/Cancel card, and
+          // return a synthetic "awaiting confirmation" tool result to the model
+          // so it stops further tool calls and produces a user-facing summary.
+          if (WRITE_TOOLS.has(toolNameForEvent) && !bypassWriteConfirm) {
+            try {
+              const summary = summarizeWriteAction(toolNameForEvent, args);
+              const idemSource = `${userId}:${toolNameForEvent}:${JSON.stringify(args ?? {})}`;
+              const idempotency_key = await sha256Hex(idemSource);
+
+              // Reuse existing pending row if same logical action is already queued.
+              const { data: existing } = await supabaseAdmin
+                .from("chat_write_pending")
+                .select("id, status, expires_at")
+                .eq("user_id", userId)
+                .eq("idempotency_key", idempotency_key)
+                .in("status", ["pending", "confirmed", "executed"])
+                .maybeSingle();
+
+              let pendingId: string | null = existing?.id ?? null;
+
+              if (!pendingId) {
+                const { data: inserted, error: insErr } = await supabaseAdmin
+                  .from("chat_write_pending")
+                  .insert({
+                    user_id: userId,
+                    tool_name: toolNameForEvent,
+                    tool_args: args ?? {},
+                    summary,
+                    idempotency_key,
+                  })
+                  .select("id")
+                  .single();
+                if (insErr) throw insErr;
+                pendingId = inserted.id;
+              }
+
+              emit({
+                duncan_event: "tool_pending",
+                id: tc?.id,
+                name: toolNameForEvent,
+                pendingId,
+                summary,
+                args,
+              });
+              emit({ duncan_event: "tool_end", id: tc?.id, name: toolNameForEvent, status: "pending_confirmation" });
+
+              const stub = createStructuredToolResult(toolNameForEvent, {
+                status: "pending_confirmation",
+                pending_id: pendingId,
+                summary,
+                message: "This write action has been queued for explicit user confirmation in the chat UI. Do NOT retry this tool. Tell the user briefly what you've prepared and that they need to confirm.",
+              }, "success");
+              const finalContent = JSON.stringify(stub);
+              if (provider === "anthropic") {
+                return { role: "user", content: [{ type: "tool_result", tool_use_id: tc?.id, content: finalContent }] };
+              }
+              return { role: "tool", tool_call_id: tc?.id, content: finalContent };
+            } catch (queueErr: any) {
+              console.error("[write-confirm] failed to queue pending write:", queueErr);
+              // Fall through to normal execution as last-resort safety net only if
+              // confirmation infra is broken — but emit the failure for the UI.
+              emit({ duncan_event: "tool_end", id: tc?.id, name: toolNameForEvent, status: "queue_failed", error: String(queueErr?.message ?? queueErr) });
+              const errResult = createStructuredToolResult(toolNameForEvent, {
+                error: "Could not queue this action for confirmation. Aborting for safety.",
+              }, "hard_error");
+              const finalContent = JSON.stringify(errResult);
+              if (provider === "anthropic") {
+                return { role: "user", content: [{ type: "tool_result", tool_use_id: tc?.id, content: finalContent }] };
+              }
+              return { role: "tool", tool_call_id: tc?.id, content: finalContent };
+            }
+          }
+
           let result: any;
+          
+
           
           if (calendarToolNames.includes(tc.function.name)) {
             if (!calendarAccessToken) {
@@ -5516,9 +5648,18 @@ Format as a natural, readable summary with clear sections. If a section has no d
           const toolName = tc?.function?.name ?? "unknown_tool";
           const toolOutcome = classifyToolOutcome(toolName, result);
 
+          // Phase 2b: feed circuit breaker + emit tool_end
+          if (toolOutcome.status === "hard_error") {
+            recordToolFailure(toolName);
+          } else {
+            recordToolSuccess(toolName);
+          }
+          emit({ duncan_event: "tool_end", id: tc?.id, name: toolName, status: toolOutcome.status });
+
           console.log("TOOL RESULT RAW:", result);
           console.log("TOOL RESULT TYPE:", typeof result);
           console.log("TOOL RESULT STATUS:", toolOutcome.status);
+
 
           const finalContent = (() => {
             const normalizedResult = toolOutcome.payload;
@@ -5562,6 +5703,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
           console.error(`Tool ${tc.function.name} threw error:`, toolError.message, toolError.stack);
           const toolName = tc?.function?.name ?? "unknown_tool";
           const isTimeout = toolError.message.toLowerCase().includes("timed out");
+          recordToolFailure(toolName);
+          emit({ duncan_event: "tool_end", id: tc?.id, name: toolName, status: isTimeout ? "timeout" : "error", error: toolError.message });
           const errorResult = isTimeout
             ? createStructuredToolResult(toolName, {
                 error: toolError.message,
@@ -5569,6 +5712,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               }, "partial")
             : createStructuredToolResult(toolName, { error: toolError.message }, "hard_error");
           const finalContent = JSON.stringify(errorResult) || "{}";
+
 
           console.log("TOOL ERROR SENT:", {
             provider,
@@ -5735,11 +5879,70 @@ Format as a natural, readable summary with clear sections. If a section has no d
       }
     };
 
+    // ====================================================================
+    // Phase 2b: executeWriteId path — invoked by confirm-chat-write after
+    // the user has explicitly confirmed a pending write action.
+    // ====================================================================
+    if (typeof executeWriteId === "string" && executeWriteId.length > 0) {
+      const { data: row, error: rowErr } = await supabaseAdmin
+        .from("chat_write_pending")
+        .select("*")
+        .eq("id", executeWriteId)
+        .maybeSingle();
+      if (rowErr || !row) {
+        return new Response(JSON.stringify({ error: "Pending action not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (row.user_id !== userId) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (row.status === "executed" && row.result) {
+        return new Response(JSON.stringify({ ok: true, result: row.result, alreadyExecuted: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!["pending", "confirmed"].includes(row.status)) {
+        return new Response(JSON.stringify({ error: `Cannot execute: status=${row.status}` }), {
+          status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const syntheticToolCall = {
+        id: `call_exec_${executeWriteId}`,
+        type: "function",
+        function: { name: row.tool_name, arguments: JSON.stringify(row.tool_args ?? {}) },
+      };
+
+      try {
+        const results = await executeToolCalls([syntheticToolCall], "openai", { bypassWriteConfirm: true });
+        const content = (results?.[0] as any)?.content;
+        let parsed: any = null;
+        try { parsed = typeof content === "string" ? JSON.parse(content) : content; } catch { parsed = { raw: content }; }
+        const ok = parsed?.status !== "hard_error";
+        return new Response(JSON.stringify({ ok, result: parsed }), {
+          status: ok ? 200 : 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ ok: false, error: e?.message || "Execution failed" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const stream = new ReadableStream({
+
       async start(controller) {
         const enqueue = (chunk: string) => controller.enqueue(encoder.encode(chunk));
+        const emitDuncanEvent = (evt: any) => {
+          try { enqueue(`data: ${JSON.stringify(evt)}\n\n`); } catch { /* closed */ }
+        };
         let aggregatedContent = "";
         let lastFullContent = "";
+
 
         // Phase 1.5: SSE heartbeat — keep the connection alive and prevent
         // perceived freezing during long tool execution / LLM round-trips.
@@ -5792,7 +5995,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
                 console.log("RECOVERY PRODUCED TOOL CALLS", recovery.toolCalls.map((tc) => tc?.function?.name));
                 const provider = detectToolResultProvider(recovery.toolCalls);
                 recordToolCalls(recovery.toolCalls);
-                const toolResults = await executeToolCalls(recovery.toolCalls, provider);
+                const toolResults = await executeToolCalls(recovery.toolCalls, provider, { emit: emitDuncanEvent });
                 const assistantMsg: any = { role: "assistant", tool_calls: recovery.toolCalls };
                 if (recovery.fullContent) assistantMsg.content = recovery.fullContent;
                 conversationMessages.push(assistantMsg, ...toolResults);
@@ -5867,7 +6070,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               detected: provider,
             });
             recordToolCalls(toolCalls);
-            const toolResults = await executeToolCalls(toolCalls, provider);
+            const toolResults = await executeToolCalls(toolCalls, provider, { emit: emitDuncanEvent });
             const toolResultsString = JSON.stringify(toolResults);
             const allToolResultsNoData = toolResults.length > 0 && toolResults.every((message: any) => {
               const content = message?.content;

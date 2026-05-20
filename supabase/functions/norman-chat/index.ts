@@ -6004,7 +6004,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               detected: provider,
             });
             recordToolCalls(toolCalls);
-            const toolResults = await executeToolCalls(toolCalls, provider);
+            const toolResults = await executeToolCalls(toolCalls, provider, { emit: emitDuncanEvent });
             const toolResultsString = JSON.stringify(toolResults);
             const allToolResultsNoData = toolResults.length > 0 && toolResults.every((message: any) => {
               const content = message?.content;

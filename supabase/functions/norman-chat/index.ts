@@ -5395,7 +5395,14 @@ Format as a natural, readable summary with clear sections. If a section has no d
       return "openai";
     }
 
-    async function executeToolCalls(toolCalls: any[], provider: "anthropic" | "openai"): Promise<any[]> {
+    async function executeToolCalls(
+      toolCalls: any[],
+      provider: "anthropic" | "openai",
+      opts: { emit?: (event: any) => void; bypassWriteConfirm?: boolean } = {}
+    ): Promise<any[]> {
+      const emit = opts.emit ?? (() => {});
+      const bypassWriteConfirm = !!opts.bypassWriteConfirm;
+
       const calendarToolNames = ["list_calendar_events", "create_calendar_event", "update_calendar_event", "delete_calendar_event"];
       const documentToolNames = ["search_documents", "read_document", "list_documents"];
       const notionToolNames = ["search_notion", "query_notion_database", "get_notion_page_content"];

@@ -5471,7 +5471,100 @@ Format as a natural, readable summary with clear sections. If a section has no d
             throw new Error(invalidReason);
           }
 
+          const toolNameForEvent = tc?.function?.name ?? "unknown_tool";
+
+          // Phase 2b: circuit breaker — short-circuit known-broken tools
+          if (circuitIsOpen(toolNameForEvent)) {
+            emit({ duncan_event: "tool_end", id: tc?.id, name: toolNameForEvent, status: "circuit_open" });
+            const cbResult = createStructuredToolResult(toolNameForEvent, {
+              error: `Tool '${toolNameForEvent}' is temporarily disabled after repeated failures. Try again in a minute or use an alternative source.`,
+            }, "hard_error");
+            const finalContent = JSON.stringify(cbResult);
+            if (provider === "anthropic") {
+              return { role: "user", content: [{ type: "tool_result", tool_use_id: tc?.id, content: finalContent }] };
+            }
+            return { role: "tool", tool_call_id: tc?.id, content: finalContent };
+          }
+
+          emit({ duncan_event: "tool_start", id: tc?.id, name: toolNameForEvent });
+
+          // Phase 2b: write-tool interception. Queue a pending row, emit a
+          // tool_pending event so the UI can render a Confirm/Cancel card, and
+          // return a synthetic "awaiting confirmation" tool result to the model
+          // so it stops further tool calls and produces a user-facing summary.
+          if (WRITE_TOOLS.has(toolNameForEvent) && !bypassWriteConfirm) {
+            try {
+              const summary = summarizeWriteAction(toolNameForEvent, args);
+              const idemSource = `${userId}:${toolNameForEvent}:${JSON.stringify(args ?? {})}`;
+              const idempotency_key = await sha256Hex(idemSource);
+
+              // Reuse existing pending row if same logical action is already queued.
+              const { data: existing } = await supabaseAdmin
+                .from("chat_write_pending")
+                .select("id, status, expires_at")
+                .eq("user_id", userId)
+                .eq("idempotency_key", idempotency_key)
+                .in("status", ["pending", "confirmed", "executed"])
+                .maybeSingle();
+
+              let pendingId: string | null = existing?.id ?? null;
+
+              if (!pendingId) {
+                const { data: inserted, error: insErr } = await supabaseAdmin
+                  .from("chat_write_pending")
+                  .insert({
+                    user_id: userId,
+                    tool_name: toolNameForEvent,
+                    tool_args: args ?? {},
+                    summary,
+                    idempotency_key,
+                  })
+                  .select("id")
+                  .single();
+                if (insErr) throw insErr;
+                pendingId = inserted.id;
+              }
+
+              emit({
+                duncan_event: "tool_pending",
+                id: tc?.id,
+                name: toolNameForEvent,
+                pendingId,
+                summary,
+                args,
+              });
+              emit({ duncan_event: "tool_end", id: tc?.id, name: toolNameForEvent, status: "pending_confirmation" });
+
+              const stub = createStructuredToolResult(toolNameForEvent, {
+                status: "pending_confirmation",
+                pending_id: pendingId,
+                summary,
+                message: "This write action has been queued for explicit user confirmation in the chat UI. Do NOT retry this tool. Tell the user briefly what you've prepared and that they need to confirm.",
+              }, "success");
+              const finalContent = JSON.stringify(stub);
+              if (provider === "anthropic") {
+                return { role: "user", content: [{ type: "tool_result", tool_use_id: tc?.id, content: finalContent }] };
+              }
+              return { role: "tool", tool_call_id: tc?.id, content: finalContent };
+            } catch (queueErr: any) {
+              console.error("[write-confirm] failed to queue pending write:", queueErr);
+              // Fall through to normal execution as last-resort safety net only if
+              // confirmation infra is broken — but emit the failure for the UI.
+              emit({ duncan_event: "tool_end", id: tc?.id, name: toolNameForEvent, status: "queue_failed", error: String(queueErr?.message ?? queueErr) });
+              const errResult = createStructuredToolResult(toolNameForEvent, {
+                error: "Could not queue this action for confirmation. Aborting for safety.",
+              }, "hard_error");
+              const finalContent = JSON.stringify(errResult);
+              if (provider === "anthropic") {
+                return { role: "user", content: [{ type: "tool_result", tool_use_id: tc?.id, content: finalContent }] };
+              }
+              return { role: "tool", tool_call_id: tc?.id, content: finalContent };
+            }
+          }
+
           let result: any;
+          
+
           
           if (calendarToolNames.includes(tc.function.name)) {
             if (!calendarAccessToken) {

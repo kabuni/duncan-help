@@ -199,7 +199,7 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress, pla
 
   return (
     <div className="relative z-10 border-t border-border px-8 py-4">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-6xl">
         {/* Extraction progress indicator */}
         {extractionProgress && (
           <div className="flex items-center gap-2 mb-3 text-xs text-primary animate-pulse">
@@ -289,7 +289,7 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress, pla
             onKeyDown={handleKeyDown}
             disabled={isLoading}
             rows={1}
-            className="flex-1 bg-transparent text-sm text-center text-foreground placeholder:text-muted-foreground/50 focus:outline-none disabled:opacity-50 resize-none overflow-y-auto"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none disabled:opacity-50 resize-none overflow-y-auto"
             style={{ maxHeight: 160 }}
           />
 

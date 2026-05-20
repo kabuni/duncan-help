@@ -4272,21 +4272,27 @@ serve(async (req) => {
     }
     userId = user.id;
     userEmail = user.email || "";
-    calendarAccessToken = await getCalendarAccessToken(userId, supabaseAdmin);
-    slackConnection = await getSlackConnection(userId, supabaseAdmin);
 
-    // Check Azure Blob Storage availability
+    // Phase 1.5: parallelize pre-LLM warm-up (integrations + forms) instead of sequential awaits.
+    const [
+      calendarTokenResult,
+      slackResult,
+      notionResult,
+      basecampResult,
+      formsResult,
+    ] = await Promise.all([
+      getCalendarAccessToken(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] calendar:", e); return null; }),
+      getSlackConnection(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] slack:", e); return null; }),
+      getNotionToken(supabaseAdmin).catch((e) => { console.warn("[warmup] notion:", e); return null; }),
+      isBasecampConnected(supabaseAdmin).catch((e) => { console.warn("[warmup] basecamp:", e); return false; }),
+      supabaseAdmin.from("google_forms").select("id, name, description, fields"),
+    ]);
+    calendarAccessToken = calendarTokenResult;
+    slackConnection = slackResult;
+    notionToken = notionResult;
+    basecampConnected = !!basecampResult;
     azureStorageAvailable = !!getAzureStorageConfig();
-
-    // Get Notion token (company-wide)
-    notionToken = await getNotionToken(supabaseAdmin);
-
-    // Check Basecamp connection (company-wide)
-    basecampConnected = await isBasecampConnected(supabaseAdmin);
-    // Get available Google Forms and inject into system prompt
-    const { data: googleForms } = await supabaseAdmin
-      .from("google_forms")
-      .select("id, name, description, fields");
+    const googleForms = formsResult?.data;
 
     // Adjust system prompt based on mode and integration availability
     let systemContent = SYSTEM_PROMPT + `\n\nCurrent date and time: ${new Date().toISOString()} (UTC).`;
@@ -4733,12 +4739,93 @@ Format as a natural, readable summary with clear sections. If a section has no d
     tools.push(...LOVABLE_CONTRIBUTORS_TOOLS);
     // Briefing mode must always return text, never invoke tools.
     // Do NOT set tool_choice without tools — OpenAI rejects that combination.
-    if (mode !== "briefing" && !shouldBypassTools && tools.length > 0) {
-      requestBody.tools = tools;
+
+    // ============================================================
+    // Phase 1.5: Intent-based tool filtering.
+    // Classify the latest user message and only expose relevant tool
+    // groups to the LLM. Falls back to the full toolset when uncertain.
+    // Always-on groups (Forms, NDA, Exec Summary, Release, Lovable Contributors)
+    // remain available because they're either tiny or admin-gated.
+    // ============================================================
+    const INTENT_RULES: Array<{ groups: any[][]; re: RegExp }> = [
+      { groups: [GMAIL_TOOLS], re: /\b(gmail|email|emails|inbox|draft|drafts|reply|forward|unread|sender|recipient|cc'?d|bcc'?d)\b/i },
+      { groups: [CALENDAR_TOOLS], re: /\b(calendar|diary|schedule|availability|free\/busy|free busy|book\b|meeting room|reschedule|invite|invites|event|events|appointment)\b/i },
+      { groups: [MEETING_TOOLS], re: /\b(meeting notes?|meetings?\b|recap|action items?|transcript|plaud|gemini|google\s*meet|recording|summary of (the|my|our)\b|minutes\b)\b/i },
+      { groups: [WORKSTREAM_TOOLS], re: /\b(workstream|workstreams|kanban|card|cards|ryg|amber|red\/yellow|status update|owner of)\b/i },
+      { groups: [PLANNER_TOOLS], re: /\b(planner|plan\b|roadmap|milestone|sprint plan|backlog|to-do list)\b/i },
+      { groups: [ANALYTICS_TOOLS], re: /\b(analytic|analytics|metric|metrics|kpi|dashboard|trend|report|reporting|chart|graph)\b/i },
+      { groups: [GOOGLE_DRIVE_TOOLS], re: /\b(drive|google drive|gdrive|folder|shared drive|doc\b|docs\b|sheet\b|sheets\b|slide|slides|file in)\b/i },
+      { groups: [DOCUMENT_TOOLS], re: /\b(document|documents|file|files|attachment|policy|policies|contract|nda|sop|playbook|handbook|wiki|knowledge base)\b/i },
+      { groups: [SLACK_TOOLS], re: /\b(slack|channel|channels|dm\b|huddle|thread|reaction|posted in)\b/i },
+      { groups: [NOTION_TOOLS], re: /\b(notion|page in notion|notion db|notion database)\b/i },
+      { groups: [BASECAMP_TOOLS], re: /\b(basecamp|to-?do\b|hill chart|campfire|message board)\b/i },
+      { groups: [AZURE_DEVOPS_TOOLS], re: /\b(devops|ado\b|work item|workitem|backlog item|pull request|pr\b|sprint|iteration|user story|epic\b|feature\b|bug\b)\b/i },
+      { groups: [AZURE_REPOS_TOOLS], re: /\b(repo|repos|repository|commit|commits|branch|branches|merge|main branch|push|pushed|shipped)\b/i },
+      { groups: [XERO_TOOLS], re: /\b(xero|invoice|invoices|revenue|expense|expenses|p&l|profit and loss|balance sheet|finance|financial|cashflow|cash flow|accounts? receivable|accounts? payable)\b/i },
+      { groups: [EXEC_SUMMARY_TOOLS], re: /\b(exec(utive)? summary|board pack|investor update|weekly report|monthly report)\b/i },
+    ];
+
+    const ALWAYS_ON_TOOLS = [
+      ...GOOGLE_FORMS_TOOLS,
+      ...NDA_TOOLS,
+      ...EXEC_SUMMARY_TOOLS,
+      ...RELEASE_TOOLS,
+      ...LOVABLE_CONTRIBUTORS_TOOLS,
+    ];
+
+    // Build the filtered toolset. If no intent matches, fall back to the full tools array.
+    let filteredTools: any[] = tools;
+    let intentMatched = false;
+    if (!isVoiceMode && latestUserText.length > 0) {
+      const matched: any[] = [];
+      for (const rule of INTENT_RULES) {
+        if (rule.re.test(latestUserText)) {
+          intentMatched = true;
+          for (const grp of rule.groups) matched.push(...grp);
+        }
+      }
+      if (intentMatched) {
+        const seen = new Set<string>();
+        filteredTools = [...ALWAYS_ON_TOOLS, ...matched].filter((t: any) => {
+          const name = t?.function?.name;
+          if (!name || seen.has(name)) return false;
+          // Respect connection gates: drop tools whose backing integration isn't available.
+          if (CALENDAR_TOOLS.includes(t) && !calendarAccessToken) return false;
+          if (DOCUMENT_TOOLS.includes(t) && !azureStorageAvailable) return false;
+          if (NOTION_TOOLS.includes(t) && !notionToken) return false;
+          if (BASECAMP_TOOLS.includes(t) && !basecampConnected) return false;
+          if (SLACK_TOOLS.includes(t) && !slackConnection) return false;
+          seen.add(name);
+          return true;
+        });
+        console.log(`[intent-filter] matched=${intentMatched} tools=${filteredTools.length}/${tools.length}`);
+      }
+    }
+
+    // Tool-first guardrail signal: data-bound intents must ground their answer in tools.
+    const DATA_INTENT_RE = /\b(meeting|email|inbox|calendar|event|workstream|task|planner|kpi|metric|invoice|xero|devops|work item|drive|document|slack|candidate|recruit|brief|status|summary|report)\b/i;
+    const isDataIntent = intentMatched || DATA_INTENT_RE.test(latestUserText);
+
+    if (isDataIntent && !isVoiceMode && !mustAskMeetingSource && mode !== "briefing" && filteredTools.length > 0) {
+      // Phase 1.5 tool-first guardrail: forbid speculation, require tool grounding.
+      systemContent += `\n\n## TOOL-FIRST GUARDRAIL\nThe user is asking about real-time or factual data (meetings, emails, calendar, workstreams, planner, analytics, documents, Slack, Xero, DevOps, recruitment, etc.). You MUST call an appropriate tool to ground your answer. If the relevant integration isn't connected OR a tool returns no matching data, say so plainly in one or two sentences and suggest a concrete next step — NEVER invent meetings, emails, events, candidates, invoices, tasks, or any other records. NEVER summarise hypothetical content.`;
+      // Rebuild the first request's messages with the updated system prompt.
+      requestBody.messages = [
+        { role: "system", content: systemContent },
+        ...messages,
+      ];
+    }
+
+    if (mode !== "briefing" && !shouldBypassTools && filteredTools.length > 0) {
+      requestBody.tools = filteredTools;
+      if (isDataIntent && !isVoiceMode && !mustAskMeetingSource) {
+        requestBody.tool_choice = "auto";
+      }
     }
 
     if (mustAskMeetingSource) {
       requestBody.tools = undefined;
+      requestBody.tool_choice = undefined;
       systemContent += `\n\n## CURRENT REQUEST OVERRIDE\nThe latest user request is a source-ambiguous meeting notes request. Reply exactly: "Which source should I use — **Google Meet** or **Plaud**?" Do not call tools.`;
       requestBody.messages = [
         { role: "system", content: systemContent },
@@ -5263,7 +5350,6 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const runOne = async (tc: any): Promise<any> => {
         await acquire();
         try {
-        try {
           const parsedArguments = parseToolArguments(tc);
           const rawArguments = parsedArguments.rawArguments;
           const args = parsedArguments.args;
@@ -5509,7 +5595,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
         const recoveryResponse = await fetchAIWithRetry({
           messages: recoveryMessages,
           stream: true,
-          tools,
+          tools: filteredTools,
           force_provider: provider,
         });
 
@@ -5555,11 +5641,43 @@ Format as a natural, readable summary with clear sections. If a section has no d
     }
 
     const encoder = new TextEncoder();
+    // Friendly labels for the "Sources used" footer.
+    const SOURCE_LABELS: Record<string, string> = {
+      search_emails: "Gmail", read_email: "Gmail", send_email: "Gmail", draft_email: "Gmail", reply_email: "Gmail", forward_email: "Gmail",
+      list_calendar_events: "Google Calendar", create_calendar_event: "Google Calendar", update_calendar_event: "Google Calendar", delete_calendar_event: "Google Calendar", check_team_availability: "Google Calendar",
+      fetch_plaud_meetings: "Plaud Meetings", list_meetings: "Meetings", get_meeting: "Meetings",
+      list_workstream_cards: "Workstreams", get_workstream_card: "Workstreams", create_workstream_card: "Workstreams", update_workstream_card: "Workstreams",
+      list_planner_items: "Planner", create_planner_item: "Planner", update_planner_item: "Planner",
+      list_drive_files: "Google Drive", read_drive_file: "Google Drive", search_drive: "Google Drive",
+      list_documents: "Documents", read_document: "Documents", search_documents: "Documents",
+      list_slack_channels: "Slack", read_slack_messages: "Slack", post_slack_message: "Slack",
+      list_devops_work_items: "Azure DevOps", get_devops_work_item: "Azure DevOps", list_devops_commits: "Azure DevOps",
+      list_azure_repo_commits: "Azure Repos",
+      list_invoices: "Xero", list_contacts: "Xero", get_pnl: "Xero",
+      list_notion_pages: "Notion", read_notion_page: "Notion",
+      list_basecamp_todos: "Basecamp", complete_basecamp_todo: "Basecamp",
+    };
+    const sourcesUsed: Record<string, number> = {};
+    const recordToolCalls = (toolCalls: any[]) => {
+      for (const tc of toolCalls || []) {
+        const name = tc?.function?.name;
+        if (!name) continue;
+        const label = SOURCE_LABELS[name] || name.replace(/_/g, " ");
+        sourcesUsed[label] = (sourcesUsed[label] || 0) + 1;
+      }
+    };
+
     const stream = new ReadableStream({
       async start(controller) {
         const enqueue = (chunk: string) => controller.enqueue(encoder.encode(chunk));
         let aggregatedContent = "";
         let lastFullContent = "";
+
+        // Phase 1.5: SSE heartbeat — keep the connection alive and prevent
+        // perceived freezing during long tool execution / LLM round-trips.
+        const heartbeat = setInterval(() => {
+          try { enqueue(`: ping\n\n`); } catch { /* controller closed */ }
+        }, 10_000);
 
         try {
           // Conversation history for multi-round tool calls
@@ -5605,6 +5723,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               if (recovery.toolCalls.length > 0) {
                 console.log("RECOVERY PRODUCED TOOL CALLS", recovery.toolCalls.map((tc) => tc?.function?.name));
                 const provider = detectToolResultProvider(recovery.toolCalls);
+                recordToolCalls(recovery.toolCalls);
                 const toolResults = await executeToolCalls(recovery.toolCalls, provider);
                 const assistantMsg: any = { role: "assistant", tool_calls: recovery.toolCalls };
                 if (recovery.fullContent) assistantMsg.content = recovery.fullContent;
@@ -5613,7 +5732,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
                 currentResponse = await fetchAIWithRetry({
                   messages: sanitizeConversationMessages(conversationMessages),
                   stream: true,
-                  tools,
+                  tools: filteredTools,
                 });
                 continue;
               }
@@ -5679,6 +5798,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               tool_id: toolCalls[0]?.id,
               detected: provider,
             });
+            recordToolCalls(toolCalls);
             const toolResults = await executeToolCalls(toolCalls, provider);
             const toolResultsString = JSON.stringify(toolResults);
             const allToolResultsNoData = toolResults.length > 0 && toolResults.every((message: any) => {
@@ -5729,7 +5849,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               model: CHAT_MODEL,
               messages: sanitizeConversationMessages(conversationMessages),
               stream: true,
-              tools,
+              tools: filteredTools,
             });
             console.log("LLM RESPONSE RECEIVED:");
             console.log({
@@ -5801,7 +5921,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
             const finalResponse = await fetchAIWithRetry({
               messages: finalMessages,
               stream: true,
-              tools,
+              tools: filteredTools,
             });
 
             const finalResult = await consumeSSEStream(finalResponse, enqueue);
@@ -5826,17 +5946,30 @@ Format as a natural, readable summary with clear sections. If a section has no d
             enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: lastFullContent } }] })}\n\n`);
           }
 
+          // Phase 1.5: emit a compact "Sources used" footer for tool-grounded answers.
+          // Skip voice mode (TTS) and briefing (already structured).
+          const sourceEntries = Object.entries(sourcesUsed);
+          if (sourceEntries.length > 0 && !isVoiceMode && mode !== "briefing") {
+            const footer = `\n\n---\n**Sources used:** ${sourceEntries
+              .map(([label, count]) => (count > 1 ? `${label} (${count})` : label))
+              .join(" · ")}`;
+            enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: footer } }] })}\n\n`);
+          }
+
           console.log("FINAL RESPONSE SENT TO UI:");
           console.log({
             fullContentLength: lastFullContent?.length || 0,
             preview: lastFullContent?.slice(0, 200),
+            sources: sourcesUsed,
           });
+          clearInterval(heartbeat);
           enqueue("data: [DONE]\n\n");
           controller.close();
         } catch (streamErr) {
           console.error("norman-chat streaming error:", streamErr);
           const message = streamErr instanceof Error ? streamErr.message : "Unknown streaming error";
           enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: `\n\n⚠️ Error: ${message}` } }] })}\n\n`);
+          clearInterval(heartbeat);
           enqueue("data: [DONE]\n\n");
           controller.close();
         }

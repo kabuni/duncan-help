@@ -5724,6 +5724,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               if (recovery.toolCalls.length > 0) {
                 console.log("RECOVERY PRODUCED TOOL CALLS", recovery.toolCalls.map((tc) => tc?.function?.name));
                 const provider = detectToolResultProvider(recovery.toolCalls);
+                recordToolCalls(recovery.toolCalls);
                 const toolResults = await executeToolCalls(recovery.toolCalls, provider);
                 const assistantMsg: any = { role: "assistant", tool_calls: recovery.toolCalls };
                 if (recovery.fullContent) assistantMsg.content = recovery.fullContent;

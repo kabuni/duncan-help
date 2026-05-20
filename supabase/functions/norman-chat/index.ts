@@ -5378,7 +5378,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
           });
 
           if (provider === "anthropic") {
-            toolResults.push({
+            return {
               role: "user",
               content: [
                 {
@@ -5387,14 +5387,13 @@ Format as a natural, readable summary with clear sections. If a section has no d
                   content: finalContent,
                 },
               ],
-            });
-          } else {
-            toolResults.push({
-              role: "tool",
-              tool_call_id: tc?.id,
-              content: finalContent,
-            });
+            };
           }
+          return {
+            role: "tool",
+            tool_call_id: tc?.id,
+            content: finalContent,
+          };
         } catch (error: any) {
           const toolError = error instanceof Error ? error : new Error(String(error));
           console.error(`Tool ${tc.function.name} threw error:`, toolError.message, toolError.stack);
@@ -5408,22 +5407,14 @@ Format as a natural, readable summary with clear sections. If a section has no d
             : createStructuredToolResult(toolName, { error: toolError.message }, "hard_error");
           const finalContent = JSON.stringify(errorResult) || "{}";
 
-          console.log("TOOL RESULT RAW:", errorResult);
-          console.log("TOOL RESULT TYPE:", typeof errorResult);
-          console.log("ADDING TOOL MESSAGE:");
-          console.log("tool_call_id:", tc?.id);
-          console.log("tool_name:", tc?.function?.name);
-          console.log("content:", finalContent);
-          console.log("content_length:", finalContent?.length);
-
-          console.log("TOOL RESULT SENT:", {
+          console.log("TOOL ERROR SENT:", {
             provider,
             tool_id: tc?.id,
             content_length: finalContent.length,
           });
 
           if (provider === "anthropic") {
-            toolResults.push({
+            return {
               role: "user",
               content: [
                 {
@@ -5432,16 +5423,23 @@ Format as a natural, readable summary with clear sections. If a section has no d
                   content: finalContent,
                 },
               ],
-            });
-          } else {
-            toolResults.push({
-              role: "tool",
-              tool_call_id: tc?.id,
-              content: finalContent,
-            });
+            };
           }
+          return {
+            role: "tool",
+            tool_call_id: tc?.id,
+            content: finalContent,
+          };
+        } finally {
+          release();
         }
-      }
+      };
+
+      // Run all tools concurrently; order matches `toolCalls` (required by OpenAI tool_call_id pairing).
+      const settled = await Promise.all(toolCalls.map((tc: any) => runOne(tc)));
+      for (const r of settled) toolResults.push(r);
+
+
 
       return toolResults;
     }

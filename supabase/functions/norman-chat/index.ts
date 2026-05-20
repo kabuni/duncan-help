@@ -4739,12 +4739,84 @@ Format as a natural, readable summary with clear sections. If a section has no d
     tools.push(...LOVABLE_CONTRIBUTORS_TOOLS);
     // Briefing mode must always return text, never invoke tools.
     // Do NOT set tool_choice without tools — OpenAI rejects that combination.
-    if (mode !== "briefing" && !shouldBypassTools && tools.length > 0) {
-      requestBody.tools = tools;
+
+    // ============================================================
+    // Phase 1.5: Intent-based tool filtering.
+    // Classify the latest user message and only expose relevant tool
+    // groups to the LLM. Falls back to the full toolset when uncertain.
+    // Always-on groups (Forms, NDA, Exec Summary, Release, Lovable Contributors)
+    // remain available because they're either tiny or admin-gated.
+    // ============================================================
+    const INTENT_RULES: Array<{ groups: any[][]; re: RegExp }> = [
+      { groups: [GMAIL_TOOLS], re: /\b(gmail|email|emails|inbox|draft|drafts|reply|forward|unread|sender|recipient|cc'?d|bcc'?d)\b/i },
+      { groups: [CALENDAR_TOOLS], re: /\b(calendar|diary|schedule|availability|free\/busy|free busy|book\b|meeting room|reschedule|invite|invites|event|events|appointment)\b/i },
+      { groups: [MEETING_TOOLS], re: /\b(meeting notes?|meetings?\b|recap|action items?|transcript|plaud|gemini|google\s*meet|recording|summary of (the|my|our)\b|minutes\b)\b/i },
+      { groups: [WORKSTREAM_TOOLS], re: /\b(workstream|workstreams|kanban|card|cards|ryg|amber|red\/yellow|status update|owner of)\b/i },
+      { groups: [PLANNER_TOOLS], re: /\b(planner|plan\b|roadmap|milestone|sprint plan|backlog|to-do list)\b/i },
+      { groups: [ANALYTICS_TOOLS], re: /\b(analytic|analytics|metric|metrics|kpi|dashboard|trend|report|reporting|chart|graph)\b/i },
+      { groups: [GOOGLE_DRIVE_TOOLS], re: /\b(drive|google drive|gdrive|folder|shared drive|doc\b|docs\b|sheet\b|sheets\b|slide|slides|file in)\b/i },
+      { groups: [DOCUMENT_TOOLS], re: /\b(document|documents|file|files|attachment|policy|policies|contract|nda|sop|playbook|handbook|wiki|knowledge base)\b/i },
+      { groups: [SLACK_TOOLS], re: /\b(slack|channel|channels|dm\b|huddle|thread|reaction|posted in)\b/i },
+      { groups: [NOTION_TOOLS], re: /\b(notion|page in notion|notion db|notion database)\b/i },
+      { groups: [BASECAMP_TOOLS], re: /\b(basecamp|to-?do\b|hill chart|campfire|message board)\b/i },
+      { groups: [AZURE_DEVOPS_TOOLS], re: /\b(devops|ado\b|work item|workitem|backlog item|pull request|pr\b|sprint|iteration|user story|epic\b|feature\b|bug\b)\b/i },
+      { groups: [AZURE_REPOS_TOOLS], re: /\b(repo|repos|repository|commit|commits|branch|branches|merge|main branch|push|pushed|shipped)\b/i },
+      { groups: [XERO_TOOLS], re: /\b(xero|invoice|invoices|revenue|expense|expenses|p&l|profit and loss|balance sheet|finance|financial|cashflow|cash flow|accounts? receivable|accounts? payable)\b/i },
+      { groups: [EXEC_SUMMARY_TOOLS], re: /\b(exec(utive)? summary|board pack|investor update|weekly report|monthly report)\b/i },
+    ];
+
+    const ALWAYS_ON_TOOLS = [
+      ...GOOGLE_FORMS_TOOLS,
+      ...NDA_TOOLS,
+      ...EXEC_SUMMARY_TOOLS,
+      ...RELEASE_TOOLS,
+      ...LOVABLE_CONTRIBUTORS_TOOLS,
+    ];
+
+    // Build the filtered toolset. If no intent matches, fall back to the full tools array.
+    let filteredTools: any[] = tools;
+    let intentMatched = false;
+    if (!isVoiceMode && latestUserText.length > 0) {
+      const matched: any[] = [];
+      for (const rule of INTENT_RULES) {
+        if (rule.re.test(latestUserText)) {
+          intentMatched = true;
+          for (const grp of rule.groups) matched.push(...grp);
+        }
+      }
+      if (intentMatched) {
+        const seen = new Set<string>();
+        filteredTools = [...ALWAYS_ON_TOOLS, ...matched].filter((t: any) => {
+          const name = t?.function?.name;
+          if (!name || seen.has(name)) return false;
+          // Respect connection gates: drop tools whose backing integration isn't available.
+          if (CALENDAR_TOOLS.includes(t) && !calendarAccessToken) return false;
+          if (DOCUMENT_TOOLS.includes(t) && !azureStorageAvailable) return false;
+          if (NOTION_TOOLS.includes(t) && !notionToken) return false;
+          if (BASECAMP_TOOLS.includes(t) && !basecampConnected) return false;
+          if (SLACK_TOOLS.includes(t) && !slackConnection) return false;
+          seen.add(name);
+          return true;
+        });
+        console.log(`[intent-filter] matched=${intentMatched} tools=${filteredTools.length}/${tools.length}`);
+      }
+    }
+
+    // Tool-first guardrail signal: data-bound intents must ground their answer in tools.
+    const DATA_INTENT_RE = /\b(meeting|email|inbox|calendar|event|workstream|task|planner|kpi|metric|invoice|xero|devops|work item|drive|document|slack|candidate|recruit|brief|status|summary|report)\b/i;
+    const isDataIntent = intentMatched || DATA_INTENT_RE.test(latestUserText);
+
+    if (mode !== "briefing" && !shouldBypassTools && filteredTools.length > 0) {
+      requestBody.tools = filteredTools;
+      // Encourage tool grounding for data intents on the very first round (non-voice).
+      if (isDataIntent && !isVoiceMode && !mustAskMeetingSource) {
+        requestBody.tool_choice = "auto";
+      }
     }
 
     if (mustAskMeetingSource) {
       requestBody.tools = undefined;
+      requestBody.tool_choice = undefined;
       systemContent += `\n\n## CURRENT REQUEST OVERRIDE\nThe latest user request is a source-ambiguous meeting notes request. Reply exactly: "Which source should I use — **Google Meet** or **Plaud**?" Do not call tools.`;
       requestBody.messages = [
         { role: "system", content: systemContent },

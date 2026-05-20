@@ -5633,11 +5633,43 @@ Format as a natural, readable summary with clear sections. If a section has no d
     }
 
     const encoder = new TextEncoder();
+    // Friendly labels for the "Sources used" footer.
+    const SOURCE_LABELS: Record<string, string> = {
+      search_emails: "Gmail", read_email: "Gmail", send_email: "Gmail", draft_email: "Gmail", reply_email: "Gmail", forward_email: "Gmail",
+      list_calendar_events: "Google Calendar", create_calendar_event: "Google Calendar", update_calendar_event: "Google Calendar", delete_calendar_event: "Google Calendar", check_team_availability: "Google Calendar",
+      fetch_plaud_meetings: "Plaud Meetings", list_meetings: "Meetings", get_meeting: "Meetings",
+      list_workstream_cards: "Workstreams", get_workstream_card: "Workstreams", create_workstream_card: "Workstreams", update_workstream_card: "Workstreams",
+      list_planner_items: "Planner", create_planner_item: "Planner", update_planner_item: "Planner",
+      list_drive_files: "Google Drive", read_drive_file: "Google Drive", search_drive: "Google Drive",
+      list_documents: "Documents", read_document: "Documents", search_documents: "Documents",
+      list_slack_channels: "Slack", read_slack_messages: "Slack", post_slack_message: "Slack",
+      list_devops_work_items: "Azure DevOps", get_devops_work_item: "Azure DevOps", list_devops_commits: "Azure DevOps",
+      list_azure_repo_commits: "Azure Repos",
+      list_invoices: "Xero", list_contacts: "Xero", get_pnl: "Xero",
+      list_notion_pages: "Notion", read_notion_page: "Notion",
+      list_basecamp_todos: "Basecamp", complete_basecamp_todo: "Basecamp",
+    };
+    const sourcesUsed: Record<string, number> = {};
+    const recordToolCalls = (toolCalls: any[]) => {
+      for (const tc of toolCalls || []) {
+        const name = tc?.function?.name;
+        if (!name) continue;
+        const label = SOURCE_LABELS[name] || name.replace(/_/g, " ");
+        sourcesUsed[label] = (sourcesUsed[label] || 0) + 1;
+      }
+    };
+
     const stream = new ReadableStream({
       async start(controller) {
         const enqueue = (chunk: string) => controller.enqueue(encoder.encode(chunk));
         let aggregatedContent = "";
         let lastFullContent = "";
+
+        // Phase 1.5: SSE heartbeat — keep the connection alive and prevent
+        // perceived freezing during long tool execution / LLM round-trips.
+        const heartbeat = setInterval(() => {
+          try { enqueue(`: ping\n\n`); } catch { /* controller closed */ }
+        }, 10_000);
 
         try {
           // Conversation history for multi-round tool calls

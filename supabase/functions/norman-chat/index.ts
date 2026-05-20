@@ -5696,6 +5696,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
           console.error(`Tool ${tc.function.name} threw error:`, toolError.message, toolError.stack);
           const toolName = tc?.function?.name ?? "unknown_tool";
           const isTimeout = toolError.message.toLowerCase().includes("timed out");
+          recordToolFailure(toolName);
+          emit({ duncan_event: "tool_end", id: tc?.id, name: toolName, status: isTimeout ? "timeout" : "error", error: toolError.message });
           const errorResult = isTimeout
             ? createStructuredToolResult(toolName, {
                 error: toolError.message,
@@ -5703,6 +5705,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               }, "partial")
             : createStructuredToolResult(toolName, { error: toolError.message }, "hard_error");
           const finalContent = JSON.stringify(errorResult) || "{}";
+
 
           console.log("TOOL ERROR SENT:", {
             provider,

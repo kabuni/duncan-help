@@ -13,6 +13,9 @@ import WelcomeModal from "@/components/WelcomeModal";
 import { useNormanChat } from "@/hooks/useNormanChat";
 import type { ChatAttachment } from "@/hooks/useNormanChat";
 import ChatInput from "@/components/chat/ChatInput";
+import PendingWriteCard from "@/components/chat/PendingWriteCard";
+import ToolStatusPills from "@/components/chat/ToolStatusPills";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useGeneralChatsContext } from "@/hooks/GeneralChatsContext";
 import { useProfile } from "@/hooks/useProfile";

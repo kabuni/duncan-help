@@ -5106,33 +5106,36 @@ Format as a natural, readable summary with clear sections. If a section has no d
     // handles it without any model tokens.
     const response = executeWriteId ? null as any : await fetchAIWithRetry(requestBody);
 
-    console.log("LLM RESPONSE OBJECT", {
-      round: 0,
-      responseType: typeof response,
-      hasBody: response.body !== null,
-    });
+    if (!executeWriteId) {
+      console.log("LLM RESPONSE OBJECT", {
+        round: 0,
+        responseType: typeof response,
+        hasBody: response.body !== null,
+      });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        console.error("AI rate limit exceeded after retries");
+      if (!response.ok) {
+        if (response.status === 429) {
+          console.error("AI rate limit exceeded after retries");
+          return new Response(
+            JSON.stringify({ error: "Rate limit exceeded. Please try again shortly." }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        if (response.status === 402) {
+          return new Response(
+            JSON.stringify({ error: "AI credits exhausted. Please add funds in workspace settings." }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const text = await response.text();
+        console.error("AI gateway error:", response.status, text);
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again shortly." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI gateway error" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add funds in workspace settings." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const text = await response.text();
-      console.error("AI gateway error:", response.status, text);
-      return new Response(
-        JSON.stringify({ error: "AI gateway error" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
+
 
     // Consume an OpenAI-shaped SSE stream while optionally forwarding each chunk to the client
     // immediately. We suppress upstream [DONE] so norman-chat emits it only once after the final round.

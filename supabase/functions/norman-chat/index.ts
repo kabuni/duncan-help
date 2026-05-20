@@ -5717,7 +5717,11 @@ Format as a natural, readable summary with clear sections. If a section has no d
             }
 
             if (allToolResultsNoData) {
-              console.log("ALL TOOL RESULTS WERE NO_DATA/PARTIAL — requesting graceful synthesis instead of more tool churn");
+              console.log("ALL TOOL RESULTS WERE NO_DATA/PARTIAL — injecting strict no-speculation directive");
+              conversationMessages.push({
+                role: "system",
+                content: "All tool calls returned no matching data. Respond with a brief, plain statement that you couldn't find the requested information in the connected sources, and (optionally) suggest one concrete next step the user can take (e.g. connect an integration, broaden the date range, check spelling). Do NOT invent meetings, emails, events, candidates, invoices, or any other records. Do NOT summarise hypothetical content. Do NOT call more tools.",
+              });
             }
             console.log("FINAL LLM INPUT (last 3 messages):");
             console.log(JSON.stringify(conversationMessages.slice(-3), null, 2));

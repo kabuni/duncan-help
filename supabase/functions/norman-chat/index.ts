@@ -5947,17 +5947,30 @@ Format as a natural, readable summary with clear sections. If a section has no d
             enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: lastFullContent } }] })}\n\n`);
           }
 
+          // Phase 1.5: emit a compact "Sources used" footer for tool-grounded answers.
+          // Skip voice mode (TTS) and briefing (already structured).
+          const sourceEntries = Object.entries(sourcesUsed);
+          if (sourceEntries.length > 0 && !isVoiceMode && mode !== "briefing") {
+            const footer = `\n\n---\n**Sources used:** ${sourceEntries
+              .map(([label, count]) => (count > 1 ? `${label} (${count})` : label))
+              .join(" · ")}`;
+            enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: footer } }] })}\n\n`);
+          }
+
           console.log("FINAL RESPONSE SENT TO UI:");
           console.log({
             fullContentLength: lastFullContent?.length || 0,
             preview: lastFullContent?.slice(0, 200),
+            sources: sourcesUsed,
           });
+          clearInterval(heartbeat);
           enqueue("data: [DONE]\n\n");
           controller.close();
         } catch (streamErr) {
           console.error("norman-chat streaming error:", streamErr);
           const message = streamErr instanceof Error ? streamErr.message : "Unknown streaming error";
           enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: `\n\n⚠️ Error: ${message}` } }] })}\n\n`);
+          clearInterval(heartbeat);
           enqueue("data: [DONE]\n\n");
           controller.close();
         }

@@ -4321,12 +4321,13 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode, userProfile, voiceMode } = await req.json();
+    const { messages, mode, userProfile, voiceMode, executeWriteId } = await req.json();
     const isVoiceMode = voiceMode === true;
     const CHAT_MODEL = isVoiceMode ? "gpt-4o-mini" : "gpt-4o";
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
 
     if (!OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY is not configured");

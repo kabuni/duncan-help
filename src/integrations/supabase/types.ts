@@ -559,6 +559,51 @@ export type Database = {
           },
         ]
       }
+      chat_write_pending: {
+        Row: {
+          created_at: string
+          error: string | null
+          executed_at: string | null
+          expires_at: string
+          id: string
+          idempotency_key: string
+          result: Json | null
+          status: Database["public"]["Enums"]["chat_write_status"]
+          summary: string | null
+          tool_args: Json
+          tool_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          executed_at?: string | null
+          expires_at?: string
+          id?: string
+          idempotency_key: string
+          result?: Json | null
+          status?: Database["public"]["Enums"]["chat_write_status"]
+          summary?: string | null
+          tool_args?: Json
+          tool_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          executed_at?: string | null
+          expires_at?: string
+          id?: string
+          idempotency_key?: string
+          result?: Json | null
+          status?: Database["public"]["Enums"]["chat_write_status"]
+          summary?: string | null
+          tool_args?: Json
+          tool_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       company_integrations: {
         Row: {
           created_at: string
@@ -3948,6 +3993,13 @@ export type Database = {
         | "rejected"
         | "changes_requested"
         | "cancelled"
+      chat_write_status:
+        | "pending"
+        | "confirmed"
+        | "executed"
+        | "cancelled"
+        | "failed"
+        | "expired"
       event_approval_status: "pending" | "approved" | "rejected" | "proposed"
       po_category:
         | "software"
@@ -4111,6 +4163,14 @@ export const Constants = {
         "rejected",
         "changes_requested",
         "cancelled",
+      ],
+      chat_write_status: [
+        "pending",
+        "confirmed",
+        "executed",
+        "cancelled",
+        "failed",
+        "expired",
       ],
       event_approval_status: ["pending", "approved", "rejected", "proposed"],
       po_category: [

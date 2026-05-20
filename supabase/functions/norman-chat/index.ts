@@ -5134,7 +5134,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
        };
     }
 
-    const TOOL_EXECUTION_TIMEOUT_MS = 20_000;
+    const TOOL_EXECUTION_TIMEOUT_MS = 10_000;
+    const PLAUD_SYNC_INTENT_RE = /\b(sync|refresh|import|pull\s+(new|latest)|update)\b[\s\S]{0,40}\bplaud\b/i;
 
     function createStructuredToolResult(toolName: string, result: any, status: "success" | "no_data" | "partial" | "hard_error" = "success") {
       return {

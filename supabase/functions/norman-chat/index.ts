@@ -5317,7 +5317,16 @@ Format as a natural, readable summary with clear sections. If a section has no d
               console.log(`Basecamp tool ${tc.function.name} result preview:`, JSON.stringify(result).slice(0, 500));
             }
           } else if (meetingToolNames.includes(tc.function.name)) {
-              result = await withToolTimeout(tc.function.name, executeMeetingTool(tc.function.name, args, supabaseAdmin, supabaseUser, supabaseUrl, authHeader || "", userId || "", meetingFlowState));
+              // Phase 1: hard server-side guard on the slow Plaud sync. Only run when the user
+              // explicitly asked for a sync/refresh/import/update of Plaud data.
+              if (tc.function.name === "fetch_plaud_meetings" && !PLAUD_SYNC_INTENT_RE.test(latestUserText)) {
+                console.log("BLOCKED fetch_plaud_meetings — no explicit sync intent in user message");
+                result = createStructuredToolResult(tc.function.name, {
+                  message: "Skipped Plaud sync. This is a slow operation and only runs when the user explicitly asks to sync, refresh, import, or update Plaud meeting data. Use list_meetings / search_meeting_transcripts / get_meeting instead for existing data.",
+                }, "no_data");
+              } else {
+                result = await withToolTimeout(tc.function.name, executeMeetingTool(tc.function.name, args, supabaseAdmin, supabaseUser, supabaseUrl, authHeader || "", userId || "", meetingFlowState));
+              }
           } else if (azureDevOpsToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeAzureDevOpsTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));
           } else if (azureReposToolNames.includes(tc.function.name)) {

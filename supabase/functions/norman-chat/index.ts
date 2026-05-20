@@ -4427,8 +4427,10 @@ Format as a natural, readable summary with clear sections. If a section has no d
     }
 
     const SIMPLE_INPUT_PATTERNS = [/^hi[!.?\s]*$/i, /^hello[!.?\s]*$/i, /^how are you[?.!\s]*$/i];
-    const MAX_TOOL_ROUNDS = isVoiceMode ? 2 : 3;
-    const MAX_EXECUTION_TIME_MS = 45_000;
+    const DEEP_INTENT_RE = /\b(analy[sz]e|deep\s*dive|compare|cross[-\s]?reference|investigate|audit|thorough|comprehensive)\b/i;
+    const allowExtraRound = isVoiceMode || DEEP_INTENT_RE.test(extractPlainText(latestUserMessage?.content));
+    const MAX_TOOL_ROUNDS = allowExtraRound ? 3 : 2;
+    const MAX_EXECUTION_TIME_MS = 90_000;
 
     function extractPlainText(content: unknown): string {
       if (typeof content === "string") return content;

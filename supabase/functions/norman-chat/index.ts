@@ -5875,8 +5875,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const stream = new ReadableStream({
       async start(controller) {
         const enqueue = (chunk: string) => controller.enqueue(encoder.encode(chunk));
+        const emitDuncanEvent = (evt: any) => {
+          try { enqueue(`data: ${JSON.stringify(evt)}\n\n`); } catch { /* closed */ }
+        };
         let aggregatedContent = "";
         let lastFullContent = "";
+
 
         // Phase 1.5: SSE heartbeat — keep the connection alive and prevent
         // perceived freezing during long tool execution / LLM round-trips.

@@ -5641,9 +5641,18 @@ Format as a natural, readable summary with clear sections. If a section has no d
           const toolName = tc?.function?.name ?? "unknown_tool";
           const toolOutcome = classifyToolOutcome(toolName, result);
 
+          // Phase 2b: feed circuit breaker + emit tool_end
+          if (toolOutcome.status === "hard_error") {
+            recordToolFailure(toolName);
+          } else {
+            recordToolSuccess(toolName);
+          }
+          emit({ duncan_event: "tool_end", id: tc?.id, name: toolName, status: toolOutcome.status });
+
           console.log("TOOL RESULT RAW:", result);
           console.log("TOOL RESULT TYPE:", typeof result);
           console.log("TOOL RESULT STATUS:", toolOutcome.status);
+
 
           const finalContent = (() => {
             const normalizedResult = toolOutcome.payload;

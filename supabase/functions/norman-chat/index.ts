@@ -4289,6 +4289,30 @@ async function sha256Hex(input: string): Promise<string> {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Phase 2b: simple in-memory per-tool circuit breaker. After N consecutive
+// failures in a single isolate, that tool is "open" (skipped) for COOLDOWN_MS.
+const TOOL_FAILURES = new Map<string, { fails: number; openUntil: number }>();
+const CIRCUIT_THRESHOLD = 3;
+const CIRCUIT_COOLDOWN_MS = 60_000;
+function circuitIsOpen(name: string): boolean {
+  const s = TOOL_FAILURES.get(name);
+  return !!s && s.openUntil > Date.now();
+}
+function recordToolFailure(name: string) {
+  const s = TOOL_FAILURES.get(name) ?? { fails: 0, openUntil: 0 };
+  s.fails += 1;
+  if (s.fails >= CIRCUIT_THRESHOLD) {
+    s.openUntil = Date.now() + CIRCUIT_COOLDOWN_MS;
+    s.fails = 0;
+  }
+  TOOL_FAILURES.set(name, s);
+}
+function recordToolSuccess(name: string) {
+  TOOL_FAILURES.delete(name);
+}
+
+
+
 
 
 serve(async (req) => {

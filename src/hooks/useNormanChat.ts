@@ -26,9 +26,11 @@ const FUNCTION_BASE_URL = normalizedSupabaseUrl
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/norman-chat`;
 const EXTRACT_URL = `${FUNCTION_BASE_URL}/extract-chat-file`;
 const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-const FASTAPI_CHAT_URL = rawApiBaseUrl && rawApiBaseUrl !== "undefined" && rawApiBaseUrl !== "null"
+const FASTAPI_SHADOW_ENABLED = import.meta.env.VITE_ENABLE_FASTAPI_SHADOW === "true";
+const FASTAPI_CHAT_URL = FASTAPI_SHADOW_ENABLED && rawApiBaseUrl && rawApiBaseUrl !== "undefined" && rawApiBaseUrl !== "null"
   ? `${rawApiBaseUrl}/norman-chat`
   : null;
+const HISTORY_WINDOW = 15;
 const NORMAL_TIMEOUT_MS = 180_000;
 const HEAVY_TIMEOUT_MS = 300_000;
 const HEAVY_MODES: Mode[] = ["reason", "analyze", "automate", "briefing"];

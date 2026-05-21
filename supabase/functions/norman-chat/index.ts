@@ -4277,6 +4277,7 @@ const WRITE_TOOLS = new Set<string>([
   "update_workstream_card",
   "submit_google_form",
   "update_planner_event_meta",
+  "send_pdf_for_signature",
 ]);
 
 const WRITE_TOOL_LABELS: Record<string, string> = {

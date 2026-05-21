@@ -599,7 +599,7 @@ Deno.serve(async (req) => {
       title, weekRange, folderName: folder.name,
       fileCount: processed.length, summaryMd,
     });
-    const messageId = await sendEmail(gmailToken, effectiveRecipient, subject, html);
+    const messageId = await sendEmail(gmailToken, recipientHeader, subject, html);
 
     await admin.from("exec_summary_runs").update({
       status: "succeeded",

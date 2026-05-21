@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Send, Paperclip, X, FileText, Image as ImageIcon, Loader2, Mic, Square } from "lucide-react";
 import type { ChatAttachment } from "@/hooks/useNormanChat";
 import { invokeEdge } from "@/lib/edgeApi";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import AudioWaveform from "@/components/chat/AudioWaveform";
 import VoiceModeButton from "@/components/chat/VoiceModeButton";

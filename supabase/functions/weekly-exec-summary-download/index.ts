@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
 
     const encodedPath = run.blob_path.split("/").map(encodeURIComponent).join("/");
     const resourcePath = `/${container}/${encodedPath}`;
-    const { headers } = sign("GET", resourcePath, accountName, accountKey, {});
+    const { headers } = await sign("GET", resourcePath, accountName, accountKey);
 
     const azureRes = await fetch(`https://${accountName}.blob.core.windows.net${resourcePath}`, {
       method: "GET", headers,

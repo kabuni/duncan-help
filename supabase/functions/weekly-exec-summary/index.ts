@@ -530,11 +530,52 @@ Deno.serve(async (req) => {
       throw new Error("All file extractions failed — nothing to summarise");
     }
 
+    // Compute deterministic content hash from processed files
+    // (id + modifiedTime + size + extracted-char-count, sorted for determinism).
+    const fingerprintInput = files
+      .map((f: any) => `${f.id}|${f.modifiedTime ?? ""}|${f.size ?? ""}`)
+      .sort()
+      .join("\n") + `\n#count=${processed.length}\n#chars=${processed.reduce((a, p) => a + p.chars, 0)}`;
+    const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintInput));
+    const contentHash = Array.from(new Uint8Array(hashBuf))
+      .map((b) => b.toString(16).padStart(2, "0")).join("");
+
     await admin.from("exec_summary_runs").update({
       files_processed: processed,
       file_count: processed.length,
       failed_files: failed,
+      content_hash: contentHash,
     }).eq("id", runId);
+
+    // Duplicate-content protection: skip if an earlier successful run for the same folder
+    // produced the same hash. `skip_dedup: true` (or `force: true`) bypasses this gate.
+    if (!skipDedup && !force) {
+      const { data: prior } = await admin
+        .from("exec_summary_runs")
+        .select("id,started_at,email_message_id")
+        .eq("folder_id", folder.id)
+        .eq("content_hash", contentHash)
+        .eq("status", "succeeded")
+        .neq("id", runId)
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (prior) {
+        await admin.from("exec_summary_runs").update({
+          status: "skipped_no_changes",
+          finished_at: new Date().toISOString(),
+          error: `Identical content already sent in run ${prior.id}`,
+        }).eq("id", runId);
+        return json({
+          skipped: true,
+          reason: "skipped_no_changes",
+          run_id: runId,
+          previous_run_id: prior.id,
+          folder: folder.name,
+          content_hash: contentHash,
+        });
+      }
+    }
 
     // 4. GPT-4o summary
     const summaryMd = await buildSummaryMarkdown(folder.name, blocks.join("\n"));

@@ -944,6 +944,7 @@ export type Database = {
       exec_summary_runs: {
         Row: {
           blob_path: string | null
+          content_hash: string | null
           created_at: string
           download_token: string | null
           email_message_id: string | null
@@ -968,6 +969,7 @@ export type Database = {
         }
         Insert: {
           blob_path?: string | null
+          content_hash?: string | null
           created_at?: string
           download_token?: string | null
           email_message_id?: string | null
@@ -992,6 +994,7 @@ export type Database = {
         }
         Update: {
           blob_path?: string | null
+          content_hash?: string | null
           created_at?: string
           download_token?: string | null
           email_message_id?: string | null

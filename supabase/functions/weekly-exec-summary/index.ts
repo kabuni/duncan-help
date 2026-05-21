@@ -418,12 +418,18 @@ Deno.serve(async (req) => {
   let body: any = {};
   try { body = await req.json(); } catch { /* empty body fine */ }
   const force = body?.force === true;
-  // Optional one-off recipient override (admin or cron-secret triggered runs, e.g. test sends).
+  const skipDedup = body?.skip_dedup === true;
+  // Optional one-off recipient override. Accepts string, comma-separated list, or array.
   // Production cron always emails RECIPIENT_EMAIL unless explicitly overridden.
-  const overrideRaw = typeof body?.recipient_override === "string" ? body.recipient_override.trim() : "";
-  const recipientOverride =
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(overrideRaw) ? overrideRaw : null;
-  const effectiveRecipient = recipientOverride ?? RECIPIENT_EMAIL;
+  const overrideRaw: unknown = body?.recipient_override;
+  const overrideList: string[] = Array.isArray(overrideRaw)
+    ? overrideRaw.map((x) => String(x).trim())
+    : typeof overrideRaw === "string"
+      ? overrideRaw.split(",").map((s) => s.trim())
+      : [];
+  const validRecipients = overrideList.filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+  const effectiveRecipients = validRecipients.length ? validRecipients : [RECIPIENT_EMAIL];
+  const recipientHeader = effectiveRecipients.join(", ");
 
   // DST-safe gate: cron fires at 07:00 and 08:00 UTC every Monday; only run at 08:00 UK local.
   // `force: true` bypasses the time gate (used for admin-triggered test runs over the cron channel).
@@ -463,7 +469,7 @@ Deno.serve(async (req) => {
       status: "running",
       trigger_source: authz.source,
       triggered_by: authz.userId,
-      recipient: effectiveRecipient,
+      recipient: recipientHeader,
     })
     .select()
     .single();
@@ -524,11 +530,52 @@ Deno.serve(async (req) => {
       throw new Error("All file extractions failed — nothing to summarise");
     }
 
+    // Compute deterministic content hash from processed files
+    // (id + modifiedTime + size + extracted-char-count, sorted for determinism).
+    const fingerprintInput = files
+      .map((f: any) => `${f.id}|${f.modifiedTime ?? ""}|${f.size ?? ""}`)
+      .sort()
+      .join("\n") + `\n#count=${processed.length}\n#chars=${processed.reduce((a, p) => a + p.chars, 0)}`;
+    const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintInput));
+    const contentHash = Array.from(new Uint8Array(hashBuf))
+      .map((b) => b.toString(16).padStart(2, "0")).join("");
+
     await admin.from("exec_summary_runs").update({
       files_processed: processed,
       file_count: processed.length,
       failed_files: failed,
+      content_hash: contentHash,
     }).eq("id", runId);
+
+    // Duplicate-content protection: skip if an earlier successful run for the same folder
+    // produced the same hash. `skip_dedup: true` (or `force: true`) bypasses this gate.
+    if (!skipDedup && !force) {
+      const { data: prior } = await admin
+        .from("exec_summary_runs")
+        .select("id,started_at,email_message_id")
+        .eq("folder_id", folder.id)
+        .eq("content_hash", contentHash)
+        .eq("status", "succeeded")
+        .neq("id", runId)
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (prior) {
+        await admin.from("exec_summary_runs").update({
+          status: "skipped_no_changes",
+          finished_at: new Date().toISOString(),
+          error: `Identical content already sent in run ${prior.id}`,
+        }).eq("id", runId);
+        return json({
+          skipped: true,
+          reason: "skipped_no_changes",
+          run_id: runId,
+          previous_run_id: prior.id,
+          folder: folder.name,
+          content_hash: contentHash,
+        });
+      }
+    }
 
     // 4. GPT-4o summary
     const summaryMd = await buildSummaryMarkdown(folder.name, blocks.join("\n"));
@@ -552,7 +599,7 @@ Deno.serve(async (req) => {
       title, weekRange, folderName: folder.name,
       fileCount: processed.length, summaryMd,
     });
-    const messageId = await sendEmail(gmailToken, effectiveRecipient, subject, html);
+    const messageId = await sendEmail(gmailToken, recipientHeader, subject, html);
 
     await admin.from("exec_summary_runs").update({
       status: "succeeded",
@@ -566,7 +613,8 @@ Deno.serve(async (req) => {
       folder: folder.name,
       files_processed: processed.length,
       failed_files: failed.length,
-      recipient: effectiveRecipient,
+      recipients: effectiveRecipients,
+      content_hash: contentHash,
       subject,
       week_range: weekRange,
     });

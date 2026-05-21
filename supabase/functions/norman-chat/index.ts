@@ -3656,6 +3656,27 @@ async function executeNdaTool(
       return result;
     }
 
+    case "send_pdf_for_signature": {
+      const res = await fetch(`${supabaseUrl}/functions/v1/docusign-send-pdf`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+        body: JSON.stringify({
+          staging_path: args.staging_path,
+          file_name: args.file_name,
+          recipient_name: args.recipient_name,
+          recipient_email: args.recipient_email,
+          subject: args.subject,
+          message: args.message,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to send PDF for signature");
+      return result;
+    }
+
     default:
       throw new Error(`Unknown NDA tool: ${toolName}`);
   }

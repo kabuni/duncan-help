@@ -941,6 +941,81 @@ export type Database = {
           },
         ]
       }
+      exec_summary_runs: {
+        Row: {
+          blob_path: string | null
+          created_at: string
+          download_token: string | null
+          email_message_id: string | null
+          error: string | null
+          error_details: Json | null
+          failed_files: Json | null
+          file_count: number | null
+          file_name: string | null
+          files_processed: Json | null
+          finished_at: string | null
+          folder_id: string | null
+          folder_name: string | null
+          id: string
+          recipient: string | null
+          run_key: string
+          started_at: string
+          status: string
+          summary_chars: number | null
+          trigger_source: string
+          triggered_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          blob_path?: string | null
+          created_at?: string
+          download_token?: string | null
+          email_message_id?: string | null
+          error?: string | null
+          error_details?: Json | null
+          failed_files?: Json | null
+          file_count?: number | null
+          file_name?: string | null
+          files_processed?: Json | null
+          finished_at?: string | null
+          folder_id?: string | null
+          folder_name?: string | null
+          id?: string
+          recipient?: string | null
+          run_key: string
+          started_at?: string
+          status?: string
+          summary_chars?: number | null
+          trigger_source?: string
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          blob_path?: string | null
+          created_at?: string
+          download_token?: string | null
+          email_message_id?: string | null
+          error?: string | null
+          error_details?: Json | null
+          failed_files?: Json | null
+          file_count?: number | null
+          file_name?: string | null
+          files_processed?: Json | null
+          finished_at?: string | null
+          folder_id?: string | null
+          folder_name?: string | null
+          id?: string
+          recipient?: string | null
+          run_key?: string
+          started_at?: string
+          status?: string
+          summary_chars?: number | null
+          trigger_source?: string
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       feature_request_attachments: {
         Row: {
           created_at: string

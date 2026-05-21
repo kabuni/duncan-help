@@ -194,3 +194,10 @@ verify_jwt = false
 
 [functions.query-knowledge-base]
 verify_jwt = false
+
+[functions.weekly-exec-summary]
+verify_jwt = false
+
+[functions.weekly-exec-summary-download]
+verify_jwt = false
+

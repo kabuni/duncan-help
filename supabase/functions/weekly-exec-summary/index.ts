@@ -19,7 +19,7 @@ const corsHeaders = {
 };
 
 const PARENT_FOLDER_ID = "1R5JxrnLsSGPu4iRMqn02oCOHmGbRSW7G";
-const RECIPIENT_EMAIL = "simon@kabuni.com";
+const RECIPIENT_EMAILS = ["simon@kabuni.com", "palash@kabuni.com"];
 const SENDER_EMAIL = "duncan@kabuni.com";
 
 const json = (b: unknown, status = 200) =>

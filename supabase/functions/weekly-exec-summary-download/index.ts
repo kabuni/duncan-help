@@ -17,25 +17,20 @@ function parseConnString(s: string) {
   return { accountName: map["AccountName"], accountKey: map["AccountKey"] };
 }
 
-function sign(method: string, path: string, accountName: string, accountKey: string, headers: Record<string,string>) {
+async function sign(method: string, path: string, accountName: string, accountKey: string) {
   const date = new Date().toUTCString();
-  const h = {
-    "x-ms-date": date,
-    "x-ms-version": "2021-12-02",
-    ...headers,
-  };
-  const canonHeaders = Object.keys(h).filter((k) => k.startsWith("x-ms-"))
-    .sort().map((k) => `${k.toLowerCase()}:${h[k]}`).join("\n");
+  const h: Record<string, string> = { "x-ms-date": date, "x-ms-version": "2021-12-02" };
+  const canonHeaders = Object.keys(h).sort().map((k) => `${k.toLowerCase()}:${h[k]}`).join("\n");
   const canonResource = `/${accountName}${path}`;
-  const stringToSign = [
-    method, "", "", "", "", "", "", "", "", "", "", "",
-    canonHeaders, canonResource,
-  ].join("\n");
+  const stringToSign = ["", "", "", "", "", "", "", "", "", "", "", ""].join("\n");
+  const toSign = method + "\n" + stringToSign + "\n" + canonHeaders + "\n" + canonResource;
   const keyBytes = Uint8Array.from(atob(accountKey), (c) => c.charCodeAt(0));
-  const sig = hmac("sha256", keyBytes, stringToSign, "utf8", "base64");
-  return {
-    headers: { ...h, Authorization: `SharedKey ${accountName}:${sig}` },
-  };
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(toSign));
+  const sig = encodeBase64(new Uint8Array(sigBuf));
+  return { headers: { ...h, Authorization: `SharedKey ${accountName}:${sig}` } };
 }
 
 Deno.serve(async (req) => {

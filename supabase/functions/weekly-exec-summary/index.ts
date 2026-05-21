@@ -530,48 +530,24 @@ Deno.serve(async (req) => {
     const summaryMd = await buildSummaryMarkdown(folder.name, blocks.join("\n"));
     if (!summaryMd) throw new Error("OpenAI returned empty summary");
 
-    // 5. Render branded DOCX via generate-exec-summary (service-role call)
-    const title = `Weekly Executive Summary — ${folder.name}`;
-    const weekRange = new Date().toLocaleDateString("en-GB", {
-      day: "numeric", month: "long", year: "numeric",
-    });
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const genRes = await fetch(`${supabaseUrl}/functions/v1/generate-exec-summary`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${serviceKey}`,
-        "x-service-secret": serviceKey,
-        apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
-      },
-      body: JSON.stringify({
-        title, week_range: weekRange, content: summaryMd, company_name: "Kabuni",
-      }),
-    });
-    const genJson = await genRes.json();
-    if (!genRes.ok || !genJson.success) {
-      throw new Error(`generate-exec-summary failed: ${JSON.stringify(genJson)}`);
-    }
-
-    // 6. Secure download token
-    const downloadToken = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
-    const downloadUrl =
-      `${supabaseUrl}/functions/v1/weekly-exec-summary-download` +
-      `?run_id=${runId}&token=${downloadToken}`;
+    const weekRange = lastWeekRangeLabel();
+    const title = "Weekly Executive Summary";
+    // ASCII-only subject — uses " | " and "-" (no em dashes) so Gmail/Outlook
+    // render it cleanly without MIME encoded-word wrapping.
+    const subject = `Weekly Executive Summary | ${weekRange}`;
 
     await admin.from("exec_summary_runs").update({
-      blob_path: genJson.blob_path,
-      file_name: genJson.file_name,
-      download_token: downloadToken,
       summary_chars: summaryMd.length,
     }).eq("id", runId);
 
-    // 7. Email
+    // 5. Email — full summary embedded in HTML body (no attachments, no link)
     const gmailToken = await getGmailSenderToken(admin);
     if (!gmailToken) throw new Error("Gmail sender token (duncan@kabuni.com) unavailable");
 
-    const subject = `Weekly Executive Summary — ${folder.name}`;
-    const html = emailHtml(folder.name, downloadUrl, processed.length, weekRange);
+    const html = emailHtml({
+      title, weekRange, folderName: folder.name,
+      fileCount: processed.length, summaryMd,
+    });
     const messageId = await sendEmail(gmailToken, effectiveRecipient, subject, html);
 
     await admin.from("exec_summary_runs").update({
@@ -586,9 +562,9 @@ Deno.serve(async (req) => {
       folder: folder.name,
       files_processed: processed.length,
       failed_files: failed.length,
-      blob_path: genJson.blob_path,
       recipient: effectiveRecipient,
-      download_url: downloadUrl,
+      subject,
+      week_range: weekRange,
     });
   } catch (e) {
     return fail(e);

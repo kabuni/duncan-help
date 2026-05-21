@@ -418,12 +418,18 @@ Deno.serve(async (req) => {
   let body: any = {};
   try { body = await req.json(); } catch { /* empty body fine */ }
   const force = body?.force === true;
-  // Optional one-off recipient override (admin or cron-secret triggered runs, e.g. test sends).
+  const skipDedup = body?.skip_dedup === true;
+  // Optional one-off recipient override. Accepts string, comma-separated list, or array.
   // Production cron always emails RECIPIENT_EMAIL unless explicitly overridden.
-  const overrideRaw = typeof body?.recipient_override === "string" ? body.recipient_override.trim() : "";
-  const recipientOverride =
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(overrideRaw) ? overrideRaw : null;
-  const effectiveRecipient = recipientOverride ?? RECIPIENT_EMAIL;
+  const overrideRaw: unknown = body?.recipient_override;
+  const overrideList: string[] = Array.isArray(overrideRaw)
+    ? overrideRaw.map((x) => String(x).trim())
+    : typeof overrideRaw === "string"
+      ? overrideRaw.split(",").map((s) => s.trim())
+      : [];
+  const validRecipients = overrideList.filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+  const effectiveRecipients = validRecipients.length ? validRecipients : [RECIPIENT_EMAIL];
+  const recipientHeader = effectiveRecipients.join(", ");
 
   // DST-safe gate: cron fires at 07:00 and 08:00 UTC every Monday; only run at 08:00 UK local.
   // `force: true` bypasses the time gate (used for admin-triggered test runs over the cron channel).

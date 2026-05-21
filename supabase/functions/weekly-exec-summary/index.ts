@@ -435,21 +435,25 @@ Deno.serve(async (req) => {
   }
 
   const uk = ukNowParts();
+  const baseKey = `weekly-${uk.isoDate}`;
+  // For cron-source forced runs (admin test sends via cron-secret), append a suffix
+  // so we never collide with the real weekly idempotency key.
   const runKey = authz.source === "cron"
-    ? `weekly-${uk.isoDate}`
+    ? (force ? `${baseKey}-force-${Date.now()}` : baseKey)
     : `manual-${uk.isoDate}-${Date.now()}`;
 
-  // Idempotency: refuse duplicate cron runs for the same day unless forced.
-  if (authz.source === "cron" || !force) {
+  // Idempotency: refuse duplicate real cron runs for the same day.
+  if (authz.source === "cron" && !force) {
     const { data: existing } = await admin
       .from("exec_summary_runs")
       .select("id,status,run_key")
       .eq("run_key", runKey)
       .maybeSingle();
-    if (existing && authz.source === "cron") {
+    if (existing) {
       return json({ skipped: true, reason: "Already ran today", run_id: existing.id });
     }
   }
+
 
   // Create run row
   const { data: runRow, error: insErr } = await admin

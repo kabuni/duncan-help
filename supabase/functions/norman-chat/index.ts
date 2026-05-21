@@ -5454,7 +5454,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const documentToolNames = ["search_documents", "read_document", "list_documents"];
       const notionToolNames = ["search_notion", "query_notion_database", "get_notion_page_content"];
       const googleFormsToolNames = ["list_google_forms", "submit_google_form", "parse_google_form", "save_parsed_google_form"];
-      const ndaToolNames = ["generate_nda", "list_nda_submissions", "send_nda_for_signature"];
+      const ndaToolNames = ["generate_nda", "list_nda_submissions", "send_nda_for_signature", "send_pdf_for_signature"];
       const basecampToolNames = ["list_basecamp_projects", "get_basecamp_todolists", "get_basecamp_todos", "get_basecamp_messages", "get_basecamp_card_table_cards"];
       const meetingToolNames = ["fetch_plaud_meetings", "list_meetings", "list_meetings_by_source", "get_meeting", "analyze_meetings", "search_meeting_transcripts"];
       const azureDevOpsToolNames = ["list_azure_devops_projects", "query_azure_work_items", "get_azure_work_item", "search_synced_work_items"];

@@ -19,7 +19,7 @@ const corsHeaders = {
 };
 
 const PARENT_FOLDER_ID = "1R5JxrnLsSGPu4iRMqn02oCOHmGbRSW7G";
-const RECIPIENT_EMAIL = "simon@kabuni.com";
+const RECIPIENT_EMAILS = ["simon@kabuni.com", "palash@kabuni.com"];
 const SENDER_EMAIL = "duncan@kabuni.com";
 
 const json = (b: unknown, status = 200) =>
@@ -420,15 +420,11 @@ Deno.serve(async (req) => {
   const force = body?.force === true;
   const skipDedup = body?.skip_dedup === true;
   // Optional one-off recipient override. Accepts string, comma-separated list, or array.
-  // Production cron always emails RECIPIENT_EMAIL unless explicitly overridden.
+  // Production cron always emails RECIPIENT_EMAILS unless explicitly overridden.
   const overrideRaw: unknown = body?.recipient_override;
-  const overrideList: string[] = Array.isArray(overrideRaw)
-    ? overrideRaw.map((x) => String(x).trim())
-    : typeof overrideRaw === "string"
-      ? overrideRaw.split(",").map((s) => s.trim())
-      : [];
-  const validRecipients = overrideList.filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
-  const effectiveRecipients = validRecipients.length ? validRecipients : [RECIPIENT_EMAIL];
+  const overrideList: string[] = Array.isArray(overrideRaw) ? overrideRaw.map((x) => String(x)) : typeof overrideRaw === "string" ? overrideRaw.split(",") : [];
+  const validRecipients = overrideList.map((s) => s.trim()).filter((s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
+  const effectiveRecipients = validRecipients.length ? validRecipients : [...RECIPIENT_EMAILS];
   const recipientHeader = effectiveRecipients.join(", ");
 
   // DST-safe gate: cron fires at 07:00 and 08:00 UTC every Monday; only run at 08:00 UK local.

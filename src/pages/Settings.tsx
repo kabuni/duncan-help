@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Settings as SettingsIcon, User, UserCheck, Users } from "lucide-react";
+import { Settings as SettingsIcon, User, UserCheck, Users, FileText } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useIsAdmin } from "@/hooks/useUserRoles";
@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { LogOut } from "lucide-react";
 import AccountApprovals from "@/components/settings/AccountApprovals";
 import AdminUserManagement from "@/components/settings/AdminUserManagement";
+import WeeklyExecSummaryAdmin from "@/components/settings/WeeklyExecSummaryAdmin";
 
 const Settings = () => {
   const { user, signOut } = useAuth();

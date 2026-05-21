@@ -424,11 +424,14 @@ Deno.serve(async (req) => {
     const weekRange = new Date().toLocaleDateString("en-GB", {
       day: "numeric", month: "long", year: "numeric",
     });
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const genRes = await fetch(`${supabaseUrl}/functions/v1/generate-exec-summary`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!}`,
+        Authorization: `Bearer ${serviceKey}`,
+        "x-service-secret": serviceKey,
+        apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
       },
       body: JSON.stringify({
         title, week_range: weekRange, content: summaryMd, company_name: "Kabuni",

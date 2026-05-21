@@ -4291,6 +4291,7 @@ const WRITE_TOOL_LABELS: Record<string, string> = {
   update_workstream_card: "Update workstream card",
   submit_google_form: "Submit Google Form",
   update_planner_event_meta: "Update planner event",
+  send_pdf_for_signature: "Send PDF for e-signature (DocuSign)",
 };
 
 function summarizeWriteAction(toolName: string, args: any): string {

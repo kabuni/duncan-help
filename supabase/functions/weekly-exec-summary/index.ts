@@ -422,7 +422,8 @@ Deno.serve(async (req) => {
   // Optional one-off recipient override. Accepts string, comma-separated list, or array.
   // Production cron always emails RECIPIENT_EMAILS unless explicitly overridden.
   const overrideRaw: unknown = body?.recipient_override;
-...
+  const overrideList: string[] = Array.isArray(overrideRaw) ? overrideRaw.map((x) => String(x)) : typeof overrideRaw === "string" ? overrideRaw.split(",") : [];
+  const validRecipients = overrideList.map((s) => s.trim()).filter((s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
   const effectiveRecipients = validRecipients.length ? validRecipients : [...RECIPIENT_EMAILS];
   const recipientHeader = effectiveRecipients.join(", ");
 

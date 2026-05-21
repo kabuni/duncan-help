@@ -1,111 +1,83 @@
+# RAG Knowledge Base — Remaining Implementation
 
-# Team Briefing — how it's populated & a clearer view of the company
+The database schema, `match_documents` RPC, and HNSW index are already migrated. The `upload-to-azure` edge function is in progress. Below is the plan to finish all four prompts.
 
-## 1. How `/team-briefing` is populated right now
+## Decisions
 
-**Page:** `src/pages/CEOBriefing.tsx` (route `/team-briefing`)
-**Hook:** `useCEOBriefing("morning")` — reads the latest 2 rows from `ceo_briefings` (today + yesterday for deltas).
-**Generate button:** invokes edge function `ceo-briefing`, which writes a job to `ceo_briefing_jobs`, runs in the background (`EdgeRuntime.waitUntil`), and the page polls `ceo-briefing-status` every 3s until `completed`. On completion it re-reads `ceo_briefings`.
+- **Embeddings**: OpenAI `text-embedding-3-small` (1536 dims) via `OPENAI_API_KEY` (already set), matching the migrated `vector(1536)` column.
+- **Azure auth**: Use SAS token flow per spec. Three new secrets required: `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_CONTAINER`, `AZURE_STORAGE_SAS_TOKEN`. User said "will add later" — functions will be written and deployed; uploads will fail with a clear error until secrets land.
+- **Sidebar placement**: New top-level "Knowledge Base" item below "Docs".
+- **Polling**: 10s while any doc is `processing`, stops when none remain.
 
-So the page itself is just a **render** of `ceo_briefings.payload` (the last LLM synthesis). It does not query live systems at view-time.
+## Edge Functions
 
-## 2. Where the briefing's data actually comes from
+1. **`upload-to-azure`** (`verify_jwt = false`, validates user in code via `getUser()`)
+   - Input: `{ file_base64, document_id, user_id, scope, filename }`
+   - Builds blob path: `public/{document_id}/{filename}` or `private/{user_id}/{document_id}/{filename}`
+   - `PUT https://{account}.blob.core.windows.net/{container}/{path}?{sas}` with `x-ms-blob-type: BlockBlob`
+   - Returns `{ blob_url, blob_path }`
 
-`supabase/functions/ceo-briefing/index.ts` runs ~25 queries in parallel, then calls 4 live sub-functions, then asks GPT to synthesise. Concretely:
+2. **`process-document`** (`verify_jwt = false`, service-role client)
+   - Input: `{ document_id }`
+   - Downloads from `blob_url` (SAS appended if private)
+   - Text extraction:
+     - `txt`/`csv`/`md` → plain text
+     - `pdf` → `npm:pdf-parse`
+     - `docx` → `npm:jszip` + XML walk of `word/document.xml`
+     - `xlsx` → `npm:xlsx` sheet_to_csv
+   - Chunker: ~500 tokens (≈2000 chars) with ~100 token overlap, sentence-aware split
+   - OpenAI embeddings in batches of 20
+   - Bulk insert into `document_chunks` with metadata `{ scope, owner_id, category, subcategory, document_title }`
+   - Sets `status='ready'`, `chunk_count=N`; on error `status='failed'` + `error_message`
+   - Wrapped in `EdgeRuntime.waitUntil` for long PDFs
 
-**A. Pulled from Duncan's Supabase tables (snapshots already synced in by other jobs):**
+3. **`query-knowledge-base`** (`verify_jwt = true`)
+   - Input: `{ query, user_id, match_count? = 8 }`
+   - Embeds query via OpenAI
+   - Calls `match_documents` RPC
+   - Returns `{ results, formatted_context }` with the spec'd format string
 
-| Source system | Table(s) read | Used for |
-|---|---|---|
-| Plaud / Google Meet | `meetings` (title, date, summary, action_items, participants, transcripts) | What changed, leadership signal, action items |
-| Workstreams (in-app) | `workstream_cards`, `workstream_activity`, `workstream_card_assignees` | Scorecard, RAG, owners, accountability |
-| Azure DevOps | `azure_work_items` | Execution signal, leadership delivery |
-| Releases (in-app) | `releases` | What shipped |
-| Recruitment | `candidates`, `job_roles` (via candidates) | Hiring signal |
-| Purchase orders | `purchase_orders` | Spend signal |
-| Bug / feedback | `issues` | Quality risk |
-| Integrations health | `sync_logs`, `integration_audit_logs` | Data-coverage audit |
-| Xero | `xero_invoices`, `xero_contacts` | Cash, overdue AR |
-| Slack | `slack_notification_logs` | Comms/escalation echoes |
-| AI usage | `token_usage` (last 30d) | Adoption / Lovable contributors |
-| RAG / docs | `project_files`, `project_file_chunks` | Document intelligence, missing-artifact check |
-| People | `profiles`, `user_roles` | Leadership roster, owners |
-| Google Calendar | `google_calendar_tokens` + live `google-calendar-api` | Calendar coverage |
-| Self-history | `ceo_briefings` (last N) | Trend deltas (probability, execution) |
-| Chats | `general_chats`, `project_chats`, `gmail_writing_profiles` | Lovable contributors card |
+## Frontend
 
-**B. Fetched live per generation (sub-edge-functions):**
+- **`src/lib/kbTaxonomy.ts`** — categories/subcategories map per spec
+- **`src/hooks/useKnowledgeBase.ts`** — `queryKnowledgeBase(message)` → `{ results, formattedContext, hasResults }`, `isSearching`
+- **`src/pages/KnowledgeBase.tsx`** — route `/knowledge-base`
+- **Components under `src/components/kb/`**:
+  - `KBDropzone.tsx` — drag/drop + click, 25MB cap, type icons, remove
+  - `KBScopePicker.tsx` — Company/Private cards (Building2/Lock)
+  - `KBCategorySelect.tsx` + `KBSubcategorySelect.tsx` — dependent dropdowns
+  - `KBTagsInput.tsx` — Enter-to-add chips
+  - `KBUploadButton.tsx` — orchestrates Uploading → Processing → Embedding → Ready/Failed per file, retry
+  - `KBRecentUploads.tsx` — last 20 docs, badges, spinner, delete, 10s polling
+- **`src/App.tsx`** — add `/knowledge-base` route
+- **`src/components/Sidebar.tsx`** — add nav entry below Docs
 
-- `ceo-email-pulse` → Gmail (duncan@kabuni) inbox / thread signals
-- `ceo-slack-pulse` → Slack channels & DMs
-- `hubspot-api` → CRM pipeline signal
-- `azure-repos-api` → commits / PR velocity
+## Upload Pipeline (per file)
 
-**C. Synthesised by:** GPT-4o (via `_shared/llm.ts` with fallback) producing the structured `payload` (verdict, pulse, tldr, workstream_scores, what_changed, risks, watchlist, leadership, decisions, coverage audit, etc.).
+1. Insert `documents` row (`status='processing'`) → get `document_id`
+2. Read file as base64, call `upload-to-azure` → save `blob_url`, `blob_path`
+3. Invoke `process-document` (fire-and-forget); UI polls `documents.status`
+4. Statuses surfaced from row: `processing` (with sub-label by step) / `ready` / `failed`
 
-**Not currently fed in** (gaps): Google Analytics, social_stats_snapshots, Basecamp to-dos, Notion, Hireflix interview outcomes, Google Drive Weekly Reports folder.
+## Files to Add / Edit
 
-## 3. Architecture today
+**Add**
+- `supabase/functions/upload-to-azure/index.ts` (in progress)
+- `supabase/functions/process-document/index.ts`
+- `supabase/functions/query-knowledge-base/index.ts`
+- `src/lib/kbTaxonomy.ts`
+- `src/hooks/useKnowledgeBase.ts`
+- `src/pages/KnowledgeBase.tsx`
+- `src/components/kb/{KBDropzone,KBScopePicker,KBCategorySelect,KBSubcategorySelect,KBTagsInput,KBUploadButton,KBRecentUploads}.tsx`
 
-```text
- Live APIs           Background syncs              Briefing run
- ─────────           ────────────────              ────────────
- Gmail   ─┐          Azure DevOps ─► azure_work_items ┐
- Slack   ─┤   ┌───►  Xero        ─► xero_*            │
- HubSpot ─┼──►│      Plaud/Meet  ─► meetings          ├─► ceo-briefing
- AzRepos ─┘   │      Hireflix    ─► candidates        │   (parallel reads
-              │      App usage   ─► token_usage,      │    + 4 live fetches
- GCalendar ──►│                     workstream_cards, │    + LLM synth)
-              │                     releases, POs…    │            │
-              └────────────────────────────────────────┘            ▼
-                                                          ceo_briefings.payload
-                                                                    │
-                                                                    ▼
-                                                    /team-briefing (read-only render)
-```
+**Edit**
+- `src/App.tsx` (route)
+- `src/components/Sidebar.tsx` (nav)
 
-## 4. What "clear visualisation of the company" should look like
+**Already done**
+- Migration: `documents`, `document_chunks`, HNSW index, RLS, `match_documents` RPC
 
-The current page renders ~12 dense sections in roughly source order. The reframe is to render **one company state, three lenses, evidence on demand** — matching what the data already produces.
+## Out of Scope (this batch)
 
-**Above the fold — Company State (one screen):**
-
-1. **Verdict Hero** — single RYG dot + one-sentence verdict + 3 KPI chips (Outcome Probability, Execution, Coverage) with day-over-day deltas. Merges today's `PulseBanner` + `TldrPanel`.
-2. **Pulse Strip** — 5 horizontal cells, 2 numbers max each:
-   - Delivery (workstreams red/amber, Azure items closed 24h)
-   - Hiring (open roles, candidates moved)
-   - Comms (Slack escalations, email backlog)
-   - Cash (overdue AR £, this-week invoices)
-   - Adoption (active Duncan users, top contributor)
-3. **Do-Today** — top 3 ranked decisions from `payload.decisions` as hero cards ("what + why now"), promoted from the current numbered list.
-
-**Below the fold — three collapsed zones, opened on click:**
-
-- **Evidence** — Workstream Scorecard, What Changed, Risk Radar, full Decisions, Accountability Watchlist
-- **Signals** — CommsPulseCard (Email/Slack/HubSpot/AzureRepos), CompanyPulseCard, Leadership grid
-- **Adoption & Coverage** — DataCoverageCard, CoverageGaps, LovableContributorsCard
-
-This keeps every existing component (no backend changes), but the CEO sees company state in ~10 seconds instead of scrolling through 12 equally-weighted blocks.
-
-## 5. Components to build / change
-
-**New (frontend only):**
-- `src/components/ceo/VerdictHero.tsx` — merges PulseBanner + Tldr into one card; computes verdict sentence from `tldr.on_track / what_will_break / where_to_act`.
-- `src/components/ceo/PulseStrip.tsx` — 5-cell strip; pulls numbers already present in `payload` (workstream_scores, hubspot_signal, slack_pulse, xero counts via Decisions context, token_usage leaderboard).
-- `src/components/ceo/DoToday.tsx` — promotes `payload.decisions.slice(0,3)`.
-
-**Reused as-is, wrapped in 3 `<Collapsible>` zones:** WorkstreamScorecard table, RiskRadar, CommsPulseCard, CompanyPulseCard, DataCoverageCard, CoverageGaps, LovableContributorsCard, AccountabilityWatchlist, full Decisions list, LeadershipGrid.
-
-**Delete:** `PulseBanner.tsx`, `TldrPanel.tsx` (logic absorbed by VerdictHero). Keep `ScoreGauge` for KPI chips.
-
-**No changes to:** `ceo-briefing` edge function, payload shape, RLS, scheduling.
-
-## 6. Optional next step (not in this plan)
-
-Add Google Analytics, social_stats_snapshots, Hireflix interview outcomes, and the Weekly Reports Drive folder summariser into `ceo-briefing` so the Pulse Strip's "Adoption" and "Hiring" cells reflect real traffic + interview signal, not just app usage.
-
-## 7. Effort
-
-~3h frontend only: 1.5h three new components, 30m collapsibles + zone wiring, 15m delete old, 45m responsive QA on `/team-briefing`.
-
-**Open question:** ship the 3 below-the-fold zones **collapsed by default** (CEO sees state in one screen, opens evidence on demand) or **expanded** (preserves today's behaviour, just reordered)?
+- Wiring `useKnowledgeBase` into the Duncan chat prompt — that's a follow-up after the UI ships and you can verify retrieval quality.
+- Re-embedding job for existing project files.

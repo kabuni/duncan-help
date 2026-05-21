@@ -437,6 +437,25 @@ const NDA_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "send_pdf_for_signature",
+      description: "Send an arbitrary PDF the user attached in chat to a single recipient for e-signature via DocuSign. Use this when the user attaches a PDF and asks to send it for esign / e-signature / DocuSign / signing. The attached PDF will be marked with `[E-SIGN READY]` along with a `staging_path` and `file_name` — pass those through unchanged. Before calling, you MUST have the recipient's full name AND a valid email; if either is missing, ASK the user (do not invent them). A signature, date, and full-name tab are auto-placed on page 1; the recipient receives a DocuSign email.",
+      parameters: {
+        type: "object",
+        properties: {
+          staging_path: { type: "string", description: "Exact `staging_path` value from the [E-SIGN READY] marker on the attached PDF." },
+          file_name: { type: "string", description: "Exact `file_name` value from the [E-SIGN READY] marker." },
+          recipient_name: { type: "string", description: "Full name of the person who will sign the PDF." },
+          recipient_email: { type: "string", description: "Email address of the signer." },
+          subject: { type: "string", description: "Optional email subject. Defaults to 'Please sign: <file_name>'." },
+          message: { type: "string", description: "Optional email body / blurb to the signer." },
+        },
+        required: ["staging_path", "file_name", "recipient_name", "recipient_email"],
+      },
+    },
+  },
 ];
 
 const GOOGLE_FORMS_TOOLS = [

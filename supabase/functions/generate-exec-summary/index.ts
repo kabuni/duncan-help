@@ -343,7 +343,9 @@ Deno.serve(async (req) => {
 
     const uploadRes = await fetch(`${supabaseUrl}/functions/v1/azure-blob-api`, {
       method: "POST",
-      headers: { Authorization: authHeader },
+      headers: isServiceCall
+        ? { "x-service-secret": serviceSecret! }
+        : { Authorization: authHeader! },
       body: formData,
     });
 

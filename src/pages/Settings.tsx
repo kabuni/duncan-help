@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Settings as SettingsIcon, User, UserCheck, Users, FileText } from "lucide-react";
+import { Settings as SettingsIcon, User, UserCheck, Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useIsAdmin } from "@/hooks/useUserRoles";
@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { LogOut } from "lucide-react";
 import AccountApprovals from "@/components/settings/AccountApprovals";
 import AdminUserManagement from "@/components/settings/AdminUserManagement";
-import WeeklyExecSummaryAdmin from "@/components/settings/WeeklyExecSummaryAdmin";
+
 
 const Settings = () => {
   const { user, signOut } = useAuth();
@@ -64,21 +64,6 @@ const Settings = () => {
             </motion.section>
           )}
 
-          {/* Admin: Weekly Executive Summary */}
-          {isAdmin && (
-            <motion.section
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.08 }}
-              className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-6"
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <FileText className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-semibold text-foreground">Weekly Executive Summary</h3>
-              </div>
-              <WeeklyExecSummaryAdmin />
-            </motion.section>
-          )}
 
           {/* Account Section */}
           <motion.section

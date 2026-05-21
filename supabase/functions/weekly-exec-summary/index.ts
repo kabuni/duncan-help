@@ -469,7 +469,7 @@ Deno.serve(async (req) => {
       status: "running",
       trigger_source: authz.source,
       triggered_by: authz.userId,
-      recipient: effectiveRecipient,
+      recipient: recipientHeader,
     })
     .select()
     .single();

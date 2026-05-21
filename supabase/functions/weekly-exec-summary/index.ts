@@ -254,26 +254,130 @@ async function sendEmail(token: string, to: string, subject: string, html: strin
   return j.id as string;
 }
 
-function emailHtml(folderName: string, downloadUrl: string, fileCount: number, dateStr: string): string {
+// ─── Markdown → HTML (lightweight, email-safe) ────────────────────────────
+function escapeHtml(s: string) {
+  return s
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function inlineMd(s: string) {
+  let out = escapeHtml(s);
+  out = out.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  out = out.replace(/(^|[^*])\*(?!\s)(.+?)\*/g, "$1<em>$2</em>");
+  out = out.replace(/`([^`]+)`/g, '<code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:13px">$1</code>');
+  return out;
+}
+
+function mdToHtml(md: string): string {
+  const lines = md.split("\n");
+  const out: string[] = [];
+  let i = 0;
+
+  const flushList = (tag: "ul" | "ol", items: string[]) => {
+    out.push(
+      `<${tag} style="margin:8px 0 14px 22px;padding:0;color:#334155;font-size:14px;line-height:1.6">` +
+        items.map((it) => `<li style="margin:4px 0">${inlineMd(it)}</li>`).join("") +
+      `</${tag}>`
+    );
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const t = line.trim();
+    if (!t) { i++; continue; }
+
+    // Table
+    if (t.startsWith("|") && lines[i + 1]?.trim().match(/^\|[\s\-:|]+\|$/)) {
+      const parseRow = (l: string) => l.trim().split("|").slice(1, -1).map((c) => c.trim());
+      const headers = parseRow(t);
+      const rows: string[][] = [];
+      let j = i + 2;
+      while (j < lines.length && lines[j].trim().startsWith("|")) {
+        rows.push(parseRow(lines[j])); j++;
+      }
+      out.push(
+        `<table style="border-collapse:collapse;width:100%;margin:12px 0;font-size:13px">` +
+        `<thead><tr>` +
+          headers.map((h) => `<th style="background:#0f172a;color:#fff;text-align:left;padding:8px 10px;border:1px solid #0f172a">${inlineMd(h)}</th>`).join("") +
+        `</tr></thead><tbody>` +
+          rows.map((r, idx) =>
+            `<tr style="background:${idx % 2 ? "#f8fafc" : "#ffffff"}">` +
+              r.map((c) => `<td style="padding:8px 10px;border:1px solid #e2e8f0;color:#334155;vertical-align:top">${inlineMd(c)}</td>`).join("") +
+            `</tr>`
+          ).join("") +
+        `</tbody></table>`
+      );
+      i = j; continue;
+    }
+
+    if (/^[-*]\s+/.test(t)) {
+      const items: string[] = [];
+      while (i < lines.length && /^[-*]\s+/.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^[-*]\s+/, "")); i++;
+      }
+      flushList("ul", items); continue;
+    }
+    if (/^\d+\.\s+/.test(t)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^\d+\.\s+/, "")); i++;
+      }
+      flushList("ol", items); continue;
+    }
+
+    if (t.startsWith("### ")) {
+      out.push(`<h3 style="margin:20px 0 8px;color:#1e293b;font-size:16px">${inlineMd(t.slice(4))}</h3>`);
+    } else if (t.startsWith("## ")) {
+      out.push(`<h2 style="margin:26px 0 10px;padding-bottom:6px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-size:19px">${inlineMd(t.slice(3))}</h2>`);
+    } else if (t.startsWith("# ")) {
+      out.push(`<h1 style="margin:8px 0 14px;color:#0f172a;font-size:24px">${inlineMd(t.slice(2))}</h1>`);
+    } else if (/^-{3,}$/.test(t)) {
+      out.push(`<hr style="border:0;border-top:1px solid #e2e8f0;margin:18px 0"/>`);
+    } else {
+      out.push(`<p style="margin:8px 0;color:#334155;font-size:14px;line-height:1.6">${inlineMd(t)}</p>`);
+    }
+    i++;
+  }
+  return out.join("\n");
+}
+
+function emailHtml(opts: {
+  title: string; weekRange: string; folderName: string;
+  fileCount: number; summaryMd: string;
+}): string {
   return `
-<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1a1a1a">
-  <h2 style="margin:0 0 6px;color:#0f172a">Weekly Executive Summary</h2>
-  <p style="margin:0 0 18px;color:#64748b;font-size:14px">${dateStr} • synthesised from <strong>${fileCount}</strong> source report${fileCount === 1 ? "" : "s"} in <em>${folderName}</em></p>
-  <p style="font-size:15px;line-height:1.55;color:#334155">
-    Your branded weekly executive summary is ready. It consolidates the latest departmental
-    reports into a single board-ready view — performance, wins, risks, and decisions needed.
-  </p>
-  <p style="margin:24px 0">
-    <a href="${downloadUrl}"
-       style="display:inline-block;padding:12px 22px;background:#0f172a;color:#fff;
-              text-decoration:none;border-radius:8px;font-size:14px;font-weight:600">
-      Download Word document
-    </a>
-  </p>
-  <p style="font-size:12px;color:#94a3b8;line-height:1.5">
-    Secure link, single-recipient. Generated automatically by Duncan.
-  </p>
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#1a1a1a;background:#ffffff">
+  <div style="border-bottom:2px solid #0f172a;padding-bottom:14px;margin-bottom:20px">
+    <h1 style="margin:0 0 4px;color:#0f172a;font-size:24px">${escapeHtml(opts.title)}</h1>
+    <div style="color:#64748b;font-size:13px">${escapeHtml(opts.weekRange)} &nbsp;·&nbsp; synthesised from <strong>${opts.fileCount}</strong> source report${opts.fileCount === 1 ? "" : "s"} in <em>${escapeHtml(opts.folderName)}</em></div>
+  </div>
+  ${mdToHtml(opts.summaryMd)}
+  <div style="margin-top:32px;padding-top:14px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px;text-align:center">
+    Confidential — Kabuni — Generated automatically by Duncan
+  </div>
 </div>`;
+}
+
+// ─── Week range "11th May - 15th May" (last Mon–Fri in UK time) ───────────
+function ordinal(n: number) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+function lastWeekRangeLabel(): string {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map((p) => [p.type, p.value]));
+  const ukToday = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day));
+  const dow = ukToday.getUTCDay();
+  const daysBackToMon = dow === 0 ? 6 : dow - 1;
+  const thisMon = new Date(ukToday); thisMon.setUTCDate(ukToday.getUTCDate() - daysBackToMon);
+  const lastMon = new Date(thisMon); lastMon.setUTCDate(thisMon.getUTCDate() - 7);
+  const lastFri = new Date(lastMon); lastFri.setUTCDate(lastMon.getUTCDate() + 4);
+  const monthName = (d: Date) => d.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  return `${ordinal(lastMon.getUTCDate())} ${monthName(lastMon)} - ${ordinal(lastFri.getUTCDate())} ${monthName(lastFri)}`;
 }
 
 // ─── Auth: admin or cron ──────────────────────────────────────────────────
@@ -331,21 +435,25 @@ Deno.serve(async (req) => {
   }
 
   const uk = ukNowParts();
+  const baseKey = `weekly-${uk.isoDate}`;
+  // For cron-source forced runs (admin test sends via cron-secret), append a suffix
+  // so we never collide with the real weekly idempotency key.
   const runKey = authz.source === "cron"
-    ? `weekly-${uk.isoDate}`
+    ? (force ? `${baseKey}-force-${Date.now()}` : baseKey)
     : `manual-${uk.isoDate}-${Date.now()}`;
 
-  // Idempotency: refuse duplicate cron runs for the same day unless forced.
-  if (authz.source === "cron" || !force) {
+  // Idempotency: refuse duplicate real cron runs for the same day.
+  if (authz.source === "cron" && !force) {
     const { data: existing } = await admin
       .from("exec_summary_runs")
       .select("id,status,run_key")
       .eq("run_key", runKey)
       .maybeSingle();
-    if (existing && authz.source === "cron") {
+    if (existing) {
       return json({ skipped: true, reason: "Already ran today", run_id: existing.id });
     }
   }
+
 
   // Create run row
   const { data: runRow, error: insErr } = await admin
@@ -426,48 +534,24 @@ Deno.serve(async (req) => {
     const summaryMd = await buildSummaryMarkdown(folder.name, blocks.join("\n"));
     if (!summaryMd) throw new Error("OpenAI returned empty summary");
 
-    // 5. Render branded DOCX via generate-exec-summary (service-role call)
-    const title = `Weekly Executive Summary — ${folder.name}`;
-    const weekRange = new Date().toLocaleDateString("en-GB", {
-      day: "numeric", month: "long", year: "numeric",
-    });
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const genRes = await fetch(`${supabaseUrl}/functions/v1/generate-exec-summary`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${serviceKey}`,
-        "x-service-secret": serviceKey,
-        apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
-      },
-      body: JSON.stringify({
-        title, week_range: weekRange, content: summaryMd, company_name: "Kabuni",
-      }),
-    });
-    const genJson = await genRes.json();
-    if (!genRes.ok || !genJson.success) {
-      throw new Error(`generate-exec-summary failed: ${JSON.stringify(genJson)}`);
-    }
-
-    // 6. Secure download token
-    const downloadToken = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
-    const downloadUrl =
-      `${supabaseUrl}/functions/v1/weekly-exec-summary-download` +
-      `?run_id=${runId}&token=${downloadToken}`;
+    const weekRange = lastWeekRangeLabel();
+    const title = "Weekly Executive Summary";
+    // ASCII-only subject — uses " | " and "-" (no em dashes) so Gmail/Outlook
+    // render it cleanly without MIME encoded-word wrapping.
+    const subject = `Weekly Executive Summary | ${weekRange}`;
 
     await admin.from("exec_summary_runs").update({
-      blob_path: genJson.blob_path,
-      file_name: genJson.file_name,
-      download_token: downloadToken,
       summary_chars: summaryMd.length,
     }).eq("id", runId);
 
-    // 7. Email
+    // 5. Email — full summary embedded in HTML body (no attachments, no link)
     const gmailToken = await getGmailSenderToken(admin);
     if (!gmailToken) throw new Error("Gmail sender token (duncan@kabuni.com) unavailable");
 
-    const subject = `Weekly Executive Summary — ${folder.name}`;
-    const html = emailHtml(folder.name, downloadUrl, processed.length, weekRange);
+    const html = emailHtml({
+      title, weekRange, folderName: folder.name,
+      fileCount: processed.length, summaryMd,
+    });
     const messageId = await sendEmail(gmailToken, effectiveRecipient, subject, html);
 
     await admin.from("exec_summary_runs").update({
@@ -482,9 +566,9 @@ Deno.serve(async (req) => {
       folder: folder.name,
       files_processed: processed.length,
       failed_files: failed.length,
-      blob_path: genJson.blob_path,
       recipient: effectiveRecipient,
-      download_url: downloadUrl,
+      subject,
+      week_range: weekRange,
     });
   } catch (e) {
     return fail(e);

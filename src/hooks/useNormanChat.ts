@@ -13,6 +13,8 @@ export interface ChatAttachment {
   previewUrl?: string;
   /** Populated after server-side extraction for non-image files */
   extractedText?: string;
+  /** For PDFs: storage path in `docusign-staging` bucket, used by send_pdf_for_signature */
+  stagingPath?: string;
 }
 
 /** Phase 2b: pending write action surfaced for explicit user confirmation. */

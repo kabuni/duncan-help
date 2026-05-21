@@ -65,6 +65,7 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress, pla
     if (!files || files.length === 0) return;
     setIsProcessing(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
       const newAttachments: ChatAttachment[] = [];
       for (const file of Array.from(files)) {
         if (file.size > MAX_FILE_SIZE) {
@@ -75,7 +76,29 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress, pla
         const previewUrl = file.type.startsWith("image/")
           ? URL.createObjectURL(file)
           : undefined;
-        newAttachments.push({ name: file.name, type: file.type || "application/octet-stream", base64, previewUrl });
+
+        // Stage PDFs in the docusign-staging bucket so Duncan can send them for e-signature.
+        let stagingPath: string | undefined;
+        if (file.type === "application/pdf" && user) {
+          const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+          const path = `${user.id}/${Date.now()}-${safeName}`;
+          const { error: upErr } = await supabase.storage
+            .from("docusign-staging")
+            .upload(path, file, { contentType: "application/pdf", upsert: false });
+          if (upErr) {
+            console.warn(`Could not stage PDF for e-sign: ${upErr.message}`);
+          } else {
+            stagingPath = path;
+          }
+        }
+
+        newAttachments.push({
+          name: file.name,
+          type: file.type || "application/octet-stream",
+          base64,
+          previewUrl,
+          stagingPath,
+        });
       }
       setAttachments((prev) => [...prev, ...newAttachments].slice(0, 5));
     } finally {

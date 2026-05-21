@@ -4318,6 +4318,8 @@ function summarizeWriteAction(toolName: string, args: any): string {
         return `${label} ${args?.form_id || args?.id || "?"}`;
       case "update_planner_event_meta":
         return `${label} ${args?.event_id || args?.id || "?"}`;
+      case "send_pdf_for_signature":
+        return `${label}: "${args?.file_name || "PDF"}" → ${args?.recipient_name || "?"} <${args?.recipient_email || "?"}>`;
       default:
         return label;
     }

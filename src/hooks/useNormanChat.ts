@@ -13,6 +13,8 @@ export interface ChatAttachment {
   previewUrl?: string;
   /** Populated after server-side extraction for non-image files */
   extractedText?: string;
+  /** For PDFs: storage path in `docusign-staging` bucket, used by send_pdf_for_signature */
+  stagingPath?: string;
 }
 
 /** Phase 2b: pending write action surfaced for explicit user confirmation. */
@@ -127,14 +129,20 @@ function buildUserContent(input: string, attachments: ChatAttachment[]) {
         },
       });
     } else if (att.extractedText) {
+      const stagingNote = att.stagingPath
+        ? `\n[E-SIGN READY] This PDF is staged for DocuSign. To send for signature, call send_pdf_for_signature with staging_path="${att.stagingPath}" and file_name="${att.name}" (collect recipient name + email from the user first).`
+        : "";
       parts.push({
         type: "text",
-        text: `\n\n--- Attached file: ${att.name} ---\n${att.extractedText}\n--- End of file ---`,
+        text: `\n\n--- Attached file: ${att.name} ---\n${att.extractedText}\n--- End of file ---${stagingNote}`,
       });
     } else {
+      const stagingNote = att.stagingPath
+        ? `\n[E-SIGN READY] PDF staged for DocuSign — staging_path="${att.stagingPath}" file_name="${att.name}". Use send_pdf_for_signature once you have recipient name + email.`
+        : "";
       parts.push({
         type: "text",
-        text: `\n\n[Attached file: ${att.name} (could not be processed)]`,
+        text: `\n\n[Attached file: ${att.name} (could not be processed)]${stagingNote}`,
       });
     }
   }

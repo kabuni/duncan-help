@@ -437,6 +437,25 @@ const NDA_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "send_pdf_for_signature",
+      description: "Send an arbitrary PDF the user attached in chat to a single recipient for e-signature via DocuSign. Use this when the user attaches a PDF and asks to send it for esign / e-signature / DocuSign / signing. The attached PDF will be marked with `[E-SIGN READY]` along with a `staging_path` and `file_name` — pass those through unchanged. Before calling, you MUST have the recipient's full name AND a valid email; if either is missing, ASK the user (do not invent them). A signature, date, and full-name tab are auto-placed on page 1; the recipient receives a DocuSign email.",
+      parameters: {
+        type: "object",
+        properties: {
+          staging_path: { type: "string", description: "Exact `staging_path` value from the [E-SIGN READY] marker on the attached PDF." },
+          file_name: { type: "string", description: "Exact `file_name` value from the [E-SIGN READY] marker." },
+          recipient_name: { type: "string", description: "Full name of the person who will sign the PDF." },
+          recipient_email: { type: "string", description: "Email address of the signer." },
+          subject: { type: "string", description: "Optional email subject. Defaults to 'Please sign: <file_name>'." },
+          message: { type: "string", description: "Optional email body / blurb to the signer." },
+        },
+        required: ["staging_path", "file_name", "recipient_name", "recipient_email"],
+      },
+    },
+  },
 ];
 
 const GOOGLE_FORMS_TOOLS = [
@@ -3637,6 +3656,27 @@ async function executeNdaTool(
       return result;
     }
 
+    case "send_pdf_for_signature": {
+      const res = await fetch(`${supabaseUrl}/functions/v1/docusign-send-pdf`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+        body: JSON.stringify({
+          staging_path: args.staging_path,
+          file_name: args.file_name,
+          recipient_name: args.recipient_name,
+          recipient_email: args.recipient_email,
+          subject: args.subject,
+          message: args.message,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to send PDF for signature");
+      return result;
+    }
+
     default:
       throw new Error(`Unknown NDA tool: ${toolName}`);
   }
@@ -4237,6 +4277,7 @@ const WRITE_TOOLS = new Set<string>([
   "update_workstream_card",
   "submit_google_form",
   "update_planner_event_meta",
+  "send_pdf_for_signature",
 ]);
 
 const WRITE_TOOL_LABELS: Record<string, string> = {
@@ -4250,6 +4291,7 @@ const WRITE_TOOL_LABELS: Record<string, string> = {
   update_workstream_card: "Update workstream card",
   submit_google_form: "Submit Google Form",
   update_planner_event_meta: "Update planner event",
+  send_pdf_for_signature: "Send PDF for e-signature (DocuSign)",
 };
 
 function summarizeWriteAction(toolName: string, args: any): string {
@@ -4276,6 +4318,8 @@ function summarizeWriteAction(toolName: string, args: any): string {
         return `${label} ${args?.form_id || args?.id || "?"}`;
       case "update_planner_event_meta":
         return `${label} ${args?.event_id || args?.id || "?"}`;
+      case "send_pdf_for_signature":
+        return `${label}: "${args?.file_name || "PDF"}" → ${args?.recipient_name || "?"} <${args?.recipient_email || "?"}>`;
       default:
         return label;
     }
@@ -5414,7 +5458,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const documentToolNames = ["search_documents", "read_document", "list_documents"];
       const notionToolNames = ["search_notion", "query_notion_database", "get_notion_page_content"];
       const googleFormsToolNames = ["list_google_forms", "submit_google_form", "parse_google_form", "save_parsed_google_form"];
-      const ndaToolNames = ["generate_nda", "list_nda_submissions", "send_nda_for_signature"];
+      const ndaToolNames = ["generate_nda", "list_nda_submissions", "send_nda_for_signature", "send_pdf_for_signature"];
       const basecampToolNames = ["list_basecamp_projects", "get_basecamp_todolists", "get_basecamp_todos", "get_basecamp_messages", "get_basecamp_card_table_cards"];
       const meetingToolNames = ["fetch_plaud_meetings", "list_meetings", "list_meetings_by_source", "get_meeting", "analyze_meetings", "search_meeting_transcripts"];
       const azureDevOpsToolNames = ["list_azure_devops_projects", "query_azure_work_items", "get_azure_work_item", "search_synced_work_items"];

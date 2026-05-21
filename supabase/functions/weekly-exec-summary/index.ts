@@ -613,7 +613,8 @@ Deno.serve(async (req) => {
       folder: folder.name,
       files_processed: processed.length,
       failed_files: failed.length,
-      recipient: effectiveRecipient,
+      recipients: effectiveRecipients,
+      content_hash: contentHash,
       subject,
       week_range: weekRange,
     });

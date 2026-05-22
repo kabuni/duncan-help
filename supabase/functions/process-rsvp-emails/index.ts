@@ -724,7 +724,7 @@ Deno.serve(async (req) => {
             .from("event_rsvps")
             .update(merged)
             .eq("id", existingRsvp.id);
-          if (updErr) { summary.errors.push(`rsvp-update: ${updErr.message}`); continue; }
+          if (updErr) { summary.errors.push(`rsvp-update: ${updErr.message}`); await finalizeLedger({ outcome: "failed_rsvp_update", gmail_thread_id: threadId ?? null, sender_email: senderEmail, subject: subjectHdr }); continue; }
           rsvpId = existingRsvp.id;
         } else {
           const fullName2 = [primaryRow.first_name, primaryRow.last_name].filter(Boolean).join(" ").trim();

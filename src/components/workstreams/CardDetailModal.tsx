@@ -380,7 +380,7 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                     />
                   </MetaField>
 
-                  <MetaField icon={<Tag className="h-3.5 w-3.5" />} label="Project" value={card.project_tag || "None"}>
+                  <MetaField alwaysEdit icon={<Tag className="h-3.5 w-3.5" />} label="Project" value={card.project_tag || "None"}>
                     {addingTag ? (
                       <div className="flex items-center gap-1">
                         <Input

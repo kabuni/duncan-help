@@ -4208,7 +4208,7 @@ serve(async (req) => {
     let calendarAccessToken: string | null = null;
     let azureStorageAvailable = false;
     let notionToken: string | null = null;
-    let basecampConnected = false;
+    
     let slackConnection: { accessToken: string; teamName: string | null; scope: string | null } | null = null;
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);

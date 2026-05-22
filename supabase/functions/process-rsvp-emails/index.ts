@@ -317,16 +317,22 @@ STRICT RULES — set event_id to null and confidence < 0.5 unless ALL of these a
 
 Discussion, planning, logistics, internal calendar invites, or generic greetings are NOT RSVPs — return null.
 
-MULTI-ATTENDEE PARSING:
-- Detect ALL named attendees. Examples:
+MULTI-ATTENDEE PARSING (CRITICAL — read carefully):
+- Detect ALL named attendees, INCLUDING the sender themself when they are also attending ("myself", "I will attend", "my presence"). Names may be UPPERCASE, lowercase, mixed case, or with titles (Mr., Dr., Ms.) — normalise to Title Case.
+- Names may be glued directly to a hyphen with NO space (e.g. "SHAH- Mobile" or "Shah-Mobile") — treat the hyphen as a field separator regardless of surrounding whitespace.
+- Examples (every one of these MUST yield 2+ attendees):
   • "Adit Bhargava and Palash Soundarkar will attend" → 2 attendees
   • "Samaresh Shah - Mobile 9836697979 and Swayam Shah - Mobile 9354138986" → 2 attendees, each with their own phone
+  • "myself SAMARESH SHAH- Mobile 9836697979 and SWAYAM SHAH- Mobile 9354138986" → 2 attendees: Samaresh Shah (+919836697979) and Swayam Shah (+919354138986). The word "myself" marks the sender as attendee #1.
   • "Myself, John Doe, Sarah Khan" → 3 attendees (sender + 2 guests)
   • "Adit - 9999999999, Palash" → 2 attendees, only Adit has a phone
-- Associate phone/email/org with the correct named attendee using proximity and dash/hyphen/colon separators. NEVER copy one attendee's phone onto another.
+  • "I'll come with my colleague Priya Mehta (+91 98123 45678)" → 2 attendees: sender + Priya Mehta
+- Conjunctions/separators between attendees include: "and", "&", ",", ";", newline, " plus ", " with ", " along with ". Split on each before assigning fields.
+- Associate phone/email/org with the named attendee that IMMEDIATELY precedes it (closest-name-wins). NEVER copy one attendee's phone onto another. If two phones appear in one sentence with two names, the first phone belongs to the first name and the second phone to the second name.
 - IGNORE filler/group words as attendees: team, everyone, guests, family, group, friends, colleagues, kids. Do NOT invent attendees from these.
 - Do NOT hallucinate or fabricate phone numbers, emails, or names. If a field is not literally present for that attendee, set it to null.
 - Deduplicate attendees referring to the same person (same normalised full name).
+- The "attendees" array MUST contain one entry per distinct named attendee. If you detected 2 names, return 2 entries — never collapse them.
 
 Match events by name/date/location ONLY. Always normalise phone to +<country code><number> with no spaces. Map school/college/university => school; news/tv/journalist/press => media; brand/corp/firm/startup => company.
 

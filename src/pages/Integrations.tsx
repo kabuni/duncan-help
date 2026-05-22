@@ -1252,11 +1252,6 @@ const IntegrationDetail = ({
                   </button>
                 </div>
               )}
-              {isBasecamp && (
-                <div className="mt-4">
-                  <BasecampBrowser />
-                </div>
-              )}
               {canEdit && (
                 <button
                   onClick={handleDisconnect}

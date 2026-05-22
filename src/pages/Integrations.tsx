@@ -16,7 +16,7 @@ import { fastApi, withFastApi } from "@/lib/fastApiClient";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { useSlackConnection } from "@/hooks/useSlackConnection";
 import { useAzureBlobStorage } from "@/hooks/useAzureBlobStorage";
-import BasecampBrowser from "@/components/BasecampBrowser";
+
 import {
   useUserIntegrations,
   useConnectIntegration,

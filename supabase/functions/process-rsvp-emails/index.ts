@@ -502,17 +502,50 @@ Deno.serve(async (req) => {
     summary.scanned = messages.length;
 
     for (const m of messages) {
-      try {
-        // Skip if this Gmail message has already been processed (dedup ledger)
-        const { data: alreadyProcessed } = await admin
+      // ── Atomic dedup claim BEFORE any side effects ──
+      // Insert a 'processing' ledger row gated by the UNIQUE(gmail_message_id)
+      // constraint. If another worker (or a prior successful run) already
+      // claimed this message, the insert returns a 23505 conflict and we skip
+      // immediately — no Gmail fetch, no OpenAI call, no RSVP writes, no
+      // outbound email. This eliminates the race window where a side effect
+      // (e.g. reply send) succeeds but the post-hoc ledger insert fails,
+      // causing the next cron tick to replay the same message.
+      let ledgerId: string;
+      {
+        const { data: claim, error: claimErr } = await admin
           .from("event_rsvp_messages")
+          .insert({ gmail_message_id: m.id, outcome: "processing" })
           .select("id")
-          .eq("gmail_message_id", m.id)
-          .maybeSingle();
-        if (alreadyProcessed) { summary.skipped++; continue; }
+          .single();
+        if (claimErr || !claim) {
+          // 23505 = unique_violation → already claimed by another worker /
+          // prior run. Any other error → log and skip (do NOT proceed without
+          // a claim, or we risk the original race condition).
+          if ((claimErr as any)?.code !== "23505") {
+            summary.errors.push(`claim ${m.id}: ${claimErr?.message || "unknown"}`);
+          }
+          summary.skipped++;
+          continue;
+        }
+        ledgerId = claim.id;
+      }
+
+      // Best-effort finaliser for the claimed ledger row. Marks outcome and
+      // attaches rsvp_id / sender / subject once known. On uncaught errors
+      // below we mark the row 'failed' so it isn't infinitely replayed.
+      const finalizeLedger = async (patch: Record<string, any>) => {
+        try {
+          await admin.from("event_rsvp_messages").update(patch).eq("id", ledgerId);
+        } catch (e) {
+          console.error("[process-rsvp-emails] finalizeLedger failed", e);
+        }
+      };
+
+      try {
+
 
         const msgRes = await fetch(`${GMAIL_API}/messages/${m.id}?format=full`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!msgRes.ok) continue;
+        if (!msgRes.ok) { await finalizeLedger({ outcome: "skipped_fetch_failed" }); continue; }
         const msg = await msgRes.json();
         const headers = msg.payload?.headers || [];
         const fromHdr = headers.find((h: any) => h.name?.toLowerCase() === "from")?.value || "";
@@ -520,7 +553,11 @@ Deno.serve(async (req) => {
         const messageIdHdr = headers.find((h: any) => h.name?.toLowerCase() === "message-id")?.value || "";
         const threadId = msg.threadId as string | undefined;
         const { email: senderEmail, name: senderName } = parseFromHeader(fromHdr);
-        if (!senderEmail) { summary.skipped++; continue; }
+        if (!senderEmail) {
+          summary.skipped++;
+          await finalizeLedger({ outcome: "skipped_no_sender", gmail_thread_id: threadId ?? null, subject: subjectHdr });
+          continue;
+        }
 
         const body = extractBody(msg.payload);
         const emailText = `From: ${senderName} <${senderEmail}>\nSubject: ${subjectHdr}\n\n${body}`;
@@ -531,7 +568,11 @@ Deno.serve(async (req) => {
         const isCalendarAuto =
           /^(accepted|declined|tentatively accepted|tentative|invitation|updated invitation|canceled event|cancelled event):/i.test(subjectHdr) ||
           fromHdr.toLowerCase().includes("calendar-notification@google.com");
-        if (isCalendarAuto) { summary.skipped++; continue; }
+        if (isCalendarAuto) {
+          summary.skipped++;
+          await finalizeLedger({ outcome: "skipped_calendar_auto", gmail_thread_id: threadId ?? null, sender_email: senderEmail, subject: subjectHdr });
+          continue;
+        }
 
         // Cheap pre-filter: only call the LLM for emails that look like RSVPs.
         const lower = `${subjectHdr}\n${body}`.toLowerCase();
@@ -550,12 +591,17 @@ Deno.serve(async (req) => {
         const looksLikeRsvp =
           intentHints.some((h) => lower.includes(h)) ||
           eventHints.some((h) => h && h.length > 3 && lower.includes(h));
-        if (!looksLikeRsvp) { summary.skipped++; continue; }
+        if (!looksLikeRsvp) {
+          summary.skipped++;
+          await finalizeLedger({ outcome: "skipped_not_rsvp", gmail_thread_id: threadId ?? null, sender_email: senderEmail, subject: subjectHdr });
+          continue;
+        }
 
         const match = await aiMatch(emailText, candidates);
         if (!match || !match.event_id || match.confidence < 0.6) {
           summary.skipped++;
           summary.errors.push(`No match for ${senderEmail} (subject: ${subjectHdr.slice(0,80)}): conf=${match?.confidence ?? "n/a"} reason=${match?.reason || "n/a"}`);
+          await finalizeLedger({ outcome: "skipped_no_match", gmail_thread_id: threadId ?? null, sender_email: senderEmail, subject: subjectHdr });
           continue;
         }
 
@@ -678,7 +724,7 @@ Deno.serve(async (req) => {
             .from("event_rsvps")
             .update(merged)
             .eq("id", existingRsvp.id);
-          if (updErr) { summary.errors.push(`rsvp-update: ${updErr.message}`); continue; }
+          if (updErr) { summary.errors.push(`rsvp-update: ${updErr.message}`); await finalizeLedger({ outcome: "failed_rsvp_update", gmail_thread_id: threadId ?? null, sender_email: senderEmail, subject: subjectHdr }); continue; }
           rsvpId = existingRsvp.id;
         } else {
           const fullName2 = [primaryRow.first_name, primaryRow.last_name].filter(Boolean).join(" ").trim();
@@ -707,14 +753,16 @@ Deno.serve(async (req) => {
             })
             .select("id")
             .single();
-          if (insErr || !inserted) { summary.errors.push(`rsvp-insert: ${insErr?.message || "unknown"}`); continue; }
+          if (insErr || !inserted) { summary.errors.push(`rsvp-insert: ${insErr?.message || "unknown"}`); await finalizeLedger({ outcome: "failed_rsvp_insert", gmail_thread_id: threadId ?? null, sender_email: senderEmail, subject: subjectHdr }); continue; }
           rsvpId = inserted.id;
         }
         summary.rsvps++;
 
-        // Log this Gmail message in the dedup ledger so it isn't reprocessed.
-        await admin.from("event_rsvp_messages").insert({
-          gmail_message_id: m.id,
+        // Finalize the dedup ledger row claimed at loop-start with the
+        // resolved rsvp_id, sender/subject, and the real outcome. (The
+        // initial 'processing' insert already guarantees no other worker
+        // can replay this Gmail message.)
+        await finalizeLedger({
           gmail_thread_id: threadId || null,
           rsvp_id: rsvpId,
           sender_email: senderEmail,
@@ -886,11 +934,18 @@ Deno.serve(async (req) => {
         }
         if (!sendResult.ok) {
           summary.errors.push(`gmail-send ${attendeeEmail}: ${sendResult.error}`);
+          // Reflect send failure on the ledger but KEEP the row claimed so we
+          // don't infinitely retry the send (and re-spam the recipient).
+          // Operator can manually clear the ledger row to retry.
+          await finalizeLedger({ outcome: "send_failed" });
         }
 
 
       } catch (e) {
         summary.errors.push(String(e));
+        // Mark the claim 'failed' so subsequent cron ticks skip it instead of
+        // replaying — but keep the row (preserves visibility + blocks resend).
+        await finalizeLedger({ outcome: "failed" });
       }
     }
 

@@ -4231,19 +4231,16 @@ serve(async (req) => {
       calendarTokenResult,
       slackResult,
       notionResult,
-      basecampResult,
       formsResult,
     ] = await Promise.all([
       getCalendarAccessToken(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] calendar:", e); return null; }),
       getSlackConnection(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] slack:", e); return null; }),
       getNotionToken(supabaseAdmin).catch((e) => { console.warn("[warmup] notion:", e); return null; }),
-      isBasecampConnected(supabaseAdmin).catch((e) => { console.warn("[warmup] basecamp:", e); return false; }),
       supabaseAdmin.from("google_forms").select("id, name, description, fields"),
     ]);
     calendarAccessToken = calendarTokenResult;
     slackConnection = slackResult;
     notionToken = notionResult;
-    basecampConnected = !!basecampResult;
     azureStorageAvailable = !!getAzureStorageConfig();
     const googleForms = formsResult?.data;
 

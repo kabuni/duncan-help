@@ -245,25 +245,19 @@ function truncate(s: string, max: number) {
   return s.length <= max ? s : s.slice(0, max) + "\n…[truncated]";
 }
 
-// ─── Planner: upcoming week (Mon → Sun, UK) ───────────────────────────────
-function upcomingWeekRangeUK(): { startUtc: string; endUtc: string; mondayLabel: string; sundayLabel: string } {
-  const fmt = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
-  });
-  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map((p) => [p.type, p.value]));
-  const ukToday = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day));
-  const dow = ukToday.getUTCDay(); // 0=Sun..6=Sat
-  // Upcoming Monday: today if Mon, else next Mon.
-  const daysToMon = dow === 1 ? 0 : (dow === 0 ? 1 : 8 - dow);
-  const mon = new Date(ukToday); mon.setUTCDate(ukToday.getUTCDate() + daysToMon);
-  const sunExclusive = new Date(mon); sunExclusive.setUTCDate(mon.getUTCDate() + 7);
+// ─── Planner: upcoming week (derived from ReportWeek for consistency) ─────
+interface PlannerRange {
+  startUtc: string; endUtc: string; mondayLabel: string; sundayLabel: string;
+}
+
+function plannerRangeFromReportWeek(w: ReportWeek): PlannerRange {
   const fmtLabel = (d: Date) =>
     d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
   return {
-    startUtc: mon.toISOString(),
-    endUtc: sunExclusive.toISOString(),
-    mondayLabel: fmtLabel(mon),
-    sundayLabel: fmtLabel(new Date(sunExclusive.getTime() - 86400000)),
+    startUtc: w.upcomingMonday.toISOString(),
+    endUtc: w.upcomingSundayExcl.toISOString(),
+    mondayLabel: fmtLabel(w.upcomingMonday),
+    sundayLabel: fmtLabel(new Date(w.upcomingSundayExcl.getTime() - 86400000)),
   };
 }
 
@@ -274,8 +268,9 @@ interface PlannerEvent {
 
 async function fetchUpcomingPlannerEvents(
   admin: any,
-): Promise<{ events: PlannerEvent[]; range: ReturnType<typeof upcomingWeekRangeUK> }> {
-  const range = upcomingWeekRangeUK();
+  reportWeek: ReportWeek,
+): Promise<{ events: PlannerEvent[]; range: PlannerRange }> {
+  const range = plannerRangeFromReportWeek(reportWeek);
   const { data, error } = await admin
     .from("key_events")
     .select("title, start_at, category, raw_description, status, deleted_in_google")
@@ -317,6 +312,7 @@ async function fetchUpcomingPlannerEvents(
   }
   return { events, range };
 }
+
 
 function formatPlannerBlock(
   events: PlannerEvent[],

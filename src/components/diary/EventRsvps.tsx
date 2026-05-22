@@ -117,7 +117,8 @@ function expandRsvp(r: RsvpRow): DisplayAttendee[] {
       first_name: a.first_name || null,
       last_name: a.last_name || null,
       phone: a.phone || null,
-      email: a.email || null,
+      // Guests inherit the sender's email unless explicitly provided
+      email: a.email || r.email || null,
       organisation_type: a.organisation_type || null,
       organisation_name: a.organisation_name || null,
       state: a.location || null,

@@ -5447,13 +5447,6 @@ Format as a natural, readable summary with clear sections. If a section has no d
             result = await withToolTimeout(tc.function.name, executeGoogleFormsTool(tc.function.name, args, supabaseAdmin));
           } else if (ndaToolNames.includes(tc.function.name)) {
             result = await withToolTimeout(tc.function.name, executeNdaTool(tc.function.name, args, supabaseAdmin, userId || "", userEmail, authHeader || ""));
-          } else if (basecampToolNames.includes(tc.function.name)) {
-            if (!basecampConnected) {
-              result = { error: "Basecamp is not connected. An admin needs to connect it via the Integrations page." };
-            } else {
-              result = await withToolTimeout(tc.function.name, executeBasecampTool(tc.function.name, args, supabaseUrl, authHeader || ""));
-              console.log(`Basecamp tool ${tc.function.name} result preview:`, JSON.stringify(result).slice(0, 500));
-            }
           } else if (meetingToolNames.includes(tc.function.name)) {
               // Phase 1: hard server-side guard on the slow Plaud sync. Only run when the user
               // explicitly asked for a sync/refresh/import/update of Plaud data.

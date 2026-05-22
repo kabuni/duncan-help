@@ -596,7 +596,6 @@ const IntegrationDetail = ({
 }) => {
   const isGoogleCalendar = integration.id === "google-calendar";
   const isAzureBlob = integration.id === "azure-blob";
-  const isBasecamp = false as const;
   const isGmail = integration.id === "gmail";
   const isAzureDevOps = integration.id === "azure-devops";
   const isGoogleDrive = integration.id === "google-drive";
@@ -605,7 +604,7 @@ const IntegrationDetail = ({
   const isGitHub = integration.id === "github";
   const isRuntimeStatusIntegration = isHubSpot || isGitHub;
   const isGoogleOAuth = isGoogleCalendar;
-  const isOAuthFlow = isGoogleOAuth || isBasecamp || isGmail || isSlack || isAzureDevOps || isGoogleDrive;
+  const isOAuthFlow = isGoogleOAuth || isGmail || isSlack || isAzureDevOps || isGoogleDrive;
   
   // Determine status based on integration type
   let status: IntegrationStatus;
@@ -613,8 +612,6 @@ const IntegrationDetail = ({
     status = isCalendarConnected ? "connected" : "disconnected";
   } else if (isAzureBlob) {
     status = isAzureBlobConnected ? "connected" : "disconnected";
-  } else if (isBasecamp) {
-    status = "disconnected";
   } else if (isGmail) {
     status = isGmailConnected ? "connected" : "disconnected";
   } else if (isSlack) {

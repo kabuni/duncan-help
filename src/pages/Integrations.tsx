@@ -906,7 +906,7 @@ const IntegrationDetail = ({
     }
   };
 
-  const oauthLoading = isGoogleCalendar ? calendarLoading : isBasecamp ? basecampLoading : isGmail ? gmailLoading : isSlack ? slackOAuth.isFetching : isAzureDevOps ? azureDevOpsLoading : googleDriveLoading;
+  const oauthLoading = isGoogleCalendar ? calendarLoading : isGmail ? gmailLoading : isSlack ? slackOAuth.isFetching : isAzureDevOps ? azureDevOpsLoading : googleDriveLoading;
   const isPending = isOAuthFlow ? oauthLoading : (isCompany ? companyMutation.isPending : (connectMutation.isPending || disconnectMutation.isPending));
   const canEdit = !isCompany || isAdmin;
 

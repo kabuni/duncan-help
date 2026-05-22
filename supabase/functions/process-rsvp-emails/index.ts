@@ -545,7 +545,7 @@ Deno.serve(async (req) => {
 
 
         const msgRes = await fetch(`${GMAIL_API}/messages/${m.id}?format=full`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!msgRes.ok) continue;
+        if (!msgRes.ok) { await finalizeLedger({ outcome: "skipped_fetch_failed" }); continue; }
         const msg = await msgRes.json();
         const headers = msg.payload?.headers || [];
         const fromHdr = headers.find((h: any) => h.name?.toLowerCase() === "from")?.value || "";
@@ -553,7 +553,11 @@ Deno.serve(async (req) => {
         const messageIdHdr = headers.find((h: any) => h.name?.toLowerCase() === "message-id")?.value || "";
         const threadId = msg.threadId as string | undefined;
         const { email: senderEmail, name: senderName } = parseFromHeader(fromHdr);
-        if (!senderEmail) { summary.skipped++; continue; }
+        if (!senderEmail) {
+          summary.skipped++;
+          await finalizeLedger({ outcome: "skipped_no_sender", gmail_thread_id: threadId ?? null, subject: subjectHdr });
+          continue;
+        }
 
         const body = extractBody(msg.payload);
         const emailText = `From: ${senderName} <${senderEmail}>\nSubject: ${subjectHdr}\n\n${body}`;
@@ -564,7 +568,11 @@ Deno.serve(async (req) => {
         const isCalendarAuto =
           /^(accepted|declined|tentatively accepted|tentative|invitation|updated invitation|canceled event|cancelled event):/i.test(subjectHdr) ||
           fromHdr.toLowerCase().includes("calendar-notification@google.com");
-        if (isCalendarAuto) { summary.skipped++; continue; }
+        if (isCalendarAuto) {
+          summary.skipped++;
+          await finalizeLedger({ outcome: "skipped_calendar_auto", gmail_thread_id: threadId ?? null, sender_email: senderEmail, subject: subjectHdr });
+          continue;
+        }
 
         // Cheap pre-filter: only call the LLM for emails that look like RSVPs.
         const lower = `${subjectHdr}\n${body}`.toLowerCase();
@@ -583,12 +591,17 @@ Deno.serve(async (req) => {
         const looksLikeRsvp =
           intentHints.some((h) => lower.includes(h)) ||
           eventHints.some((h) => h && h.length > 3 && lower.includes(h));
-        if (!looksLikeRsvp) { summary.skipped++; continue; }
+        if (!looksLikeRsvp) {
+          summary.skipped++;
+          await finalizeLedger({ outcome: "skipped_not_rsvp", gmail_thread_id: threadId ?? null, sender_email: senderEmail, subject: subjectHdr });
+          continue;
+        }
 
         const match = await aiMatch(emailText, candidates);
         if (!match || !match.event_id || match.confidence < 0.6) {
           summary.skipped++;
           summary.errors.push(`No match for ${senderEmail} (subject: ${subjectHdr.slice(0,80)}): conf=${match?.confidence ?? "n/a"} reason=${match?.reason || "n/a"}`);
+          await finalizeLedger({ outcome: "skipped_no_match", gmail_thread_id: threadId ?? null, sender_email: senderEmail, subject: subjectHdr });
           continue;
         }
 

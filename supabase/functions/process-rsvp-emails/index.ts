@@ -625,6 +625,12 @@ Deno.serve(async (req) => {
           incomingAttendees = [primaryAttendee, ...rest];
         }
 
+        // Attendees without an explicit email inherit the sender's email
+        // (shared RSVPs: e.g. parent emails on behalf of family/colleagues).
+        for (const a of incomingAttendees) {
+          if (isEmpty(a.email)) a.email = attendeeEmail;
+        }
+
         let rsvpId: string;
         const newValid = ["yes", "no", "maybe"].includes(match.status) ? match.status : null;
         // Status protection: never overwrite explicit "no" with anything other than another explicit value.

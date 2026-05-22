@@ -543,7 +543,7 @@ const Integrations = () => {
               isAdmin={isAdmin}
               isCalendarConnected={isCalendarConnected}
               isAzureBlobConnected={isAzureBlobConnected}
-              isBasecampConnected={isBasecampConnected}
+              
               isGmailConnected={isGmailConnected}
               isSlackConnected={slackConnection.isConnected}
               slackWorkspaceName={slackConnection.workspaceName}

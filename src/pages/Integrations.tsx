@@ -258,7 +258,7 @@ const Integrations = () => {
   const { isConnected: isCalendarConnected, checkConnection: checkCalendarConnection } = useGoogleCalendar();
   const slackConnection = useSlackConnection();
   const [isAzureBlobConnected, setIsAzureBlobConnected] = useState<boolean | null>(null);
-  const [isBasecampConnected, setIsBasecampConnected] = useState<boolean | null>(null);
+  
   const [isGmailConnected, setIsGmailConnected] = useState<boolean | null>(null);
   const [isAzureDevOpsConnected, setIsAzureDevOpsConnected] = useState<boolean | null>(null);
   const [isGoogleDriveConnected, setIsGoogleDriveConnected] = useState<boolean | null>(null);

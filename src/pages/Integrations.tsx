@@ -851,7 +851,7 @@ const IntegrationDetail = ({
         setGoogleDriveLoading(false);
       }
     } catch (err: any) {
-      setBasecampLoading(false);
+      
       setGmailLoading(false);
       setAzureDevOpsLoading(false);
       setGoogleDriveLoading(false);

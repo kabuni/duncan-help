@@ -414,6 +414,7 @@ function attendeeMissing(a: AttendeeExtract): string[] {
   if (isEmptyVal(a.last_name)) m.push("last name");
   if (isEmptyVal(a.phone)) m.push("mobile (with country code)");
   if (isEmptyVal(a.organisation_name)) m.push("organisation");
+  if (isEmptyVal(a.location)) m.push("city / region");
   return m;
 }
 
@@ -622,6 +623,12 @@ Deno.serve(async (req) => {
             }
           }
           incomingAttendees = [primaryAttendee, ...rest];
+        }
+
+        // Attendees without an explicit email inherit the sender's email
+        // (shared RSVPs: e.g. parent emails on behalf of family/colleagues).
+        for (const a of incomingAttendees) {
+          if (isEmpty(a.email)) a.email = attendeeEmail;
         }
 
         let rsvpId: string;

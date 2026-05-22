@@ -414,6 +414,7 @@ function attendeeMissing(a: AttendeeExtract): string[] {
   if (isEmptyVal(a.last_name)) m.push("last name");
   if (isEmptyVal(a.phone)) m.push("mobile (with country code)");
   if (isEmptyVal(a.organisation_name)) m.push("organisation");
+  if (isEmptyVal(a.location)) m.push("city / region");
   return m;
 }
 

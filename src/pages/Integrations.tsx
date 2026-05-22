@@ -147,21 +147,6 @@ const integrations: Integration[] = [
     ],
   },
   {
-    id: "basecamp",
-    name: "Basecamp",
-    description: "Connect Basecamp to access projects, to-dos, messages, schedules, and more across your team.",
-    icon: FolderOpen,
-    category: "Project Management",
-    services: ["Projects", "To-dos", "Messages", "Schedules"],
-    type: "company",
-    setupSteps: [
-      "Register an app at launchpad.37signals.com",
-      "Add the redirect URI provided by Duncan",
-      "An admin connects via OAuth to authorize access",
-      "Duncan can then fetch projects, to-dos, and messages",
-    ],
-  },
-  {
     id: "azure-devops",
     name: "Azure DevOps",
     description: "Sync work items from Azure Boards. Duncan reasons over project tickets, delivery status, and operational risks.",

@@ -694,29 +694,21 @@ Deno.serve(async (req) => {
     if (emptyFallback && !allowEmptyFolder) {
       throw new Error("All file extractions failed — nothing to summarise");
     }
-    if (emptyFallback) {
-      blocks.push(
-        `\n\n=== NO WEEKLY SOURCE REPORTS AVAILABLE ===\n` +
-        `The Drive folder "${folder.name}" contained no readable Google Docs or DOCX files for the previous week. ` +
-        `Generate a brief fallback Executive Snapshot that explicitly notes "No weekly source reports were available for this period", ` +
-        `omit RYG/Wins/Risks tables that would require source data (or render them with a single 'No data' row), ` +
-        `and still produce the full 'Upcoming This Week' section from the planner schedule below.`
-      );
-    }
 
-    // Fetch upcoming planner events (Mon → Sun, UK) before hashing/synthesis.
-    const { events: plannerEvents, range: plannerRange } = await fetchUpcomingPlannerEvents(admin);
-    const plannerBlock = formatPlannerBlock(plannerEvents, plannerRange);
+    // Canonical reporting window — single source of truth for all displayed dates.
+    const window = buildReportingWindow();
+
+    // Fetch upcoming planner events (current Mon → Sun, UK) before hashing/synthesis.
+    const plannerEvents = await fetchUpcomingPlannerEvents(admin, window);
+    const plannerBlock = formatPlannerBlock(plannerEvents, window);
 
     // Compute deterministic content hash from processed files + planner schedule.
-    // Planner data participates in the hash so that planner-only changes still
-    // regenerate the email even when Drive docs are unchanged.
     const fingerprintInput = files
       .map((f: any) => `${f.id}|${f.modifiedTime ?? ""}|${f.size ?? ""}`)
       .sort()
       .join("\n")
       + `\n#count=${processed.length}\n#chars=${processed.reduce((a, p) => a + p.chars, 0)}`
-      + `\n#planner_range=${plannerRange.startUtc}..${plannerRange.endUtc}`
+      + `\n#planner_range=${window.upcomingStartUtc}..${window.upcomingEndUtc}`
       + `\n#planner=\n${plannerHashInput(plannerEvents)}`;
     const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintInput));
     const contentHash = Array.from(new Uint8Array(hashBuf))
@@ -759,15 +751,31 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. GPT-4o summary
-    const summaryMd = await buildSummaryMarkdown(folder.name, blocks.join("\n"), plannerBlock);
-    if (!summaryMd) throw new Error("OpenAI returned empty summary");
-
-    const weekRange = lastWeekRangeLabel();
+    // 4. Build the summary markdown.
+    // Three branches:
+    //   (a) Docs exist → full GPT synthesis with canonical date contract.
+    //   (b) No docs but planner events exist → GPT planner-only mode (no fake KPIs).
+    //   (c) No docs AND no planner events → deterministic plain fallback, skip GPT.
+    let summaryMd: string;
+    const weekRange = window.prevRangeShort;
     const title = "Weekly Executive Summary";
-    // ASCII-only subject — uses " | " and "-" (no em dashes) so Gmail/Outlook
-    // render it cleanly without MIME encoded-word wrapping.
     const subject = `Weekly Executive Summary | ${weekRange}`;
+
+    if (!emptyFallback) {
+      summaryMd = await buildSummaryMarkdown(folder.name, blocks.join("\n"), plannerBlock, window, "full");
+    } else if (plannerEvents.length > 0) {
+      summaryMd = await buildSummaryMarkdown(folder.name, "", plannerBlock, window, "planner_only");
+    } else {
+      // Pure empty state — no docs, no planner. No GPT, no fake content.
+      summaryMd =
+        `# ${title}\n\n` +
+        `${window.prevHeading}\n\n` +
+        `No weekly reports or planner events were available for this reporting period.\n\n` +
+        `## Upcoming This Week\n\n` +
+        `- No planner events scheduled.\n`;
+    }
+
+    if (!summaryMd) throw new Error("Summary generation returned empty content");
 
     await admin.from("exec_summary_runs").update({
       summary_chars: summaryMd.length,
@@ -778,8 +786,12 @@ Deno.serve(async (req) => {
     if (!gmailToken) throw new Error("Gmail sender token (duncan@kabuni.com) unavailable");
 
     const html = emailHtml({
-      title, weekRange, folderName: folder.name,
-      fileCount: processed.length, summaryMd,
+      title,
+      weekRange,
+      folderName: emptyFallback ? null : folder.name,
+      fileCount: processed.length,
+      summaryMd,
+      generatedAtUk: window.generatedAtUk,
     });
     const messageId = await sendEmail(gmailToken, recipientHeader, subject, html);
 
@@ -799,6 +811,12 @@ Deno.serve(async (req) => {
       content_hash: contentHash,
       subject,
       week_range: weekRange,
+      reporting_window: {
+        previous: window.prevRangeLong,
+        upcoming: `${window.upcomingMondayLabel} – ${window.upcomingSundayLabel}`,
+        uk_year: window.ukYear,
+      },
+      mode: !emptyFallback ? "full" : (plannerEvents.length > 0 ? "planner_only" : "empty"),
     });
   } catch (e) {
     return fail(e);

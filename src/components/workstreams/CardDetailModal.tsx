@@ -444,13 +444,11 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                           {existingTags.map(tag => (
                             <SelectItem key={tag} value={tag}>{tag}</SelectItem>
                           ))}
-                          {isAdmin && (
-                            <SelectItem value="__new__" className="text-primary font-medium">
-                              <span className="inline-flex items-center gap-1.5">
-                                <Plus className="h-3 w-3" /> Add new workstream…
-                              </span>
-                            </SelectItem>
-                          )}
+                          <SelectItem value="__new__" className="text-primary font-medium">
+                            <span className="inline-flex items-center gap-1.5">
+                              <Plus className="h-3 w-3" /> Add new workstream…
+                            </span>
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                     )}

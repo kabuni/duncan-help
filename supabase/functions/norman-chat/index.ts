@@ -2032,6 +2032,47 @@ async function executeWorkstreamTool(
         result = result.filter((r: any) => r.overdue || overdueTaskCardIds.has(r.id));
       }
 
+      if (wantCsv) {
+        const esc = (v: any) => {
+          if (v === null || v === undefined) return "";
+          const s = Array.isArray(v) ? v.join("; ") : String(v);
+          return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        };
+        const header = ["Title", "Status", "Project", "Priority", "Due Date", "Overdue", "Assignees", "Open Task Count", "Open Tasks"];
+        const lines = [header.join(",")];
+        for (const r of result) {
+          const taskTitles = (r.open_tasks || []).map((t: any) => t.overdue ? `${t.title} (OVERDUE)` : t.title);
+          lines.push([
+            esc(r.title), esc(r.status), esc(r.project_tag), esc(r.priority),
+            esc(r.due_date), esc(r.overdue ? "yes" : ""), esc(r.assignees),
+            esc(r.open_task_count ?? ""), esc(taskTitles),
+          ].join(","));
+        }
+        const csv = lines.join("\n");
+        const ts = new Date().toISOString().replace(/[:.]/g, "-");
+        const filename = `workstream-cards-${ts}.csv`;
+        const path = `workstreams/${userId}/${filename}`;
+        const { error: upErr } = await supabaseAdmin.storage
+          .from("exports")
+          .upload(path, new Blob([csv], { type: "text/csv" }), {
+            contentType: "text/csv",
+            upsert: true,
+          });
+        if (upErr) throw new Error(`CSV upload failed: ${upErr.message}`);
+        const { data: signed, error: signErr } = await supabaseAdmin.storage
+          .from("exports")
+          .createSignedUrl(path, 60 * 60, { download: filename });
+        if (signErr || !signed?.signedUrl) throw new Error(`Sign URL failed: ${signErr?.message}`);
+        return {
+          count: result.length,
+          format: "csv",
+          filename,
+          download_url: signed.signedUrl,
+          expires_in_seconds: 3600,
+          message: `CSV ready (${result.length} cards). Present the download_url to the user as a clickable markdown link: [Download ${filename}](${signed.signedUrl}). Do not paste the raw list inline.`,
+        };
+      }
+
       return { count: result.length, cards: result, filter: args };
     }
 

@@ -614,7 +614,7 @@ const IntegrationDetail = ({
   } else if (isAzureBlob) {
     status = isAzureBlobConnected ? "connected" : "disconnected";
   } else if (isBasecamp) {
-    status = isBasecampConnected ? "connected" : "disconnected";
+    status = "disconnected";
   } else if (isGmail) {
     status = isGmailConnected ? "connected" : "disconnected";
   } else if (isSlack) {

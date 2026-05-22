@@ -753,14 +753,16 @@ Deno.serve(async (req) => {
             })
             .select("id")
             .single();
-          if (insErr || !inserted) { summary.errors.push(`rsvp-insert: ${insErr?.message || "unknown"}`); continue; }
+          if (insErr || !inserted) { summary.errors.push(`rsvp-insert: ${insErr?.message || "unknown"}`); await finalizeLedger({ outcome: "failed_rsvp_insert", gmail_thread_id: threadId ?? null, sender_email: senderEmail, subject: subjectHdr }); continue; }
           rsvpId = inserted.id;
         }
         summary.rsvps++;
 
-        // Log this Gmail message in the dedup ledger so it isn't reprocessed.
-        await admin.from("event_rsvp_messages").insert({
-          gmail_message_id: m.id,
+        // Finalize the dedup ledger row claimed at loop-start with the
+        // resolved rsvp_id, sender/subject, and the real outcome. (The
+        // initial 'processing' insert already guarantees no other worker
+        // can replay this Gmail message.)
+        await finalizeLedger({
           gmail_thread_id: threadId || null,
           rsvp_id: rsvpId,
           sender_email: senderEmail,

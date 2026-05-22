@@ -154,73 +154,25 @@ function truncate(s: string, max: number) {
   return s.length <= max ? s : s.slice(0, max) + "\n…[truncated]";
 }
 
-// ─── Canonical reporting window (UK time, DST-safe) ───────────────────────
-// One source of truth used by the subject, email subtitle, GPT prompt, and
-// planner section. Never hardcode dates anywhere else in this file.
-interface ReportingWindow {
-  prevMonIso: string;
-  prevFriIso: string;
-  prevRangeShort: string;   // "11th May - 15th May"
-  prevRangeLong: string;    // "Monday 11 May 2026 – Friday 15 May 2026"
-  prevHeading: string;      // "Week of 11 May 2026"
-  upcomingMonIso: string;
-  upcomingSunIso: string;
-  upcomingStartUtc: string;
-  upcomingEndUtc: string;
-  upcomingMondayLabel: string;
-  upcomingSundayLabel: string;
-  ukYear: number;
-  generatedAtUk: string;
-}
-
-function ordinal(n: number) {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
-}
-
-function buildReportingWindow(): ReportingWindow {
+// ─── Planner: upcoming week (Mon → Sun, UK) ───────────────────────────────
+function upcomingWeekRangeUK(): { startUtc: string; endUtc: string; mondayLabel: string; sundayLabel: string } {
   const fmt = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
   });
   const parts = Object.fromEntries(fmt.formatToParts(new Date()).map((p) => [p.type, p.value]));
-  const ukYear = +parts.year;
-  const ukToday = new Date(Date.UTC(ukYear, +parts.month - 1, +parts.day));
-  const dow = ukToday.getUTCDay();
-  const daysBackToMon = dow === 0 ? 6 : dow - 1;
-  const thisMon = new Date(ukToday); thisMon.setUTCDate(ukToday.getUTCDate() - daysBackToMon);
-  const prevMon = new Date(thisMon); prevMon.setUTCDate(thisMon.getUTCDate() - 7);
-  const prevFri = new Date(prevMon); prevFri.setUTCDate(prevMon.getUTCDate() + 4);
-  const upcomingMon = thisMon;
-  const upcomingSun = new Date(thisMon); upcomingSun.setUTCDate(thisMon.getUTCDate() + 6);
-  const upcomingEndExclusive = new Date(thisMon); upcomingEndExclusive.setUTCDate(thisMon.getUTCDate() + 7);
-
-  const isoDate = (d: Date) =>
-    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
-  const monthName = (d: Date) => d.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
-  const longDate = (d: Date) =>
-    d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-  const dayMonth = (d: Date) =>
+  const ukToday = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day));
+  const dow = ukToday.getUTCDay(); // 0=Sun..6=Sat
+  // Upcoming Monday: today if Mon, else next Mon.
+  const daysToMon = dow === 1 ? 0 : (dow === 0 ? 1 : 8 - dow);
+  const mon = new Date(ukToday); mon.setUTCDate(ukToday.getUTCDate() + daysToMon);
+  const sunExclusive = new Date(mon); sunExclusive.setUTCDate(mon.getUTCDate() + 7);
+  const fmtLabel = (d: Date) =>
     d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
-  const nowFmt = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long",
-    year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false,
-  });
-
   return {
-    prevMonIso: isoDate(prevMon),
-    prevFriIso: isoDate(prevFri),
-    prevRangeShort: `${ordinal(prevMon.getUTCDate())} ${monthName(prevMon)} - ${ordinal(prevFri.getUTCDate())} ${monthName(prevFri)}`,
-    prevRangeLong: `${longDate(prevMon)} – ${longDate(prevFri)}`,
-    prevHeading: `Week of ${prevMon.getUTCDate()} ${monthName(prevMon)} ${prevMon.getUTCFullYear()}`,
-    upcomingMonIso: isoDate(upcomingMon),
-    upcomingSunIso: isoDate(upcomingSun),
-    upcomingStartUtc: upcomingMon.toISOString(),
-    upcomingEndUtc: upcomingEndExclusive.toISOString(),
-    upcomingMondayLabel: dayMonth(upcomingMon),
-    upcomingSundayLabel: dayMonth(upcomingSun),
-    ukYear,
-    generatedAtUk: `${nowFmt.format(new Date())} UK`,
+    startUtc: mon.toISOString(),
+    endUtc: sunExclusive.toISOString(),
+    mondayLabel: fmtLabel(mon),
+    sundayLabel: fmtLabel(new Date(sunExclusive.getTime() - 86400000)),
   };
 }
 
@@ -231,18 +183,18 @@ interface PlannerEvent {
 
 async function fetchUpcomingPlannerEvents(
   admin: any,
-  window: ReportingWindow,
-): Promise<PlannerEvent[]> {
+): Promise<{ events: PlannerEvent[]; range: ReturnType<typeof upcomingWeekRangeUK> }> {
+  const range = upcomingWeekRangeUK();
   const { data, error } = await admin
     .from("key_events")
     .select("title, start_at, category, raw_description, status, deleted_in_google")
-    .gte("start_at", window.upcomingStartUtc)
-    .lt("start_at", window.upcomingEndUtc)
+    .gte("start_at", range.startUtc)
+    .lt("start_at", range.endUtc)
     .eq("deleted_in_google", false)
     .order("start_at", { ascending: true });
   if (error) {
     console.warn("[weekly-exec-summary] planner fetch failed:", error.message);
-    return [];
+    return { events: [], range };
   }
   const dayFmt = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Europe/London", weekday: "long", day: "numeric", month: "short",
@@ -272,18 +224,17 @@ async function fetchUpcomingPlannerEvents(
       description: shortDesc, startIso: r.start_at,
     });
   }
-  return events;
+  return { events, range };
 }
 
 function formatPlannerBlock(
   events: PlannerEvent[],
-  window: ReportingWindow,
+  range: ReturnType<typeof upcomingWeekRangeUK>,
 ): string {
-  const header = `Upcoming This Week (${window.upcomingMondayLabel} – ${window.upcomingSundayLabel}):`;
   if (!events.length) {
-    return `${header}\n- No planner events scheduled.`;
+    return `Upcoming This Week (${range.mondayLabel} – ${range.sundayLabel}):\n- No planner events scheduled.`;
   }
-  const lines = [header];
+  const lines = [`Upcoming This Week (${range.mondayLabel} – ${range.sundayLabel}):`];
   for (const e of events) {
     const cat = e.category ? ` [${e.category}]` : "";
     const desc = e.description ? ` — ${e.description}` : "";
@@ -304,59 +255,28 @@ async function buildSummaryMarkdown(
   folderName: string,
   fileBlocks: string,
   plannerBlock: string,
-  window: ReportingWindow,
-  mode: "full" | "planner_only",
 ): Promise<string> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
 
-  const dateContract =
-    `CANONICAL REPORTING DATES (use these EXACTLY — do NOT invent any other dates or years):\n` +
-    `- Reporting period (previous week): ${window.prevRangeLong}\n` +
-    `- Required H1 heading: "Weekly Executive Summary"\n` +
-    `- Required subtitle line under H1 (plain paragraph, no heading marker): "${window.prevHeading}"\n` +
-    `- Upcoming planner window: ${window.upcomingMondayLabel} – ${window.upcomingSundayLabel}\n` +
-    `- Current UK year: ${window.ukYear}\n` +
-    `Never reference any other year. Never write "Week of <some other date>". ` +
-    `Do not include the current date or a "generated on" line — the email wrapper handles that.`;
-
-  let system: string;
-  if (mode === "full") {
-    system =
-      "You are Duncan, Kabuni's executive intelligence engine. " +
-      "Produce a board-ready weekly executive summary in clean Markdown. " +
-      "Begin with the required H1 then the required subtitle paragraph exactly as specified in the date contract. " +
-      "Use H2 for sections, bullets where useful, and Markdown tables only when you have real data to compare. " +
-      "Sections (in order): Executive Snapshot, Performance Overview (RYG table), " +
-      "Wins of the Week, Risks & Blockers (with mitigations), Key Decisions Needed, " +
-      "Cross-Department Highlights, Upcoming This Week. " +
-      "For the 'Upcoming This Week' section, use ONLY the planner schedule provided — " +
-      "group bullets by weekday in chronological order, keep it concise, and do not invent events. " +
-      "Keep 'Upcoming This Week' to a short, scannable list; it must NOT dominate the report. " +
-      "Be concise, factual, decision-oriented. Never invent figures, KPIs, or 'No data' filler rows — " +
-      "if a section has no source material, omit it entirely rather than padding with placeholders.\n\n" +
-      dateContract;
-  } else {
-    // Planner-only mode: source reports missing, do not fabricate KPIs.
-    system =
-      "You are Duncan, Kabuni's executive intelligence engine. " +
-      "No source weekly reports were available for the previous week, so produce a SHORT, honest Markdown document with exactly this structure and nothing else:\n" +
-      "1. H1 heading (use the required heading from the date contract).\n" +
-      "2. A single subtitle paragraph (use the required subtitle from the date contract).\n" +
-      "3. A short paragraph stating: 'No weekly source reports were available for the previous reporting period.'\n" +
-      "4. An H2 'Upcoming This Week' section rendered strictly from the planner schedule provided — " +
-      "group bullets by weekday in chronological order; if the planner is empty, render a single bullet: 'No planner events scheduled.'\n" +
-      "Do NOT invent KPIs, RYG tables, wins, risks, decisions, or any other sections. " +
-      "Do NOT add filler such as 'No data' rows or placeholder tables.\n\n" +
-      dateContract;
-  }
+  const system =
+    "You are Duncan, Kabuni's executive intelligence engine. " +
+    "Produce a board-ready weekly executive summary in clean Markdown. " +
+    "Use H1 for the report title, H2 for sections, bullets where useful, and Markdown tables when comparing items. " +
+    "Sections (in order): Executive Snapshot, Performance Overview (RYG table), " +
+    "Wins of the Week, Risks & Blockers (with mitigations), Key Decisions Needed, " +
+    "Cross-Department Highlights, Upcoming This Week. " +
+    "For the 'Upcoming This Week' section, use ONLY the planner schedule provided below — " +
+    "group bullets by weekday in chronological order, keep it concise, and do not invent events. " +
+    "Keep 'Upcoming This Week' to a short, scannable list; it must NOT dominate the report. " +
+    "Be concise, factual, decision-oriented. Never invent figures.";
 
   const user =
-    `Folder: ${folderName || "(none)"}\n\n` +
+    `Folder: ${folderName}\n\n` +
     `=== PLANNER SCHEDULE (upcoming week, UK time) ===\n${plannerBlock}\n\n` +
-    (mode === "full"
-      ? `=== PREVIOUS WEEK SOURCE REPORTS (${window.prevRangeLong}) ===\nSynthesise across them.\n\n${fileBlocks}`
-      : `=== PREVIOUS WEEK SOURCE REPORTS ===\n(none available)`);
+    `=== PREVIOUS WEEK SOURCE REPORTS ===\n` +
+    `Source reports from the last week are below. Synthesise across them.\n\n` +
+    fileBlocks;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -366,7 +286,7 @@ async function buildSummaryMarkdown(
     },
     body: JSON.stringify({
       model: "gpt-4o",
-      temperature: 0.2,
+      temperature: 0.3,
       max_tokens: 3500,
       messages: [
         { role: "system", content: system },
@@ -528,23 +448,41 @@ function mdToHtml(md: string): string {
 }
 
 function emailHtml(opts: {
-  title: string; weekRange: string; folderName: string | null;
-  fileCount: number; summaryMd: string; generatedAtUk: string;
+  title: string; weekRange: string; folderName: string;
+  fileCount: number; summaryMd: string;
 }): string {
-  const sourceLine = opts.folderName && opts.fileCount > 0
-    ? `&nbsp;·&nbsp; synthesised from <strong>${opts.fileCount}</strong> source report${opts.fileCount === 1 ? "" : "s"} in <em>${escapeHtml(opts.folderName)}</em>`
-    : `&nbsp;·&nbsp; <em>no weekly source reports available</em>`;
   return `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#1a1a1a;background:#ffffff">
   <div style="border-bottom:2px solid #0f172a;padding-bottom:14px;margin-bottom:20px">
     <h1 style="margin:0 0 4px;color:#0f172a;font-size:24px">${escapeHtml(opts.title)}</h1>
-    <div style="color:#64748b;font-size:13px">${escapeHtml(opts.weekRange)} ${sourceLine}</div>
+    <div style="color:#64748b;font-size:13px">${escapeHtml(opts.weekRange)} &nbsp;·&nbsp; synthesised from <strong>${opts.fileCount}</strong> source report${opts.fileCount === 1 ? "" : "s"} in <em>${escapeHtml(opts.folderName)}</em></div>
   </div>
   ${mdToHtml(opts.summaryMd)}
   <div style="margin-top:32px;padding-top:14px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px;text-align:center">
-    Confidential — Kabuni — Generated automatically by Duncan · ${escapeHtml(opts.generatedAtUk)}
+    Confidential — Kabuni — Generated automatically by Duncan
   </div>
 </div>`;
+}
+
+// ─── Week range "11th May - 15th May" (last Mon–Fri in UK time) ───────────
+function ordinal(n: number) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+function lastWeekRangeLabel(): string {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map((p) => [p.type, p.value]));
+  const ukToday = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day));
+  const dow = ukToday.getUTCDay();
+  const daysBackToMon = dow === 0 ? 6 : dow - 1;
+  const thisMon = new Date(ukToday); thisMon.setUTCDate(ukToday.getUTCDate() - daysBackToMon);
+  const lastMon = new Date(thisMon); lastMon.setUTCDate(thisMon.getUTCDate() - 7);
+  const lastFri = new Date(lastMon); lastFri.setUTCDate(lastMon.getUTCDate() + 4);
+  const monthName = (d: Date) => d.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  return `${ordinal(lastMon.getUTCDate())} ${monthName(lastMon)} - ${ordinal(lastFri.getUTCDate())} ${monthName(lastFri)}`;
 }
 
 // ─── Auth: admin or cron ──────────────────────────────────────────────────
@@ -694,21 +632,29 @@ Deno.serve(async (req) => {
     if (emptyFallback && !allowEmptyFolder) {
       throw new Error("All file extractions failed — nothing to summarise");
     }
+    if (emptyFallback) {
+      blocks.push(
+        `\n\n=== NO WEEKLY SOURCE REPORTS AVAILABLE ===\n` +
+        `The Drive folder "${folder.name}" contained no readable Google Docs or DOCX files for the previous week. ` +
+        `Generate a brief fallback Executive Snapshot that explicitly notes "No weekly source reports were available for this period", ` +
+        `omit RYG/Wins/Risks tables that would require source data (or render them with a single 'No data' row), ` +
+        `and still produce the full 'Upcoming This Week' section from the planner schedule below.`
+      );
+    }
 
-    // Canonical reporting window — single source of truth for all displayed dates.
-    const window = buildReportingWindow();
-
-    // Fetch upcoming planner events (current Mon → Sun, UK) before hashing/synthesis.
-    const plannerEvents = await fetchUpcomingPlannerEvents(admin, window);
-    const plannerBlock = formatPlannerBlock(plannerEvents, window);
+    // Fetch upcoming planner events (Mon → Sun, UK) before hashing/synthesis.
+    const { events: plannerEvents, range: plannerRange } = await fetchUpcomingPlannerEvents(admin);
+    const plannerBlock = formatPlannerBlock(plannerEvents, plannerRange);
 
     // Compute deterministic content hash from processed files + planner schedule.
+    // Planner data participates in the hash so that planner-only changes still
+    // regenerate the email even when Drive docs are unchanged.
     const fingerprintInput = files
       .map((f: any) => `${f.id}|${f.modifiedTime ?? ""}|${f.size ?? ""}`)
       .sort()
       .join("\n")
       + `\n#count=${processed.length}\n#chars=${processed.reduce((a, p) => a + p.chars, 0)}`
-      + `\n#planner_range=${window.upcomingStartUtc}..${window.upcomingEndUtc}`
+      + `\n#planner_range=${plannerRange.startUtc}..${plannerRange.endUtc}`
       + `\n#planner=\n${plannerHashInput(plannerEvents)}`;
     const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintInput));
     const contentHash = Array.from(new Uint8Array(hashBuf))
@@ -751,31 +697,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. Build the summary markdown.
-    // Three branches:
-    //   (a) Docs exist → full GPT synthesis with canonical date contract.
-    //   (b) No docs but planner events exist → GPT planner-only mode (no fake KPIs).
-    //   (c) No docs AND no planner events → deterministic plain fallback, skip GPT.
-    let summaryMd: string;
-    const weekRange = window.prevRangeShort;
+    // 4. GPT-4o summary
+    const summaryMd = await buildSummaryMarkdown(folder.name, blocks.join("\n"), plannerBlock);
+    if (!summaryMd) throw new Error("OpenAI returned empty summary");
+
+    const weekRange = lastWeekRangeLabel();
     const title = "Weekly Executive Summary";
+    // ASCII-only subject — uses " | " and "-" (no em dashes) so Gmail/Outlook
+    // render it cleanly without MIME encoded-word wrapping.
     const subject = `Weekly Executive Summary | ${weekRange}`;
-
-    if (!emptyFallback) {
-      summaryMd = await buildSummaryMarkdown(folder.name, blocks.join("\n"), plannerBlock, window, "full");
-    } else if (plannerEvents.length > 0) {
-      summaryMd = await buildSummaryMarkdown(folder.name, "", plannerBlock, window, "planner_only");
-    } else {
-      // Pure empty state — no docs, no planner. No GPT, no fake content.
-      summaryMd =
-        `# ${title}\n\n` +
-        `${window.prevHeading}\n\n` +
-        `No weekly reports or planner events were available for this reporting period.\n\n` +
-        `## Upcoming This Week\n\n` +
-        `- No planner events scheduled.\n`;
-    }
-
-    if (!summaryMd) throw new Error("Summary generation returned empty content");
 
     await admin.from("exec_summary_runs").update({
       summary_chars: summaryMd.length,
@@ -786,12 +716,8 @@ Deno.serve(async (req) => {
     if (!gmailToken) throw new Error("Gmail sender token (duncan@kabuni.com) unavailable");
 
     const html = emailHtml({
-      title,
-      weekRange,
-      folderName: emptyFallback ? null : folder.name,
-      fileCount: processed.length,
-      summaryMd,
-      generatedAtUk: window.generatedAtUk,
+      title, weekRange, folderName: folder.name,
+      fileCount: processed.length, summaryMd,
     });
     const messageId = await sendEmail(gmailToken, recipientHeader, subject, html);
 
@@ -811,12 +737,6 @@ Deno.serve(async (req) => {
       content_hash: contentHash,
       subject,
       week_range: weekRange,
-      reporting_window: {
-        previous: window.prevRangeLong,
-        upcoming: `${window.upcomingMondayLabel} – ${window.upcomingSundayLabel}`,
-        uk_year: window.ukYear,
-      },
-      mode: !emptyFallback ? "full" : (plannerEvents.length > 0 ? "planner_only" : "empty"),
     });
   } catch (e) {
     return fail(e);

@@ -141,8 +141,6 @@ verify_jwt = false
 [functions.extract-file-text]
 verify_jwt = false
 
-[functions.basecamp-webhook]
-verify_jwt = false
 
 [functions.check-overdue-tasks]
 verify_jwt = false

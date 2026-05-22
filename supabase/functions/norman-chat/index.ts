@@ -1923,7 +1923,9 @@ async function executeWorkstreamTool(
 
     case "list_workstream_cards": {
       const wantCsv = args.export_format === "csv";
-      const limit = Math.min(Math.max(args.limit ?? (wantCsv ? 500 : 30), 1), wantCsv ? 1000 : 100);
+      const wantSheet = args.export_format === "gsheet";
+      const isExport = wantCsv || wantSheet;
+      const limit = Math.min(Math.max(args.limit ?? (isExport ? 500 : 30), 1), isExport ? 1000 : 100);
       const includeTasks = args.include_tasks !== false;
       const nowIso = new Date().toISOString();
 

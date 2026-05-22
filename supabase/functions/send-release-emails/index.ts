@@ -50,7 +50,7 @@ serve(async (req) => {
     // Fetch all mapped users with Slack IDs
     const { data: mappings, error: mappingsError } = await supabase
       .from("user_notification_mappings")
-      .select("duncan_user_id, slack_user_identifier, basecamp_name")
+      .select("duncan_user_id, slack_user_identifier")
       .eq("is_active", true);
     if (mappingsError) throw mappingsError;
 

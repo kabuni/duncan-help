@@ -57,7 +57,7 @@ const orgLabel: Record<string, string> = {
   other: "Other",
 };
 
-const FIELDS = ["first_name", "last_name", "phone", "email", "organisation_type", "organisation_name", "state"] as const;
+const FIELDS = ["first_name", "last_name", "phone", "organisation_name", "state"] as const;
 const ATTENDEES_MARKER = "\n\n--ATTENDEES_JSON--\n";
 
 function parseSidecarAttendees(notes: string | null | undefined): AttendeeExtract[] {

@@ -49,6 +49,72 @@ function ukNowParts() {
   };
 }
 
+// ─── Single source of truth for report dates (UK time) ────────────────────
+// One object computed once per run. Used for:
+//   - folder name matching
+//   - subject line
+//   - email header label
+//   - GPT date grounding (prevents year hallucination)
+//   - upcoming-week planner window
+//   - pre-send validator
+interface ReportWeek {
+  monday: Date;
+  friday: Date;
+  upcomingMonday: Date;
+  upcomingSundayExcl: Date;
+  year: number;
+  monthLong: string;
+  monthShort: string;
+  monDay: number;
+  friDay: number;
+  label: string;              // "11th May - 15th May"
+  isoLabel: string;           // "2026-05-11/2026-05-15"
+  todayLabel: string;         // "Friday 22 May 2026"
+  upcomingLabel: string;      // "Monday 25 May – Sunday 31 May 2026"
+}
+
+function ordinalNum(n: number) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function buildReportWeek(): ReportWeek {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  const p = Object.fromEntries(fmt.formatToParts(new Date()).map((x) => [x.type, x.value]));
+  const ukToday = new Date(Date.UTC(+p.year, +p.month - 1, +p.day));
+  const dow = ukToday.getUTCDay();
+  const daysBackToMon = dow === 0 ? 6 : dow - 1;
+  const thisMon = new Date(ukToday); thisMon.setUTCDate(ukToday.getUTCDate() - daysBackToMon);
+  const monday = new Date(thisMon); monday.setUTCDate(thisMon.getUTCDate() - 7);
+  const friday = new Date(monday); friday.setUTCDate(monday.getUTCDate() + 4);
+  const upcomingMonday = new Date(monday); upcomingMonday.setUTCDate(monday.getUTCDate() + 14);
+  const upcomingSundayExcl = new Date(upcomingMonday); upcomingSundayExcl.setUTCDate(upcomingMonday.getUTCDate() + 7);
+  const monthLong = monday.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  const monthShort = monday.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
+  const friMonthLong = friday.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  const label = monthLong === friMonthLong
+    ? `${ordinalNum(monday.getUTCDate())} ${monthLong} - ${ordinalNum(friday.getUTCDate())} ${friMonthLong}`
+    : `${ordinalNum(monday.getUTCDate())} ${monthLong} - ${ordinalNum(friday.getUTCDate())} ${friMonthLong}`;
+  const isoLabel = `${monday.toISOString().slice(0, 10)}/${friday.toISOString().slice(0, 10)}`;
+  const todayLabel = ukToday.toLocaleDateString("en-GB", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
+  });
+  const upSat = new Date(upcomingSundayExcl.getTime() - 86400000);
+  const upcomingLabel =
+    `${upcomingMonday.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })} ` +
+    `– ${upSat.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}`;
+  return {
+    monday, friday, upcomingMonday, upcomingSundayExcl,
+    year: monday.getUTCFullYear(),
+    monthLong, monthShort,
+    monDay: monday.getUTCDate(), friDay: friday.getUTCDate(),
+    label, isoLabel, todayLabel, upcomingLabel,
+  };
+}
+
 // ─── Google Drive helpers ──────────────────────────────────────────────────
 async function refreshGoogleToken(refresh: string) {
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -91,21 +157,46 @@ async function driveFetch(token: string, url: string): Promise<Response> {
   return fetch(url, { headers: { Authorization: `Bearer ${token}` } });
 }
 
-async function findLatestWeeklyFolder(token: string) {
-  // List subfolders ordered by createdTime desc — deterministic "latest".
+function normalizeFolderName(s: string) {
+  return s.toLowerCase()
+    .replace(/[\u2013\u2014]/g, "-")            // en/em dash → hyphen
+    .replace(/(\d+)(st|nd|rd|th)/g, "$1")        // strip ordinals
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function folderMatchesWeek(name: string, w: ReportWeek): boolean {
+  const n = normalizeFolderName(name);
+  const monthLong = w.monthLong.toLowerCase();
+  const monthShort = w.monthShort.toLowerCase();
+  const hasMonth = n.includes(monthLong) || n.includes(monthShort);
+  const hasMonDay = new RegExp(`(^|[^0-9])${w.monDay}([^0-9]|$)`).test(n);
+  const hasFriDay = new RegExp(`(^|[^0-9])${w.friDay}([^0-9]|$)`).test(n);
+  return hasMonth && hasMonDay && hasFriDay;
+}
+
+interface ResolvedFolder {
+  id: string;
+  name: string;
+  matched: boolean;
+  candidatesConsidered: string[];
+}
+
+async function findFolderForWeek(token: string, w: ReportWeek): Promise<ResolvedFolder> {
   const q = encodeURIComponent(
     `'${PARENT_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
   );
   const url =
     `https://www.googleapis.com/drive/v3/files?q=${q}` +
     `&fields=files(id,name,createdTime,modifiedTime)` +
-    `&orderBy=createdTime%20desc&pageSize=10`;
+    `&orderBy=createdTime%20desc&pageSize=50`;
   const res = await driveFetch(token, url);
   if (!res.ok) throw new Error(`Drive folder list failed: ${await res.text()}`);
-  const data = await res.json();
-  const folders = data.files ?? [];
-  if (!folders.length) throw new Error("No weekly subfolders found in the configured parent folder");
-  return folders[0] as { id: string; name: string; createdTime: string };
+  const folders = ((await res.json()).files ?? []) as Array<{ id: string; name: string }>;
+  const names = folders.map((f) => f.name);
+  const matched = folders.find((f) => folderMatchesWeek(f.name, w));
+  if (matched) return { id: matched.id, name: matched.name, matched: true, candidatesConsidered: names };
+  return { id: "", name: "", matched: false, candidatesConsidered: names };
 }
 
 async function listFolderFiles(token: string, folderId: string) {
@@ -154,25 +245,19 @@ function truncate(s: string, max: number) {
   return s.length <= max ? s : s.slice(0, max) + "\n…[truncated]";
 }
 
-// ─── Planner: upcoming week (Mon → Sun, UK) ───────────────────────────────
-function upcomingWeekRangeUK(): { startUtc: string; endUtc: string; mondayLabel: string; sundayLabel: string } {
-  const fmt = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
-  });
-  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map((p) => [p.type, p.value]));
-  const ukToday = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day));
-  const dow = ukToday.getUTCDay(); // 0=Sun..6=Sat
-  // Upcoming Monday: today if Mon, else next Mon.
-  const daysToMon = dow === 1 ? 0 : (dow === 0 ? 1 : 8 - dow);
-  const mon = new Date(ukToday); mon.setUTCDate(ukToday.getUTCDate() + daysToMon);
-  const sunExclusive = new Date(mon); sunExclusive.setUTCDate(mon.getUTCDate() + 7);
+// ─── Planner: upcoming week (derived from ReportWeek for consistency) ─────
+interface PlannerRange {
+  startUtc: string; endUtc: string; mondayLabel: string; sundayLabel: string;
+}
+
+function plannerRangeFromReportWeek(w: ReportWeek): PlannerRange {
   const fmtLabel = (d: Date) =>
     d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
   return {
-    startUtc: mon.toISOString(),
-    endUtc: sunExclusive.toISOString(),
-    mondayLabel: fmtLabel(mon),
-    sundayLabel: fmtLabel(new Date(sunExclusive.getTime() - 86400000)),
+    startUtc: w.upcomingMonday.toISOString(),
+    endUtc: w.upcomingSundayExcl.toISOString(),
+    mondayLabel: fmtLabel(w.upcomingMonday),
+    sundayLabel: fmtLabel(new Date(w.upcomingSundayExcl.getTime() - 86400000)),
   };
 }
 
@@ -183,8 +268,9 @@ interface PlannerEvent {
 
 async function fetchUpcomingPlannerEvents(
   admin: any,
-): Promise<{ events: PlannerEvent[]; range: ReturnType<typeof upcomingWeekRangeUK> }> {
-  const range = upcomingWeekRangeUK();
+  reportWeek: ReportWeek,
+): Promise<{ events: PlannerEvent[]; range: PlannerRange }> {
+  const range = plannerRangeFromReportWeek(reportWeek);
   const { data, error } = await admin
     .from("key_events")
     .select("title, start_at, category, raw_description, status, deleted_in_google")
@@ -227,9 +313,10 @@ async function fetchUpcomingPlannerEvents(
   return { events, range };
 }
 
+
 function formatPlannerBlock(
   events: PlannerEvent[],
-  range: ReturnType<typeof upcomingWeekRangeUK>,
+  range: PlannerRange,
 ): string {
   if (!events.length) {
     return `Upcoming This Week (${range.mondayLabel} – ${range.sundayLabel}):\n- No planner events scheduled.`;
@@ -255,9 +342,21 @@ async function buildSummaryMarkdown(
   folderName: string,
   fileBlocks: string,
   plannerBlock: string,
+  reportWeek: ReportWeek,
 ): Promise<string> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
+
+  const dateGrounding =
+    `\n\n=== AUTHORITATIVE DATE CONTEXT (USE EXACTLY — DO NOT ALTER) ===\n` +
+    `TODAY (UK): ${reportWeek.todayLabel}\n` +
+    `REPORT WEEK (the week being summarised): ${reportWeek.label} ${reportWeek.year}\n` +
+    `UPCOMING WEEK (forward-looking section): ${reportWeek.upcomingLabel}\n` +
+    `CURRENT YEAR: ${reportWeek.year}\n` +
+    `RULES:\n` +
+    `- The H1 MUST read exactly: "Weekly Executive Summary — ${reportWeek.label} ${reportWeek.year}".\n` +
+    `- Do NOT invent or shift years. The only year that may appear anywhere is ${reportWeek.year}.\n` +
+    `- Do NOT relabel the report week. The phrase "week of" must use ${reportWeek.label} ${reportWeek.year}.\n`;
 
   const system =
     "You are Duncan, Kabuni's executive intelligence engine. " +
@@ -269,13 +368,17 @@ async function buildSummaryMarkdown(
     "For the 'Upcoming This Week' section, use ONLY the planner schedule provided below — " +
     "group bullets by weekday in chronological order, keep it concise, and do not invent events. " +
     "Keep 'Upcoming This Week' to a short, scannable list; it must NOT dominate the report. " +
-    "Be concise, factual, decision-oriented. Never invent figures.";
+    "Be concise, factual, decision-oriented. Never invent figures. " +
+    "ALWAYS honour the AUTHORITATIVE DATE CONTEXT exactly — never substitute a different year or week." +
+    dateGrounding;
 
   const user =
-    `Folder: ${folderName}\n\n` +
+    `Folder: ${folderName}\n` +
+    `Report week: ${reportWeek.label} ${reportWeek.year}\n` +
+    `Today: ${reportWeek.todayLabel}\n\n` +
     `=== PLANNER SCHEDULE (upcoming week, UK time) ===\n${plannerBlock}\n\n` +
     `=== PREVIOUS WEEK SOURCE REPORTS ===\n` +
-    `Source reports from the last week are below. Synthesise across them.\n\n` +
+    `Source reports from ${reportWeek.label} ${reportWeek.year} are below. Synthesise across them.\n\n` +
     fileBlocks;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -298,6 +401,7 @@ async function buildSummaryMarkdown(
   const data = await res.json();
   return data.choices?.[0]?.message?.content ?? "";
 }
+
 
 // ─── Gmail send ───────────────────────────────────────────────────────────
 async function getGmailSenderToken(admin: any): Promise<string | null> {
@@ -448,14 +552,22 @@ function mdToHtml(md: string): string {
 }
 
 function emailHtml(opts: {
-  title: string; weekRange: string; folderName: string;
-  fileCount: number; summaryMd: string;
+  title: string;
+  weekRange: string;
+  folderName: string;
+  folderMatched: boolean;
+  fileCount: number;
+  summaryMd: string;
 }): string {
+  const folderProvenance = opts.folderName
+    ? `Source folder: <em>${escapeHtml(opts.folderName)}</em>${opts.folderMatched ? "" : ' <span style="color:#b45309">(name did not match report week)</span>'}`
+    : `<span style="color:#b45309">No source folder matched ${escapeHtml(opts.weekRange)} — fallback summary.</span>`;
   return `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#1a1a1a;background:#ffffff">
   <div style="border-bottom:2px solid #0f172a;padding-bottom:14px;margin-bottom:20px">
     <h1 style="margin:0 0 4px;color:#0f172a;font-size:24px">${escapeHtml(opts.title)}</h1>
-    <div style="color:#64748b;font-size:13px">${escapeHtml(opts.weekRange)} &nbsp;·&nbsp; synthesised from <strong>${opts.fileCount}</strong> source report${opts.fileCount === 1 ? "" : "s"} in <em>${escapeHtml(opts.folderName)}</em></div>
+    <div style="color:#64748b;font-size:13px">${escapeHtml(opts.weekRange)} &nbsp;·&nbsp; synthesised from <strong>${opts.fileCount}</strong> source report${opts.fileCount === 1 ? "" : "s"}</div>
+    <div style="color:#94a3b8;font-size:12px;margin-top:4px">${folderProvenance}</div>
   </div>
   ${mdToHtml(opts.summaryMd)}
   <div style="margin-top:32px;padding-top:14px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px;text-align:center">
@@ -464,26 +576,28 @@ function emailHtml(opts: {
 </div>`;
 }
 
-// ─── Week range "11th May - 15th May" (last Mon–Fri in UK time) ───────────
-function ordinal(n: number) {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+// ─── Pre-send validator ───────────────────────────────────────────────────
+function validateOutput(opts: {
+  subject: string;
+  summaryMd: string;
+  reportWeek: ReportWeek;
+}): { ok: true } | { ok: false; reason: string } {
+  const { subject, summaryMd, reportWeek } = opts;
+  if (!subject.includes(reportWeek.label)) {
+    return { ok: false, reason: `Subject missing report-week label "${reportWeek.label}"` };
+  }
+  // Find any 4-digit year in the body and assert it equals reportWeek.year.
+  const years = Array.from(summaryMd.matchAll(/\b(19|20)\d{2}\b/g)).map((m) => m[0]);
+  const wrongYears = years.filter((y) => y !== String(reportWeek.year));
+  if (wrongYears.length) {
+    return {
+      ok: false,
+      reason: `GPT produced wrong year(s): ${[...new Set(wrongYears)].join(", ")} (expected ${reportWeek.year})`,
+    };
+  }
+  return { ok: true };
 }
-function lastWeekRangeLabel(): string {
-  const fmt = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
-  });
-  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map((p) => [p.type, p.value]));
-  const ukToday = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day));
-  const dow = ukToday.getUTCDay();
-  const daysBackToMon = dow === 0 ? 6 : dow - 1;
-  const thisMon = new Date(ukToday); thisMon.setUTCDate(ukToday.getUTCDate() - daysBackToMon);
-  const lastMon = new Date(thisMon); lastMon.setUTCDate(thisMon.getUTCDate() - 7);
-  const lastFri = new Date(lastMon); lastFri.setUTCDate(lastMon.getUTCDate() + 4);
-  const monthName = (d: Date) => d.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
-  return `${ordinal(lastMon.getUTCDate())} ${monthName(lastMon)} - ${ordinal(lastFri.getUTCDate())} ${monthName(lastFri)}`;
-}
+
 
 // ─── Auth: admin or cron ──────────────────────────────────────────────────
 async function authorize(req: Request, admin: any): Promise<
@@ -593,18 +707,31 @@ Deno.serve(async (req) => {
   };
 
   try {
+    // 0. Single source of truth for all dates this run.
+    const reportWeek = buildReportWeek();
+    const weekRange = reportWeek.label;
+
     // 1. Drive token
     const driveToken = await getDriveToken(admin);
 
-    // 2. Latest weekly folder
-    const folder = await findLatestWeeklyFolder(driveToken);
+    // 2. Folder for the report week (name-matched, not "newest wins").
+    const folder = await findFolderForWeek(driveToken, reportWeek);
+    if (!folder.matched && !allowEmptyFolder) {
+      throw new Error(
+        `No Drive folder matched the report week "${weekRange} ${reportWeek.year}". ` +
+        `Candidates considered: ${folder.candidatesConsidered.slice(0, 10).join(", ") || "(none)"}`
+      );
+    }
     await admin.from("exec_summary_runs").update({
-      folder_id: folder.id, folder_name: folder.name,
+      folder_id: folder.id || null,
+      folder_name: folder.name || null,
     }).eq("id", runId);
 
-    // 3. List + extract
-    const files = await listFolderFiles(driveToken, folder.id);
-    if (!files.length && !allowEmptyFolder) throw new Error(`No Google Docs or DOCX files in folder "${folder.name}"`);
+    // 3. List + extract (skip if no folder matched — fallback path).
+    const files = folder.matched ? await listFolderFiles(driveToken, folder.id) : [];
+    if (folder.matched && !files.length && !allowEmptyFolder) {
+      throw new Error(`No Google Docs or DOCX files in folder "${folder.name}"`);
+    }
 
     const processed: Array<{ id: string; name: string; chars: number; type: string }> = [];
     const failed: Array<{ id: string; name: string; error: string }> = [];
@@ -633,26 +760,28 @@ Deno.serve(async (req) => {
       throw new Error("All file extractions failed — nothing to summarise");
     }
     if (emptyFallback) {
+      const folderNote = folder.matched
+        ? `The Drive folder "${folder.name}" matched the report week but contained no readable Google Docs or DOCX files.`
+        : `No Drive folder matched the report week "${weekRange} ${reportWeek.year}".`;
       blocks.push(
         `\n\n=== NO WEEKLY SOURCE REPORTS AVAILABLE ===\n` +
-        `The Drive folder "${folder.name}" contained no readable Google Docs or DOCX files for the previous week. ` +
-        `Generate a brief fallback Executive Snapshot that explicitly notes "No weekly source reports were available for this period", ` +
+        `${folderNote} ` +
+        `Generate a brief fallback Executive Snapshot that explicitly notes "No weekly source reports were available for ${weekRange} ${reportWeek.year}", ` +
         `omit RYG/Wins/Risks tables that would require source data (or render them with a single 'No data' row), ` +
         `and still produce the full 'Upcoming This Week' section from the planner schedule below.`
       );
     }
 
-    // Fetch upcoming planner events (Mon → Sun, UK) before hashing/synthesis.
-    const { events: plannerEvents, range: plannerRange } = await fetchUpcomingPlannerEvents(admin);
+    // Fetch upcoming planner events (derived from reportWeek for consistency).
+    const { events: plannerEvents, range: plannerRange } = await fetchUpcomingPlannerEvents(admin, reportWeek);
     const plannerBlock = formatPlannerBlock(plannerEvents, plannerRange);
 
-    // Compute deterministic content hash from processed files + planner schedule.
-    // Planner data participates in the hash so that planner-only changes still
-    // regenerate the email even when Drive docs are unchanged.
+    // Deterministic content hash from processed files + planner schedule + report-week.
     const fingerprintInput = files
       .map((f: any) => `${f.id}|${f.modifiedTime ?? ""}|${f.size ?? ""}`)
       .sort()
       .join("\n")
+      + `\n#week=${reportWeek.isoLabel}`
       + `\n#count=${processed.length}\n#chars=${processed.reduce((a, p) => a + p.chars, 0)}`
       + `\n#planner_range=${plannerRange.startUtc}..${plannerRange.endUtc}`
       + `\n#planner=\n${plannerHashInput(plannerEvents)}`;
@@ -667,9 +796,8 @@ Deno.serve(async (req) => {
       content_hash: contentHash,
     }).eq("id", runId);
 
-    // Duplicate-content protection: skip if an earlier successful run for the same folder
-    // produced the same hash. `skip_dedup: true` (or `force: true`) bypasses this gate.
-    if (!skipDedup && !force) {
+    // Duplicate-content protection.
+    if (!skipDedup && !force && folder.matched) {
       const { data: prior } = await admin
         .from("exec_summary_runs")
         .select("id,started_at,email_message_id")
@@ -697,27 +825,50 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. GPT-4o summary
-    const summaryMd = await buildSummaryMarkdown(folder.name, blocks.join("\n"), plannerBlock);
+    // 4. GPT-4o summary (with authoritative date grounding).
+    const summaryMd = await buildSummaryMarkdown(
+      folder.name || `(no folder matched ${weekRange} ${reportWeek.year})`,
+      blocks.join("\n"),
+      plannerBlock,
+      reportWeek,
+    );
     if (!summaryMd) throw new Error("OpenAI returned empty summary");
 
-    const weekRange = lastWeekRangeLabel();
     const title = "Weekly Executive Summary";
-    // ASCII-only subject — uses " | " and "-" (no em dashes) so Gmail/Outlook
-    // render it cleanly without MIME encoded-word wrapping.
-    const subject = `Weekly Executive Summary | ${weekRange}`;
+    const subject = `Weekly Executive Summary | ${weekRange} ${reportWeek.year}`;
+
+    // Pre-send validator — block any run with subject/body date drift.
+    const validation = validateOutput({ subject, summaryMd, reportWeek });
+    if (!validation.ok) {
+      await admin.from("exec_summary_runs").update({
+        status: "failed_validation",
+        finished_at: new Date().toISOString(),
+        error: validation.reason,
+        error_details: { subject, report_week: reportWeek.label, year: reportWeek.year },
+      }).eq("id", runId);
+      return json({
+        error: `Validation failed: ${validation.reason}`,
+        run_id: runId,
+        subject,
+        report_week: `${reportWeek.label} ${reportWeek.year}`,
+      }, 500);
+    }
 
     await admin.from("exec_summary_runs").update({
       summary_chars: summaryMd.length,
     }).eq("id", runId);
 
-    // 5. Email — full summary embedded in HTML body (no attachments, no link)
+    // 5. Email
     const gmailToken = await getGmailSenderToken(admin);
     if (!gmailToken) throw new Error("Gmail sender token (duncan@kabuni.com) unavailable");
 
     const html = emailHtml({
-      title, weekRange, folderName: folder.name,
-      fileCount: processed.length, summaryMd,
+      title,
+      weekRange: `${weekRange} ${reportWeek.year}`,
+      folderName: folder.name,
+      folderMatched: folder.matched,
+      fileCount: processed.length,
+      summaryMd,
     });
     const messageId = await sendEmail(gmailToken, recipientHeader, subject, html);
 
@@ -730,15 +881,17 @@ Deno.serve(async (req) => {
     return json({
       success: true,
       run_id: runId,
-      folder: folder.name,
+      folder: folder.name || null,
+      folder_matched: folder.matched,
       files_processed: processed.length,
       failed_files: failed.length,
       recipients: effectiveRecipients,
       content_hash: contentHash,
       subject,
-      week_range: weekRange,
+      week_range: `${weekRange} ${reportWeek.year}`,
     });
   } catch (e) {
     return fail(e);
   }
 });
+

@@ -258,9 +258,20 @@ async function sendGmailReply(
   }
 }
 
-async function aiMatch(emailText: string, candidates: any[]): Promise<{
+interface AttendeeExtract {
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
+  organisation_type: string | null;
+  organisation_name: string | null;
+  location: string | null;
+}
+
+interface AiMatchResult {
   event_id: string | null;
   status: string;
+  status_explicit?: boolean;
   confidence: number;
   reason: string;
   first_name: string | null;
@@ -271,35 +282,55 @@ async function aiMatch(emailText: string, candidates: any[]): Promise<{
   organisation_name: string | null;
   location: string | null;
   missing_fields: string[];
-} | null> {
+  attendees?: AttendeeExtract[];
+}
+
+async function aiMatch(emailText: string, candidates: any[]): Promise<AiMatchResult | null> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) return null;
-  const sys = `You decide whether an inbound email is a clear RSVP for one of the listed events, and extract attendee details. Events can be anywhere in the world — do NOT assume any specific country. Return STRICT JSON:
+  const sys = `You decide whether an inbound email is a clear RSVP for one of the listed events, and extract attendee details for EVERY attendee mentioned (the sender may RSVP for themselves AND additional guests). Events can be anywhere in the world — do NOT assume any specific country. Return STRICT JSON:
 {
   "event_id": "<uuid of the event the sender is RSVPing to, or null>",
   "status": "yes|no|maybe",
+  "status_explicit": true if the email contains explicit yes/no/maybe intent words, false if defaulted,
   "confidence": 0-1,
   "reason": "short",
-  "first_name": "<string or null>",
-  "last_name": "<string or null>",
-  "phone": "<full international format e.g. +447700900000 or null>",
-  "email": "<best email for the attendee or null>",
+  "first_name": "<primary attendee first name or null>",
+  "last_name": "<primary attendee last name or null>",
+  "phone": "<primary attendee phone, full international e.g. +447700900000 or null>",
+  "email": "<best email for the primary attendee or null>",
   "organisation_type": "school|media|company|other or null",
   "organisation_name": "<string or null>",
-  "location": "<city, region or country the attendee is travelling from, or null>",
-  "missing_fields": ["any of: first_name,last_name,phone,email,organisation_type,organisation_name,location"]
+  "location": "<city/region/country the primary attendee is travelling from, or null>",
+  "missing_fields": ["any of: first_name,last_name,phone,email,organisation_type,organisation_name,location"],
+  "attendees": [
+    { "first_name":"...", "last_name":"...", "phone":"...", "email":"...",
+      "organisation_type":"...", "organisation_name":"...", "location":"..." }
+    // ONE entry per attendee. attendees[0] MUST be the primary (sender) and must match the top-level primary fields.
+  ]
 }
 
 STRICT RULES — set event_id to null and confidence < 0.5 unless ALL of these are true:
-1. The email is an inbound RSVP request or response addressed to the recipient (duncan@kabuni.com). Auto-generated calendar accept/decline notifications from Google Calendar / Outlook are NOT RSVPs — return null for those.
-2. The sender is RSVPing for THEMSELVES with explicit attendance intent (yes/no/maybe — e.g. "I'd like to attend", "count me in", "I won't make it", "tentative", "RSVP yes").
-3. The email clearly identifies ONE specific event from the candidate list — by event name, by date (e.g. "7 June", "June 7th"), or by city/location. If ambiguous, return null.
+1. The email is an inbound RSVP request or response addressed to duncan@kabuni.com. Auto-generated calendar accept/decline notifications from Google Calendar / Outlook are NOT RSVPs — return null for those.
+2. The sender (or someone they explicitly bring) is RSVPing with attendance intent (yes/no/maybe — "I'd like to attend", "count me in", "Adit and I will attend", "I won't make it", "tentative").
+3. The email clearly identifies ONE specific event from the candidate list — by name, date, or city. If ambiguous, return null.
 
 Discussion, planning, logistics, internal calendar invites, or generic greetings are NOT RSVPs — return null.
 
-Match events by name/date/location ONLY. Never reject an event because of its country. Always normalise phone to +<country code><number> with no spaces. Map school/college/university => school; news/tv/journalist/press => media; brand/corp/firm/startup => company.
+MULTI-ATTENDEE PARSING:
+- Detect ALL named attendees. Examples:
+  • "Adit Bhargava and Palash Soundarkar will attend" → 2 attendees
+  • "Samaresh Shah - Mobile 9836697979 and Swayam Shah - Mobile 9354138986" → 2 attendees, each with their own phone
+  • "Myself, John Doe, Sarah Khan" → 3 attendees (sender + 2 guests)
+  • "Adit - 9999999999, Palash" → 2 attendees, only Adit has a phone
+- Associate phone/email/org with the correct named attendee using proximity and dash/hyphen/colon separators. NEVER copy one attendee's phone onto another.
+- IGNORE filler/group words as attendees: team, everyone, guests, family, group, friends, colleagues, kids. Do NOT invent attendees from these.
+- Do NOT hallucinate or fabricate phone numbers, emails, or names. If a field is not literally present for that attendee, set it to null.
+- Deduplicate attendees referring to the same person (same normalised full name).
 
-LITERAL EXTRACTION ONLY: Set first_name, last_name, phone, email, organisation_type, organisation_name, and location to null UNLESS the attendee literally states the value in this email (signature blocks count). NEVER infer or guess any of these values from the event venue, the subject line, the sender's email domain, the event location, or general context. If the attendee did not write it, return null for that field — do not fill in plausible defaults. The Mumbai venue, the event city, or where the event is held must NEVER be used to populate "location" (which is where the attendee is travelling FROM).`;
+Match events by name/date/location ONLY. Always normalise phone to +<country code><number> with no spaces. Map school/college/university => school; news/tv/journalist/press => media; brand/corp/firm/startup => company.
+
+LITERAL EXTRACTION ONLY: leave any field null UNLESS the attendee literally states the value in this email (signature blocks count). NEVER infer from event venue, subject, sender domain, or context. The event city must NEVER populate "location" (which is where the attendee is travelling FROM).`;
   const user = `Email:\n${emailText.slice(0, 4000)}\n\nCandidate events (JSON, with ISO start dates):\n${JSON.stringify(candidates)}`;
   try {
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -316,6 +347,109 @@ LITERAL EXTRACTION ONLY: Set first_name, last_name, phone, email, organisation_t
     const j = await r.json();
     return JSON.parse(j.choices[0].message.content);
   } catch (e) { console.error("ai parse error", e); return null; }
+}
+
+// ─── Multi-attendee helpers ────────────────────────────────────────────────
+const FILLER_NAMES = new Set([
+  "team", "everyone", "guests", "guest", "family", "group", "friends",
+  "colleagues", "kids", "all", "us", "we",
+]);
+const ATTENDEES_MARKER = "\n\n--ATTENDEES_JSON--\n";
+
+function isEmptyVal(v: any): boolean {
+  return v === null || v === undefined || (typeof v === "string" && v.trim() === "");
+}
+
+function normName(first?: string | null, last?: string | null): string {
+  return `${(first || "").trim()} ${(last || "").trim()}`.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function isFillerAttendee(a: AttendeeExtract): boolean {
+  const n = normName(a.first_name, a.last_name);
+  if (!n) return true;
+  if (FILLER_NAMES.has(n)) return true;
+  const parts = n.split(" ");
+  if (parts.length === 1 && FILLER_NAMES.has(parts[0])) return true;
+  return false;
+}
+
+function cleanAttendeeList(list: AttendeeExtract[] | undefined | null): AttendeeExtract[] {
+  if (!Array.isArray(list)) return [];
+  const seen = new Map<string, AttendeeExtract>();
+  for (const raw of list) {
+    if (!raw || typeof raw !== "object") continue;
+    const a: AttendeeExtract = {
+      first_name: raw.first_name || null,
+      last_name: raw.last_name || null,
+      phone: raw.phone || null,
+      email: raw.email ? String(raw.email).toLowerCase() : null,
+      organisation_type: raw.organisation_type || null,
+      organisation_name: raw.organisation_name || null,
+      location: raw.location || null,
+    };
+    if (isFillerAttendee(a)) continue;
+    const key = normName(a.first_name, a.last_name) || (a.email || "").toLowerCase();
+    if (!key) continue;
+    if (seen.has(key)) {
+      const ex = seen.get(key)!;
+      for (const k of Object.keys(a) as (keyof AttendeeExtract)[]) {
+        if (isEmptyVal(ex[k]) && !isEmptyVal(a[k])) (ex as any)[k] = a[k];
+      }
+    } else {
+      seen.set(key, a);
+    }
+  }
+  return Array.from(seen.values());
+}
+
+function attendeeMissing(a: AttendeeExtract): string[] {
+  const m: string[] = [];
+  if (isEmptyVal(a.first_name)) m.push("first name");
+  if (isEmptyVal(a.last_name)) m.push("last name");
+  if (isEmptyVal(a.phone)) m.push("mobile (with country code)");
+  if (isEmptyVal(a.organisation_name)) m.push("organisation");
+  return m;
+}
+
+function displayAttendee(a: AttendeeExtract): string {
+  const n = `${a.first_name || ""} ${a.last_name || ""}`.trim();
+  return n || a.email || "(unnamed)";
+}
+
+function parseAttendeesSidecar(notes: string | null | undefined): { subject: string; attendees: AttendeeExtract[] } {
+  const s = notes || "";
+  const idx = s.indexOf(ATTENDEES_MARKER);
+  if (idx === -1) return { subject: s, attendees: [] };
+  const subject = s.slice(0, idx);
+  const jsonPart = s.slice(idx + ATTENDEES_MARKER.length).trim();
+  try {
+    const parsed = JSON.parse(jsonPart);
+    if (Array.isArray(parsed)) return { subject, attendees: cleanAttendeeList(parsed) };
+  } catch { /* ignore */ }
+  return { subject, attendees: [] };
+}
+
+function serialiseNotes(subject: string, attendees: AttendeeExtract[]): string {
+  if (!attendees.length) return subject || "";
+  return `${subject || ""}${ATTENDEES_MARKER}${JSON.stringify(attendees)}`;
+}
+
+function mergeAttendeeLists(existing: AttendeeExtract[], incoming: AttendeeExtract[]): AttendeeExtract[] {
+  const out = existing.map((a) => ({ ...a }));
+  for (const inc of incoming) {
+    const key = normName(inc.first_name, inc.last_name);
+    if (!key) continue;
+    const ix = out.findIndex((a) => normName(a.first_name, a.last_name) === key);
+    if (ix === -1) {
+      out.push({ ...inc });
+    } else {
+      const cur = out[ix];
+      for (const k of Object.keys(inc) as (keyof AttendeeExtract)[]) {
+        if (isEmptyVal(cur[k]) && !isEmptyVal(inc[k])) (cur as any)[k] = inc[k];
+      }
+    }
+  }
+  return out;
 }
 
 Deno.serve(async (req) => {

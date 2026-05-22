@@ -274,7 +274,7 @@ const Integrations = () => {
     }
   };
 
-  const checkBasecampConnection = () => {};
+  
 
   const checkGmailConnection = async () => {
     try {

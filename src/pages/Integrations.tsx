@@ -405,7 +405,6 @@ const Integrations = () => {
       "slack": slackConnection.isConnected,
       "google-calendar": isCalendarConnected,
       "azure-blob": isAzureBlobConnected,
-      "basecamp": isBasecampConnected,
       "azure-devops": isAzureDevOpsConnected,
       "google-drive": isGoogleDriveConnected,
     };

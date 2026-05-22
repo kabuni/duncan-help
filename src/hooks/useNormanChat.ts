@@ -352,8 +352,9 @@ export function useNormanChat() {
         }
 
         const userContent = buildUserContent(input, safeAttachments);
+        const historyWindow = getHistoryWindowForConversation(input, messages);
         const apiMessages = [
-          ...messages.slice(-HISTORY_WINDOW).map((m) => ({ role: m.role, content: m.content })),
+          ...messages.slice(-historyWindow).map((m) => ({ role: m.role, content: m.content })),
           { role: "user", content: userContent },
         ];
 

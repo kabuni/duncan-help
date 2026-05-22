@@ -274,15 +274,7 @@ const Integrations = () => {
     }
   };
 
-  const checkBasecampConnection = async () => {
-    try {
-      const { supabase } = await import("@/integrations/supabase/client");
-      const { data } = await supabase.from("basecamp_tokens").select("id").limit(1);
-      setIsBasecampConnected(data && data.length > 0);
-    } catch {
-      setIsBasecampConnected(false);
-    }
-  };
+  const checkBasecampConnection = () => {};
 
   const checkGmailConnection = async () => {
     try {

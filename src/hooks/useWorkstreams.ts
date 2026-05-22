@@ -495,10 +495,21 @@ export function useUpdateCard() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<WorkstreamCard> & { id: string }) => {
+    mutationFn: async ({ id, ...updates }: Partial<WorkstreamCard> & { id: string; status_source?: "manual" | "automatic" }) => {
       if (!user) throw new Error("Not authenticated");
       // Remove non-DB fields
       const { assignees, tasks_total, tasks_completed, owner_name, ...dbUpdates } = updates as any;
+
+      // Any user-driven status change is treated as a manual override so the
+      // overdue/auto-escalation cron will not overwrite it.
+      // Callers can explicitly pass status_source: "automatic" to clear the override.
+      if (updates.status && dbUpdates.status_source === undefined) {
+        dbUpdates.status_source = "manual";
+        dbUpdates.manual_status_set_at = new Date().toISOString();
+      } else if (dbUpdates.status_source === "automatic") {
+        dbUpdates.manual_status_set_at = null;
+      }
+
       const { error } = await supabase
         .from("workstream_cards")
         .update({ ...dbUpdates, updated_at: new Date().toISOString() })
@@ -507,7 +518,8 @@ export function useUpdateCard() {
 
       if (updates.status) {
         await supabase.from("workstream_activity").insert({
-          card_id: id, user_id: user.id, action: "status_changed", details: { new_status: updates.status },
+          card_id: id, user_id: user.id, action: "status_changed",
+          details: { new_status: updates.status, status_source: dbUpdates.status_source || "manual" },
         });
       }
     },

@@ -3553,10 +3553,12 @@ export type Database = {
           description: string
           due_date: string | null
           id: string
+          manual_status_set_at: string | null
           owner_id: string | null
           priority: string
           project_tag: string | null
           status: string
+          status_source: string
           title: string
           updated_at: string
         }
@@ -3567,10 +3569,12 @@ export type Database = {
           description?: string
           due_date?: string | null
           id?: string
+          manual_status_set_at?: string | null
           owner_id?: string | null
           priority?: string
           project_tag?: string | null
           status?: string
+          status_source?: string
           title: string
           updated_at?: string
         }
@@ -3581,10 +3585,12 @@ export type Database = {
           description?: string
           due_date?: string | null
           id?: string
+          manual_status_set_at?: string | null
           owner_id?: string | null
           priority?: string
           project_tag?: string | null
           status?: string
+          status_source?: string
           title?: string
           updated_at?: string
         }

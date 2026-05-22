@@ -2096,7 +2096,13 @@ async function executeWorkstreamTool(
       const updateData: any = {};
       if (updates.title) updateData.title = updates.title;
       if (updates.description) updateData.description = updates.description;
-      if (updates.status) updateData.status = updates.status;
+      if (updates.status) {
+        updateData.status = updates.status;
+        // User-driven status changes via Duncan count as a manual override
+        // so the overdue cron will not overwrite them.
+        updateData.status_source = "manual";
+        updateData.manual_status_set_at = new Date().toISOString();
+      }
       if (updates.project_tag) updateData.project_tag = updates.project_tag;
       if (updates.due_date) updateData.due_date = updates.due_date;
 

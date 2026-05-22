@@ -1920,6 +1920,120 @@ async function executeWorkstreamTool(
       return { members: data || [], count: (data || []).length };
     }
 
+    case "list_workstream_cards": {
+      const limit = Math.min(Math.max(args.limit ?? 30, 1), 100);
+      const includeTasks = args.include_tasks !== false;
+      const nowIso = new Date().toISOString();
+
+      // Optional pre-filter to cards assigned to current user
+      let restrictCardIds: string[] | null = null;
+      if (args.assignee === "me") {
+        const { data: myAssign } = await supabaseAdmin
+          .from("workstream_card_assignees")
+          .select("card_id")
+          .eq("user_id", userId);
+        restrictCardIds = (myAssign || []).map((r: any) => r.card_id);
+        if (restrictCardIds.length === 0) {
+          return { count: 0, cards: [], filter: { ...args, applied: "assignee=me (none)" } };
+        }
+      }
+
+      let cardsQuery = supabaseAdmin
+        .from("workstream_cards")
+        .select("id, title, status, project_tag, due_date, priority, created_at")
+        .is("archived_at", null)
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .limit(limit);
+
+      if (args.status === "open") {
+        cardsQuery = cardsQuery.in("status", ["red", "amber", "green"]);
+      } else if (args.status) {
+        cardsQuery = cardsQuery.eq("status", args.status);
+      } else {
+        cardsQuery = cardsQuery.in("status", ["red", "amber", "green"]);
+      }
+      if (args.project_tag) cardsQuery = cardsQuery.eq("project_tag", args.project_tag);
+      if (restrictCardIds) cardsQuery = cardsQuery.in("id", restrictCardIds);
+      if (args.overdue_only) cardsQuery = cardsQuery.lt("due_date", nowIso);
+
+      const { data: cards, error } = await cardsQuery;
+      if (error) throw new Error(`Failed to list workstream cards: ${error.message}`);
+      const cardList = cards || [];
+      if (cardList.length === 0) {
+        return { count: 0, cards: [], filter: args };
+      }
+
+      const cardIds = cardList.map((c: any) => c.id);
+
+      // Fetch assignees + open tasks in parallel
+      const [assigneesRes, tasksRes] = await Promise.all([
+        supabaseAdmin
+          .from("workstream_card_assignees")
+          .select("card_id, user_id")
+          .in("card_id", cardIds),
+        includeTasks
+          ? supabaseAdmin
+              .from("workstream_tasks")
+              .select("id, card_id, title, due_date, completed")
+              .in("card_id", cardIds)
+              .eq("completed", false)
+              .order("due_date", { ascending: true, nullsFirst: false })
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+
+      const assigneeRows = (assigneesRes as any).data || [];
+      const tasks = (tasksRes as any).data || [];
+
+      // Resolve assignee names
+      const userIds = Array.from(new Set(assigneeRows.map((a: any) => a.user_id)));
+      const nameById: Record<string, string> = {};
+      if (userIds.length > 0) {
+        const { data: profs } = await supabaseAdmin
+          .from("profiles")
+          .select("user_id, display_name")
+          .in("user_id", userIds);
+        for (const p of profs || []) nameById[p.user_id] = p.display_name || "Unknown";
+      }
+
+      const assigneesByCard: Record<string, string[]> = {};
+      for (const a of assigneeRows) {
+        (assigneesByCard[a.card_id] ||= []).push(nameById[a.user_id] || "Unknown");
+      }
+
+      const tasksByCard: Record<string, any[]> = {};
+      for (const t of tasks) {
+        (tasksByCard[t.card_id] ||= []).push({
+          title: t.title,
+          due_date: t.due_date,
+          overdue: !!(t.due_date && t.due_date < nowIso),
+        });
+      }
+
+      let result = cardList.map((c: any) => ({
+        id: c.id,
+        title: c.title,
+        status: c.status,
+        project_tag: c.project_tag,
+        due_date: c.due_date,
+        priority: c.priority,
+        overdue: !!(c.due_date && c.due_date < nowIso),
+        assignees: assigneesByCard[c.id] || [],
+        open_tasks: includeTasks ? (tasksByCard[c.id] || []) : undefined,
+        open_task_count: includeTasks ? (tasksByCard[c.id] || []).length : undefined,
+      }));
+
+      if (args.overdue_only) {
+        // Already filtered card-level; also keep cards with overdue tasks even if card has no due date
+        const overdueTaskCardIds = new Set(Object.entries(tasksByCard)
+          .filter(([_, ts]) => (ts as any[]).some((t) => t.overdue))
+          .map(([id]) => id));
+        result = result.filter((r: any) => r.overdue || overdueTaskCardIds.has(r.id));
+      }
+
+      return { count: result.length, cards: result, filter: args };
+    }
+
+
     case "create_workstream_card": {
       // Deduplication: check if a card with the same title + project_tag already exists for this creator
       const dedupQuery = supabaseAdmin

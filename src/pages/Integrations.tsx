@@ -805,20 +805,6 @@ const IntegrationDetail = ({
     try {
       if (isGoogleCalendar) {
         await initiateCalendarOAuth();
-      } else if (isBasecamp) {
-        setBasecampLoading(true);
-        const { supabase } = await import("@/integrations/supabase/client");
-        const data = await withFastApi<{ url?: string }>(
-          async () => {
-            const { data, error } = await supabase.functions.invoke("basecamp-auth");
-            if (error) throw error;
-            return data;
-          },
-          () => fastApi("GET", "/basecamp/auth"),
-        );
-        if (data?.url) window.location.href = data.url;
-        else throw new Error("No auth URL returned");
-        setBasecampLoading(false);
       } else if (isGmail) {
         setGmailLoading(true);
         const { supabase } = await import("@/integrations/supabase/client");

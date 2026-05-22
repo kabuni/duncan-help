@@ -709,13 +709,20 @@ Deno.serve(async (req) => {
           outcome: isFollowUp ? "follow_up" : "new_rsvp",
         });
 
-        // Re-read the merged row so missing[] reflects the FINAL state.
+        // Re-read merged row + parse attendees sidecar so missing[] reflects FINAL state.
         const { data: rsvpRow } = await admin
           .from("event_rsvps")
-          .select("first_name,last_name,phone,email,organisation_type,organisation_name,state,status")
+          .select("first_name,last_name,phone,email,organisation_type,organisation_name,state,status,notes")
           .eq("id", rsvpId)
           .single();
         const r: any = rsvpRow || {};
+        const finalAttendees = parseAttendeesSidecar(r.notes).attendees;
+        // Fallback: synthesise a single attendee from primary fields if sidecar is empty
+        const attendeesForReply: AttendeeExtract[] = finalAttendees.length ? finalAttendees : [{
+          first_name: r.first_name, last_name: r.last_name, phone: r.phone,
+          email: r.email, organisation_type: r.organisation_type,
+          organisation_name: r.organisation_name, location: r.state,
+        }];
 
         // Mark as read
         await fetch(`${GMAIL_API}/messages/${m.id}/modify`, {
@@ -724,7 +731,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
         }).catch(() => {});
 
-        // Format date in IST. No UK time anywhere.
+        // Format date in IST.
         const fmtDateIST = (iso: string) =>
           new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Kolkata" });
         const fmtTimeIST = (iso: string) =>
@@ -747,20 +754,26 @@ Deno.serve(async (req) => {
           whereValue = whereValue || "Jio Centre, Mumbai";
         }
 
-        // Required fields and what's still missing AFTER merge
-        const missing: string[] = [];
-        if (isEmpty(r.first_name)) missing.push("First name");
-        if (isEmpty(r.last_name)) missing.push("Last name");
-        if (isEmpty(r.phone)) missing.push("Phone (with country code, e.g. +91…)");
-        if (isEmpty(r.email)) missing.push("Email address");
-        if (isEmpty(r.organisation_type)) missing.push("School / Media / Company");
-        if (isEmpty(r.organisation_name)) missing.push("Organisation name");
-        if (isEmpty(r.state)) missing.push("City / region you're travelling from");
+        // ── Per-attendee completeness ──
+        const completeAttendees: AttendeeExtract[] = [];
+        const incompleteAttendees: { a: AttendeeExtract; missing: string[] }[] = [];
+        for (const a of attendeesForReply) {
+          const miss = attendeeMissing(a);
+          if (miss.length === 0) completeAttendees.push(a);
+          else incompleteAttendees.push({ a, missing: miss });
+        }
+        const allComplete = incompleteAttendees.length === 0 && attendeesForReply.length > 0;
+        const isMulti = attendeesForReply.length > 1;
+
+        // Flat missing[] (used by HTML renderer). For multi-attendee, prefix each line with attendee name.
+        const missing: string[] = incompleteAttendees.flatMap(({ a, missing: ms }) =>
+          isMulti ? ms.map((m) => `${displayAttendee(a)} — ${m}`) : ms.map((m) => m.charAt(0).toUpperCase() + m.slice(1))
+        );
 
         const asciiSubject = subjectHdr.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g, "-");
         const replySubject = asciiSubject.toLowerCase().startsWith("re:") ? asciiSubject : `Re: ${asciiSubject}`;
         const firstName = r.first_name || senderName?.split(" ")[0] || "there";
-        const statusUpper = String(r.status || validStatus).toUpperCase();
+        const statusUpper = String(r.status || finalStatus).toUpperCase();
         const orgLabel = r.organisation_type === "school" ? "School" : r.organisation_type === "media" ? "Media" : "Company";
 
         const highlights: { label: string; value: string }[] = [
@@ -769,47 +782,60 @@ Deno.serve(async (req) => {
         ];
         if (whereValue) highlights.push({ label: "Where", value: whereValue });
         highlights.push({ label: "Status", value: statusUpper });
-        if (r.first_name || r.last_name) highlights.push({ label: "Name", value: `${r.first_name || ""} ${r.last_name || ""}`.trim() });
-        if (r.phone) highlights.push({ label: "Phone", value: r.phone });
-        if (r.organisation_name) highlights.push({ label: orgLabel, value: r.organisation_name });
-        if (r.state) highlights.push({ label: "Travelling from", value: r.state });
 
-        const allComplete = missing.length === 0;
+        if (isMulti) {
+          highlights.push({ label: "Attendees", value: String(attendeesForReply.length) });
+          for (const a of attendeesForReply) {
+            const bits: string[] = [];
+            if (a.phone) bits.push(a.phone);
+            if (a.organisation_name) bits.push(a.organisation_name);
+            highlights.push({ label: displayAttendee(a), value: bits.join(" · ") || "—" });
+          }
+        } else {
+          if (r.first_name || r.last_name) highlights.push({ label: "Name", value: `${r.first_name || ""} ${r.last_name || ""}`.trim() });
+          if (r.phone) highlights.push({ label: "Phone", value: r.phone });
+          if (r.organisation_name) highlights.push({ label: orgLabel, value: r.organisation_name });
+          if (r.state) highlights.push({ label: "Travelling from", value: r.state });
+        }
 
-        // Skip sending another completion email if the RSVP was already complete
-        // on a prior reply and we've already sent the confirmation in this thread.
-        const prevMissingCount = existingRsvp ? [
-          existingRsvp.first_name,
-          existingRsvp.last_name,
-          existingRsvp.phone,
-          existingRsvp.email,
-          existingRsvp.organisation_type,
-          existingRsvp.organisation_name,
-          existingRsvp.state,
-        ].filter((v) => isEmpty(v)).length : 7;
-        const wasAlreadyComplete = prevMissingCount === 0;
+        // Skip duplicate completion email
+        const existingNotesAttendees = parseAttendeesSidecar(existingRsvp?.notes).attendees;
+        const wasAlreadyComplete = existingRsvp
+          ? (existingNotesAttendees.length
+              ? existingNotesAttendees.every((a) => attendeeMissing(a).length === 0)
+              : [existingRsvp.first_name, existingRsvp.last_name, existingRsvp.phone, existingRsvp.organisation_name].every((v) => !isEmpty(v)))
+          : false;
         const alreadySentConfirmation = !!existingRsvp?.reply_sent_at;
-        const skipSend = allComplete && wasAlreadyComplete && alreadySentConfirmation;
+        const skipSend = allComplete && wasAlreadyComplete && alreadySentConfirmation
+          && existingNotesAttendees.length === attendeesForReply.length;
 
         if (skipSend) {
           console.log("[process-rsvp-emails] skipping duplicate completion email", { rsvp_id: rsvpId, thread_id: threadId });
           continue;
         }
 
-        const intro = isFollowUp
+        const completeListText = completeAttendees.map((a) => `• ${displayAttendee(a)}`).join("\n");
+        const incompleteListText = incompleteAttendees
+          .map(({ a, missing: ms }) => `• ${displayAttendee(a)} — ${ms.join(", ")}`).join("\n");
+
+        const intro = isMulti
           ? (allComplete
-              ? `Thanks — your RSVP for "${ev.title}" is now complete. Here's what we have on file.`
-              : `Thanks for the update on your RSVP for "${ev.title}". We still need a few more details to complete your registration.`)
-          : (isMumbaiShowcase
+              ? `Thanks — all ${attendeesForReply.length} attendees are fully registered for "${ev.title}".`
+              : `Thanks for the RSVP for "${ev.title}". ${completeAttendees.length ? `${completeAttendees.length} attendee${completeAttendees.length>1?"s are":" is"} fully registered. ` : ""}We still need a few details for the others.`)
+          : (isFollowUp
               ? (allComplete
-                  ? `We've got you down for ${ev.title} at ${whereValue} on ${whenLabel.split(" · ")[0]}. Here's the running order for the day.`
-                  : `Thanks for your RSVP for ${ev.title} at ${whereValue} on ${whenLabel.split(" · ")[0]} — your status is recorded as ${statusUpper}. Here's the running order, and we just need a few more details from you.`)
-              : (allComplete
-                  ? `Your RSVP for "${ev.title}" is fully confirmed. Here's what we have on file.`
-                  : `Thanks for your RSVP for "${ev.title}" — your status is recorded as ${statusUpper}. We just need a few more details to complete your registration.`));
+                  ? `Thanks — your RSVP for "${ev.title}" is now complete. Here's what we have on file.`
+                  : `Thanks for the update on your RSVP for "${ev.title}". We still need a few more details to complete your registration.`)
+              : (isMumbaiShowcase
+                  ? (allComplete
+                      ? `We've got you down for ${ev.title} at ${whereValue} on ${whenLabel.split(" · ")[0]}. Here's the running order for the day.`
+                      : `Thanks for your RSVP for ${ev.title} at ${whereValue} on ${whenLabel.split(" · ")[0]} — your status is recorded as ${statusUpper}. Here's the running order, and we just need a few more details from you.`)
+                  : (allComplete
+                      ? `Your RSVP for "${ev.title}" is fully confirmed. Here's what we have on file.`
+                      : `Thanks for your RSVP for "${ev.title}" — your status is recorded as ${statusUpper}. We just need a few more details to complete your registration.`)));
 
         const greeting = allComplete
-          ? (isFollowUp ? `Thanks, ${firstName} — your RSVP is now complete` : (isMumbaiShowcase ? `You're confirmed for Kabuni Showcase Mumbai, ${firstName} 🎉` : `You're confirmed, ${firstName} 🎉`))
+          ? (isMulti ? `You're all confirmed 🎉` : (isFollowUp ? `Thanks, ${firstName} — your RSVP is now complete` : (isMumbaiShowcase ? `You're confirmed for Kabuni Showcase Mumbai, ${firstName} 🎉` : `You're confirmed, ${firstName} 🎉`)))
           : `Thanks, ${firstName} — almost there`;
 
         const html = renderHtmlEmail({
@@ -818,16 +844,20 @@ Deno.serve(async (req) => {
           highlights,
           schedule,
           missing,
-          closing: allComplete ? "Looking forward to seeing you there." : "Reply to this email with the missing details and you'll be all set.",
+          closing: allComplete ? "Looking forward to seeing you all there." : "Reply to this email with the missing details and you'll be all set.",
         });
 
         const scheduleText = schedule.length
           ? `\nRunning order:\n${schedule.map((s) => `  ${s.time}  —  ${s.label}`).join("\n")}\n`
           : "";
         const whereText = whereValue ? ` (${whereValue})` : "";
-        const textBody = allComplete
-          ? `Hi ${firstName},\n\n${isFollowUp ? `Thanks — your RSVP is now complete.` : `Your RSVP for "${ev.title}"${whereText} on ${whenLabel} is confirmed (${statusUpper}).`}\n${scheduleText}\nWe have your details on file:\n- Name: ${r.first_name || ""} ${r.last_name || ""}\n- Phone: ${r.phone || "—"}\n- ${orgLabel}: ${r.organisation_name || "—"}\n- Travelling from: ${r.state || "—"}\n\nSee you there.\n\n— Duncan`
-          : `Hi ${firstName},\n\nThanks. We still need the following details to complete your RSVP for "${ev.title}"${whereText}:\n${missing.map((f) => `- ${f}`).join("\n")}\n\nJust reply to this email with the details above.\n\n— Duncan`;
+        const textBody = isMulti
+          ? (allComplete
+              ? `Hi ${firstName},\n\nAll ${attendeesForReply.length} attendees are confirmed for "${ev.title}"${whereText} on ${whenLabel} (${statusUpper}).\n\nRegistered:\n${completeListText}\n${scheduleText}\nSee you there.\n\n— Duncan`
+              : `Hi ${firstName},\n\nThanks for the RSVP for "${ev.title}"${whereText} on ${whenLabel} (${statusUpper}).\n\n${completeAttendees.length ? `Fully registered:\n${completeListText}\n\n` : ""}I still need:\n${incompleteListText}\n\nJust reply to this email with the missing details.\n\n— Duncan`)
+          : (allComplete
+              ? `Hi ${firstName},\n\n${isFollowUp ? `Thanks — your RSVP is now complete.` : `Your RSVP for "${ev.title}"${whereText} on ${whenLabel} is confirmed (${statusUpper}).`}\n${scheduleText}\nWe have your details on file:\n- Name: ${r.first_name || ""} ${r.last_name || ""}\n- Phone: ${r.phone || "—"}\n- ${orgLabel}: ${r.organisation_name || "—"}\n- Travelling from: ${r.state || "—"}\n\nSee you there.\n\n— Duncan`
+              : `Hi ${firstName},\n\nThanks. We still need the following details to complete your RSVP for "${ev.title}"${whereText}:\n${missing.map((f) => `- ${f}`).join("\n")}\n\nJust reply to this email with the details above.\n\n— Duncan`);
 
         const sendResult = await sendGmailReply(token, attendeeEmail, replySubject, textBody, html, threadId, messageIdHdr);
         const replyUpdate = sendResult.ok

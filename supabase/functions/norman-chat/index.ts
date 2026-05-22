@@ -1675,7 +1675,7 @@ const WORKSTREAM_TOOLS = [
     type: "function",
     function: {
       name: "list_workstream_cards",
-      description: "Fast, focused list of workstream cards with their open tasks. Use this whenever the user asks to see, list, summarize, or enumerate workstream cards, pending actions, open tasks, to-dos, overdue items, or 'what's on my plate'. Returns card title, status (red/amber/green/done), project tag, due date, assignee names, and open task titles. Set export_format='csv' when the user asks for a downloadable file, CSV, spreadsheet, or Google Sheet — this returns a short-lived download_url instead of inline JSON. Prefer this over get_workstream_analytics or get_operational_summary when the user wants an actual list (not just counts).",
+      description: "Fast, focused list of workstream cards with their open tasks. Use this whenever the user asks to see, list, summarize, or enumerate workstream cards, pending actions, open tasks, to-dos, overdue items, or 'what's on my plate'. Returns card title, status (red/amber/green/done), project tag, due date, assignee names, and open task titles. Set export_format='csv' for a downloadable CSV, or export_format='gsheet' to create a new Google Sheet in the user's own Google Drive (requires their Gmail/Google integration to be connected). Prefer this over get_workstream_analytics or get_operational_summary when the user wants an actual list (not just counts).",
       parameters: {
         type: "object",
         properties: {
@@ -1684,8 +1684,8 @@ const WORKSTREAM_TOOLS = [
           assignee: { type: "string", enum: ["me", "anyone"], description: "'me' = only cards assigned to the current user. Default: anyone." },
           overdue_only: { type: "boolean", description: "If true, only cards whose due_date has passed or that contain overdue open tasks." },
           include_tasks: { type: "boolean", description: "Include open task titles per card (default true)." },
-          limit: { type: "number", description: "Max cards to return (default 30, max 1000 when export_format=csv, otherwise 100)." },
-          export_format: { type: "string", enum: ["json", "csv"], description: "'csv' uploads a CSV to private storage and returns a 1-hour signed download_url + filename. Use whenever the user mentions download, CSV, spreadsheet, Excel, or Google Sheet. Default: json." },
+          limit: { type: "number", description: "Max cards to return (default 30, max 1000 when exporting, otherwise 100)." },
+          export_format: { type: "string", enum: ["json", "csv", "gsheet"], description: "'csv' uploads a CSV to private storage and returns a 1-hour signed download_url. 'gsheet' creates a Google Sheet in the user's own Drive using their connected Google account and returns the spreadsheet URL. Default: json." },
         },
         required: [],
       },
@@ -1923,7 +1923,9 @@ async function executeWorkstreamTool(
 
     case "list_workstream_cards": {
       const wantCsv = args.export_format === "csv";
-      const limit = Math.min(Math.max(args.limit ?? (wantCsv ? 500 : 30), 1), wantCsv ? 1000 : 100);
+      const wantSheet = args.export_format === "gsheet";
+      const isExport = wantCsv || wantSheet;
+      const limit = Math.min(Math.max(args.limit ?? (isExport ? 500 : 30), 1), isExport ? 1000 : 100);
       const includeTasks = args.include_tasks !== false;
       const nowIso = new Date().toISOString();
 
@@ -2070,6 +2072,117 @@ async function executeWorkstreamTool(
           download_url: signed.signedUrl,
           expires_in_seconds: 3600,
           message: `CSV ready (${result.length} cards). Present the download_url to the user as a clickable markdown link: [Download ${filename}](${signed.signedUrl}). Do not paste the raw list inline.`,
+        };
+      }
+
+      if (wantSheet) {
+        // Load this user's Google (Gmail) tokens — same OAuth flow grants Sheets + Drive scopes.
+        const { data: tokenRow } = await supabaseAdmin
+          .from("gmail_tokens")
+          .select("*")
+          .eq("connected_by", userId)
+          .maybeSingle();
+        if (!tokenRow) {
+          return { error: "no_google_connection", message: "I can't create a Google Sheet because you haven't connected your Google account yet. Go to Settings → Integrations → Gmail to connect, then try again." };
+        }
+
+        // Refresh access token if needed
+        let accessToken: string = tokenRow.access_token;
+        const expiry = new Date(tokenRow.token_expiry).getTime();
+        if (expiry - Date.now() < 5 * 60 * 1000) {
+          const clientId = Deno.env.get("GMAIL_CLIENT_ID");
+          const clientSecret = Deno.env.get("GMAIL_CLIENT_SECRET");
+          const refreshRes = await fetch("https://oauth2.googleapis.com/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              refresh_token: tokenRow.refresh_token,
+              client_id: clientId!,
+              client_secret: clientSecret!,
+              grant_type: "refresh_token",
+            }),
+          });
+          if (!refreshRes.ok) {
+            return { error: "google_refresh_failed", message: "Your Google connection has expired. Please reconnect in Settings → Integrations → Gmail." };
+          }
+          const refreshed = await refreshRes.json();
+          accessToken = refreshed.access_token;
+          await supabaseAdmin
+            .from("gmail_tokens")
+            .update({
+              access_token: accessToken,
+              token_expiry: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
+            })
+            .eq("id", tokenRow.id);
+        }
+
+        // Verify required scopes
+        const tokenInfoRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
+        const tokenInfo = tokenInfoRes.ok ? await tokenInfoRes.json() : {};
+        const granted = new Set(String(tokenInfo.scope || "").split(/\s+/).filter(Boolean));
+        const needSheets = !granted.has("https://www.googleapis.com/auth/spreadsheets");
+        const needDrive = !granted.has("https://www.googleapis.com/auth/drive.file") && !granted.has("https://www.googleapis.com/auth/drive");
+        if (needSheets || needDrive) {
+          return {
+            error: "missing_google_scopes",
+            message: "Your Google connection is missing the permissions needed to create Sheets. Please go to Settings → Integrations → Gmail, disconnect, and reconnect — you'll be asked to approve Google Sheets and Drive access.",
+          };
+        }
+
+        // Build sheet payload
+        const headerRow = ["Title", "Status", "Project", "Priority", "Due Date", "Overdue", "Assignees", "Open Task Count", "Open Tasks"];
+        const dataRows = result.map((r: any) => {
+          const taskTitles = (r.open_tasks || []).map((t: any) => t.overdue ? `${t.title} (OVERDUE)` : t.title).join("; ");
+          return [
+            r.title || "",
+            r.status || "",
+            r.project_tag || "",
+            r.priority || "",
+            r.due_date || "",
+            r.overdue ? "yes" : "",
+            (r.assignees || []).join(", "),
+            String(r.open_task_count ?? ""),
+            taskTitles,
+          ];
+        });
+        const ts = new Date().toISOString().slice(0, 16).replace("T", " ");
+        const title = `Duncan — Workstream cards (${ts} UTC)`;
+
+        // Create spreadsheet with data inline
+        const createRes = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            properties: { title },
+            sheets: [{
+              properties: { title: "Workstream Cards", gridProperties: { frozenRowCount: 1 } },
+              data: [{
+                startRow: 0,
+                startColumn: 0,
+                rowData: [headerRow, ...dataRows].map((row) => ({
+                  values: row.map((v) => ({ userEnteredValue: { stringValue: String(v) } })),
+                })),
+              }],
+            }],
+          }),
+        });
+        if (!createRes.ok) {
+          const txt = await createRes.text();
+          return { error: "sheets_create_failed", message: `Failed to create Google Sheet: ${createRes.status} ${txt.slice(0, 300)}` };
+        }
+        const sheet = await createRes.json();
+        const spreadsheetUrl: string = sheet.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${sheet.spreadsheetId}/edit`;
+
+        return {
+          count: result.length,
+          format: "gsheet",
+          spreadsheet_id: sheet.spreadsheetId,
+          spreadsheet_url: spreadsheetUrl,
+          title,
+          message: `Google Sheet created (${result.length} cards) in the user's own Google Drive. Present the URL as a clickable markdown link: [${title}](${spreadsheetUrl}). Do not paste the raw list inline.`,
         };
       }
 

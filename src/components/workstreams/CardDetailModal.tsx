@@ -380,7 +380,7 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                     />
                   </MetaField>
 
-                  <MetaField icon={<Tag className="h-3.5 w-3.5" />} label="Project" value={card.project_tag || "None"}>
+                  <MetaField alwaysEdit icon={<Tag className="h-3.5 w-3.5" />} label="Project" value={card.project_tag || "None"}>
                     {addingTag ? (
                       <div className="flex items-center gap-1">
                         <Input
@@ -627,17 +627,41 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
   );
 }
 
-function MetaField({ icon, label, value, children }: {
+function MetaField({ icon, label, value, children, alwaysEdit = false }: {
   icon: React.ReactNode; label: string; value: string; children: React.ReactNode;
+  /**
+   * When true, always render `children` (no display/edit toggle).
+   * Use for controls that own their own open/close state via portals
+   * (Radix Select / Popover / DropdownMenu) — otherwise synthetic blur
+   * events bubbling out of the portal will unmount the control mid-hover.
+   */
+  alwaysEdit?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  if (alwaysEdit) {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-medium">
+          {icon} {label}
+        </div>
+        {children}
+      </div>
+    );
+  }
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-medium">
         {icon} {label}
       </div>
       {editing ? (
-        <div onBlur={() => setTimeout(() => setEditing(false), 200)}>
+        <div
+          onBlur={(e) => {
+            // Don't collapse when focus moves to a child element (e.g. a date
+            // picker popup). Only collapse when focus leaves the wrapper entirely.
+            if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+            setTimeout(() => setEditing(false), 200);
+          }}
+        >
           {children}
         </div>
       ) : (

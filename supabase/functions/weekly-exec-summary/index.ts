@@ -631,12 +631,20 @@ Deno.serve(async (req) => {
       throw new Error("All file extractions failed — nothing to summarise");
     }
 
-    // Compute deterministic content hash from processed files
-    // (id + modifiedTime + size + extracted-char-count, sorted for determinism).
+    // Fetch upcoming planner events (Mon → Sun, UK) before hashing/synthesis.
+    const { events: plannerEvents, range: plannerRange } = await fetchUpcomingPlannerEvents(admin);
+    const plannerBlock = formatPlannerBlock(plannerEvents, plannerRange);
+
+    // Compute deterministic content hash from processed files + planner schedule.
+    // Planner data participates in the hash so that planner-only changes still
+    // regenerate the email even when Drive docs are unchanged.
     const fingerprintInput = files
       .map((f: any) => `${f.id}|${f.modifiedTime ?? ""}|${f.size ?? ""}`)
       .sort()
-      .join("\n") + `\n#count=${processed.length}\n#chars=${processed.reduce((a, p) => a + p.chars, 0)}`;
+      .join("\n")
+      + `\n#count=${processed.length}\n#chars=${processed.reduce((a, p) => a + p.chars, 0)}`
+      + `\n#planner_range=${plannerRange.startUtc}..${plannerRange.endUtc}`
+      + `\n#planner=\n${plannerHashInput(plannerEvents)}`;
     const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintInput));
     const contentHash = Array.from(new Uint8Array(hashBuf))
       .map((b) => b.toString(16).padStart(2, "0")).join("");

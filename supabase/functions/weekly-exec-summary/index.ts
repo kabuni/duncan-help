@@ -154,8 +154,108 @@ function truncate(s: string, max: number) {
   return s.length <= max ? s : s.slice(0, max) + "\n…[truncated]";
 }
 
+// ─── Planner: upcoming week (Mon → Sun, UK) ───────────────────────────────
+function upcomingWeekRangeUK(): { startUtc: string; endUtc: string; mondayLabel: string; sundayLabel: string } {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map((p) => [p.type, p.value]));
+  const ukToday = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day));
+  const dow = ukToday.getUTCDay(); // 0=Sun..6=Sat
+  // Upcoming Monday: today if Mon, else next Mon.
+  const daysToMon = dow === 1 ? 0 : (dow === 0 ? 1 : 8 - dow);
+  const mon = new Date(ukToday); mon.setUTCDate(ukToday.getUTCDate() + daysToMon);
+  const sunExclusive = new Date(mon); sunExclusive.setUTCDate(mon.getUTCDate() + 7);
+  const fmtLabel = (d: Date) =>
+    d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+  return {
+    startUtc: mon.toISOString(),
+    endUtc: sunExclusive.toISOString(),
+    mondayLabel: fmtLabel(mon),
+    sundayLabel: fmtLabel(new Date(sunExclusive.getTime() - 86400000)),
+  };
+}
+
+interface PlannerEvent {
+  weekday: string; day: string; title: string; category: string | null; description: string | null;
+  startIso: string;
+}
+
+async function fetchUpcomingPlannerEvents(
+  admin: any,
+): Promise<{ events: PlannerEvent[]; range: ReturnType<typeof upcomingWeekRangeUK> }> {
+  const range = upcomingWeekRangeUK();
+  const { data, error } = await admin
+    .from("key_events")
+    .select("title, start_at, category, raw_description, status, deleted_in_google")
+    .gte("start_at", range.startUtc)
+    .lt("start_at", range.endUtc)
+    .eq("deleted_in_google", false)
+    .order("start_at", { ascending: true });
+  if (error) {
+    console.warn("[weekly-exec-summary] planner fetch failed:", error.message);
+    return { events: [], range };
+  }
+  const dayFmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", weekday: "long", day: "numeric", month: "short",
+  });
+  const seen = new Set<string>();
+  const events: PlannerEvent[] = [];
+  for (const r of (data ?? [])) {
+    if (!r.start_at) continue;
+    const title = (r.title ?? "").trim();
+    if (!title) continue;
+    const status = (r.status ?? "").toLowerCase();
+    if (["cancelled", "canceled", "archived", "draft"].includes(status)) continue;
+    if (/^(tbc|tbd|placeholder|untitled|test)\b/i.test(title)) continue;
+
+    const parts = Object.fromEntries(
+      dayFmt.formatToParts(new Date(r.start_at)).map((p) => [p.type, p.value])
+    );
+    const weekday = parts.weekday;
+    const dayLabel = `${parts.weekday} ${parts.day} ${parts.month}`;
+    const desc = (r.raw_description ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const shortDesc = desc ? (desc.length > 140 ? desc.slice(0, 137) + "…" : desc) : null;
+    const dedupKey = `${weekday}::${title.toLowerCase()}`;
+    if (seen.has(dedupKey)) continue;
+    seen.add(dedupKey);
+    events.push({
+      weekday, day: dayLabel, title, category: r.category ?? null,
+      description: shortDesc, startIso: r.start_at,
+    });
+  }
+  return { events, range };
+}
+
+function formatPlannerBlock(
+  events: PlannerEvent[],
+  range: ReturnType<typeof upcomingWeekRangeUK>,
+): string {
+  if (!events.length) {
+    return `Upcoming This Week (${range.mondayLabel} – ${range.sundayLabel}):\n- No planner events scheduled.`;
+  }
+  const lines = [`Upcoming This Week (${range.mondayLabel} – ${range.sundayLabel}):`];
+  for (const e of events) {
+    const cat = e.category ? ` [${e.category}]` : "";
+    const desc = e.description ? ` — ${e.description}` : "";
+    lines.push(`- ${e.day} — ${e.title}${cat}${desc}`);
+  }
+  return lines.join("\n");
+}
+
+function plannerHashInput(events: PlannerEvent[]): string {
+  return events
+    .map((e) => `${e.startIso}|${e.title}|${e.category ?? ""}`)
+    .sort()
+    .join("\n");
+}
+
 // ─── OpenAI summary ───────────────────────────────────────────────────────
-async function buildSummaryMarkdown(folderName: string, fileBlocks: string): Promise<string> {
+async function buildSummaryMarkdown(
+  folderName: string,
+  fileBlocks: string,
+  plannerBlock: string,
+): Promise<string> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
 
@@ -165,11 +265,16 @@ async function buildSummaryMarkdown(folderName: string, fileBlocks: string): Pro
     "Use H1 for the report title, H2 for sections, bullets where useful, and Markdown tables when comparing items. " +
     "Sections (in order): Executive Snapshot, Performance Overview (RYG table), " +
     "Wins of the Week, Risks & Blockers (with mitigations), Key Decisions Needed, " +
-    "Cross-Department Highlights, Forward Look (next 7 days). " +
+    "Cross-Department Highlights, Upcoming This Week. " +
+    "For the 'Upcoming This Week' section, use ONLY the planner schedule provided below — " +
+    "group bullets by weekday in chronological order, keep it concise, and do not invent events. " +
+    "Keep 'Upcoming This Week' to a short, scannable list; it must NOT dominate the report. " +
     "Be concise, factual, decision-oriented. Never invent figures.";
 
   const user =
     `Folder: ${folderName}\n\n` +
+    `=== PLANNER SCHEDULE (upcoming week, UK time) ===\n${plannerBlock}\n\n` +
+    `=== PREVIOUS WEEK SOURCE REPORTS ===\n` +
     `Source reports from the last week are below. Synthesise across them.\n\n` +
     fileBlocks;
 
@@ -526,12 +631,20 @@ Deno.serve(async (req) => {
       throw new Error("All file extractions failed — nothing to summarise");
     }
 
-    // Compute deterministic content hash from processed files
-    // (id + modifiedTime + size + extracted-char-count, sorted for determinism).
+    // Fetch upcoming planner events (Mon → Sun, UK) before hashing/synthesis.
+    const { events: plannerEvents, range: plannerRange } = await fetchUpcomingPlannerEvents(admin);
+    const plannerBlock = formatPlannerBlock(plannerEvents, plannerRange);
+
+    // Compute deterministic content hash from processed files + planner schedule.
+    // Planner data participates in the hash so that planner-only changes still
+    // regenerate the email even when Drive docs are unchanged.
     const fingerprintInput = files
       .map((f: any) => `${f.id}|${f.modifiedTime ?? ""}|${f.size ?? ""}`)
       .sort()
-      .join("\n") + `\n#count=${processed.length}\n#chars=${processed.reduce((a, p) => a + p.chars, 0)}`;
+      .join("\n")
+      + `\n#count=${processed.length}\n#chars=${processed.reduce((a, p) => a + p.chars, 0)}`
+      + `\n#planner_range=${plannerRange.startUtc}..${plannerRange.endUtc}`
+      + `\n#planner=\n${plannerHashInput(plannerEvents)}`;
     const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintInput));
     const contentHash = Array.from(new Uint8Array(hashBuf))
       .map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -574,7 +687,7 @@ Deno.serve(async (req) => {
     }
 
     // 4. GPT-4o summary
-    const summaryMd = await buildSummaryMarkdown(folder.name, blocks.join("\n"));
+    const summaryMd = await buildSummaryMarkdown(folder.name, blocks.join("\n"), plannerBlock);
     if (!summaryMd) throw new Error("OpenAI returned empty summary");
 
     const weekRange = lastWeekRangeLabel();

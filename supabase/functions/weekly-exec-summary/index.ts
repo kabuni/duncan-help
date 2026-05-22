@@ -279,10 +279,11 @@ function formatPlannerBlock(
   events: PlannerEvent[],
   window: ReportingWindow,
 ): string {
+  const header = `Upcoming This Week (${window.upcomingMondayLabel} – ${window.upcomingSundayLabel}):`;
   if (!events.length) {
-    return `Upcoming This Week (${range.mondayLabel} – ${range.sundayLabel}):\n- No planner events scheduled.`;
+    return `${header}\n- No planner events scheduled.`;
   }
-  const lines = [`Upcoming This Week (${range.mondayLabel} – ${range.sundayLabel}):`];
+  const lines = [header];
   for (const e of events) {
     const cat = e.category ? ` [${e.category}]` : "";
     const desc = e.description ? ` — ${e.description}` : "";
@@ -303,28 +304,59 @@ async function buildSummaryMarkdown(
   folderName: string,
   fileBlocks: string,
   plannerBlock: string,
+  window: ReportingWindow,
+  mode: "full" | "planner_only",
 ): Promise<string> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
 
-  const system =
-    "You are Duncan, Kabuni's executive intelligence engine. " +
-    "Produce a board-ready weekly executive summary in clean Markdown. " +
-    "Use H1 for the report title, H2 for sections, bullets where useful, and Markdown tables when comparing items. " +
-    "Sections (in order): Executive Snapshot, Performance Overview (RYG table), " +
-    "Wins of the Week, Risks & Blockers (with mitigations), Key Decisions Needed, " +
-    "Cross-Department Highlights, Upcoming This Week. " +
-    "For the 'Upcoming This Week' section, use ONLY the planner schedule provided below — " +
-    "group bullets by weekday in chronological order, keep it concise, and do not invent events. " +
-    "Keep 'Upcoming This Week' to a short, scannable list; it must NOT dominate the report. " +
-    "Be concise, factual, decision-oriented. Never invent figures.";
+  const dateContract =
+    `CANONICAL REPORTING DATES (use these EXACTLY — do NOT invent any other dates or years):\n` +
+    `- Reporting period (previous week): ${window.prevRangeLong}\n` +
+    `- Required H1 heading: "Weekly Executive Summary"\n` +
+    `- Required subtitle line under H1 (plain paragraph, no heading marker): "${window.prevHeading}"\n` +
+    `- Upcoming planner window: ${window.upcomingMondayLabel} – ${window.upcomingSundayLabel}\n` +
+    `- Current UK year: ${window.ukYear}\n` +
+    `Never reference any other year. Never write "Week of <some other date>". ` +
+    `Do not include the current date or a "generated on" line — the email wrapper handles that.`;
+
+  let system: string;
+  if (mode === "full") {
+    system =
+      "You are Duncan, Kabuni's executive intelligence engine. " +
+      "Produce a board-ready weekly executive summary in clean Markdown. " +
+      "Begin with the required H1 then the required subtitle paragraph exactly as specified in the date contract. " +
+      "Use H2 for sections, bullets where useful, and Markdown tables only when you have real data to compare. " +
+      "Sections (in order): Executive Snapshot, Performance Overview (RYG table), " +
+      "Wins of the Week, Risks & Blockers (with mitigations), Key Decisions Needed, " +
+      "Cross-Department Highlights, Upcoming This Week. " +
+      "For the 'Upcoming This Week' section, use ONLY the planner schedule provided — " +
+      "group bullets by weekday in chronological order, keep it concise, and do not invent events. " +
+      "Keep 'Upcoming This Week' to a short, scannable list; it must NOT dominate the report. " +
+      "Be concise, factual, decision-oriented. Never invent figures, KPIs, or 'No data' filler rows — " +
+      "if a section has no source material, omit it entirely rather than padding with placeholders.\n\n" +
+      dateContract;
+  } else {
+    // Planner-only mode: source reports missing, do not fabricate KPIs.
+    system =
+      "You are Duncan, Kabuni's executive intelligence engine. " +
+      "No source weekly reports were available for the previous week, so produce a SHORT, honest Markdown document with exactly this structure and nothing else:\n" +
+      "1. H1 heading (use the required heading from the date contract).\n" +
+      "2. A single subtitle paragraph (use the required subtitle from the date contract).\n" +
+      "3. A short paragraph stating: 'No weekly source reports were available for the previous reporting period.'\n" +
+      "4. An H2 'Upcoming This Week' section rendered strictly from the planner schedule provided — " +
+      "group bullets by weekday in chronological order; if the planner is empty, render a single bullet: 'No planner events scheduled.'\n" +
+      "Do NOT invent KPIs, RYG tables, wins, risks, decisions, or any other sections. " +
+      "Do NOT add filler such as 'No data' rows or placeholder tables.\n\n" +
+      dateContract;
+  }
 
   const user =
-    `Folder: ${folderName}\n\n` +
+    `Folder: ${folderName || "(none)"}\n\n` +
     `=== PLANNER SCHEDULE (upcoming week, UK time) ===\n${plannerBlock}\n\n` +
-    `=== PREVIOUS WEEK SOURCE REPORTS ===\n` +
-    `Source reports from the last week are below. Synthesise across them.\n\n` +
-    fileBlocks;
+    (mode === "full"
+      ? `=== PREVIOUS WEEK SOURCE REPORTS (${window.prevRangeLong}) ===\nSynthesise across them.\n\n${fileBlocks}`
+      : `=== PREVIOUS WEEK SOURCE REPORTS ===\n(none available)`);
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -334,7 +366,7 @@ async function buildSummaryMarkdown(
     },
     body: JSON.stringify({
       model: "gpt-4o",
-      temperature: 0.3,
+      temperature: 0.2,
       max_tokens: 3500,
       messages: [
         { role: "system", content: system },

@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
 
     // 3. Fetch cards, task assignees, and user mappings in parallel
     const [cardsRes, taskAssigneesRes, mappingsRes] = await Promise.all([
-      supabase.from("workstream_cards").select("id, title, status, owner_id").in("id", cardIds),
+      supabase.from("workstream_cards").select("id, title, status, owner_id, status_source").in("id", cardIds),
       supabase.from("workstream_task_assignees").select("task_id, user_id").in("task_id", taskIds),
       supabase.from("user_notification_mappings").select("duncan_user_id, slack_user_identifier, is_active").eq("is_active", true),
     ]);

@@ -19,7 +19,6 @@ const integrationMeta: Record<string, { label: string; icon: React.ElementType }
   "linear": { label: "Linear", icon: Zap },
   "google-calendar": { label: "Google Calendar", icon: Calendar },
   "azure-blob": { label: "Azure Blob", icon: FolderOpen },
-  "basecamp": { label: "Basecamp", icon: FolderOpen },
   "azure-devops": { label: "Azure DevOps", icon: GitBranch },
   
 };
@@ -71,14 +70,12 @@ const Sidebar = ({
         company?.forEach(c => ids.add(c.integration_id));
         userInt?.forEach(u => ids.add(u.integration_id));
         
-        const [{ data: basecamp }, { data: gcal }, { data: gmail }, { data: azureDevops }] = await Promise.all([
-          supabase.from("basecamp_tokens").select("id").limit(1),
+        const [{ data: gcal }, { data: gmail }, { data: azureDevops }] = await Promise.all([
           supabase.from("google_calendar_tokens").select("id").limit(1),
           supabase.from("gmail_tokens").select("id").limit(1),
           supabase.from("azure_devops_tokens").select("id").limit(1),
         ]);
         
-        if (basecamp?.length) ids.add("basecamp");
         if (gcal?.length) ids.add("google-calendar");
         if (gmail?.length) ids.add("gmail");
         if (azureDevops?.length) ids.add("azure-devops");

@@ -16,7 +16,7 @@ import { fastApi, withFastApi } from "@/lib/fastApiClient";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { useSlackConnection } from "@/hooks/useSlackConnection";
 import { useAzureBlobStorage } from "@/hooks/useAzureBlobStorage";
-import BasecampBrowser from "@/components/BasecampBrowser";
+
 import {
   useUserIntegrations,
   useConnectIntegration,
@@ -147,21 +147,6 @@ const integrations: Integration[] = [
     ],
   },
   {
-    id: "basecamp",
-    name: "Basecamp",
-    description: "Connect Basecamp to access projects, to-dos, messages, schedules, and more across your team.",
-    icon: FolderOpen,
-    category: "Project Management",
-    services: ["Projects", "To-dos", "Messages", "Schedules"],
-    type: "company",
-    setupSteps: [
-      "Register an app at launchpad.37signals.com",
-      "Add the redirect URI provided by Duncan",
-      "An admin connects via OAuth to authorize access",
-      "Duncan can then fetch projects, to-dos, and messages",
-    ],
-  },
-  {
     id: "azure-devops",
     name: "Azure DevOps",
     description: "Sync work items from Azure Boards. Duncan reasons over project tickets, delivery status, and operational risks.",
@@ -222,7 +207,7 @@ const integrations: Integration[] = [
   },
 ];
 
-const hiddenIntegrationIds = new Set(["azure-blob", "basecamp", "github", "hubspot"]);
+const hiddenIntegrationIds = new Set(["azure-blob", "github", "hubspot"]);
 const baseVisibleIntegrations = integrations.filter((integration) => !hiddenIntegrationIds.has(integration.id));
 
 const statusConfig: Record<IntegrationStatus, { label: string; color: string; dot: string; bg: string }> = {
@@ -273,7 +258,7 @@ const Integrations = () => {
   const { isConnected: isCalendarConnected, checkConnection: checkCalendarConnection } = useGoogleCalendar();
   const slackConnection = useSlackConnection();
   const [isAzureBlobConnected, setIsAzureBlobConnected] = useState<boolean | null>(null);
-  const [isBasecampConnected, setIsBasecampConnected] = useState<boolean | null>(null);
+  
   const [isGmailConnected, setIsGmailConnected] = useState<boolean | null>(null);
   const [isAzureDevOpsConnected, setIsAzureDevOpsConnected] = useState<boolean | null>(null);
   const [isGoogleDriveConnected, setIsGoogleDriveConnected] = useState<boolean | null>(null);
@@ -289,15 +274,7 @@ const Integrations = () => {
     }
   };
 
-  const checkBasecampConnection = async () => {
-    try {
-      const { supabase } = await import("@/integrations/supabase/client");
-      const { data } = await supabase.from("basecamp_tokens").select("id").limit(1);
-      setIsBasecampConnected(data && data.length > 0);
-    } catch {
-      setIsBasecampConnected(false);
-    }
-  };
+  
 
   const checkGmailConnection = async () => {
     try {
@@ -361,10 +338,6 @@ const Integrations = () => {
       toast.success("Azure Blob Storage connected successfully!");
       checkAzureBlobConnection();
       setSearchParams({});
-    } else if (success === "basecamp") {
-      toast.success("Basecamp connected successfully!");
-      checkBasecampConnection();
-      setSearchParams({});
     } else if (success === "azure_devops") {
       toast.success("Azure DevOps connected successfully!");
       checkAzureDevOpsConnection();
@@ -418,7 +391,7 @@ const Integrations = () => {
   useEffect(() => {
     checkCalendarConnection();
     checkAzureBlobConnection();
-    checkBasecampConnection();
+    
     checkGmailConnection();
     checkAzureDevOpsConnection();
     checkGoogleDriveConnection();
@@ -432,7 +405,6 @@ const Integrations = () => {
       "slack": slackConnection.isConnected,
       "google-calendar": isCalendarConnected,
       "azure-blob": isAzureBlobConnected,
-      "basecamp": isBasecampConnected,
       "azure-devops": isAzureDevOpsConnected,
       "google-drive": isGoogleDriveConnected,
     };
@@ -571,7 +543,7 @@ const Integrations = () => {
               isAdmin={isAdmin}
               isCalendarConnected={isCalendarConnected}
               isAzureBlobConnected={isAzureBlobConnected}
-              isBasecampConnected={isBasecampConnected}
+              
               isGmailConnected={isGmailConnected}
               isSlackConnected={slackConnection.isConnected}
               slackWorkspaceName={slackConnection.workspaceName}
@@ -598,7 +570,7 @@ const IntegrationDetail = ({
   isAdmin,
   isCalendarConnected,
   isAzureBlobConnected,
-  isBasecampConnected,
+  
   isGmailConnected,
   isSlackConnected,
   slackWorkspaceName,
@@ -613,7 +585,7 @@ const IntegrationDetail = ({
   isAdmin: boolean;
   isCalendarConnected: boolean | null;
   isAzureBlobConnected: boolean | null;
-  isBasecampConnected: boolean | null;
+  
   isGmailConnected: boolean | null;
   isSlackConnected: boolean | null;
   slackWorkspaceName: string | null;
@@ -624,7 +596,6 @@ const IntegrationDetail = ({
 }) => {
   const isGoogleCalendar = integration.id === "google-calendar";
   const isAzureBlob = integration.id === "azure-blob";
-  const isBasecamp = integration.id === "basecamp";
   const isGmail = integration.id === "gmail";
   const isAzureDevOps = integration.id === "azure-devops";
   const isGoogleDrive = integration.id === "google-drive";
@@ -633,7 +604,7 @@ const IntegrationDetail = ({
   const isGitHub = integration.id === "github";
   const isRuntimeStatusIntegration = isHubSpot || isGitHub;
   const isGoogleOAuth = isGoogleCalendar;
-  const isOAuthFlow = isGoogleOAuth || isBasecamp || isGmail || isSlack || isAzureDevOps || isGoogleDrive;
+  const isOAuthFlow = isGoogleOAuth || isGmail || isSlack || isAzureDevOps || isGoogleDrive;
   
   // Determine status based on integration type
   let status: IntegrationStatus;
@@ -641,8 +612,6 @@ const IntegrationDetail = ({
     status = isCalendarConnected ? "connected" : "disconnected";
   } else if (isAzureBlob) {
     status = isAzureBlobConnected ? "connected" : "disconnected";
-  } else if (isBasecamp) {
-    status = isBasecampConnected ? "connected" : "disconnected";
   } else if (isGmail) {
     status = isGmailConnected ? "connected" : "disconnected";
   } else if (isSlack) {
@@ -674,7 +643,7 @@ const IntegrationDetail = ({
   // Google OAuth hooks
   const { initiateOAuth: initiateCalendarOAuth, disconnect: disconnectCalendar, isLoading: calendarLoading } = useGoogleCalendar();
   const slackOAuth = useSlackConnection();
-  const [basecampLoading, setBasecampLoading] = useState(false);
+  
   const [gmailLoading, setGmailLoading] = useState(false);
   const [azureDevOpsLoading, setAzureDevOpsLoading] = useState(false);
   const [googleDriveLoading, setGoogleDriveLoading] = useState(false);
@@ -836,20 +805,6 @@ const IntegrationDetail = ({
     try {
       if (isGoogleCalendar) {
         await initiateCalendarOAuth();
-      } else if (isBasecamp) {
-        setBasecampLoading(true);
-        const { supabase } = await import("@/integrations/supabase/client");
-        const data = await withFastApi<{ url?: string }>(
-          async () => {
-            const { data, error } = await supabase.functions.invoke("basecamp-auth");
-            if (error) throw error;
-            return data;
-          },
-          () => fastApi("GET", "/basecamp/auth"),
-        );
-        if (data?.url) window.location.href = data.url;
-        else throw new Error("No auth URL returned");
-        setBasecampLoading(false);
       } else if (isGmail) {
         setGmailLoading(true);
         const { supabase } = await import("@/integrations/supabase/client");
@@ -896,7 +851,7 @@ const IntegrationDetail = ({
         setGoogleDriveLoading(false);
       }
     } catch (err: any) {
-      setBasecampLoading(false);
+      
       setGmailLoading(false);
       setAzureDevOpsLoading(false);
       setGoogleDriveLoading(false);
@@ -951,7 +906,7 @@ const IntegrationDetail = ({
     }
   };
 
-  const oauthLoading = isGoogleCalendar ? calendarLoading : isBasecamp ? basecampLoading : isGmail ? gmailLoading : isSlack ? slackOAuth.isFetching : isAzureDevOps ? azureDevOpsLoading : googleDriveLoading;
+  const oauthLoading = isGoogleCalendar ? calendarLoading : isGmail ? gmailLoading : isSlack ? slackOAuth.isFetching : isAzureDevOps ? azureDevOpsLoading : googleDriveLoading;
   const isPending = isOAuthFlow ? oauthLoading : (isCompany ? companyMutation.isPending : (connectMutation.isPending || disconnectMutation.isPending));
   const canEdit = !isCompany || isAdmin;
 
@@ -1108,8 +1063,6 @@ const IntegrationDetail = ({
                     <p className="text-sm text-foreground">
                       {isAzureDevOps
                         ? "Click below to authorize Duncan to access your Azure DevOps work items and boards."
-                        : isBasecamp 
-                        ? "Click below to authorize Duncan to access your Basecamp projects, to-dos, and messages."
                         : isGmail
                         ? "Click below to sign in with Google and grant Duncan read-only access to your Gmail for CV ingestion."
                         : isSlack
@@ -1132,7 +1085,7 @@ const IntegrationDetail = ({
                     ) : (
                       <>
                         <ExternalLink className="h-4 w-4" />
-                        {isAzureDevOps ? "Connect Azure DevOps" : isBasecamp ? "Connect with Basecamp" : isGmail ? "Connect Gmail" : isSlack ? "Connect Slack" : isGoogleDrive ? "Connect Google Drive" : "Sign in with Google"}
+                        {isAzureDevOps ? "Connect Azure DevOps" : isGmail ? "Connect Gmail" : isSlack ? "Connect Slack" : isGoogleDrive ? "Connect Google Drive" : "Sign in with Google"}
                       </>
                     )}
                   </button>
@@ -1278,11 +1231,6 @@ const IntegrationDetail = ({
                     {slackSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
                     {slackSending ? "Sending..." : "Send as me"}
                   </button>
-                </div>
-              )}
-              {isBasecamp && (
-                <div className="mt-4">
-                  <BasecampBrowser />
                 </div>
               )}
               {canEdit && (

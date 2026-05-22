@@ -74,7 +74,7 @@ function getHistoryWindowForConversation(
 const NORMAL_TIMEOUT_MS = 180_000;
 const HEAVY_TIMEOUT_MS = 300_000;
 const HEAVY_MODES: Mode[] = ["reason", "analyze", "automate", "briefing"];
-const HEAVY_KEYWORDS = /\b(meeting|meetings|calendar|diary|availability|schedule|brief|briefing|summary|summari[sz]e|recap|workstream|kanban|overdue|tasks?|report|analy[sz]e|compare|cv|candidate|recruit|email|gmail|inbox|draft|devops|ado|basecamp)\b/i;
+const HEAVY_KEYWORDS = /\b(meeting|meetings|calendar|diary|availability|schedule|brief|briefing|summary|summari[sz]e|recap|workstream|kanban|overdue|tasks?|report|analy[sz]e|compare|cv|candidate|recruit|email|gmail|inbox|draft|devops|ado)\b/i;
 
 type TaggedController = AbortController & { wasTimeout?: boolean };
 

@@ -9,7 +9,7 @@ export * as gmail from "./gmail";
 export * as calendar from "./calendar";
 export * as drive from "./drive";
 export * as azureDevops from "./azureDevops";
-export * as basecamp from "./basecamp";
+
 export * as xero from "./xero";
 export * as hireflix from "./hireflix";
 export * as misc from "./misc";

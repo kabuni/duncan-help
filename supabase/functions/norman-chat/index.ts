@@ -25,7 +25,7 @@ Your capabilities:
 - **Calendar Management**: You have access to the user's Google Calendar. You can list events, create new events, update existing events, and delete events.
 - **Document Search**: You have access to the company's document storage. You can search for documents, read their content, list folders, and answer questions based on them. Documents are organized in folders: documents/, ndas/, and templates/.
 - **Notion Access**: You have access to the company's Notion workspace. You can search for pages, query databases, and read page content. Use these tools when users ask about information stored in Notion.
-- **Basecamp Access**: You have access to the company's Basecamp. You can list projects, fetch to-do lists and individual to-dos (both completed and incomplete), read messages from message boards, and fetch cards from Card Tables. Use these tools when users ask about project status, tasks, to-dos, messages, or cards in Basecamp. When asked about a specific project, first use list_basecamp_projects to find it, then use the project ID and dock tool IDs to fetch to-dos, messages, or cards. For Card Tables, look for the 'card_table' dock item.
+
 - **Meeting Intelligence**: Use list_meetings to browse stored meetings (supports from_date/to_date and typo-tolerant search), get_meeting for a specific meeting's transcript/analysis, analyze_meetings to run AI analysis on meetings, and search_meeting_transcripts for cross-meeting topic search. **fetch_plaud_meetings is a SLOW sync (~20s) and must ONLY be called when the user EXPLICITLY asks to sync/refresh/import Plaud data** — i.e. the prompt contains keywords like "sync Plaud", "refresh Plaud", "pull new Plaud", "update Plaud meeting data", or "import from Plaud". **Never treat "fetch my latest meeting notes" as a sync request.** For summarization, analysis, search, or any question about existing meetings (including "today's", "yesterday's", "recent", "this week's", "summarize my meetings"): SKIP fetch_plaud_meetings. Go straight to the strict routing rules below. Note: meeting titles in the database may contain typos (e.g. "Lighting" instead of "Lightning") — the search is typo-tolerant, but always confirm the date matches what the user asked for before answering.
 
 **STRICT MULTI-MEETING BATCH LIMIT (HARD RULE — NOT a suggestion):** For any request involving multiple meetings (e.g. "summarize recent meetings", "this week's meetings", "what happened recently"):
@@ -536,78 +536,6 @@ const GOOGLE_FORMS_TOOLS = [
   },
 ];
 
-const BASECAMP_TOOLS = [
-  {
-    type: "function",
-    function: {
-      name: "list_basecamp_projects",
-      description: "List all projects in Basecamp. Returns project names, IDs, statuses, and their dock items (todosets, message boards, card_tables, etc.). Use this first to discover project IDs and dock IDs needed for other Basecamp tools.",
-      parameters: { type: "object", properties: {}, required: [] },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_basecamp_todolists",
-      description: "Get all to-do lists within a Basecamp project's todoset. Requires the project ID and the todoset ID (found in the project's dock items).",
-      parameters: {
-        type: "object",
-        properties: {
-          project_id: { type: "number", description: "The Basecamp project ID" },
-          todoset_id: { type: "number", description: "The todoset ID from the project's dock items" },
-        },
-        required: ["project_id", "todoset_id"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_basecamp_todos",
-      description: "Get to-do items within a specific to-do list. Returns both completed and incomplete todos. Returns title, completion status, assignees, and due dates.",
-      parameters: {
-        type: "object",
-        properties: {
-          project_id: { type: "number", description: "The Basecamp project ID" },
-          todolist_id: { type: "number", description: "The to-do list ID" },
-          completed_only: { type: "boolean", description: "If true, fetch only completed todos. Default fetches incomplete todos." },
-        },
-        required: ["project_id", "todolist_id"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_basecamp_messages",
-      description: "Get messages from a Basecamp project's message board. Requires the project ID and the message board ID (found in the project's dock items).",
-      parameters: {
-        type: "object",
-        properties: {
-          project_id: { type: "number", description: "The Basecamp project ID" },
-          message_board_id: { type: "number", description: "The message board ID from the project's dock items" },
-        },
-        required: ["project_id", "message_board_id"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_basecamp_card_table_cards",
-      description: "Get all cards from a Basecamp Card Table. Returns all columns and their cards with titles, assignees, due dates, and colors. First use list_basecamp_projects to find the project and its 'card_table' dock item. Pass the card_table dock item ID.",
-      parameters: {
-        type: "object",
-        properties: {
-          project_id: { type: "number", description: "The Basecamp project ID" },
-          card_table_id: { type: "number", description: "The Card Table ID from the project's dock items (name: 'card_table')" },
-          column_id: { type: "number", description: "Optional. A specific column ID to fetch cards for." },
-        },
-        required: ["project_id", "card_table_id"],
-      },
-    },
-  },
-];
 
 const MEETING_TOOLS = [
   {
@@ -3692,128 +3620,6 @@ async function executeNdaTool(
   }
 }
 
-async function isBasecampConnected(supabaseAdmin: any): Promise<boolean> {
-  const { data, error } = await supabaseAdmin
-    .from("basecamp_tokens")
-    .select("id")
-    .limit(1)
-    .maybeSingle();
-  return !error && !!data;
-}
-
-async function executeBasecampTool(
-  toolName: string,
-  args: any,
-  supabaseUrl: string,
-  authHeader: string
-): Promise<any> {
-  async function bcCall(endpoint: string, paginate = true) {
-    const res = await fetch(`${supabaseUrl}/functions/v1/basecamp-api`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authHeader,
-      },
-      body: JSON.stringify({ endpoint, method: "GET", paginate }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Basecamp API error: ${res.status}`);
-    }
-    return res.json();
-  }
-
-  switch (toolName) {
-    case "list_basecamp_projects": {
-      const projects = await bcCall("projects");
-      return (projects || []).map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        status: p.status,
-        url: p.app_url,
-        dock: (p.dock || []).filter((d: any) => d.enabled).map((d: any) => ({
-          id: d.id,
-          title: d.title,
-          name: d.name,
-        })),
-      }));
-    }
-    case "get_basecamp_todolists": {
-      const lists = await bcCall(`buckets/${args.project_id}/todosets/${args.todoset_id}/todolists`);
-      return (lists || []).map((l: any) => ({
-        id: l.id,
-        title: l.title,
-        description: l.description,
-        completed: l.completed,
-        completed_ratio: l.completed_ratio,
-      }));
-    }
-    case "get_basecamp_todos": {
-      const baseEndpoint = `buckets/${args.project_id}/todolists/${args.todolist_id}/todos`;
-      if (args.completed_only) {
-        const completed = await bcCall(`${baseEndpoint}?completed=true`);
-        return (completed || []).map(mapTodo);
-      }
-      // Fetch both incomplete and completed
-      const [incomplete, completed] = await Promise.all([
-        bcCall(baseEndpoint),
-        bcCall(`${baseEndpoint}?completed=true`),
-      ]);
-      const all = [...(incomplete || []).map(mapTodo), ...(completed || []).map(mapTodo)];
-      return all;
-    }
-    case "get_basecamp_messages": {
-      const msgs = await bcCall(`buckets/${args.project_id}/message_boards/${args.message_board_id}/messages`);
-      return (msgs || []).map((m: any) => ({
-        id: m.id,
-        title: m.title,
-        content: (m.content || "").slice(0, 2000),
-        created_at: m.created_at,
-        creator: m.creator?.name,
-      }));
-    }
-    case "get_basecamp_card_table_cards": {
-      // Fetch the card table resource
-      const cardTable = await bcCall(`buckets/${args.project_id}/card_tables/${args.card_table_id}`, false);
-
-      if (!cardTable.lists || !Array.isArray(cardTable.lists)) {
-        return { card_table: cardTable.title || "Unknown", columns: [], message: "Card table has no columns or may not be available for this project." };
-      }
-
-      if (args.column_id) {
-        const list = cardTable.lists.find((l: any) => l.id === args.column_id);
-        if (!list) return { error: `Column ${args.column_id} not found` };
-        const cardsUrl = list.cards_url;
-        if (!cardsUrl) return { column: list.title, cards: [], error: "No cards URL" };
-        const cards = await bcCall(cardsUrl, false);
-        return {
-          column: list.title, color: list.color, cards_count: (cards || []).length,
-          cards: (cards || []).map(mapCard),
-        };
-      }
-
-      // Fetch all columns' cards via the proxy (cards_url is a full URL)
-      const columnsWithCards = await Promise.all(
-        cardTable.lists.map(async (list: any) => {
-          try {
-            if (!list.cards_url) return { id: list.id, title: list.title, color: list.color, cards: [], error: "no cards_url" };
-            const cards = await bcCall(list.cards_url, false);
-            return {
-              id: list.id, title: list.title, color: list.color, cards_count: (cards || []).length,
-              cards: (cards || []).map(mapCard),
-            };
-          } catch (e: any) {
-            return { id: list.id, title: list.title, color: list.color, cards: [], error: String(e) };
-          }
-        })
-      );
-      return { card_table: cardTable.title, columns: columnsWithCards };
-    }
-    default:
-      throw new Error(`Unknown Basecamp tool: ${toolName}`);
-  }
-}
 
 function mapTodo(t: any) {
   return {
@@ -4402,7 +4208,7 @@ serve(async (req) => {
     let calendarAccessToken: string | null = null;
     let azureStorageAvailable = false;
     let notionToken: string | null = null;
-    let basecampConnected = false;
+    
     let slackConnection: { accessToken: string; teamName: string | null; scope: string | null } | null = null;
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
@@ -4425,19 +4231,16 @@ serve(async (req) => {
       calendarTokenResult,
       slackResult,
       notionResult,
-      basecampResult,
       formsResult,
     ] = await Promise.all([
       getCalendarAccessToken(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] calendar:", e); return null; }),
       getSlackConnection(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] slack:", e); return null; }),
       getNotionToken(supabaseAdmin).catch((e) => { console.warn("[warmup] notion:", e); return null; }),
-      isBasecampConnected(supabaseAdmin).catch((e) => { console.warn("[warmup] basecamp:", e); return false; }),
       supabaseAdmin.from("google_forms").select("id, name, description, fields"),
     ]);
     calendarAccessToken = calendarTokenResult;
     slackConnection = slackResult;
     notionToken = notionResult;
-    basecampConnected = !!basecampResult;
     azureStorageAvailable = !!getAzureStorageConfig();
     const googleForms = formsResult?.data;
 
@@ -4473,9 +4276,7 @@ serve(async (req) => {
       systemContent += "\n\nNote: Notion is not connected. If the user asks about Notion data, let them know an admin needs to connect Notion first via the Integrations page.";
     }
 
-    if (!basecampConnected) {
-      systemContent += "\n\nNote: Basecamp is not connected. If the user asks about Basecamp projects, to-dos, or messages, let them know an admin needs to connect Basecamp first via the Integrations page.";
-    }
+
 
     if (slackConnection) {
       systemContent += `\n\nSlack is connected for this user${slackConnection.teamName ? ` to ${slackConnection.teamName}` : ""}. Use Slack tools when the user asks about Slack messages, channels, or team signals.`;
@@ -4855,9 +4656,6 @@ Format as a natural, readable summary with clear sections. If a section has no d
     if (notionToken) {
       tools.push(...NOTION_TOOLS);
     }
-    if (basecampConnected) {
-      tools.push(...BASECAMP_TOOLS);
-    }
     // Meeting tools always available (Gmail connection checked at execution time)
     tools.push(...MEETING_TOOLS);
     // Azure DevOps tools always available (connection checked at execution time)
@@ -4905,7 +4703,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       { groups: [DOCUMENT_TOOLS], re: /\b(document|documents|file|files|attachment|policy|policies|contract|nda|sop|playbook|handbook|wiki|knowledge base)\b/i },
       { groups: [SLACK_TOOLS], re: /\b(slack|channel|channels|dm\b|huddle|thread|reaction|posted in)\b/i },
       { groups: [NOTION_TOOLS], re: /\b(notion|page in notion|notion db|notion database)\b/i },
-      { groups: [BASECAMP_TOOLS], re: /\b(basecamp|to-?do\b|hill chart|campfire|message board)\b/i },
+      
       { groups: [AZURE_DEVOPS_TOOLS], re: /\b(devops|ado\b|work item|workitem|backlog item|pull request|pr\b|sprint|iteration|user story|epic\b|feature\b|bug\b)\b/i },
       { groups: [AZURE_REPOS_TOOLS], re: /\b(repo|repos|repository|commit|commits|branch|branches|merge|main branch|push|pushed|shipped)\b/i },
       { groups: [XERO_TOOLS], re: /\b(xero|invoice|invoices|revenue|expense|expenses|p&l|profit and loss|balance sheet|finance|financial|cashflow|cash flow|accounts? receivable|accounts? payable)\b/i },
@@ -4940,7 +4738,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
           if (CALENDAR_TOOLS.includes(t) && !calendarAccessToken) return false;
           if (DOCUMENT_TOOLS.includes(t) && !azureStorageAvailable) return false;
           if (NOTION_TOOLS.includes(t) && !notionToken) return false;
-          if (BASECAMP_TOOLS.includes(t) && !basecampConnected) return false;
+          
           if (SLACK_TOOLS.includes(t) && !slackConnection) return false;
           seen.add(name);
           return true;
@@ -5469,7 +5267,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const notionToolNames = ["search_notion", "query_notion_database", "get_notion_page_content"];
       const googleFormsToolNames = ["list_google_forms", "submit_google_form", "parse_google_form", "save_parsed_google_form"];
       const ndaToolNames = ["generate_nda", "list_nda_submissions", "send_nda_for_signature", "send_pdf_for_signature"];
-      const basecampToolNames = ["list_basecamp_projects", "get_basecamp_todolists", "get_basecamp_todos", "get_basecamp_messages", "get_basecamp_card_table_cards"];
+      
       const meetingToolNames = ["fetch_plaud_meetings", "list_meetings", "list_meetings_by_source", "get_meeting", "analyze_meetings", "search_meeting_transcripts"];
       const azureDevOpsToolNames = ["list_azure_devops_projects", "query_azure_work_items", "get_azure_work_item", "search_synced_work_items"];
       const azureReposToolNames = ["list_azure_repos", "get_recent_commits", "list_pull_requests", "get_pr_reviews", "get_repos_team_summary"];
@@ -5649,13 +5447,6 @@ Format as a natural, readable summary with clear sections. If a section has no d
             result = await withToolTimeout(tc.function.name, executeGoogleFormsTool(tc.function.name, args, supabaseAdmin));
           } else if (ndaToolNames.includes(tc.function.name)) {
             result = await withToolTimeout(tc.function.name, executeNdaTool(tc.function.name, args, supabaseAdmin, userId || "", userEmail, authHeader || ""));
-          } else if (basecampToolNames.includes(tc.function.name)) {
-            if (!basecampConnected) {
-              result = { error: "Basecamp is not connected. An admin needs to connect it via the Integrations page." };
-            } else {
-              result = await withToolTimeout(tc.function.name, executeBasecampTool(tc.function.name, args, supabaseUrl, authHeader || ""));
-              console.log(`Basecamp tool ${tc.function.name} result preview:`, JSON.stringify(result).slice(0, 500));
-            }
           } else if (meetingToolNames.includes(tc.function.name)) {
               // Phase 1: hard server-side guard on the slow Plaud sync. Only run when the user
               // explicitly asked for a sync/refresh/import/update of Plaud data.
@@ -5921,7 +5712,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       list_azure_repo_commits: "Azure Repos",
       list_invoices: "Xero", list_contacts: "Xero", get_pnl: "Xero",
       list_notion_pages: "Notion", read_notion_page: "Notion",
-      list_basecamp_todos: "Basecamp", complete_basecamp_todo: "Basecamp",
+      
     };
     const sourcesUsed: Record<string, number> = {};
     const recordToolCalls = (toolCalls: any[]) => {

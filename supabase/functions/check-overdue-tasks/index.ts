@@ -335,27 +335,17 @@ Deno.serve(async (req) => {
       }
 
       // 7. Auto-escalate card status if severely overdue
-      // Respect manual overrides: skip if user changed status within last 7 days.
-      const manualOverrideCutoff = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
-      const { data: recentManual } = await supabase
-        .from("workstream_activity")
-        .select("id")
-        .eq("card_id", card.id)
-        .eq("action", "status_changed")
-        .gte("created_at", manualOverrideCutoff)
-        .limit(1);
-      const hasRecentManualOverride = (recentManual?.length ?? 0) > 0;
-
-      if (hasRecentManualOverride) {
-        console.log(`Skipping auto-escalation for card ${card.id} — recent manual status change within 7d`);
+      // Manual overrides are permanent until explicitly cleared (status_source = 'automatic').
+      if (card.status_source === "manual") {
+        console.log(`Skipping auto-escalation for card ${card.id} — status_source=manual`);
       } else if (daysSinceOverdue >= 5 && card.status === "green") {
         await supabase.from("workstream_cards")
-          .update({ status: "amber", updated_at: new Date().toISOString() })
+          .update({ status: "amber", status_source: "automatic", updated_at: new Date().toISOString() })
           .eq("id", card.id);
         console.log(`Auto-escalated card ${card.id} from green to amber`);
       } else if (daysSinceOverdue >= 7 && card.status === "amber") {
         await supabase.from("workstream_cards")
-          .update({ status: "red", updated_at: new Date().toISOString() })
+          .update({ status: "red", status_source: "automatic", updated_at: new Date().toISOString() })
           .eq("id", card.id);
         console.log(`Auto-escalated card ${card.id} from amber to red`);
       }

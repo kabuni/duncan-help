@@ -49,6 +49,72 @@ function ukNowParts() {
   };
 }
 
+// ─── Single source of truth for report dates (UK time) ────────────────────
+// One object computed once per run. Used for:
+//   - folder name matching
+//   - subject line
+//   - email header label
+//   - GPT date grounding (prevents year hallucination)
+//   - upcoming-week planner window
+//   - pre-send validator
+interface ReportWeek {
+  monday: Date;
+  friday: Date;
+  upcomingMonday: Date;
+  upcomingSundayExcl: Date;
+  year: number;
+  monthLong: string;
+  monthShort: string;
+  monDay: number;
+  friDay: number;
+  label: string;              // "11th May - 15th May"
+  isoLabel: string;           // "2026-05-11/2026-05-15"
+  todayLabel: string;         // "Friday 22 May 2026"
+  upcomingLabel: string;      // "Monday 25 May – Sunday 31 May 2026"
+}
+
+function ordinalNum(n: number) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function buildReportWeek(): ReportWeek {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  const p = Object.fromEntries(fmt.formatToParts(new Date()).map((x) => [x.type, x.value]));
+  const ukToday = new Date(Date.UTC(+p.year, +p.month - 1, +p.day));
+  const dow = ukToday.getUTCDay();
+  const daysBackToMon = dow === 0 ? 6 : dow - 1;
+  const thisMon = new Date(ukToday); thisMon.setUTCDate(ukToday.getUTCDate() - daysBackToMon);
+  const monday = new Date(thisMon); monday.setUTCDate(thisMon.getUTCDate() - 7);
+  const friday = new Date(monday); friday.setUTCDate(monday.getUTCDate() + 4);
+  const upcomingMonday = new Date(monday); upcomingMonday.setUTCDate(monday.getUTCDate() + 14);
+  const upcomingSundayExcl = new Date(upcomingMonday); upcomingSundayExcl.setUTCDate(upcomingMonday.getUTCDate() + 7);
+  const monthLong = monday.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  const monthShort = monday.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
+  const friMonthLong = friday.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  const label = monthLong === friMonthLong
+    ? `${ordinalNum(monday.getUTCDate())} ${monthLong} - ${ordinalNum(friday.getUTCDate())} ${friMonthLong}`
+    : `${ordinalNum(monday.getUTCDate())} ${monthLong} - ${ordinalNum(friday.getUTCDate())} ${friMonthLong}`;
+  const isoLabel = `${monday.toISOString().slice(0, 10)}/${friday.toISOString().slice(0, 10)}`;
+  const todayLabel = ukToday.toLocaleDateString("en-GB", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
+  });
+  const upSat = new Date(upcomingSundayExcl.getTime() - 86400000);
+  const upcomingLabel =
+    `${upcomingMonday.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })} ` +
+    `– ${upSat.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}`;
+  return {
+    monday, friday, upcomingMonday, upcomingSundayExcl,
+    year: monday.getUTCFullYear(),
+    monthLong, monthShort,
+    monDay: monday.getUTCDate(), friDay: friday.getUTCDate(),
+    label, isoLabel, todayLabel, upcomingLabel,
+  };
+}
+
 // ─── Google Drive helpers ──────────────────────────────────────────────────
 async function refreshGoogleToken(refresh: string) {
   const res = await fetch("https://oauth2.googleapis.com/token", {

@@ -391,7 +391,7 @@ const Integrations = () => {
   useEffect(() => {
     checkCalendarConnection();
     checkAzureBlobConnection();
-    checkBasecampConnection();
+    
     checkGmailConnection();
     checkAzureDevOpsConnection();
     checkGoogleDriveConnection();

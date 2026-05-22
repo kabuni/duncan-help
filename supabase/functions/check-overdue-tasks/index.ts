@@ -335,7 +335,20 @@ Deno.serve(async (req) => {
       }
 
       // 7. Auto-escalate card status if severely overdue
-      if (daysSinceOverdue >= 5 && card.status === "green") {
+      // Respect manual overrides: skip if user changed status within last 7 days.
+      const manualOverrideCutoff = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+      const { data: recentManual } = await supabase
+        .from("workstream_activity")
+        .select("id")
+        .eq("card_id", card.id)
+        .eq("action", "status_changed")
+        .gte("created_at", manualOverrideCutoff)
+        .limit(1);
+      const hasRecentManualOverride = (recentManual?.length ?? 0) > 0;
+
+      if (hasRecentManualOverride) {
+        console.log(`Skipping auto-escalation for card ${card.id} — recent manual status change within 7d`);
+      } else if (daysSinceOverdue >= 5 && card.status === "green") {
         await supabase.from("workstream_cards")
           .update({ status: "amber", updated_at: new Date().toISOString() })
           .eq("id", card.id);

@@ -54,6 +54,23 @@ const FASTAPI_CHAT_URL = FASTAPI_SHADOW_ENABLED && rawApiBaseUrl && rawApiBaseUr
   ? `${rawApiBaseUrl}/norman-chat`
   : null;
 const HISTORY_WINDOW = 15;
+const LONG_WORKFLOW_HISTORY_WINDOW = 50;
+const LONG_WORKFLOW_PATTERN = /nda|agreement|contract|\bform\b|onboarding/i;
+
+function getHistoryWindowForConversation(
+  latestUserInput: string,
+  priorMessages: Message[]
+): number {
+  if (LONG_WORKFLOW_PATTERN.test(latestUserInput || "")) {
+    return LONG_WORKFLOW_HISTORY_WINDOW;
+  }
+  // Also extend window if the recent conversation is already in a long-form flow
+  const recent = priorMessages.slice(-6).map((m) => m.content).join(" ");
+  if (LONG_WORKFLOW_PATTERN.test(recent)) {
+    return LONG_WORKFLOW_HISTORY_WINDOW;
+  }
+  return HISTORY_WINDOW;
+}
 const NORMAL_TIMEOUT_MS = 180_000;
 const HEAVY_TIMEOUT_MS = 300_000;
 const HEAVY_MODES: Mode[] = ["reason", "analyze", "automate", "briefing"];
@@ -335,8 +352,9 @@ export function useNormanChat() {
         }
 
         const userContent = buildUserContent(input, safeAttachments);
+        const historyWindow = getHistoryWindowForConversation(input, messages);
         const apiMessages = [
-          ...messages.slice(-HISTORY_WINDOW).map((m) => ({ role: m.role, content: m.content })),
+          ...messages.slice(-historyWindow).map((m) => ({ role: m.role, content: m.content })),
           { role: "user", content: userContent },
         ];
 

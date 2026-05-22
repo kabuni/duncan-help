@@ -4703,7 +4703,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       { groups: [DOCUMENT_TOOLS], re: /\b(document|documents|file|files|attachment|policy|policies|contract|nda|sop|playbook|handbook|wiki|knowledge base)\b/i },
       { groups: [SLACK_TOOLS], re: /\b(slack|channel|channels|dm\b|huddle|thread|reaction|posted in)\b/i },
       { groups: [NOTION_TOOLS], re: /\b(notion|page in notion|notion db|notion database)\b/i },
-      { groups: [BASECAMP_TOOLS], re: /\b(basecamp|to-?do\b|hill chart|campfire|message board)\b/i },
+      
       { groups: [AZURE_DEVOPS_TOOLS], re: /\b(devops|ado\b|work item|workitem|backlog item|pull request|pr\b|sprint|iteration|user story|epic\b|feature\b|bug\b)\b/i },
       { groups: [AZURE_REPOS_TOOLS], re: /\b(repo|repos|repository|commit|commits|branch|branches|merge|main branch|push|pushed|shipped)\b/i },
       { groups: [XERO_TOOLS], re: /\b(xero|invoice|invoices|revenue|expense|expenses|p&l|profit and loss|balance sheet|finance|financial|cashflow|cash flow|accounts? receivable|accounts? payable)\b/i },

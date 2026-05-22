@@ -1675,7 +1675,7 @@ const WORKSTREAM_TOOLS = [
     type: "function",
     function: {
       name: "list_workstream_cards",
-      description: "Fast, focused list of workstream cards with their open tasks. Use this whenever the user asks to see, list, summarize, or enumerate workstream cards, pending actions, open tasks, to-dos, overdue items, or 'what's on my plate'. Returns card title, status (red/amber/green/done), project tag, due date, assignee names, and open task titles. Prefer this over get_workstream_analytics or get_operational_summary when the user wants an actual list (not just counts).",
+      description: "Fast, focused list of workstream cards with their open tasks. Use this whenever the user asks to see, list, summarize, or enumerate workstream cards, pending actions, open tasks, to-dos, overdue items, or 'what's on my plate'. Returns card title, status (red/amber/green/done), project tag, due date, assignee names, and open task titles. Set export_format='csv' when the user asks for a downloadable file, CSV, spreadsheet, or Google Sheet — this returns a short-lived download_url instead of inline JSON. Prefer this over get_workstream_analytics or get_operational_summary when the user wants an actual list (not just counts).",
       parameters: {
         type: "object",
         properties: {
@@ -1684,7 +1684,8 @@ const WORKSTREAM_TOOLS = [
           assignee: { type: "string", enum: ["me", "anyone"], description: "'me' = only cards assigned to the current user. Default: anyone." },
           overdue_only: { type: "boolean", description: "If true, only cards whose due_date has passed or that contain overdue open tasks." },
           include_tasks: { type: "boolean", description: "Include open task titles per card (default true)." },
-          limit: { type: "number", description: "Max cards to return (default 30, max 100)." },
+          limit: { type: "number", description: "Max cards to return (default 30, max 1000 when export_format=csv, otherwise 100)." },
+          export_format: { type: "string", enum: ["json", "csv"], description: "'csv' uploads a CSV to private storage and returns a 1-hour signed download_url + filename. Use whenever the user mentions download, CSV, spreadsheet, Excel, or Google Sheet. Default: json." },
         },
         required: [],
       },
@@ -1921,7 +1922,8 @@ async function executeWorkstreamTool(
     }
 
     case "list_workstream_cards": {
-      const limit = Math.min(Math.max(args.limit ?? 30, 1), 100);
+      const wantCsv = args.export_format === "csv";
+      const limit = Math.min(Math.max(args.limit ?? (wantCsv ? 500 : 30), 1), wantCsv ? 1000 : 100);
       const includeTasks = args.include_tasks !== false;
       const nowIso = new Date().toISOString();
 
@@ -2028,6 +2030,47 @@ async function executeWorkstreamTool(
           .filter(([_, ts]) => (ts as any[]).some((t) => t.overdue))
           .map(([id]) => id));
         result = result.filter((r: any) => r.overdue || overdueTaskCardIds.has(r.id));
+      }
+
+      if (wantCsv) {
+        const esc = (v: any) => {
+          if (v === null || v === undefined) return "";
+          const s = Array.isArray(v) ? v.join("; ") : String(v);
+          return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        };
+        const header = ["Title", "Status", "Project", "Priority", "Due Date", "Overdue", "Assignees", "Open Task Count", "Open Tasks"];
+        const lines = [header.join(",")];
+        for (const r of result) {
+          const taskTitles = (r.open_tasks || []).map((t: any) => t.overdue ? `${t.title} (OVERDUE)` : t.title);
+          lines.push([
+            esc(r.title), esc(r.status), esc(r.project_tag), esc(r.priority),
+            esc(r.due_date), esc(r.overdue ? "yes" : ""), esc(r.assignees),
+            esc(r.open_task_count ?? ""), esc(taskTitles),
+          ].join(","));
+        }
+        const csv = lines.join("\n");
+        const ts = new Date().toISOString().replace(/[:.]/g, "-");
+        const filename = `workstream-cards-${ts}.csv`;
+        const path = `workstreams/${userId}/${filename}`;
+        const { error: upErr } = await supabaseAdmin.storage
+          .from("exports")
+          .upload(path, new Blob([csv], { type: "text/csv" }), {
+            contentType: "text/csv",
+            upsert: true,
+          });
+        if (upErr) throw new Error(`CSV upload failed: ${upErr.message}`);
+        const { data: signed, error: signErr } = await supabaseAdmin.storage
+          .from("exports")
+          .createSignedUrl(path, 60 * 60, { download: filename });
+        if (signErr || !signed?.signedUrl) throw new Error(`Sign URL failed: ${signErr?.message}`);
+        return {
+          count: result.length,
+          format: "csv",
+          filename,
+          download_url: signed.signedUrl,
+          expires_in_seconds: 3600,
+          message: `CSV ready (${result.length} cards). Present the download_url to the user as a clickable markdown link: [Download ${filename}](${signed.signedUrl}). Do not paste the raw list inline.`,
+        };
       }
 
       return { count: result.length, cards: result, filter: args };
@@ -4829,7 +4872,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       { groups: [GMAIL_TOOLS], re: /\b(gmail|email|emails|inbox|draft|drafts|reply|forward|unread|sender|recipient|cc'?d|bcc'?d)\b/i },
       { groups: [CALENDAR_TOOLS], re: /\b(calendar|diary|schedule|availability|free\/busy|free busy|book\b|meeting room|reschedule|invite|invites|event|events|appointment)\b/i },
       { groups: [MEETING_TOOLS], re: /\b(meeting notes?|meetings?\b|recap|action items?|transcript|plaud|gemini|google\s*meet|recording|summary of (the|my|our)\b|minutes\b)\b/i },
-      { groups: [WORKSTREAM_TOOLS], re: /\b(workstream|workstreams|kanban|card|cards|ryg|amber|red\/yellow|status update|owner of|pending action|pending actions|action items?|open tasks?|my tasks?|to[- ]?dos?|on my plate|overdue)\b/i },
+      { groups: [WORKSTREAM_TOOLS], re: /\b(workstream|workstreams|kanban|card|cards|ryg|amber|red\/yellow|status update|owner of|pending action|pending actions|action items?|open tasks?|my tasks?|to[- ]?dos?|on my plate|overdue|csv|download|spreadsheet|excel|google sheet|export)\b/i },
       { groups: [PLANNER_TOOLS], re: /\b(planner|plan\b|roadmap|milestone|sprint plan|backlog|to-do list)\b/i },
       { groups: [ANALYTICS_TOOLS], re: /\b(analytic|analytics|metric|metrics|kpi|dashboard|trend|report|reporting|chart|graph)\b/i },
       { groups: [GOOGLE_DRIVE_TOOLS], re: /\b(drive|google drive|gdrive|folder|shared drive|doc\b|docs\b|sheet\b|sheets\b|slide|slides|file in)\b/i },

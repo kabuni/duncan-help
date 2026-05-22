@@ -643,7 +643,7 @@ const IntegrationDetail = ({
   // Google OAuth hooks
   const { initiateOAuth: initiateCalendarOAuth, disconnect: disconnectCalendar, isLoading: calendarLoading } = useGoogleCalendar();
   const slackOAuth = useSlackConnection();
-  const [basecampLoading, setBasecampLoading] = useState(false);
+  
   const [gmailLoading, setGmailLoading] = useState(false);
   const [azureDevOpsLoading, setAzureDevOpsLoading] = useState(false);
   const [googleDriveLoading, setGoogleDriveLoading] = useState(false);

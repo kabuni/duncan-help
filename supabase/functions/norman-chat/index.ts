@@ -5712,7 +5712,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       list_azure_repo_commits: "Azure Repos",
       list_invoices: "Xero", list_contacts: "Xero", get_pnl: "Xero",
       list_notion_pages: "Notion", read_notion_page: "Notion",
-      list_basecamp_todos: "Basecamp", complete_basecamp_todo: "Basecamp",
+      
     };
     const sourcesUsed: Record<string, number> = {};
     const recordToolCalls = (toolCalls: any[]) => {

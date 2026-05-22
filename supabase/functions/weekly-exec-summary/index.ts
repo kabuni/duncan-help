@@ -316,7 +316,7 @@ async function fetchUpcomingPlannerEvents(
 
 function formatPlannerBlock(
   events: PlannerEvent[],
-  range: ReturnType<typeof upcomingWeekRangeUK>,
+  range: PlannerRange,
 ): string {
   if (!events.length) {
     return `Upcoming This Week (${range.mondayLabel} – ${range.sundayLabel}):\n- No planner events scheduled.`;
@@ -342,9 +342,21 @@ async function buildSummaryMarkdown(
   folderName: string,
   fileBlocks: string,
   plannerBlock: string,
+  reportWeek: ReportWeek,
 ): Promise<string> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
+
+  const dateGrounding =
+    `\n\n=== AUTHORITATIVE DATE CONTEXT (USE EXACTLY — DO NOT ALTER) ===\n` +
+    `TODAY (UK): ${reportWeek.todayLabel}\n` +
+    `REPORT WEEK (the week being summarised): ${reportWeek.label} ${reportWeek.year}\n` +
+    `UPCOMING WEEK (forward-looking section): ${reportWeek.upcomingLabel}\n` +
+    `CURRENT YEAR: ${reportWeek.year}\n` +
+    `RULES:\n` +
+    `- The H1 MUST read exactly: "Weekly Executive Summary — ${reportWeek.label} ${reportWeek.year}".\n` +
+    `- Do NOT invent or shift years. The only year that may appear anywhere is ${reportWeek.year}.\n` +
+    `- Do NOT relabel the report week. The phrase "week of" must use ${reportWeek.label} ${reportWeek.year}.\n`;
 
   const system =
     "You are Duncan, Kabuni's executive intelligence engine. " +
@@ -356,13 +368,17 @@ async function buildSummaryMarkdown(
     "For the 'Upcoming This Week' section, use ONLY the planner schedule provided below — " +
     "group bullets by weekday in chronological order, keep it concise, and do not invent events. " +
     "Keep 'Upcoming This Week' to a short, scannable list; it must NOT dominate the report. " +
-    "Be concise, factual, decision-oriented. Never invent figures.";
+    "Be concise, factual, decision-oriented. Never invent figures. " +
+    "ALWAYS honour the AUTHORITATIVE DATE CONTEXT exactly — never substitute a different year or week." +
+    dateGrounding;
 
   const user =
-    `Folder: ${folderName}\n\n` +
+    `Folder: ${folderName}\n` +
+    `Report week: ${reportWeek.label} ${reportWeek.year}\n` +
+    `Today: ${reportWeek.todayLabel}\n\n` +
     `=== PLANNER SCHEDULE (upcoming week, UK time) ===\n${plannerBlock}\n\n` +
     `=== PREVIOUS WEEK SOURCE REPORTS ===\n` +
-    `Source reports from the last week are below. Synthesise across them.\n\n` +
+    `Source reports from ${reportWeek.label} ${reportWeek.year} are below. Synthesise across them.\n\n` +
     fileBlocks;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -385,6 +401,7 @@ async function buildSummaryMarkdown(
   const data = await res.json();
   return data.choices?.[0]?.message?.content ?? "";
 }
+
 
 // ─── Gmail send ───────────────────────────────────────────────────────────
 async function getGmailSenderToken(admin: any): Promise<string | null> {

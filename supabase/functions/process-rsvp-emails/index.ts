@@ -459,6 +459,52 @@ function mergeAttendeeLists(existing: AttendeeExtract[], incoming: AttendeeExtra
   return out;
 }
 
+// Sender ↔ attendee reconciliation.
+// Returns true when we are confident the given attendee row IS the sender,
+// based on Gmail From display name + email local-part. Designed to avoid
+// false positives: surname-only matches are NOT enough.
+function senderMatchesAttendee(senderEmail: string, senderName: string, a: AttendeeExtract): boolean {
+  const aFirst = (a.first_name || "").trim().toLowerCase();
+  const aLast = (a.last_name || "").trim().toLowerCase();
+  if (!aFirst && !aLast) return false;
+
+  const local = (senderEmail.split("@")[0] || "").toLowerCase();
+  const localTokens = local.split(/[._\-+0-9]+/).filter((t) => t.length >= 2);
+  const nameTokens = (senderName || "")
+    .toLowerCase()
+    .replace(/[",.()<>]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+  const prefixMatch = (a: string, b: string) =>
+    !!a && !!b && (a === b || (a.length >= 3 && b.startsWith(a)) || (b.length >= 3 && a.startsWith(b)));
+
+  // 1) Full first + last appear in sender display name
+  if (aFirst && aLast && nameTokens.length >= 2) {
+    if (nameTokens.includes(aFirst) && nameTokens.includes(aLast)) return true;
+  }
+  // 2) Initial-first-name + surname in display name (e.g. "A Bhargava" ↔ "Adit Bhargava")
+  if (aLast && nameTokens.includes(aLast)) {
+    if (aFirst && aFirst.length <= 2 && nameTokens.some((t) => t.startsWith(aFirst))) return true;
+    if (aFirst && nameTokens.some((t) => prefixMatch(t, aFirst))) return true;
+  }
+  // 3) Email local-part contains BOTH first and last (e.g. adit.bhargava@…)
+  if (aFirst && aLast && localTokens.length >= 2) {
+    const hasFirst = localTokens.some((t) => prefixMatch(t, aFirst)) ||
+      (aFirst.length <= 2 && localTokens.some((t) => t.startsWith(aFirst)));
+    const hasLast = localTokens.some((t) => prefixMatch(t, aLast));
+    if (hasFirst && hasLast) return true;
+  }
+  // 4) Single-token local-part equals attendee first name AND surname appears in display name
+  //    (e.g. ashish@company.com + "Ashish Patil" in display name → matches "Ashish Patil")
+  if (aFirst && aLast && localTokens.length === 1) {
+    const only = localTokens[0];
+    if (prefixMatch(only, aFirst) && nameTokens.includes(aLast)) return true;
+  }
+  return false;
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 

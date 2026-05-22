@@ -596,7 +596,7 @@ const IntegrationDetail = ({
 }) => {
   const isGoogleCalendar = integration.id === "google-calendar";
   const isAzureBlob = integration.id === "azure-blob";
-  const isBasecamp = integration.id === "basecamp";
+  const isBasecamp = false;
   const isGmail = integration.id === "gmail";
   const isAzureDevOps = integration.id === "azure-devops";
   const isGoogleDrive = integration.id === "google-drive";

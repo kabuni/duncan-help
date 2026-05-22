@@ -524,6 +524,7 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { /* empty body fine */ }
   const force = body?.force === true;
   const skipDedup = body?.skip_dedup === true;
+  const allowEmptyFolder = body?.allow_empty_folder === true;
   // Optional one-off recipient override. Accepts string, comma-separated list, or array.
   // Production cron always emails RECIPIENT_EMAILS unless explicitly overridden.
   const overrideRaw: unknown = body?.recipient_override;

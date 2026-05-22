@@ -570,7 +570,7 @@ const IntegrationDetail = ({
   isAdmin,
   isCalendarConnected,
   isAzureBlobConnected,
-  isBasecampConnected,
+  
   isGmailConnected,
   isSlackConnected,
   slackWorkspaceName,

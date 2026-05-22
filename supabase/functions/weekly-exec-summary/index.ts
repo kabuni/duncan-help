@@ -552,14 +552,22 @@ function mdToHtml(md: string): string {
 }
 
 function emailHtml(opts: {
-  title: string; weekRange: string; folderName: string;
-  fileCount: number; summaryMd: string;
+  title: string;
+  weekRange: string;
+  folderName: string;
+  folderMatched: boolean;
+  fileCount: number;
+  summaryMd: string;
 }): string {
+  const folderProvenance = opts.folderName
+    ? `Source folder: <em>${escapeHtml(opts.folderName)}</em>${opts.folderMatched ? "" : ' <span style="color:#b45309">(name did not match report week)</span>'}`
+    : `<span style="color:#b45309">No source folder matched ${escapeHtml(opts.weekRange)} — fallback summary.</span>`;
   return `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#1a1a1a;background:#ffffff">
   <div style="border-bottom:2px solid #0f172a;padding-bottom:14px;margin-bottom:20px">
     <h1 style="margin:0 0 4px;color:#0f172a;font-size:24px">${escapeHtml(opts.title)}</h1>
-    <div style="color:#64748b;font-size:13px">${escapeHtml(opts.weekRange)} &nbsp;·&nbsp; synthesised from <strong>${opts.fileCount}</strong> source report${opts.fileCount === 1 ? "" : "s"} in <em>${escapeHtml(opts.folderName)}</em></div>
+    <div style="color:#64748b;font-size:13px">${escapeHtml(opts.weekRange)} &nbsp;·&nbsp; synthesised from <strong>${opts.fileCount}</strong> source report${opts.fileCount === 1 ? "" : "s"}</div>
+    <div style="color:#94a3b8;font-size:12px;margin-top:4px">${folderProvenance}</div>
   </div>
   ${mdToHtml(opts.summaryMd)}
   <div style="margin-top:32px;padding-top:14px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px;text-align:center">
@@ -568,26 +576,28 @@ function emailHtml(opts: {
 </div>`;
 }
 
-// ─── Week range "11th May - 15th May" (last Mon–Fri in UK time) ───────────
-function ordinal(n: number) {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+// ─── Pre-send validator ───────────────────────────────────────────────────
+function validateOutput(opts: {
+  subject: string;
+  summaryMd: string;
+  reportWeek: ReportWeek;
+}): { ok: true } | { ok: false; reason: string } {
+  const { subject, summaryMd, reportWeek } = opts;
+  if (!subject.includes(reportWeek.label)) {
+    return { ok: false, reason: `Subject missing report-week label "${reportWeek.label}"` };
+  }
+  // Find any 4-digit year in the body and assert it equals reportWeek.year.
+  const years = Array.from(summaryMd.matchAll(/\b(19|20)\d{2}\b/g)).map((m) => m[0]);
+  const wrongYears = years.filter((y) => y !== String(reportWeek.year));
+  if (wrongYears.length) {
+    return {
+      ok: false,
+      reason: `GPT produced wrong year(s): ${[...new Set(wrongYears)].join(", ")} (expected ${reportWeek.year})`,
+    };
+  }
+  return { ok: true };
 }
-function lastWeekRangeLabel(): string {
-  const fmt = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
-  });
-  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map((p) => [p.type, p.value]));
-  const ukToday = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day));
-  const dow = ukToday.getUTCDay();
-  const daysBackToMon = dow === 0 ? 6 : dow - 1;
-  const thisMon = new Date(ukToday); thisMon.setUTCDate(ukToday.getUTCDate() - daysBackToMon);
-  const lastMon = new Date(thisMon); lastMon.setUTCDate(thisMon.getUTCDate() - 7);
-  const lastFri = new Date(lastMon); lastFri.setUTCDate(lastMon.getUTCDate() + 4);
-  const monthName = (d: Date) => d.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
-  return `${ordinal(lastMon.getUTCDate())} ${monthName(lastMon)} - ${ordinal(lastFri.getUTCDate())} ${monthName(lastFri)}`;
-}
+
 
 // ─── Auth: admin or cron ──────────────────────────────────────────────────
 async function authorize(req: Request, admin: any): Promise<

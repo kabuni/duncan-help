@@ -4656,9 +4656,6 @@ Format as a natural, readable summary with clear sections. If a section has no d
     if (notionToken) {
       tools.push(...NOTION_TOOLS);
     }
-    if (basecampConnected) {
-      tools.push(...BASECAMP_TOOLS);
-    }
     // Meeting tools always available (Gmail connection checked at execution time)
     tools.push(...MEETING_TOOLS);
     // Azure DevOps tools always available (connection checked at execution time)

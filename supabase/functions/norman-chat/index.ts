@@ -2075,6 +2075,117 @@ async function executeWorkstreamTool(
         };
       }
 
+      if (wantSheet) {
+        // Load this user's Google (Gmail) tokens — same OAuth flow grants Sheets + Drive scopes.
+        const { data: tokenRow } = await supabaseAdmin
+          .from("gmail_tokens")
+          .select("*")
+          .eq("connected_by", userId)
+          .maybeSingle();
+        if (!tokenRow) {
+          return { error: "no_google_connection", message: "I can't create a Google Sheet because you haven't connected your Google account yet. Go to Settings → Integrations → Gmail to connect, then try again." };
+        }
+
+        // Refresh access token if needed
+        let accessToken: string = tokenRow.access_token;
+        const expiry = new Date(tokenRow.token_expiry).getTime();
+        if (expiry - Date.now() < 5 * 60 * 1000) {
+          const clientId = Deno.env.get("GMAIL_CLIENT_ID");
+          const clientSecret = Deno.env.get("GMAIL_CLIENT_SECRET");
+          const refreshRes = await fetch("https://oauth2.googleapis.com/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              refresh_token: tokenRow.refresh_token,
+              client_id: clientId!,
+              client_secret: clientSecret!,
+              grant_type: "refresh_token",
+            }),
+          });
+          if (!refreshRes.ok) {
+            return { error: "google_refresh_failed", message: "Your Google connection has expired. Please reconnect in Settings → Integrations → Gmail." };
+          }
+          const refreshed = await refreshRes.json();
+          accessToken = refreshed.access_token;
+          await supabaseAdmin
+            .from("gmail_tokens")
+            .update({
+              access_token: accessToken,
+              token_expiry: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
+            })
+            .eq("id", tokenRow.id);
+        }
+
+        // Verify required scopes
+        const tokenInfoRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
+        const tokenInfo = tokenInfoRes.ok ? await tokenInfoRes.json() : {};
+        const granted = new Set(String(tokenInfo.scope || "").split(/\s+/).filter(Boolean));
+        const needSheets = !granted.has("https://www.googleapis.com/auth/spreadsheets");
+        const needDrive = !granted.has("https://www.googleapis.com/auth/drive.file") && !granted.has("https://www.googleapis.com/auth/drive");
+        if (needSheets || needDrive) {
+          return {
+            error: "missing_google_scopes",
+            message: "Your Google connection is missing the permissions needed to create Sheets. Please go to Settings → Integrations → Gmail, disconnect, and reconnect — you'll be asked to approve Google Sheets and Drive access.",
+          };
+        }
+
+        // Build sheet payload
+        const headerRow = ["Title", "Status", "Project", "Priority", "Due Date", "Overdue", "Assignees", "Open Task Count", "Open Tasks"];
+        const dataRows = result.map((r: any) => {
+          const taskTitles = (r.open_tasks || []).map((t: any) => t.overdue ? `${t.title} (OVERDUE)` : t.title).join("; ");
+          return [
+            r.title || "",
+            r.status || "",
+            r.project_tag || "",
+            r.priority || "",
+            r.due_date || "",
+            r.overdue ? "yes" : "",
+            (r.assignees || []).join(", "),
+            String(r.open_task_count ?? ""),
+            taskTitles,
+          ];
+        });
+        const ts = new Date().toISOString().slice(0, 16).replace("T", " ");
+        const title = `Duncan — Workstream cards (${ts} UTC)`;
+
+        // Create spreadsheet with data inline
+        const createRes = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            properties: { title },
+            sheets: [{
+              properties: { title: "Workstream Cards", gridProperties: { frozenRowCount: 1 } },
+              data: [{
+                startRow: 0,
+                startColumn: 0,
+                rowData: [headerRow, ...dataRows].map((row) => ({
+                  values: row.map((v) => ({ userEnteredValue: { stringValue: String(v) } })),
+                })),
+              }],
+            }],
+          }),
+        });
+        if (!createRes.ok) {
+          const txt = await createRes.text();
+          return { error: "sheets_create_failed", message: `Failed to create Google Sheet: ${createRes.status} ${txt.slice(0, 300)}` };
+        }
+        const sheet = await createRes.json();
+        const spreadsheetUrl: string = sheet.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${sheet.spreadsheetId}/edit`;
+
+        return {
+          count: result.length,
+          format: "gsheet",
+          spreadsheet_id: sheet.spreadsheetId,
+          spreadsheet_url: spreadsheetUrl,
+          title,
+          message: `Google Sheet created (${result.length} cards) in the user's own Google Drive. Present the URL as a clickable markdown link: [${title}](${spreadsheetUrl}). Do not paste the raw list inline.`,
+        };
+      }
+
       return { count: result.length, cards: result, filter: args };
     }
 

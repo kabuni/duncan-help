@@ -528,41 +528,23 @@ function mdToHtml(md: string): string {
 }
 
 function emailHtml(opts: {
-  title: string; weekRange: string; folderName: string;
-  fileCount: number; summaryMd: string;
+  title: string; weekRange: string; folderName: string | null;
+  fileCount: number; summaryMd: string; generatedAtUk: string;
 }): string {
+  const sourceLine = opts.folderName && opts.fileCount > 0
+    ? `&nbsp;·&nbsp; synthesised from <strong>${opts.fileCount}</strong> source report${opts.fileCount === 1 ? "" : "s"} in <em>${escapeHtml(opts.folderName)}</em>`
+    : `&nbsp;·&nbsp; <em>no weekly source reports available</em>`;
   return `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#1a1a1a;background:#ffffff">
   <div style="border-bottom:2px solid #0f172a;padding-bottom:14px;margin-bottom:20px">
     <h1 style="margin:0 0 4px;color:#0f172a;font-size:24px">${escapeHtml(opts.title)}</h1>
-    <div style="color:#64748b;font-size:13px">${escapeHtml(opts.weekRange)} &nbsp;·&nbsp; synthesised from <strong>${opts.fileCount}</strong> source report${opts.fileCount === 1 ? "" : "s"} in <em>${escapeHtml(opts.folderName)}</em></div>
+    <div style="color:#64748b;font-size:13px">${escapeHtml(opts.weekRange)} ${sourceLine}</div>
   </div>
   ${mdToHtml(opts.summaryMd)}
   <div style="margin-top:32px;padding-top:14px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px;text-align:center">
-    Confidential — Kabuni — Generated automatically by Duncan
+    Confidential — Kabuni — Generated automatically by Duncan · ${escapeHtml(opts.generatedAtUk)}
   </div>
 </div>`;
-}
-
-// ─── Week range "11th May - 15th May" (last Mon–Fri in UK time) ───────────
-function ordinal(n: number) {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
-}
-function lastWeekRangeLabel(): string {
-  const fmt = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
-  });
-  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map((p) => [p.type, p.value]));
-  const ukToday = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day));
-  const dow = ukToday.getUTCDay();
-  const daysBackToMon = dow === 0 ? 6 : dow - 1;
-  const thisMon = new Date(ukToday); thisMon.setUTCDate(ukToday.getUTCDate() - daysBackToMon);
-  const lastMon = new Date(thisMon); lastMon.setUTCDate(thisMon.getUTCDate() - 7);
-  const lastFri = new Date(lastMon); lastFri.setUTCDate(lastMon.getUTCDate() + 4);
-  const monthName = (d: Date) => d.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
-  return `${ordinal(lastMon.getUTCDate())} ${monthName(lastMon)} - ${ordinal(lastFri.getUTCDate())} ${monthName(lastFri)}`;
 }
 
 // ─── Auth: admin or cron ──────────────────────────────────────────────────

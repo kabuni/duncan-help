@@ -154,25 +154,73 @@ function truncate(s: string, max: number) {
   return s.length <= max ? s : s.slice(0, max) + "\n…[truncated]";
 }
 
-// ─── Planner: upcoming week (Mon → Sun, UK) ───────────────────────────────
-function upcomingWeekRangeUK(): { startUtc: string; endUtc: string; mondayLabel: string; sundayLabel: string } {
+// ─── Canonical reporting window (UK time, DST-safe) ───────────────────────
+// One source of truth used by the subject, email subtitle, GPT prompt, and
+// planner section. Never hardcode dates anywhere else in this file.
+interface ReportingWindow {
+  prevMonIso: string;
+  prevFriIso: string;
+  prevRangeShort: string;   // "11th May - 15th May"
+  prevRangeLong: string;    // "Monday 11 May 2026 – Friday 15 May 2026"
+  prevHeading: string;      // "Week of 11 May 2026"
+  upcomingMonIso: string;
+  upcomingSunIso: string;
+  upcomingStartUtc: string;
+  upcomingEndUtc: string;
+  upcomingMondayLabel: string;
+  upcomingSundayLabel: string;
+  ukYear: number;
+  generatedAtUk: string;
+}
+
+function ordinal(n: number) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function buildReportingWindow(): ReportingWindow {
   const fmt = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
   });
   const parts = Object.fromEntries(fmt.formatToParts(new Date()).map((p) => [p.type, p.value]));
-  const ukToday = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day));
-  const dow = ukToday.getUTCDay(); // 0=Sun..6=Sat
-  // Upcoming Monday: today if Mon, else next Mon.
-  const daysToMon = dow === 1 ? 0 : (dow === 0 ? 1 : 8 - dow);
-  const mon = new Date(ukToday); mon.setUTCDate(ukToday.getUTCDate() + daysToMon);
-  const sunExclusive = new Date(mon); sunExclusive.setUTCDate(mon.getUTCDate() + 7);
-  const fmtLabel = (d: Date) =>
+  const ukYear = +parts.year;
+  const ukToday = new Date(Date.UTC(ukYear, +parts.month - 1, +parts.day));
+  const dow = ukToday.getUTCDay();
+  const daysBackToMon = dow === 0 ? 6 : dow - 1;
+  const thisMon = new Date(ukToday); thisMon.setUTCDate(ukToday.getUTCDate() - daysBackToMon);
+  const prevMon = new Date(thisMon); prevMon.setUTCDate(thisMon.getUTCDate() - 7);
+  const prevFri = new Date(prevMon); prevFri.setUTCDate(prevMon.getUTCDate() + 4);
+  const upcomingMon = thisMon;
+  const upcomingSun = new Date(thisMon); upcomingSun.setUTCDate(thisMon.getUTCDate() + 6);
+  const upcomingEndExclusive = new Date(thisMon); upcomingEndExclusive.setUTCDate(thisMon.getUTCDate() + 7);
+
+  const isoDate = (d: Date) =>
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  const monthName = (d: Date) => d.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  const longDate = (d: Date) =>
+    d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+  const dayMonth = (d: Date) =>
     d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+  const nowFmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long",
+    year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+
   return {
-    startUtc: mon.toISOString(),
-    endUtc: sunExclusive.toISOString(),
-    mondayLabel: fmtLabel(mon),
-    sundayLabel: fmtLabel(new Date(sunExclusive.getTime() - 86400000)),
+    prevMonIso: isoDate(prevMon),
+    prevFriIso: isoDate(prevFri),
+    prevRangeShort: `${ordinal(prevMon.getUTCDate())} ${monthName(prevMon)} - ${ordinal(prevFri.getUTCDate())} ${monthName(prevFri)}`,
+    prevRangeLong: `${longDate(prevMon)} – ${longDate(prevFri)}`,
+    prevHeading: `Week of ${prevMon.getUTCDate()} ${monthName(prevMon)} ${prevMon.getUTCFullYear()}`,
+    upcomingMonIso: isoDate(upcomingMon),
+    upcomingSunIso: isoDate(upcomingSun),
+    upcomingStartUtc: upcomingMon.toISOString(),
+    upcomingEndUtc: upcomingEndExclusive.toISOString(),
+    upcomingMondayLabel: dayMonth(upcomingMon),
+    upcomingSundayLabel: dayMonth(upcomingSun),
+    ukYear,
+    generatedAtUk: `${nowFmt.format(new Date())} UK`,
   };
 }
 

@@ -19,7 +19,6 @@ const integrationMeta: Record<string, { label: string; icon: React.ElementType }
   "linear": { label: "Linear", icon: Zap },
   "google-calendar": { label: "Google Calendar", icon: Calendar },
   "azure-blob": { label: "Azure Blob", icon: FolderOpen },
-  "basecamp": { label: "Basecamp", icon: FolderOpen },
   "azure-devops": { label: "Azure DevOps", icon: GitBranch },
   
 };

@@ -4738,7 +4738,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
           if (CALENDAR_TOOLS.includes(t) && !calendarAccessToken) return false;
           if (DOCUMENT_TOOLS.includes(t) && !azureStorageAvailable) return false;
           if (NOTION_TOOLS.includes(t) && !notionToken) return false;
-          if (BASECAMP_TOOLS.includes(t) && !basecampConnected) return false;
+          
           if (SLACK_TOOLS.includes(t) && !slackConnection) return false;
           seen.add(name);
           return true;

@@ -502,14 +502,47 @@ Deno.serve(async (req) => {
     summary.scanned = messages.length;
 
     for (const m of messages) {
-      try {
-        // Skip if this Gmail message has already been processed (dedup ledger)
-        const { data: alreadyProcessed } = await admin
+      // ── Atomic dedup claim BEFORE any side effects ──
+      // Insert a 'processing' ledger row gated by the UNIQUE(gmail_message_id)
+      // constraint. If another worker (or a prior successful run) already
+      // claimed this message, the insert returns a 23505 conflict and we skip
+      // immediately — no Gmail fetch, no OpenAI call, no RSVP writes, no
+      // outbound email. This eliminates the race window where a side effect
+      // (e.g. reply send) succeeds but the post-hoc ledger insert fails,
+      // causing the next cron tick to replay the same message.
+      let ledgerId: string;
+      {
+        const { data: claim, error: claimErr } = await admin
           .from("event_rsvp_messages")
+          .insert({ gmail_message_id: m.id, outcome: "processing" })
           .select("id")
-          .eq("gmail_message_id", m.id)
-          .maybeSingle();
-        if (alreadyProcessed) { summary.skipped++; continue; }
+          .single();
+        if (claimErr || !claim) {
+          // 23505 = unique_violation → already claimed by another worker /
+          // prior run. Any other error → log and skip (do NOT proceed without
+          // a claim, or we risk the original race condition).
+          if ((claimErr as any)?.code !== "23505") {
+            summary.errors.push(`claim ${m.id}: ${claimErr?.message || "unknown"}`);
+          }
+          summary.skipped++;
+          continue;
+        }
+        ledgerId = claim.id;
+      }
+
+      // Best-effort finaliser for the claimed ledger row. Marks outcome and
+      // attaches rsvp_id / sender / subject once known. On uncaught errors
+      // below we mark the row 'failed' so it isn't infinitely replayed.
+      const finalizeLedger = async (patch: Record<string, any>) => {
+        try {
+          await admin.from("event_rsvp_messages").update(patch).eq("id", ledgerId);
+        } catch (e) {
+          console.error("[process-rsvp-emails] finalizeLedger failed", e);
+        }
+      };
+
+      try {
+
 
         const msgRes = await fetch(`${GMAIL_API}/messages/${m.id}?format=full`, { headers: { Authorization: `Bearer ${token}` } });
         if (!msgRes.ok) continue;

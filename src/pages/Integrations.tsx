@@ -338,10 +338,6 @@ const Integrations = () => {
       toast.success("Azure Blob Storage connected successfully!");
       checkAzureBlobConnection();
       setSearchParams({});
-    } else if (success === "basecamp") {
-      toast.success("Basecamp connected successfully!");
-      checkBasecampConnection();
-      setSearchParams({});
     } else if (success === "azure_devops") {
       toast.success("Azure DevOps connected successfully!");
       checkAzureDevOpsConnection();

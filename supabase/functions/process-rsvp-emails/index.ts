@@ -258,9 +258,20 @@ async function sendGmailReply(
   }
 }
 
-async function aiMatch(emailText: string, candidates: any[]): Promise<{
+interface AttendeeExtract {
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
+  organisation_type: string | null;
+  organisation_name: string | null;
+  location: string | null;
+}
+
+interface AiMatchResult {
   event_id: string | null;
   status: string;
+  status_explicit?: boolean;
   confidence: number;
   reason: string;
   first_name: string | null;
@@ -271,35 +282,55 @@ async function aiMatch(emailText: string, candidates: any[]): Promise<{
   organisation_name: string | null;
   location: string | null;
   missing_fields: string[];
-} | null> {
+  attendees?: AttendeeExtract[];
+}
+
+async function aiMatch(emailText: string, candidates: any[]): Promise<AiMatchResult | null> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) return null;
-  const sys = `You decide whether an inbound email is a clear RSVP for one of the listed events, and extract attendee details. Events can be anywhere in the world — do NOT assume any specific country. Return STRICT JSON:
+  const sys = `You decide whether an inbound email is a clear RSVP for one of the listed events, and extract attendee details for EVERY attendee mentioned (the sender may RSVP for themselves AND additional guests). Events can be anywhere in the world — do NOT assume any specific country. Return STRICT JSON:
 {
   "event_id": "<uuid of the event the sender is RSVPing to, or null>",
   "status": "yes|no|maybe",
+  "status_explicit": true if the email contains explicit yes/no/maybe intent words, false if defaulted,
   "confidence": 0-1,
   "reason": "short",
-  "first_name": "<string or null>",
-  "last_name": "<string or null>",
-  "phone": "<full international format e.g. +447700900000 or null>",
-  "email": "<best email for the attendee or null>",
+  "first_name": "<primary attendee first name or null>",
+  "last_name": "<primary attendee last name or null>",
+  "phone": "<primary attendee phone, full international e.g. +447700900000 or null>",
+  "email": "<best email for the primary attendee or null>",
   "organisation_type": "school|media|company|other or null",
   "organisation_name": "<string or null>",
-  "location": "<city, region or country the attendee is travelling from, or null>",
-  "missing_fields": ["any of: first_name,last_name,phone,email,organisation_type,organisation_name,location"]
+  "location": "<city/region/country the primary attendee is travelling from, or null>",
+  "missing_fields": ["any of: first_name,last_name,phone,email,organisation_type,organisation_name,location"],
+  "attendees": [
+    { "first_name":"...", "last_name":"...", "phone":"...", "email":"...",
+      "organisation_type":"...", "organisation_name":"...", "location":"..." }
+    // ONE entry per attendee. attendees[0] MUST be the primary (sender) and must match the top-level primary fields.
+  ]
 }
 
 STRICT RULES — set event_id to null and confidence < 0.5 unless ALL of these are true:
-1. The email is an inbound RSVP request or response addressed to the recipient (duncan@kabuni.com). Auto-generated calendar accept/decline notifications from Google Calendar / Outlook are NOT RSVPs — return null for those.
-2. The sender is RSVPing for THEMSELVES with explicit attendance intent (yes/no/maybe — e.g. "I'd like to attend", "count me in", "I won't make it", "tentative", "RSVP yes").
-3. The email clearly identifies ONE specific event from the candidate list — by event name, by date (e.g. "7 June", "June 7th"), or by city/location. If ambiguous, return null.
+1. The email is an inbound RSVP request or response addressed to duncan@kabuni.com. Auto-generated calendar accept/decline notifications from Google Calendar / Outlook are NOT RSVPs — return null for those.
+2. The sender (or someone they explicitly bring) is RSVPing with attendance intent (yes/no/maybe — "I'd like to attend", "count me in", "Adit and I will attend", "I won't make it", "tentative").
+3. The email clearly identifies ONE specific event from the candidate list — by name, date, or city. If ambiguous, return null.
 
 Discussion, planning, logistics, internal calendar invites, or generic greetings are NOT RSVPs — return null.
 
-Match events by name/date/location ONLY. Never reject an event because of its country. Always normalise phone to +<country code><number> with no spaces. Map school/college/university => school; news/tv/journalist/press => media; brand/corp/firm/startup => company.
+MULTI-ATTENDEE PARSING:
+- Detect ALL named attendees. Examples:
+  • "Adit Bhargava and Palash Soundarkar will attend" → 2 attendees
+  • "Samaresh Shah - Mobile 9836697979 and Swayam Shah - Mobile 9354138986" → 2 attendees, each with their own phone
+  • "Myself, John Doe, Sarah Khan" → 3 attendees (sender + 2 guests)
+  • "Adit - 9999999999, Palash" → 2 attendees, only Adit has a phone
+- Associate phone/email/org with the correct named attendee using proximity and dash/hyphen/colon separators. NEVER copy one attendee's phone onto another.
+- IGNORE filler/group words as attendees: team, everyone, guests, family, group, friends, colleagues, kids. Do NOT invent attendees from these.
+- Do NOT hallucinate or fabricate phone numbers, emails, or names. If a field is not literally present for that attendee, set it to null.
+- Deduplicate attendees referring to the same person (same normalised full name).
 
-LITERAL EXTRACTION ONLY: Set first_name, last_name, phone, email, organisation_type, organisation_name, and location to null UNLESS the attendee literally states the value in this email (signature blocks count). NEVER infer or guess any of these values from the event venue, the subject line, the sender's email domain, the event location, or general context. If the attendee did not write it, return null for that field — do not fill in plausible defaults. The Mumbai venue, the event city, or where the event is held must NEVER be used to populate "location" (which is where the attendee is travelling FROM).`;
+Match events by name/date/location ONLY. Always normalise phone to +<country code><number> with no spaces. Map school/college/university => school; news/tv/journalist/press => media; brand/corp/firm/startup => company.
+
+LITERAL EXTRACTION ONLY: leave any field null UNLESS the attendee literally states the value in this email (signature blocks count). NEVER infer from event venue, subject, sender domain, or context. The event city must NEVER populate "location" (which is where the attendee is travelling FROM).`;
   const user = `Email:\n${emailText.slice(0, 4000)}\n\nCandidate events (JSON, with ISO start dates):\n${JSON.stringify(candidates)}`;
   try {
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -316,6 +347,109 @@ LITERAL EXTRACTION ONLY: Set first_name, last_name, phone, email, organisation_t
     const j = await r.json();
     return JSON.parse(j.choices[0].message.content);
   } catch (e) { console.error("ai parse error", e); return null; }
+}
+
+// ─── Multi-attendee helpers ────────────────────────────────────────────────
+const FILLER_NAMES = new Set([
+  "team", "everyone", "guests", "guest", "family", "group", "friends",
+  "colleagues", "kids", "all", "us", "we",
+]);
+const ATTENDEES_MARKER = "\n\n--ATTENDEES_JSON--\n";
+
+function isEmptyVal(v: any): boolean {
+  return v === null || v === undefined || (typeof v === "string" && v.trim() === "");
+}
+
+function normName(first?: string | null, last?: string | null): string {
+  return `${(first || "").trim()} ${(last || "").trim()}`.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function isFillerAttendee(a: AttendeeExtract): boolean {
+  const n = normName(a.first_name, a.last_name);
+  if (!n) return true;
+  if (FILLER_NAMES.has(n)) return true;
+  const parts = n.split(" ");
+  if (parts.length === 1 && FILLER_NAMES.has(parts[0])) return true;
+  return false;
+}
+
+function cleanAttendeeList(list: AttendeeExtract[] | undefined | null): AttendeeExtract[] {
+  if (!Array.isArray(list)) return [];
+  const seen = new Map<string, AttendeeExtract>();
+  for (const raw of list) {
+    if (!raw || typeof raw !== "object") continue;
+    const a: AttendeeExtract = {
+      first_name: raw.first_name || null,
+      last_name: raw.last_name || null,
+      phone: raw.phone || null,
+      email: raw.email ? String(raw.email).toLowerCase() : null,
+      organisation_type: raw.organisation_type || null,
+      organisation_name: raw.organisation_name || null,
+      location: raw.location || null,
+    };
+    if (isFillerAttendee(a)) continue;
+    const key = normName(a.first_name, a.last_name) || (a.email || "").toLowerCase();
+    if (!key) continue;
+    if (seen.has(key)) {
+      const ex = seen.get(key)!;
+      for (const k of Object.keys(a) as (keyof AttendeeExtract)[]) {
+        if (isEmptyVal(ex[k]) && !isEmptyVal(a[k])) (ex as any)[k] = a[k];
+      }
+    } else {
+      seen.set(key, a);
+    }
+  }
+  return Array.from(seen.values());
+}
+
+function attendeeMissing(a: AttendeeExtract): string[] {
+  const m: string[] = [];
+  if (isEmptyVal(a.first_name)) m.push("first name");
+  if (isEmptyVal(a.last_name)) m.push("last name");
+  if (isEmptyVal(a.phone)) m.push("mobile (with country code)");
+  if (isEmptyVal(a.organisation_name)) m.push("organisation");
+  return m;
+}
+
+function displayAttendee(a: AttendeeExtract): string {
+  const n = `${a.first_name || ""} ${a.last_name || ""}`.trim();
+  return n || a.email || "(unnamed)";
+}
+
+function parseAttendeesSidecar(notes: string | null | undefined): { subject: string; attendees: AttendeeExtract[] } {
+  const s = notes || "";
+  const idx = s.indexOf(ATTENDEES_MARKER);
+  if (idx === -1) return { subject: s, attendees: [] };
+  const subject = s.slice(0, idx);
+  const jsonPart = s.slice(idx + ATTENDEES_MARKER.length).trim();
+  try {
+    const parsed = JSON.parse(jsonPart);
+    if (Array.isArray(parsed)) return { subject, attendees: cleanAttendeeList(parsed) };
+  } catch { /* ignore */ }
+  return { subject, attendees: [] };
+}
+
+function serialiseNotes(subject: string, attendees: AttendeeExtract[]): string {
+  if (!attendees.length) return subject || "";
+  return `${subject || ""}${ATTENDEES_MARKER}${JSON.stringify(attendees)}`;
+}
+
+function mergeAttendeeLists(existing: AttendeeExtract[], incoming: AttendeeExtract[]): AttendeeExtract[] {
+  const out = existing.map((a) => ({ ...a }));
+  for (const inc of incoming) {
+    const key = normName(inc.first_name, inc.last_name);
+    if (!key) continue;
+    const ix = out.findIndex((a) => normName(a.first_name, a.last_name) === key);
+    if (ix === -1) {
+      out.push({ ...inc });
+    } else {
+      const cur = out[ix];
+      for (const k of Object.keys(inc) as (keyof AttendeeExtract)[]) {
+        if (isEmptyVal(cur[k]) && !isEmptyVal(inc[k])) (cur as any)[k] = inc[k];
+      }
+    }
+  }
+  return out;
 }
 
 Deno.serve(async (req) => {
@@ -453,25 +587,75 @@ Deno.serve(async (req) => {
 
         const isFollowUp = !!existingRsvp;
         const nowIso = new Date().toISOString();
-        const isEmpty = (v: any) => v === null || v === undefined || (typeof v === "string" && v.trim() === "");
-        // Merge helper: only fill new value when existing field is empty AND new value is non-null.
+        const isEmpty = isEmptyVal;
         const mergeField = (oldVal: any, newVal: any) => (isEmpty(oldVal) && !isEmpty(newVal) ? newVal : oldVal);
 
+        // ── Build incoming attendee list (primary + additional) ──
+        const primaryAttendee: AttendeeExtract = {
+          first_name: match.first_name,
+          last_name: match.last_name,
+          phone: match.phone,
+          email: match.email ? String(match.email).toLowerCase() : attendeeEmail,
+          organisation_type: match.organisation_type,
+          organisation_name: match.organisation_name,
+          location: match.location,
+        };
+        const aiList = cleanAttendeeList(match.attendees);
+        // Ensure primary is first; dedupe against AI list by normalised name
+        const primaryKey = normName(primaryAttendee.first_name, primaryAttendee.last_name);
+        let incomingAttendees: AttendeeExtract[];
+        if (!primaryKey || isFillerAttendee(primaryAttendee)) {
+          incomingAttendees = aiList;
+        } else {
+          const rest = aiList.filter((a) => normName(a.first_name, a.last_name) !== primaryKey);
+          // try to merge AI primary entry into our primary
+          const aiPrimary = aiList.find((a) => normName(a.first_name, a.last_name) === primaryKey);
+          if (aiPrimary) {
+            for (const k of Object.keys(aiPrimary) as (keyof AttendeeExtract)[]) {
+              if (isEmpty(primaryAttendee[k]) && !isEmpty(aiPrimary[k])) (primaryAttendee as any)[k] = aiPrimary[k];
+            }
+          }
+          incomingAttendees = [primaryAttendee, ...rest];
+        }
+
         let rsvpId: string;
-        const validStatus = ["yes", "no", "maybe"].includes(match.status) ? match.status : "yes";
+        const newValid = ["yes", "no", "maybe"].includes(match.status) ? match.status : null;
+        // Status protection: never overwrite explicit "no" with anything other than another explicit value.
+        const existingStatus: string | null = existingRsvp?.status ?? null;
+        const incomingExplicit = !!match.status_explicit && !!newValid;
+        let finalStatus: string;
+        if (existingStatus === "no" && !incomingExplicit) {
+          finalStatus = "no";
+        } else if (incomingExplicit) {
+          finalStatus = newValid!;
+        } else {
+          finalStatus = existingStatus || newValid || "yes";
+        }
+
+        // ── Merge attendees sidecar into notes ──
+        const existingNotesParsed = parseAttendeesSidecar(existingRsvp?.notes);
+        const existingAttendees = existingNotesParsed.attendees;
+        const mergedAttendees = mergeAttendeeLists(existingAttendees, incomingAttendees);
+        const notesSubjectPart = existingRsvp?.notes
+          ? (existingNotesParsed.subject || subjectHdr)
+          : subjectHdr;
+        const finalNotes = serialiseNotes(notesSubjectPart, mergedAttendees);
+
+        // Primary row reflects attendees[0] (the sender / primary attendee)
+        const primaryRow = mergedAttendees[0] || primaryAttendee;
 
         if (isFollowUp) {
           const merged = {
             profile_id: existingRsvp.profile_id || profile?.id || null,
-            display_name: existingRsvp.display_name || (([match.first_name, match.last_name].filter(Boolean).join(" ").trim()) || profile?.display_name || senderName || attendeeEmail),
-            first_name: mergeField(existingRsvp.first_name, match.first_name),
-            last_name: mergeField(existingRsvp.last_name, match.last_name),
-            phone: mergeField(existingRsvp.phone, match.phone),
-            organisation_type: mergeField(existingRsvp.organisation_type, match.organisation_type),
-            organisation_name: mergeField(existingRsvp.organisation_name, match.organisation_name),
-            state: mergeField(existingRsvp.state, match.location),
-            // Status: only overwrite when sender provides a fresh explicit one; default keeps prior value.
-            status: validStatus,
+            display_name: existingRsvp.display_name || (([primaryRow.first_name, primaryRow.last_name].filter(Boolean).join(" ").trim()) || profile?.display_name || senderName || attendeeEmail),
+            first_name: mergeField(existingRsvp.first_name, primaryRow.first_name),
+            last_name: mergeField(existingRsvp.last_name, primaryRow.last_name),
+            phone: mergeField(existingRsvp.phone, primaryRow.phone),
+            organisation_type: mergeField(existingRsvp.organisation_type, primaryRow.organisation_type),
+            organisation_name: mergeField(existingRsvp.organisation_name, primaryRow.organisation_name),
+            state: mergeField(existingRsvp.state, primaryRow.location),
+            status: finalStatus,
+            notes: finalNotes,
             gmail_thread_id: existingRsvp.gmail_thread_id || threadId || null,
             last_inbound_message_id: m.id,
             follow_up_count: (existingRsvp.follow_up_count || 0) + 1,
@@ -484,24 +668,24 @@ Deno.serve(async (req) => {
           if (updErr) { summary.errors.push(`rsvp-update: ${updErr.message}`); continue; }
           rsvpId = existingRsvp.id;
         } else {
-          const fullName = [match.first_name, match.last_name].filter(Boolean).join(" ").trim();
-          const display = fullName || profile?.display_name || senderName || attendeeEmail;
+          const fullName2 = [primaryRow.first_name, primaryRow.last_name].filter(Boolean).join(" ").trim();
+          const display2 = fullName2 || profile?.display_name || senderName || attendeeEmail;
           const { data: inserted, error: insErr } = await admin
             .from("event_rsvps")
             .insert({
               event_id: match.event_id,
               profile_id: profile?.id || null,
               email: attendeeEmail,
-              display_name: display,
-              first_name: match.first_name,
-              last_name: match.last_name,
-              phone: match.phone,
-              organisation_type: match.organisation_type,
-              organisation_name: match.organisation_name,
-              state: match.location,
-              status: validStatus,
+              display_name: display2,
+              first_name: primaryRow.first_name,
+              last_name: primaryRow.last_name,
+              phone: primaryRow.phone,
+              organisation_type: primaryRow.organisation_type,
+              organisation_name: primaryRow.organisation_name,
+              state: primaryRow.location,
+              status: finalStatus,
               source: "email",
-              notes: subjectHdr,
+              notes: finalNotes,
               gmail_message_id: m.id,
               gmail_thread_id: threadId || null,
               last_inbound_message_id: m.id,
@@ -525,13 +709,20 @@ Deno.serve(async (req) => {
           outcome: isFollowUp ? "follow_up" : "new_rsvp",
         });
 
-        // Re-read the merged row so missing[] reflects the FINAL state.
+        // Re-read merged row + parse attendees sidecar so missing[] reflects FINAL state.
         const { data: rsvpRow } = await admin
           .from("event_rsvps")
-          .select("first_name,last_name,phone,email,organisation_type,organisation_name,state,status")
+          .select("first_name,last_name,phone,email,organisation_type,organisation_name,state,status,notes")
           .eq("id", rsvpId)
           .single();
         const r: any = rsvpRow || {};
+        const finalAttendees = parseAttendeesSidecar(r.notes).attendees;
+        // Fallback: synthesise a single attendee from primary fields if sidecar is empty
+        const attendeesForReply: AttendeeExtract[] = finalAttendees.length ? finalAttendees : [{
+          first_name: r.first_name, last_name: r.last_name, phone: r.phone,
+          email: r.email, organisation_type: r.organisation_type,
+          organisation_name: r.organisation_name, location: r.state,
+        }];
 
         // Mark as read
         await fetch(`${GMAIL_API}/messages/${m.id}/modify`, {
@@ -540,7 +731,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
         }).catch(() => {});
 
-        // Format date in IST. No UK time anywhere.
+        // Format date in IST.
         const fmtDateIST = (iso: string) =>
           new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Kolkata" });
         const fmtTimeIST = (iso: string) =>
@@ -563,20 +754,26 @@ Deno.serve(async (req) => {
           whereValue = whereValue || "Jio Centre, Mumbai";
         }
 
-        // Required fields and what's still missing AFTER merge
-        const missing: string[] = [];
-        if (isEmpty(r.first_name)) missing.push("First name");
-        if (isEmpty(r.last_name)) missing.push("Last name");
-        if (isEmpty(r.phone)) missing.push("Phone (with country code, e.g. +91…)");
-        if (isEmpty(r.email)) missing.push("Email address");
-        if (isEmpty(r.organisation_type)) missing.push("School / Media / Company");
-        if (isEmpty(r.organisation_name)) missing.push("Organisation name");
-        if (isEmpty(r.state)) missing.push("City / region you're travelling from");
+        // ── Per-attendee completeness ──
+        const completeAttendees: AttendeeExtract[] = [];
+        const incompleteAttendees: { a: AttendeeExtract; missing: string[] }[] = [];
+        for (const a of attendeesForReply) {
+          const miss = attendeeMissing(a);
+          if (miss.length === 0) completeAttendees.push(a);
+          else incompleteAttendees.push({ a, missing: miss });
+        }
+        const allComplete = incompleteAttendees.length === 0 && attendeesForReply.length > 0;
+        const isMulti = attendeesForReply.length > 1;
+
+        // Flat missing[] (used by HTML renderer). For multi-attendee, prefix each line with attendee name.
+        const missing: string[] = incompleteAttendees.flatMap(({ a, missing: ms }) =>
+          isMulti ? ms.map((m) => `${displayAttendee(a)} — ${m}`) : ms.map((m) => m.charAt(0).toUpperCase() + m.slice(1))
+        );
 
         const asciiSubject = subjectHdr.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g, "-");
         const replySubject = asciiSubject.toLowerCase().startsWith("re:") ? asciiSubject : `Re: ${asciiSubject}`;
         const firstName = r.first_name || senderName?.split(" ")[0] || "there";
-        const statusUpper = String(r.status || validStatus).toUpperCase();
+        const statusUpper = String(r.status || finalStatus).toUpperCase();
         const orgLabel = r.organisation_type === "school" ? "School" : r.organisation_type === "media" ? "Media" : "Company";
 
         const highlights: { label: string; value: string }[] = [
@@ -585,47 +782,60 @@ Deno.serve(async (req) => {
         ];
         if (whereValue) highlights.push({ label: "Where", value: whereValue });
         highlights.push({ label: "Status", value: statusUpper });
-        if (r.first_name || r.last_name) highlights.push({ label: "Name", value: `${r.first_name || ""} ${r.last_name || ""}`.trim() });
-        if (r.phone) highlights.push({ label: "Phone", value: r.phone });
-        if (r.organisation_name) highlights.push({ label: orgLabel, value: r.organisation_name });
-        if (r.state) highlights.push({ label: "Travelling from", value: r.state });
 
-        const allComplete = missing.length === 0;
+        if (isMulti) {
+          highlights.push({ label: "Attendees", value: String(attendeesForReply.length) });
+          for (const a of attendeesForReply) {
+            const bits: string[] = [];
+            if (a.phone) bits.push(a.phone);
+            if (a.organisation_name) bits.push(a.organisation_name);
+            highlights.push({ label: displayAttendee(a), value: bits.join(" · ") || "—" });
+          }
+        } else {
+          if (r.first_name || r.last_name) highlights.push({ label: "Name", value: `${r.first_name || ""} ${r.last_name || ""}`.trim() });
+          if (r.phone) highlights.push({ label: "Phone", value: r.phone });
+          if (r.organisation_name) highlights.push({ label: orgLabel, value: r.organisation_name });
+          if (r.state) highlights.push({ label: "Travelling from", value: r.state });
+        }
 
-        // Skip sending another completion email if the RSVP was already complete
-        // on a prior reply and we've already sent the confirmation in this thread.
-        const prevMissingCount = existingRsvp ? [
-          existingRsvp.first_name,
-          existingRsvp.last_name,
-          existingRsvp.phone,
-          existingRsvp.email,
-          existingRsvp.organisation_type,
-          existingRsvp.organisation_name,
-          existingRsvp.state,
-        ].filter((v) => isEmpty(v)).length : 7;
-        const wasAlreadyComplete = prevMissingCount === 0;
+        // Skip duplicate completion email
+        const existingNotesAttendees = parseAttendeesSidecar(existingRsvp?.notes).attendees;
+        const wasAlreadyComplete = existingRsvp
+          ? (existingNotesAttendees.length
+              ? existingNotesAttendees.every((a) => attendeeMissing(a).length === 0)
+              : [existingRsvp.first_name, existingRsvp.last_name, existingRsvp.phone, existingRsvp.organisation_name].every((v) => !isEmpty(v)))
+          : false;
         const alreadySentConfirmation = !!existingRsvp?.reply_sent_at;
-        const skipSend = allComplete && wasAlreadyComplete && alreadySentConfirmation;
+        const skipSend = allComplete && wasAlreadyComplete && alreadySentConfirmation
+          && existingNotesAttendees.length === attendeesForReply.length;
 
         if (skipSend) {
           console.log("[process-rsvp-emails] skipping duplicate completion email", { rsvp_id: rsvpId, thread_id: threadId });
           continue;
         }
 
-        const intro = isFollowUp
+        const completeListText = completeAttendees.map((a) => `• ${displayAttendee(a)}`).join("\n");
+        const incompleteListText = incompleteAttendees
+          .map(({ a, missing: ms }) => `• ${displayAttendee(a)} — ${ms.join(", ")}`).join("\n");
+
+        const intro = isMulti
           ? (allComplete
-              ? `Thanks — your RSVP for "${ev.title}" is now complete. Here's what we have on file.`
-              : `Thanks for the update on your RSVP for "${ev.title}". We still need a few more details to complete your registration.`)
-          : (isMumbaiShowcase
+              ? `Thanks — all ${attendeesForReply.length} attendees are fully registered for "${ev.title}".`
+              : `Thanks for the RSVP for "${ev.title}". ${completeAttendees.length ? `${completeAttendees.length} attendee${completeAttendees.length>1?"s are":" is"} fully registered. ` : ""}We still need a few details for the others.`)
+          : (isFollowUp
               ? (allComplete
-                  ? `We've got you down for ${ev.title} at ${whereValue} on ${whenLabel.split(" · ")[0]}. Here's the running order for the day.`
-                  : `Thanks for your RSVP for ${ev.title} at ${whereValue} on ${whenLabel.split(" · ")[0]} — your status is recorded as ${statusUpper}. Here's the running order, and we just need a few more details from you.`)
-              : (allComplete
-                  ? `Your RSVP for "${ev.title}" is fully confirmed. Here's what we have on file.`
-                  : `Thanks for your RSVP for "${ev.title}" — your status is recorded as ${statusUpper}. We just need a few more details to complete your registration.`));
+                  ? `Thanks — your RSVP for "${ev.title}" is now complete. Here's what we have on file.`
+                  : `Thanks for the update on your RSVP for "${ev.title}". We still need a few more details to complete your registration.`)
+              : (isMumbaiShowcase
+                  ? (allComplete
+                      ? `We've got you down for ${ev.title} at ${whereValue} on ${whenLabel.split(" · ")[0]}. Here's the running order for the day.`
+                      : `Thanks for your RSVP for ${ev.title} at ${whereValue} on ${whenLabel.split(" · ")[0]} — your status is recorded as ${statusUpper}. Here's the running order, and we just need a few more details from you.`)
+                  : (allComplete
+                      ? `Your RSVP for "${ev.title}" is fully confirmed. Here's what we have on file.`
+                      : `Thanks for your RSVP for "${ev.title}" — your status is recorded as ${statusUpper}. We just need a few more details to complete your registration.`)));
 
         const greeting = allComplete
-          ? (isFollowUp ? `Thanks, ${firstName} — your RSVP is now complete` : (isMumbaiShowcase ? `You're confirmed for Kabuni Showcase Mumbai, ${firstName} 🎉` : `You're confirmed, ${firstName} 🎉`))
+          ? (isMulti ? `You're all confirmed 🎉` : (isFollowUp ? `Thanks, ${firstName} — your RSVP is now complete` : (isMumbaiShowcase ? `You're confirmed for Kabuni Showcase Mumbai, ${firstName} 🎉` : `You're confirmed, ${firstName} 🎉`)))
           : `Thanks, ${firstName} — almost there`;
 
         const html = renderHtmlEmail({
@@ -634,16 +844,20 @@ Deno.serve(async (req) => {
           highlights,
           schedule,
           missing,
-          closing: allComplete ? "Looking forward to seeing you there." : "Reply to this email with the missing details and you'll be all set.",
+          closing: allComplete ? "Looking forward to seeing you all there." : "Reply to this email with the missing details and you'll be all set.",
         });
 
         const scheduleText = schedule.length
           ? `\nRunning order:\n${schedule.map((s) => `  ${s.time}  —  ${s.label}`).join("\n")}\n`
           : "";
         const whereText = whereValue ? ` (${whereValue})` : "";
-        const textBody = allComplete
-          ? `Hi ${firstName},\n\n${isFollowUp ? `Thanks — your RSVP is now complete.` : `Your RSVP for "${ev.title}"${whereText} on ${whenLabel} is confirmed (${statusUpper}).`}\n${scheduleText}\nWe have your details on file:\n- Name: ${r.first_name || ""} ${r.last_name || ""}\n- Phone: ${r.phone || "—"}\n- ${orgLabel}: ${r.organisation_name || "—"}\n- Travelling from: ${r.state || "—"}\n\nSee you there.\n\n— Duncan`
-          : `Hi ${firstName},\n\nThanks. We still need the following details to complete your RSVP for "${ev.title}"${whereText}:\n${missing.map((f) => `- ${f}`).join("\n")}\n\nJust reply to this email with the details above.\n\n— Duncan`;
+        const textBody = isMulti
+          ? (allComplete
+              ? `Hi ${firstName},\n\nAll ${attendeesForReply.length} attendees are confirmed for "${ev.title}"${whereText} on ${whenLabel} (${statusUpper}).\n\nRegistered:\n${completeListText}\n${scheduleText}\nSee you there.\n\n— Duncan`
+              : `Hi ${firstName},\n\nThanks for the RSVP for "${ev.title}"${whereText} on ${whenLabel} (${statusUpper}).\n\n${completeAttendees.length ? `Fully registered:\n${completeListText}\n\n` : ""}I still need:\n${incompleteListText}\n\nJust reply to this email with the missing details.\n\n— Duncan`)
+          : (allComplete
+              ? `Hi ${firstName},\n\n${isFollowUp ? `Thanks — your RSVP is now complete.` : `Your RSVP for "${ev.title}"${whereText} on ${whenLabel} is confirmed (${statusUpper}).`}\n${scheduleText}\nWe have your details on file:\n- Name: ${r.first_name || ""} ${r.last_name || ""}\n- Phone: ${r.phone || "—"}\n- ${orgLabel}: ${r.organisation_name || "—"}\n- Travelling from: ${r.state || "—"}\n\nSee you there.\n\n— Duncan`
+              : `Hi ${firstName},\n\nThanks. We still need the following details to complete your RSVP for "${ev.title}"${whereText}:\n${missing.map((f) => `- ${f}`).join("\n")}\n\nJust reply to this email with the details above.\n\n— Duncan`);
 
         const sendResult = await sendGmailReply(token, attendeeEmail, replySubject, textBody, html, threadId, messageIdHdr);
         const replyUpdate = sendResult.ok

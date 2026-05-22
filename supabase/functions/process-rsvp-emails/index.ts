@@ -703,7 +703,26 @@ Deno.serve(async (req) => {
         // Ensure primary is first; dedupe against AI list by normalised name
         const primaryKey = normName(primaryAttendee.first_name, primaryAttendee.last_name);
         let incomingAttendees: AttendeeExtract[];
-        if (!primaryKey || isFillerAttendee(primaryAttendee)) {
+
+        // ── Sender ↔ attendee reconciliation ──
+        // If the sender is already represented inside aiList (e.g. "Adit, Palash
+        // and Ashish will attend" sent by ashish@…), DO NOT create an additional
+        // unnamed sender attendee. Treat the matched attendee as the primary.
+        const primaryMatchesSender =
+          isFillerAttendee(primaryAttendee) ||
+          senderMatchesAttendee(senderEmail, senderName, primaryAttendee);
+        const senderMatchInList = !primaryMatchesSender
+          ? aiList.find((a) => senderMatchesAttendee(senderEmail, senderName, a))
+          : null;
+
+        if (senderMatchInList) {
+          // Sender is already in the list under a different identity than the AI's
+          // top-level primary fields. Drop the AI primary; reorder matched first.
+          const matched: AttendeeExtract = { ...senderMatchInList };
+          if (isEmptyVal(matched.email)) matched.email = attendeeEmail;
+          const rest = aiList.filter((a) => a !== senderMatchInList);
+          incomingAttendees = [matched, ...rest];
+        } else if (!primaryKey || isFillerAttendee(primaryAttendee)) {
           incomingAttendees = aiList;
         } else {
           const rest = aiList.filter((a) => normName(a.first_name, a.last_name) !== primaryKey);
@@ -716,6 +735,7 @@ Deno.serve(async (req) => {
           }
           incomingAttendees = [primaryAttendee, ...rest];
         }
+
 
         // Attendees without an explicit email inherit the sender's email
         // (shared RSVPs: e.g. parent emails on behalf of family/colleagues).

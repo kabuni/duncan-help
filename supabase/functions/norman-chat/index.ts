@@ -1674,6 +1674,25 @@ const WORKSTREAM_TOOLS = [
   {
     type: "function",
     function: {
+      name: "list_workstream_cards",
+      description: "Fast, focused list of workstream cards with their open tasks. Use this whenever the user asks to see, list, summarize, or enumerate workstream cards, pending actions, open tasks, to-dos, overdue items, or 'what's on my plate'. Returns card title, status (red/amber/green/done), project tag, due date, assignee names, and open task titles. Prefer this over get_workstream_analytics or get_operational_summary when the user wants an actual list (not just counts).",
+      parameters: {
+        type: "object",
+        properties: {
+          status: { type: "string", enum: ["red", "amber", "green", "done", "open"], description: "Filter by status. 'open' = red+amber+green (excludes done). Default: open." },
+          project_tag: { type: "string", enum: ["Lightning Strike Event", "Website", "K10 App", "School Integrations"], description: "Filter by project tag" },
+          assignee: { type: "string", enum: ["me", "anyone"], description: "'me' = only cards assigned to the current user. Default: anyone." },
+          overdue_only: { type: "boolean", description: "If true, only cards whose due_date has passed or that contain overdue open tasks." },
+          include_tasks: { type: "boolean", description: "Include open task titles per card (default true)." },
+          limit: { type: "number", description: "Max cards to return (default 30, max 100)." },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "create_workstream_card",
       description: "Create a new workstream card. The card is automatically assigned ONLY to the creator (current user). To assign to others, use update_workstream_card after creation. Returns the created card ID for chaining with add_tasks_to_card.",
       parameters: {
@@ -1900,6 +1919,120 @@ async function executeWorkstreamTool(
       if (error) throw new Error(`Failed to list team members: ${error.message}`);
       return { members: data || [], count: (data || []).length };
     }
+
+    case "list_workstream_cards": {
+      const limit = Math.min(Math.max(args.limit ?? 30, 1), 100);
+      const includeTasks = args.include_tasks !== false;
+      const nowIso = new Date().toISOString();
+
+      // Optional pre-filter to cards assigned to current user
+      let restrictCardIds: string[] | null = null;
+      if (args.assignee === "me") {
+        const { data: myAssign } = await supabaseAdmin
+          .from("workstream_card_assignees")
+          .select("card_id")
+          .eq("user_id", userId);
+        restrictCardIds = (myAssign || []).map((r: any) => r.card_id);
+        if (restrictCardIds.length === 0) {
+          return { count: 0, cards: [], filter: { ...args, applied: "assignee=me (none)" } };
+        }
+      }
+
+      let cardsQuery = supabaseAdmin
+        .from("workstream_cards")
+        .select("id, title, status, project_tag, due_date, priority, created_at")
+        .is("archived_at", null)
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .limit(limit);
+
+      if (args.status === "open") {
+        cardsQuery = cardsQuery.in("status", ["red", "amber", "green"]);
+      } else if (args.status) {
+        cardsQuery = cardsQuery.eq("status", args.status);
+      } else {
+        cardsQuery = cardsQuery.in("status", ["red", "amber", "green"]);
+      }
+      if (args.project_tag) cardsQuery = cardsQuery.eq("project_tag", args.project_tag);
+      if (restrictCardIds) cardsQuery = cardsQuery.in("id", restrictCardIds);
+      if (args.overdue_only) cardsQuery = cardsQuery.lt("due_date", nowIso);
+
+      const { data: cards, error } = await cardsQuery;
+      if (error) throw new Error(`Failed to list workstream cards: ${error.message}`);
+      const cardList = cards || [];
+      if (cardList.length === 0) {
+        return { count: 0, cards: [], filter: args };
+      }
+
+      const cardIds = cardList.map((c: any) => c.id);
+
+      // Fetch assignees + open tasks in parallel
+      const [assigneesRes, tasksRes] = await Promise.all([
+        supabaseAdmin
+          .from("workstream_card_assignees")
+          .select("card_id, user_id")
+          .in("card_id", cardIds),
+        includeTasks
+          ? supabaseAdmin
+              .from("workstream_tasks")
+              .select("id, card_id, title, due_date, completed")
+              .in("card_id", cardIds)
+              .eq("completed", false)
+              .order("due_date", { ascending: true, nullsFirst: false })
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+
+      const assigneeRows = (assigneesRes as any).data || [];
+      const tasks = (tasksRes as any).data || [];
+
+      // Resolve assignee names
+      const userIds = Array.from(new Set(assigneeRows.map((a: any) => a.user_id)));
+      const nameById: Record<string, string> = {};
+      if (userIds.length > 0) {
+        const { data: profs } = await supabaseAdmin
+          .from("profiles")
+          .select("user_id, display_name")
+          .in("user_id", userIds);
+        for (const p of profs || []) nameById[p.user_id] = p.display_name || "Unknown";
+      }
+
+      const assigneesByCard: Record<string, string[]> = {};
+      for (const a of assigneeRows) {
+        (assigneesByCard[a.card_id] ||= []).push(nameById[a.user_id] || "Unknown");
+      }
+
+      const tasksByCard: Record<string, any[]> = {};
+      for (const t of tasks) {
+        (tasksByCard[t.card_id] ||= []).push({
+          title: t.title,
+          due_date: t.due_date,
+          overdue: !!(t.due_date && t.due_date < nowIso),
+        });
+      }
+
+      let result = cardList.map((c: any) => ({
+        id: c.id,
+        title: c.title,
+        status: c.status,
+        project_tag: c.project_tag,
+        due_date: c.due_date,
+        priority: c.priority,
+        overdue: !!(c.due_date && c.due_date < nowIso),
+        assignees: assigneesByCard[c.id] || [],
+        open_tasks: includeTasks ? (tasksByCard[c.id] || []) : undefined,
+        open_task_count: includeTasks ? (tasksByCard[c.id] || []).length : undefined,
+      }));
+
+      if (args.overdue_only) {
+        // Already filtered card-level; also keep cards with overdue tasks even if card has no due date
+        const overdueTaskCardIds = new Set(Object.entries(tasksByCard)
+          .filter(([_, ts]) => (ts as any[]).some((t) => t.overdue))
+          .map(([id]) => id));
+        result = result.filter((r: any) => r.overdue || overdueTaskCardIds.has(r.id));
+      }
+
+      return { count: result.length, cards: result, filter: args };
+    }
+
 
     case "create_workstream_card": {
       // Deduplication: check if a card with the same title + project_tag already exists for this creator
@@ -4696,7 +4829,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       { groups: [GMAIL_TOOLS], re: /\b(gmail|email|emails|inbox|draft|drafts|reply|forward|unread|sender|recipient|cc'?d|bcc'?d)\b/i },
       { groups: [CALENDAR_TOOLS], re: /\b(calendar|diary|schedule|availability|free\/busy|free busy|book\b|meeting room|reschedule|invite|invites|event|events|appointment)\b/i },
       { groups: [MEETING_TOOLS], re: /\b(meeting notes?|meetings?\b|recap|action items?|transcript|plaud|gemini|google\s*meet|recording|summary of (the|my|our)\b|minutes\b)\b/i },
-      { groups: [WORKSTREAM_TOOLS], re: /\b(workstream|workstreams|kanban|card|cards|ryg|amber|red\/yellow|status update|owner of)\b/i },
+      { groups: [WORKSTREAM_TOOLS], re: /\b(workstream|workstreams|kanban|card|cards|ryg|amber|red\/yellow|status update|owner of|pending action|pending actions|action items?|open tasks?|my tasks?|to[- ]?dos?|on my plate|overdue)\b/i },
       { groups: [PLANNER_TOOLS], re: /\b(planner|plan\b|roadmap|milestone|sprint plan|backlog|to-do list)\b/i },
       { groups: [ANALYTICS_TOOLS], re: /\b(analytic|analytics|metric|metrics|kpi|dashboard|trend|report|reporting|chart|graph)\b/i },
       { groups: [GOOGLE_DRIVE_TOOLS], re: /\b(drive|google drive|gdrive|folder|shared drive|doc\b|docs\b|sheet\b|sheets\b|slide|slides|file in)\b/i },

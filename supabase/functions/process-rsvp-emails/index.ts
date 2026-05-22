@@ -934,11 +934,18 @@ Deno.serve(async (req) => {
         }
         if (!sendResult.ok) {
           summary.errors.push(`gmail-send ${attendeeEmail}: ${sendResult.error}`);
+          // Reflect send failure on the ledger but KEEP the row claimed so we
+          // don't infinitely retry the send (and re-spam the recipient).
+          // Operator can manually clear the ledger row to retry.
+          await finalizeLedger({ outcome: "send_failed" });
         }
 
 
       } catch (e) {
         summary.errors.push(String(e));
+        // Mark the claim 'failed' so subsequent cron ticks skip it instead of
+        // replaying — but keep the row (preserves visibility + blocks resend).
+        await finalizeLedger({ outcome: "failed" });
       }
     }
 

@@ -604,7 +604,7 @@ Deno.serve(async (req) => {
 
     // 3. List + extract
     const files = await listFolderFiles(driveToken, folder.id);
-    if (!files.length) throw new Error(`No Google Docs or DOCX files in folder "${folder.name}"`);
+    if (!files.length && !allowEmptyFolder) throw new Error(`No Google Docs or DOCX files in folder "${folder.name}"`);
 
     const processed: Array<{ id: string; name: string; chars: number; type: string }> = [];
     const failed: Array<{ id: string; name: string; error: string }> = [];
@@ -628,8 +628,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!processed.length) {
+    const emptyFallback = processed.length === 0;
+    if (emptyFallback && !allowEmptyFolder) {
       throw new Error("All file extractions failed — nothing to summarise");
+    }
+    if (emptyFallback) {
+      blocks.push(
+        `\n\n=== NO WEEKLY SOURCE REPORTS AVAILABLE ===\n` +
+        `The Drive folder "${folder.name}" contained no readable Google Docs or DOCX files for the previous week. ` +
+        `Generate a brief fallback Executive Snapshot that explicitly notes "No weekly source reports were available for this period", ` +
+        `omit RYG/Wins/Risks tables that would require source data (or render them with a single 'No data' row), ` +
+        `and still produce the full 'Upcoming This Week' section from the planner schedule below.`
+      );
     }
 
     // Fetch upcoming planner events (Mon → Sun, UK) before hashing/synthesis.

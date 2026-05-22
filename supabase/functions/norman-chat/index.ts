@@ -1675,7 +1675,7 @@ const WORKSTREAM_TOOLS = [
     type: "function",
     function: {
       name: "list_workstream_cards",
-      description: "Fast, focused list of workstream cards with their open tasks. Use this whenever the user asks to see, list, summarize, or enumerate workstream cards, pending actions, open tasks, to-dos, overdue items, or 'what's on my plate'. Returns card title, status (red/amber/green/done), project tag, due date, assignee names, and open task titles. Set export_format='csv' when the user asks for a downloadable file, CSV, spreadsheet, or Google Sheet — this returns a short-lived download_url instead of inline JSON. Prefer this over get_workstream_analytics or get_operational_summary when the user wants an actual list (not just counts).",
+      description: "Fast, focused list of workstream cards with their open tasks. Use this whenever the user asks to see, list, summarize, or enumerate workstream cards, pending actions, open tasks, to-dos, overdue items, or 'what's on my plate'. Returns card title, status (red/amber/green/done), project tag, due date, assignee names, and open task titles. Set export_format='csv' for a downloadable CSV, or export_format='gsheet' to create a new Google Sheet in the user's own Google Drive (requires their Gmail/Google integration to be connected). Prefer this over get_workstream_analytics or get_operational_summary when the user wants an actual list (not just counts).",
       parameters: {
         type: "object",
         properties: {
@@ -1684,8 +1684,8 @@ const WORKSTREAM_TOOLS = [
           assignee: { type: "string", enum: ["me", "anyone"], description: "'me' = only cards assigned to the current user. Default: anyone." },
           overdue_only: { type: "boolean", description: "If true, only cards whose due_date has passed or that contain overdue open tasks." },
           include_tasks: { type: "boolean", description: "Include open task titles per card (default true)." },
-          limit: { type: "number", description: "Max cards to return (default 30, max 1000 when export_format=csv, otherwise 100)." },
-          export_format: { type: "string", enum: ["json", "csv"], description: "'csv' uploads a CSV to private storage and returns a 1-hour signed download_url + filename. Use whenever the user mentions download, CSV, spreadsheet, Excel, or Google Sheet. Default: json." },
+          limit: { type: "number", description: "Max cards to return (default 30, max 1000 when exporting, otherwise 100)." },
+          export_format: { type: "string", enum: ["json", "csv", "gsheet"], description: "'csv' uploads a CSV to private storage and returns a 1-hour signed download_url. 'gsheet' creates a Google Sheet in the user's own Drive using their connected Google account and returns the spreadsheet URL. Default: json." },
         },
         required: [],
       },

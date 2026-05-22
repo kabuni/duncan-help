@@ -497,8 +497,20 @@ export function useUpdateCard() {
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<WorkstreamCard> & { id: string; status_source?: "manual" | "automatic" }) => {
       if (!user) throw new Error("Not authenticated");
-      // Remove non-DB fields
-      const { assignees, tasks_total, tasks_completed, owner_name, ...dbUpdates } = updates as any;
+      // Strip non-DB / computed fields so spreading a full card object can't
+      // poison the UPDATE with unknown columns.
+      const {
+        assignees, tasks_total, tasks_completed, owner_name,
+        overall_status, task_breakdown,
+        ...dbUpdates
+      } = updates as any;
+
+      // Normalize project_tag: trim whitespace; treat empty string as null.
+      if (dbUpdates.project_tag !== undefined) {
+        const v = (dbUpdates.project_tag ?? "");
+        const trimmed = typeof v === "string" ? v.trim() : v;
+        dbUpdates.project_tag = trimmed ? trimmed : null;
+      }
 
       // Any user-driven status change is treated as a manual override so the
       // overdue/auto-escalation cron will not overwrite it.
@@ -510,10 +522,12 @@ export function useUpdateCard() {
         dbUpdates.manual_status_set_at = null;
       }
 
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from("workstream_cards")
         .update({ ...dbUpdates, updated_at: new Date().toISOString() })
-        .eq("id", id);
+        .eq("id", id)
+        .select("id, project_tag, status, status_source")
+        .single();
       if (error) throw error;
 
       if (updates.status) {
@@ -522,7 +536,59 @@ export function useUpdateCard() {
           details: { new_status: updates.status, status_source: dbUpdates.status_source || "manual" },
         });
       }
+
+      if (dbUpdates.project_tag !== undefined) {
+        await supabase.from("workstream_activity").insert({
+          card_id: id, user_id: user.id, action: "project_changed",
+          details: { new_project_tag: dbUpdates.project_tag },
+        });
+      }
+
+      return { id, updates: dbUpdates, updated };
     },
+    // Optimistic: snap the Select / badges to the new value immediately so the
+    // UI doesn't appear to "revert" while the refetch round-trips.
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: ["workstream-card", vars.id] });
+      const prevDetail = qc.getQueryData<any>(["workstream-card", vars.id]);
+      const prevLists = qc.getQueriesData<any>({ queryKey: ["workstream-cards"] });
+
+      // Patch card-detail cache
+      if (prevDetail?.card) {
+        qc.setQueryData(["workstream-card", vars.id], {
+          ...prevDetail,
+          card: { ...prevDetail.card, ...vars },
+        });
+      }
+      // Patch every list cache that contains this card
+      prevLists.forEach(([key, list]) => {
+        if (!Array.isArray(list)) return;
+        qc.setQueryData(key, list.map((c: any) => c.id === vars.id ? { ...c, ...vars } : c));
+      });
+      return { prevDetail, prevLists };
+    },
+    onError: (e: Error, _vars, ctx) => {
+      // Roll back optimistic patches
+      if (ctx?.prevDetail) qc.setQueryData(["workstream-card", _vars.id], ctx.prevDetail);
+      ctx?.prevLists?.forEach(([key, list]: [any, any]) => qc.setQueryData(key, list));
+      toast.error(`Couldn't save change: ${e.message}`);
+    },
+    onSuccess: (result, vars) => {
+      if (vars.project_tag !== undefined) {
+        toast.success(
+          vars.project_tag === null || vars.project_tag === ""
+            ? "Removed from workstream"
+            : `Moved to "${result?.updated?.project_tag ?? vars.project_tag}"`
+        );
+      }
+    },
+    onSettled: (_data, _err, vars) => {
+      qc.invalidateQueries({ queryKey: ["workstream-cards"] });
+      qc.invalidateQueries({ queryKey: ["workstream-card", vars.id] });
+      qc.invalidateQueries({ queryKey: ["workstream-project-tags"] });
+    },
+  });
+}
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workstream-cards"] });
       qc.invalidateQueries({ queryKey: ["workstream-card"] });

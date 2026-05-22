@@ -587,25 +587,75 @@ Deno.serve(async (req) => {
 
         const isFollowUp = !!existingRsvp;
         const nowIso = new Date().toISOString();
-        const isEmpty = (v: any) => v === null || v === undefined || (typeof v === "string" && v.trim() === "");
-        // Merge helper: only fill new value when existing field is empty AND new value is non-null.
+        const isEmpty = isEmptyVal;
         const mergeField = (oldVal: any, newVal: any) => (isEmpty(oldVal) && !isEmpty(newVal) ? newVal : oldVal);
 
+        // ── Build incoming attendee list (primary + additional) ──
+        const primaryAttendee: AttendeeExtract = {
+          first_name: match.first_name,
+          last_name: match.last_name,
+          phone: match.phone,
+          email: match.email ? String(match.email).toLowerCase() : attendeeEmail,
+          organisation_type: match.organisation_type,
+          organisation_name: match.organisation_name,
+          location: match.location,
+        };
+        const aiList = cleanAttendeeList(match.attendees);
+        // Ensure primary is first; dedupe against AI list by normalised name
+        const primaryKey = normName(primaryAttendee.first_name, primaryAttendee.last_name);
+        let incomingAttendees: AttendeeExtract[];
+        if (!primaryKey || isFillerAttendee(primaryAttendee)) {
+          incomingAttendees = aiList;
+        } else {
+          const rest = aiList.filter((a) => normName(a.first_name, a.last_name) !== primaryKey);
+          // try to merge AI primary entry into our primary
+          const aiPrimary = aiList.find((a) => normName(a.first_name, a.last_name) === primaryKey);
+          if (aiPrimary) {
+            for (const k of Object.keys(aiPrimary) as (keyof AttendeeExtract)[]) {
+              if (isEmpty(primaryAttendee[k]) && !isEmpty(aiPrimary[k])) (primaryAttendee as any)[k] = aiPrimary[k];
+            }
+          }
+          incomingAttendees = [primaryAttendee, ...rest];
+        }
+
         let rsvpId: string;
-        const validStatus = ["yes", "no", "maybe"].includes(match.status) ? match.status : "yes";
+        const newValid = ["yes", "no", "maybe"].includes(match.status) ? match.status : null;
+        // Status protection: never overwrite explicit "no" with anything other than another explicit value.
+        const existingStatus: string | null = existingRsvp?.status ?? null;
+        const incomingExplicit = !!match.status_explicit && !!newValid;
+        let finalStatus: string;
+        if (existingStatus === "no" && !incomingExplicit) {
+          finalStatus = "no";
+        } else if (incomingExplicit) {
+          finalStatus = newValid!;
+        } else {
+          finalStatus = existingStatus || newValid || "yes";
+        }
+
+        // ── Merge attendees sidecar into notes ──
+        const existingNotesParsed = parseAttendeesSidecar(existingRsvp?.notes);
+        const existingAttendees = existingNotesParsed.attendees;
+        const mergedAttendees = mergeAttendeeLists(existingAttendees, incomingAttendees);
+        const notesSubjectPart = existingRsvp?.notes
+          ? (existingNotesParsed.subject || subjectHdr)
+          : subjectHdr;
+        const finalNotes = serialiseNotes(notesSubjectPart, mergedAttendees);
+
+        // Primary row reflects attendees[0] (the sender / primary attendee)
+        const primaryRow = mergedAttendees[0] || primaryAttendee;
 
         if (isFollowUp) {
           const merged = {
             profile_id: existingRsvp.profile_id || profile?.id || null,
-            display_name: existingRsvp.display_name || (([match.first_name, match.last_name].filter(Boolean).join(" ").trim()) || profile?.display_name || senderName || attendeeEmail),
-            first_name: mergeField(existingRsvp.first_name, match.first_name),
-            last_name: mergeField(existingRsvp.last_name, match.last_name),
-            phone: mergeField(existingRsvp.phone, match.phone),
-            organisation_type: mergeField(existingRsvp.organisation_type, match.organisation_type),
-            organisation_name: mergeField(existingRsvp.organisation_name, match.organisation_name),
-            state: mergeField(existingRsvp.state, match.location),
-            // Status: only overwrite when sender provides a fresh explicit one; default keeps prior value.
-            status: validStatus,
+            display_name: existingRsvp.display_name || (([primaryRow.first_name, primaryRow.last_name].filter(Boolean).join(" ").trim()) || profile?.display_name || senderName || attendeeEmail),
+            first_name: mergeField(existingRsvp.first_name, primaryRow.first_name),
+            last_name: mergeField(existingRsvp.last_name, primaryRow.last_name),
+            phone: mergeField(existingRsvp.phone, primaryRow.phone),
+            organisation_type: mergeField(existingRsvp.organisation_type, primaryRow.organisation_type),
+            organisation_name: mergeField(existingRsvp.organisation_name, primaryRow.organisation_name),
+            state: mergeField(existingRsvp.state, primaryRow.location),
+            status: finalStatus,
+            notes: finalNotes,
             gmail_thread_id: existingRsvp.gmail_thread_id || threadId || null,
             last_inbound_message_id: m.id,
             follow_up_count: (existingRsvp.follow_up_count || 0) + 1,
@@ -618,24 +668,24 @@ Deno.serve(async (req) => {
           if (updErr) { summary.errors.push(`rsvp-update: ${updErr.message}`); continue; }
           rsvpId = existingRsvp.id;
         } else {
-          const fullName = [match.first_name, match.last_name].filter(Boolean).join(" ").trim();
-          const display = fullName || profile?.display_name || senderName || attendeeEmail;
+          const fullName2 = [primaryRow.first_name, primaryRow.last_name].filter(Boolean).join(" ").trim();
+          const display2 = fullName2 || profile?.display_name || senderName || attendeeEmail;
           const { data: inserted, error: insErr } = await admin
             .from("event_rsvps")
             .insert({
               event_id: match.event_id,
               profile_id: profile?.id || null,
               email: attendeeEmail,
-              display_name: display,
-              first_name: match.first_name,
-              last_name: match.last_name,
-              phone: match.phone,
-              organisation_type: match.organisation_type,
-              organisation_name: match.organisation_name,
-              state: match.location,
-              status: validStatus,
+              display_name: display2,
+              first_name: primaryRow.first_name,
+              last_name: primaryRow.last_name,
+              phone: primaryRow.phone,
+              organisation_type: primaryRow.organisation_type,
+              organisation_name: primaryRow.organisation_name,
+              state: primaryRow.location,
+              status: finalStatus,
               source: "email",
-              notes: subjectHdr,
+              notes: finalNotes,
               gmail_message_id: m.id,
               gmail_thread_id: threadId || null,
               last_inbound_message_id: m.id,

@@ -1674,6 +1674,25 @@ const WORKSTREAM_TOOLS = [
   {
     type: "function",
     function: {
+      name: "list_workstream_cards",
+      description: "Fast, focused list of workstream cards with their open tasks. Use this whenever the user asks to see, list, summarize, or enumerate workstream cards, pending actions, open tasks, to-dos, overdue items, or 'what's on my plate'. Returns card title, status (red/amber/green/done), project tag, due date, assignee names, and open task titles. Prefer this over get_workstream_analytics or get_operational_summary when the user wants an actual list (not just counts).",
+      parameters: {
+        type: "object",
+        properties: {
+          status: { type: "string", enum: ["red", "amber", "green", "done", "open"], description: "Filter by status. 'open' = red+amber+green (excludes done). Default: open." },
+          project_tag: { type: "string", enum: ["Lightning Strike Event", "Website", "K10 App", "School Integrations"], description: "Filter by project tag" },
+          assignee: { type: "string", enum: ["me", "anyone"], description: "'me' = only cards assigned to the current user. Default: anyone." },
+          overdue_only: { type: "boolean", description: "If true, only cards whose due_date has passed or that contain overdue open tasks." },
+          include_tasks: { type: "boolean", description: "Include open task titles per card (default true)." },
+          limit: { type: "number", description: "Max cards to return (default 30, max 100)." },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "create_workstream_card",
       description: "Create a new workstream card. The card is automatically assigned ONLY to the creator (current user). To assign to others, use update_workstream_card after creation. Returns the created card ID for chaining with add_tasks_to_card.",
       parameters: {

@@ -707,18 +707,31 @@ Deno.serve(async (req) => {
   };
 
   try {
+    // 0. Single source of truth for all dates this run.
+    const reportWeek = buildReportWeek();
+    const weekRange = reportWeek.label;
+
     // 1. Drive token
     const driveToken = await getDriveToken(admin);
 
-    // 2. Latest weekly folder
-    const folder = await findLatestWeeklyFolder(driveToken);
+    // 2. Folder for the report week (name-matched, not "newest wins").
+    const folder = await findFolderForWeek(driveToken, reportWeek);
+    if (!folder.matched && !allowEmptyFolder) {
+      throw new Error(
+        `No Drive folder matched the report week "${weekRange} ${reportWeek.year}". ` +
+        `Candidates considered: ${folder.candidatesConsidered.slice(0, 10).join(", ") || "(none)"}`
+      );
+    }
     await admin.from("exec_summary_runs").update({
-      folder_id: folder.id, folder_name: folder.name,
+      folder_id: folder.id || null,
+      folder_name: folder.name || null,
     }).eq("id", runId);
 
-    // 3. List + extract
-    const files = await listFolderFiles(driveToken, folder.id);
-    if (!files.length && !allowEmptyFolder) throw new Error(`No Google Docs or DOCX files in folder "${folder.name}"`);
+    // 3. List + extract (skip if no folder matched — fallback path).
+    const files = folder.matched ? await listFolderFiles(driveToken, folder.id) : [];
+    if (folder.matched && !files.length && !allowEmptyFolder) {
+      throw new Error(`No Google Docs or DOCX files in folder "${folder.name}"`);
+    }
 
     const processed: Array<{ id: string; name: string; chars: number; type: string }> = [];
     const failed: Array<{ id: string; name: string; error: string }> = [];
@@ -747,26 +760,28 @@ Deno.serve(async (req) => {
       throw new Error("All file extractions failed — nothing to summarise");
     }
     if (emptyFallback) {
+      const folderNote = folder.matched
+        ? `The Drive folder "${folder.name}" matched the report week but contained no readable Google Docs or DOCX files.`
+        : `No Drive folder matched the report week "${weekRange} ${reportWeek.year}".`;
       blocks.push(
         `\n\n=== NO WEEKLY SOURCE REPORTS AVAILABLE ===\n` +
-        `The Drive folder "${folder.name}" contained no readable Google Docs or DOCX files for the previous week. ` +
-        `Generate a brief fallback Executive Snapshot that explicitly notes "No weekly source reports were available for this period", ` +
+        `${folderNote} ` +
+        `Generate a brief fallback Executive Snapshot that explicitly notes "No weekly source reports were available for ${weekRange} ${reportWeek.year}", ` +
         `omit RYG/Wins/Risks tables that would require source data (or render them with a single 'No data' row), ` +
         `and still produce the full 'Upcoming This Week' section from the planner schedule below.`
       );
     }
 
-    // Fetch upcoming planner events (Mon → Sun, UK) before hashing/synthesis.
-    const { events: plannerEvents, range: plannerRange } = await fetchUpcomingPlannerEvents(admin);
+    // Fetch upcoming planner events (derived from reportWeek for consistency).
+    const { events: plannerEvents, range: plannerRange } = await fetchUpcomingPlannerEvents(admin, reportWeek);
     const plannerBlock = formatPlannerBlock(plannerEvents, plannerRange);
 
-    // Compute deterministic content hash from processed files + planner schedule.
-    // Planner data participates in the hash so that planner-only changes still
-    // regenerate the email even when Drive docs are unchanged.
+    // Deterministic content hash from processed files + planner schedule + report-week.
     const fingerprintInput = files
       .map((f: any) => `${f.id}|${f.modifiedTime ?? ""}|${f.size ?? ""}`)
       .sort()
       .join("\n")
+      + `\n#week=${reportWeek.isoLabel}`
       + `\n#count=${processed.length}\n#chars=${processed.reduce((a, p) => a + p.chars, 0)}`
       + `\n#planner_range=${plannerRange.startUtc}..${plannerRange.endUtc}`
       + `\n#planner=\n${plannerHashInput(plannerEvents)}`;
@@ -781,9 +796,8 @@ Deno.serve(async (req) => {
       content_hash: contentHash,
     }).eq("id", runId);
 
-    // Duplicate-content protection: skip if an earlier successful run for the same folder
-    // produced the same hash. `skip_dedup: true` (or `force: true`) bypasses this gate.
-    if (!skipDedup && !force) {
+    // Duplicate-content protection.
+    if (!skipDedup && !force && folder.matched) {
       const { data: prior } = await admin
         .from("exec_summary_runs")
         .select("id,started_at,email_message_id")
@@ -811,27 +825,50 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. GPT-4o summary
-    const summaryMd = await buildSummaryMarkdown(folder.name, blocks.join("\n"), plannerBlock);
+    // 4. GPT-4o summary (with authoritative date grounding).
+    const summaryMd = await buildSummaryMarkdown(
+      folder.name || `(no folder matched ${weekRange} ${reportWeek.year})`,
+      blocks.join("\n"),
+      plannerBlock,
+      reportWeek,
+    );
     if (!summaryMd) throw new Error("OpenAI returned empty summary");
 
-    const weekRange = lastWeekRangeLabel();
     const title = "Weekly Executive Summary";
-    // ASCII-only subject — uses " | " and "-" (no em dashes) so Gmail/Outlook
-    // render it cleanly without MIME encoded-word wrapping.
-    const subject = `Weekly Executive Summary | ${weekRange}`;
+    const subject = `Weekly Executive Summary | ${weekRange} ${reportWeek.year}`;
+
+    // Pre-send validator — block any run with subject/body date drift.
+    const validation = validateOutput({ subject, summaryMd, reportWeek });
+    if (!validation.ok) {
+      await admin.from("exec_summary_runs").update({
+        status: "failed_validation",
+        finished_at: new Date().toISOString(),
+        error: validation.reason,
+        error_details: { subject, report_week: reportWeek.label, year: reportWeek.year },
+      }).eq("id", runId);
+      return json({
+        error: `Validation failed: ${validation.reason}`,
+        run_id: runId,
+        subject,
+        report_week: `${reportWeek.label} ${reportWeek.year}`,
+      }, 500);
+    }
 
     await admin.from("exec_summary_runs").update({
       summary_chars: summaryMd.length,
     }).eq("id", runId);
 
-    // 5. Email — full summary embedded in HTML body (no attachments, no link)
+    // 5. Email
     const gmailToken = await getGmailSenderToken(admin);
     if (!gmailToken) throw new Error("Gmail sender token (duncan@kabuni.com) unavailable");
 
     const html = emailHtml({
-      title, weekRange, folderName: folder.name,
-      fileCount: processed.length, summaryMd,
+      title,
+      weekRange: `${weekRange} ${reportWeek.year}`,
+      folderName: folder.name,
+      folderMatched: folder.matched,
+      fileCount: processed.length,
+      summaryMd,
     });
     const messageId = await sendEmail(gmailToken, recipientHeader, subject, html);
 
@@ -844,15 +881,17 @@ Deno.serve(async (req) => {
     return json({
       success: true,
       run_id: runId,
-      folder: folder.name,
+      folder: folder.name || null,
+      folder_matched: folder.matched,
       files_processed: processed.length,
       failed_files: failed.length,
       recipients: effectiveRecipients,
       content_hash: contentHash,
       subject,
-      week_range: weekRange,
+      week_range: `${weekRange} ${reportWeek.year}`,
     });
   } catch (e) {
     return fail(e);
   }
 });
+

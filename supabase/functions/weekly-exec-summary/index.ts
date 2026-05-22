@@ -231,18 +231,18 @@ interface PlannerEvent {
 
 async function fetchUpcomingPlannerEvents(
   admin: any,
-): Promise<{ events: PlannerEvent[]; range: ReturnType<typeof upcomingWeekRangeUK> }> {
-  const range = upcomingWeekRangeUK();
+  window: ReportingWindow,
+): Promise<PlannerEvent[]> {
   const { data, error } = await admin
     .from("key_events")
     .select("title, start_at, category, raw_description, status, deleted_in_google")
-    .gte("start_at", range.startUtc)
-    .lt("start_at", range.endUtc)
+    .gte("start_at", window.upcomingStartUtc)
+    .lt("start_at", window.upcomingEndUtc)
     .eq("deleted_in_google", false)
     .order("start_at", { ascending: true });
   if (error) {
     console.warn("[weekly-exec-summary] planner fetch failed:", error.message);
-    return { events: [], range };
+    return [];
   }
   const dayFmt = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Europe/London", weekday: "long", day: "numeric", month: "short",
@@ -272,12 +272,12 @@ async function fetchUpcomingPlannerEvents(
       description: shortDesc, startIso: r.start_at,
     });
   }
-  return { events, range };
+  return events;
 }
 
 function formatPlannerBlock(
   events: PlannerEvent[],
-  range: ReturnType<typeof upcomingWeekRangeUK>,
+  window: ReportingWindow,
 ): string {
   if (!events.length) {
     return `Upcoming This Week (${range.mondayLabel} – ${range.sundayLabel}):\n- No planner events scheduled.`;

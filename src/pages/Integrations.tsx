@@ -207,7 +207,7 @@ const integrations: Integration[] = [
   },
 ];
 
-const hiddenIntegrationIds = new Set(["azure-blob", "basecamp", "github", "hubspot"]);
+const hiddenIntegrationIds = new Set(["azure-blob", "github", "hubspot"]);
 const baseVisibleIntegrations = integrations.filter((integration) => !hiddenIntegrationIds.has(integration.id));
 
 const statusConfig: Record<IntegrationStatus, { label: string; color: string; dot: string; bg: string }> = {

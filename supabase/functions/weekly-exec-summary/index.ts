@@ -687,7 +687,7 @@ Deno.serve(async (req) => {
     }
 
     // 4. GPT-4o summary
-    const summaryMd = await buildSummaryMarkdown(folder.name, blocks.join("\n"));
+    const summaryMd = await buildSummaryMarkdown(folder.name, blocks.join("\n"), plannerBlock);
     if (!summaryMd) throw new Error("OpenAI returned empty summary");
 
     const weekRange = lastWeekRangeLabel();

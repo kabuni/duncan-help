@@ -91,21 +91,46 @@ async function driveFetch(token: string, url: string): Promise<Response> {
   return fetch(url, { headers: { Authorization: `Bearer ${token}` } });
 }
 
-async function findLatestWeeklyFolder(token: string) {
-  // List subfolders ordered by createdTime desc — deterministic "latest".
+function normalizeFolderName(s: string) {
+  return s.toLowerCase()
+    .replace(/[\u2013\u2014]/g, "-")            // en/em dash → hyphen
+    .replace(/(\d+)(st|nd|rd|th)/g, "$1")        // strip ordinals
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function folderMatchesWeek(name: string, w: ReportWeek): boolean {
+  const n = normalizeFolderName(name);
+  const monthLong = w.monthLong.toLowerCase();
+  const monthShort = w.monthShort.toLowerCase();
+  const hasMonth = n.includes(monthLong) || n.includes(monthShort);
+  const hasMonDay = new RegExp(`(^|[^0-9])${w.monDay}([^0-9]|$)`).test(n);
+  const hasFriDay = new RegExp(`(^|[^0-9])${w.friDay}([^0-9]|$)`).test(n);
+  return hasMonth && hasMonDay && hasFriDay;
+}
+
+interface ResolvedFolder {
+  id: string;
+  name: string;
+  matched: boolean;
+  candidatesConsidered: string[];
+}
+
+async function findFolderForWeek(token: string, w: ReportWeek): Promise<ResolvedFolder> {
   const q = encodeURIComponent(
     `'${PARENT_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
   );
   const url =
     `https://www.googleapis.com/drive/v3/files?q=${q}` +
     `&fields=files(id,name,createdTime,modifiedTime)` +
-    `&orderBy=createdTime%20desc&pageSize=10`;
+    `&orderBy=createdTime%20desc&pageSize=50`;
   const res = await driveFetch(token, url);
   if (!res.ok) throw new Error(`Drive folder list failed: ${await res.text()}`);
-  const data = await res.json();
-  const folders = data.files ?? [];
-  if (!folders.length) throw new Error("No weekly subfolders found in the configured parent folder");
-  return folders[0] as { id: string; name: string; createdTime: string };
+  const folders = ((await res.json()).files ?? []) as Array<{ id: string; name: string }>;
+  const names = folders.map((f) => f.name);
+  const matched = folders.find((f) => folderMatchesWeek(f.name, w));
+  if (matched) return { id: matched.id, name: matched.name, matched: true, candidatesConsidered: names };
+  return { id: "", name: "", matched: false, candidatesConsidered: names };
 }
 
 async function listFolderFiles(token: string, folderId: string) {

@@ -1063,8 +1063,6 @@ const IntegrationDetail = ({
                     <p className="text-sm text-foreground">
                       {isAzureDevOps
                         ? "Click below to authorize Duncan to access your Azure DevOps work items and boards."
-                        : isBasecamp 
-                        ? "Click below to authorize Duncan to access your Basecamp projects, to-dos, and messages."
                         : isGmail
                         ? "Click below to sign in with Google and grant Duncan read-only access to your Gmail for CV ingestion."
                         : isSlack

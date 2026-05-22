@@ -585,7 +585,7 @@ const IntegrationDetail = ({
   isAdmin: boolean;
   isCalendarConnected: boolean | null;
   isAzureBlobConnected: boolean | null;
-  isBasecampConnected: boolean | null;
+  
   isGmailConnected: boolean | null;
   isSlackConnected: boolean | null;
   slackWorkspaceName: string | null;

@@ -79,11 +79,11 @@ function ordinalNum(n: number) {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-function buildReportWeek(): ReportWeek {
+function buildReportWeek(asOf?: Date): ReportWeek {
   const fmt = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
   });
-  const p = Object.fromEntries(fmt.formatToParts(new Date()).map((x) => [x.type, x.value]));
+  const p = Object.fromEntries(fmt.formatToParts(asOf ?? new Date()).map((x) => [x.type, x.value]));
   const ukToday = new Date(Date.UTC(+p.year, +p.month - 1, +p.day));
   const dow = ukToday.getUTCDay();
   const daysBackToMon = dow === 0 ? 6 : dow - 1;
@@ -708,7 +708,9 @@ Deno.serve(async (req) => {
 
   try {
     // 0. Single source of truth for all dates this run.
-    const reportWeek = buildReportWeek();
+    const asOfRaw = typeof body?.as_of === "string" ? body.as_of : null;
+    const asOfDate = asOfRaw ? new Date(asOfRaw) : undefined;
+    const reportWeek = buildReportWeek(asOfDate && !isNaN(asOfDate.getTime()) ? asOfDate : undefined);
     const weekRange = reportWeek.label;
 
     // 1. Drive token

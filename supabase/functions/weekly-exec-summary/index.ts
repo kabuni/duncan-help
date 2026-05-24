@@ -708,7 +708,9 @@ Deno.serve(async (req) => {
 
   try {
     // 0. Single source of truth for all dates this run.
-    const reportWeek = buildReportWeek();
+    const asOfRaw = typeof body?.as_of === "string" ? body.as_of : null;
+    const asOfDate = asOfRaw ? new Date(asOfRaw) : undefined;
+    const reportWeek = buildReportWeek(asOfDate && !isNaN(asOfDate.getTime()) ? asOfDate : undefined);
     const weekRange = reportWeek.label;
 
     // 1. Drive token

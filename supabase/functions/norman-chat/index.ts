@@ -5915,104 +5915,11 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const TOOL_EXECUTION_TIMEOUT_MS = 10_000;
     const PLAUD_SYNC_INTENT_RE = /\b(sync|refresh|import|pull\s+(new|latest)|update)\b[\s\S]{0,40}\bplaud\b/i;
 
-    /**
-     * Phase 1 — Canonical Tool-Result Envelope.
-     *
-     * Every tool — read, write, pending, error — MUST be wrapped through this
-     * helper. The envelope guarantees the following fields exist on the JSON
-     * the model sees, so the Mutation Truth Rule (Phase 2) can be enforced
-     * structurally instead of by prose:
-     *
-     *   { tool, source, status, ok, verified, ...payload }
-     *
-     * Rules for defaults (caller-provided fields always win):
-     *   - status="success" | "no_data"           → ok=true,  verified=true
-     *   - status="pending_confirmation"          → ok=false, verified=false
-     *   - status="partial" | "timeout"           → ok=false, verified=false
-     *   - status="hard_error" | "error"          → ok=false, verified=false
-     *   - status="circuit_open"                  → ok=false, verified=false
-     *
-     * Tools that perform real writes (e.g. reschedule_event) should return
-     * `{ ok, verified, source, before, after, error }` directly — those values
-     * pass through unchanged.
-     */
-    type ToolResultStatus =
-      | "success"
-      | "no_data"
-      | "partial"
-      | "pending_confirmation"
-      | "hard_error"
-      | "error"
-      | "timeout"
-      | "circuit_open";
-
-    function createStructuredToolResult(
-      toolName: string,
-      result: any,
-      statusHint: ToolResultStatus = "success",
-    ) {
-      const payload: Record<string, any> =
-        result && typeof result === "object" && !Array.isArray(result)
-          ? { ...result }
-          : { data: result };
-
-      // status: caller-provided result.status wins; otherwise use the hint.
-      const status: ToolResultStatus =
-        (typeof payload.status === "string" ? payload.status : statusHint) as ToolResultStatus;
-
-      // Derived defaults — only applied if the underlying tool didn't already
-      // set them. Write tools (reschedule_event, etc.) return their own ok/verified.
-      const positive = status === "success" || status === "no_data";
-      const ok = typeof payload.ok === "boolean" ? payload.ok : positive;
-      const verified = typeof payload.verified === "boolean" ? payload.verified : positive;
-      const source = typeof payload.source === "string" ? payload.source : toolName;
-
-      const envelope: Record<string, any> = { ...payload };
-      envelope.tool = toolName;
-      envelope.source = source;
-      envelope.status = status;
-      envelope.ok = ok;
-      envelope.verified = verified;
-      return envelope;
-    }
-
-    function classifyToolOutcome(toolName: string, result: any): { status: "success" | "no_data" | "partial" | "hard_error"; payload: any } {
-      if (result == null) {
-        return { status: "no_data", payload: createStructuredToolResult(toolName, { reason: "empty result" }, "no_data") };
-      }
-
-      if (typeof result === "object" && !Array.isArray(result)) {
-        const errorMessage = typeof result.error === "string" ? result.error.toLowerCase() : "";
-        if (errorMessage.includes("timed out")) {
-          return {
-            status: "partial",
-            payload: createStructuredToolResult(toolName, {
-              error: result.error,
-              fallback_message: "This source took too long, so continue without blocking on it.",
-            }, "partial"),
-          };
-        }
-
-        const likelyNoData = errorMessage.includes("no meetings")
-          || errorMessage.includes("no data")
-          || errorMessage.includes("not found")
-          || errorMessage.includes("no results")
-          || result.skipped === true
-          || result.empty === true;
-
-        if (likelyNoData) {
-          return { status: "no_data", payload: createStructuredToolResult(toolName, result, "no_data") };
-        }
-
-        return { status: "success", payload: createStructuredToolResult(toolName, result, "success") };
-      }
-
-      if (typeof result === "string" && result.trim().length === 0) {
-        return { status: "no_data", payload: createStructuredToolResult(toolName, { reason: "blank string result" }, "no_data") };
-      }
-
-      return { status: "success", payload: createStructuredToolResult(toolName, result, "success") };
-    }
+    // Phase 1 + Phase 8 — canonical tool-result envelope helpers live in
+    // `../_shared/tool-envelope.ts`. ToolResultStatus / createStructuredToolResult /
+    // classifyToolOutcome are imported at the top of this file so future
+    // executors (confirm-chat-write, project chat) can share the same shape
+    // and the Mutation Truth Rule remains structurally enforceable.
 
     async function withToolTimeout<T>(toolName: string, work: Promise<T>): Promise<T> {
       return await Promise.race([

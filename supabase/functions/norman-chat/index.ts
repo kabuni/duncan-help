@@ -6418,28 +6418,43 @@ Format as a natural, readable summary with clear sections. If a section has no d
       return sanitized;
     }
 
+    // ====================================================================
+    // Phase 6 — Kill silent recovery paths.
+    //
+    // Invariant: a tool call MUST originate from the streamed model output
+    // for the current turn. The recovery path is therefore TEXT-ONLY:
+    //   • We never pass `tools` to the recovery request.
+    //   • If the model still tries to emit tool calls, we discard them.
+    //   • If recovery cannot produce a user-facing answer, we return a
+    //     typed error envelope that the caller surfaces as a retry
+    //     affordance — we NEVER silently re-invoke write tools.
+    // ====================================================================
     async function recoverEmptyCompletion(baseMessages: any[]): Promise<{
       fullContent: string;
-      toolCalls: any[];
-      hadIncompleteToolCall: boolean;
+      error: { code: string; message: string; retryable: boolean } | null;
     }> {
       const recoveryMessages = [
         ...sanitizeConversationMessages(baseMessages),
         {
           role: "system",
-          content: "The prior completion returned no visible answer. Answer the user directly now. If tools are useful, call them. Otherwise return a concise user-facing response with no preamble.",
+          content:
+            "The prior completion returned no visible answer. Respond to the user in plain text only. Do NOT call any tools — tools were intentionally withheld for this recovery turn. If you cannot answer from prior tool results, say so honestly and suggest the user retry.",
         },
       ];
 
       const providers: Array<"claude" | "openai"> = ["claude", "openai"];
 
       for (const provider of providers) {
-        console.log("EMPTY COMPLETION RECOVERY ATTEMPT", { provider, messageCount: recoveryMessages.length });
+        console.log("EMPTY COMPLETION RECOVERY ATTEMPT (text-only)", {
+          provider,
+          messageCount: recoveryMessages.length,
+        });
 
         const recoveryResponse = await fetchAIWithRetry({
           messages: recoveryMessages,
           stream: true,
-          tools: filteredTools,
+          // Phase 6 invariant: never offer tools during recovery.
+          tools: undefined,
           force_provider: provider,
         });
 
@@ -6460,27 +6475,29 @@ Format as a natural, readable summary with clear sections. If a section has no d
           sawAnyDelta: recoveryResult.sawAnyDelta,
         });
 
-        if (recoveryResult.toolCalls.length > 0 && !recoveryResult.hadIncompleteToolCall) {
-          return {
-            fullContent: recoveryResult.fullContent,
-            toolCalls: recoveryResult.toolCalls,
-            hadIncompleteToolCall: false,
-          };
+        if (recoveryResult.toolCalls.length > 0) {
+          // Hard invariant violation — model tried to fabricate tool calls
+          // in a turn where the user-visible stream produced none. Discard.
+          console.warn("RECOVERY ATTEMPTED TO FABRICATE TOOL CALLS — discarding", {
+            attempted: recoveryResult.toolCalls.map((tc: any) => tc?.function?.name),
+          });
         }
 
         if (recoveryResult.fullContent.trim().length > 0) {
           return {
             fullContent: recoveryResult.fullContent,
-            toolCalls: [],
-            hadIncompleteToolCall: recoveryResult.hadIncompleteToolCall,
+            error: null,
           };
         }
       }
 
       return {
-        fullContent: "I couldn’t complete the synthesis for this request. Please retry.",
-        toolCalls: [],
-        hadIncompleteToolCall: false,
+        fullContent: "I couldn't complete that turn cleanly. Nothing was changed. Please retry your request.",
+        error: {
+          code: "empty_completion",
+          message: "Model returned no usable answer and recovery produced no text.",
+          retryable: true,
+        },
       };
     }
 

@@ -6608,6 +6608,40 @@ Format as a natural, readable summary with clear sections. If a section has no d
         let aggregatedContent = "";
         let lastFullContent = "";
 
+        // Phase 7 — Structured per-turn observability.
+        const turnId = (globalThis.crypto?.randomUUID?.() ?? `turn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
+        const turnStartedAt = Date.now();
+        const turnLog = {
+          turn_id: turnId,
+          user_id: userId,
+          intent: (typeof turn !== "undefined" ? (turn as any)?.intentMatched ?? null : null) as string | null,
+          bypass_tools: (typeof turn !== "undefined" ? (turn as any)?.bypassTools ?? false : false) as boolean,
+          tools_called: [] as string[],
+          mutation_ok: null as boolean | null,
+          mutation_verified: null as boolean | null,
+          rounds: 0,
+          empty_completion: false,
+          fabricated_tool_call: false,
+        };
+        const recordTurnToolOutcomes = (toolResults: any[]) => {
+          for (const msg of toolResults || []) {
+            const content = msg?.content;
+            let parsed: any = null;
+            if (typeof content === "string") {
+              try { parsed = JSON.parse(content); } catch { parsed = null; }
+            } else if (content && typeof content === "object") {
+              parsed = content;
+            }
+            if (!parsed) continue;
+            if (typeof parsed.ok === "boolean") {
+              turnLog.mutation_ok = parsed.ok && (turnLog.mutation_ok !== false);
+            }
+            if (typeof parsed.verified === "boolean") {
+              turnLog.mutation_verified = parsed.verified && (turnLog.mutation_verified !== false);
+            }
+          }
+        };
+
 
         // Phase 1.5: SSE heartbeat — keep the connection alive and prevent
         // perceived freezing during long tool execution / LLM round-trips.

@@ -2308,10 +2308,10 @@ async function executeWorkstreamTool(
           freshness_sla_seconds: 30,
           row_count: result.length,
           truncated: result.length >= limit,
-          filters_applied: args,
-          query_echo: `workstream_cards where status=${args.status ?? "open"}${args.project_tag ? ` project_tag=${args.project_tag}` : ""} limit ${limit}`,
+          filters_applied: filtersWithWindow,
+          query_echo: `workstream_cards where status=${args.status ?? "open"}${args.project_tag ? ` project_tag=${args.project_tag}` : ""}${windowEcho} limit ${limit}`,
         });
-        return { count: result.length, cards: result, filter: args, read_result: rr, meta: { readResult: true } };
+        return { count: result.length, cards: result, filter: filtersWithWindow, read_result: rr, meta: { readResult: true } };
       }
     }
 

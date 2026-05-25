@@ -6294,7 +6294,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
            } else if (analyticsToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeAnalyticsTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));
           } else if (workstreamMgmtToolNames.includes(tc.function.name)) {
-              result = await withToolTimeout(tc.function.name, executeWorkstreamTool(tc.function.name, args, supabaseAdmin, userId || ""));
+              result = await withToolTimeout(tc.function.name, executeWorkstreamTool(tc.function.name, args, supabaseAdmin, userId || "", resolvedIdentity, identityCache));
           } else if (plannerToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executePlannerTool(tc.function.name, args, supabaseAdmin));
           } else if (execSummaryToolNames.includes(tc.function.name)) {

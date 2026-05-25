@@ -61,7 +61,7 @@ Two paths exist today (interceptor stub + `confirm-chat-write`) and neither clos
 
 ---
 
-## Phase 4 — Collapse defensive layers into one router
+## Phase 4 — Collapse defensive layers into one router ✅ SHIPPED
 
 Today: `mustAskMeetingSource`, `shouldBypassTools`, `INTENT_RULES`, and the new entity resolver all bias behavior independently and contradict the act-first prompt. Replace with **one** deterministic router invoked once per turn:
 

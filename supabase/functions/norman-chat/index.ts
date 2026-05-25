@@ -6485,6 +6485,10 @@ Format as a natural, readable summary with clear sections. If a section has no d
       
     };
     const sourcesUsed: Record<string, number> = {};
+    // Phase 9: collect every executed tool envelope so the post-LLM
+    // correctness linter can verify that the model's claims are backed by
+    // ReadResult-tagged tool outputs from this turn.
+    const executedToolEnvelopes: ToolCallRecord[] = [];
     const recordToolCalls = (toolCalls: any[]) => {
       for (const tc of toolCalls || []) {
         const name = tc?.function?.name;

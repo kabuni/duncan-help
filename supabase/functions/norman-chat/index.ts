@@ -3859,13 +3859,29 @@ async function executeMeetingTool(
         .maybeSingle();
       if (error) throw new Error(`Failed to load meeting: ${error.message}`);
       if (!data) {
+        const rr = createReadResult({
+          data: null, source: "meetings_db", freshness_sla_seconds: 300, row_count: 0,
+          filters_applied: { meeting_id: args.meeting_id },
+          query_echo: `meetings get id=${args.meeting_id}`,
+          empty_reason: "no_matches",
+        });
         console.log("[MEETING FLOW FINAL]", { user: userId, tool: toolName, args, corrected, action: "not_found" });
-        return { error: "Meeting not found or you do not have access to it.", fallback_message: "I couldn't find that meeting. Try listing your recent meetings first." };
+        return {
+          error: "Meeting not found or you do not have access to it.",
+          fallback_message: "I couldn't find that meeting. Try listing your recent meetings first.",
+          read_result: rr, meta: { readResult: true },
+        };
       }
-      return {
-        ...data,
-        transcript: data.transcript ? data.transcript.slice(0, 40000) : null,
-      };
+      const transcriptFull = data.transcript || "";
+      const transcript = transcriptFull ? transcriptFull.slice(0, 40000) : null;
+      const payload = { ...data, transcript };
+      const rr = createReadResult({
+        data: payload, source: "meetings_db", freshness_sla_seconds: 300, row_count: 1,
+        truncated: !!(transcriptFull && transcriptFull.length > 40000),
+        filters_applied: { meeting_id: args.meeting_id },
+        query_echo: `meetings get id=${args.meeting_id}`,
+      });
+      return { ...payload, read_result: rr, meta: { readResult: true } };
     }
 
     case "analyze_meetings": {

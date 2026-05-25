@@ -4992,10 +4992,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const latestUserMessage = [...messages].reverse().find((message: any) => message?.role === "user");
     const latestUserText = extractPlainText(latestUserMessage?.content).trim();
 
-    // Phase 1: cap rounds at 2 by default; allow 3 only for voice or explicit deep-analysis intents.
-    const DEEP_INTENT_RE = /\b(analy[sz]e|deep\s*dive|compare|cross[-\s]?reference|investigate|audit|thorough|comprehensive)\b/i;
-    const allowExtraRound = isVoiceMode || DEEP_INTENT_RE.test(latestUserText);
-    const MAX_TOOL_ROUNDS = allowExtraRound ? 3 : 2;
+    // Phase 5: raise the tool-call ceiling to 6 rounds so multi-step
+    // operational sequences (resolve entity → list → fetch detail → mutate →
+    // re-verify → narrate) can complete in a single turn without the loop
+    // tripping the cap mid-task. The 90s wall-clock budget is the real
+    // upper bound and prevents runaway loops.
+    const MAX_TOOL_ROUNDS = 6;
     const MAX_EXECUTION_TIME_MS = 90_000;
     // Broad: any user message mentioning meetings/calls + an intent verb (fetch/get/show/give/what)
     // OR meeting-notes/summary/discussions phrasing — triggers source disambiguation.
@@ -5267,6 +5269,69 @@ Format as a natural, readable summary with clear sections. If a section has no d
     }
 
 
+    // ================================================================
+    // Phase 4: classifyTurn — single deterministic router.
+    // Collapses the previously scattered defensive layers
+    // (mustAskMeetingSource, shouldBypassTools, INTENT_RULES,
+    // inline entity resolver) into ONE canonical readout.
+    // Downstream code reads `turn.*` instead of the individual flags;
+    // the original locals are kept as aliases for backward compat so
+    // the rest of this function remains untouched.
+    // ================================================================
+    const turn = {
+      latestUserText,
+      isVoiceMode,
+      // intent signals
+      isDataIntent: false as boolean,           // filled below
+      intentMatched: false as boolean,          // filled below
+      // disambiguation
+      needsMeetingSourceClarification: mustAskMeetingSource,
+      explicitSourceMeetingRequest,
+      sourceAlreadyChosen,
+      // execution gates
+      bypassTools: false as boolean,            // filled below
+      // pre-resolved entities (deterministic, high-confidence)
+      resolvedProjectTag: null as string | null, // filled below
+    };
+
+    // Phase 5: working-memory injection — surface any pending writes the
+    // user has queued in the last few minutes so the model never claims
+    // a write succeeded when it is actually awaiting confirmation, and
+    // can refer back to recent verified writes by id when asked.
+    try {
+      if (userId) {
+        const sinceIso = new Date(Date.now() - 10 * 60_000).toISOString();
+        const { data: pendingRows } = await supabaseAdmin
+          .from("chat_write_pending")
+          .select("id, tool_name, summary, status, created_at, executed_at, result")
+          .eq("user_id", userId)
+          .gte("created_at", sinceIso)
+          .order("created_at", { ascending: false })
+          .limit(5);
+        if (pendingRows && pendingRows.length > 0) {
+          const lines = pendingRows.map((r: any) => {
+            const env = r.result || {};
+            const verified = env.ok === true && env.verified === true;
+            const tail =
+              r.status === "executed" && verified
+                ? `verified=true (source=${env.source ?? "?"})`
+                : r.status === "failed"
+                ? `failed: ${(env.error || r.error || "unknown").toString().slice(0, 120)}`
+                : `status=${r.status}`;
+            return `- [${r.id.slice(0, 8)}] ${r.tool_name} — ${r.summary ?? "(no summary)"} — ${tail}`;
+          });
+          systemContent +=
+            `\n\n## WORKING MEMORY — recent write actions (last 10 minutes)\n` +
+            `Use these as ground truth when the user asks "did that go through?", "did you move it?", or refers to a recent change.\n` +
+            `Only claim a write succeeded when its line shows \`verified=true\`. ` +
+            `Lines marked \`status=pending\` or \`status=confirmed\` are still AWAITING the user's click in the chat UI — do NOT claim those have executed.\n` +
+            lines.join("\n");
+        }
+      }
+    } catch (_workingMemoryErr) {
+      // Non-fatal — working memory is best-effort.
+    }
+
     // First call to AI with tools if calendar is connected
     const requestBody: any = {
       model: CHAT_MODEL,
@@ -5387,6 +5452,34 @@ Format as a natural, readable summary with clear sections. If a section has no d
     // Tool-first guardrail signal: data-bound intents must ground their answer in tools.
     const DATA_INTENT_RE = /\b(meeting|email|inbox|calendar|event|workstream|task|planner|kpi|metric|invoice|xero|devops|work item|drive|document|slack|candidate|recruit|brief|status|summary|report)\b/i;
     const isDataIntent = intentMatched || DATA_INTENT_RE.test(latestUserText);
+
+    // Phase 4: backfill the unified `turn` readout now that all signals are computed.
+    turn.intentMatched = intentMatched;
+    turn.isDataIntent = isDataIntent;
+    turn.bypassTools = shouldBypassTools;
+    // Surface the resolver hit (re-derive from the lightweight matcher above so
+    // we never silently drift between resolver text and turn.* readout).
+    try {
+      const _lower = latestUserText.toLowerCase();
+      const _aliases: Record<string, string[]> = {
+        "Lightning Strike Event": ["lightning strike", "lightning-strike", "lightningstrike", "lightning strike event", "lightning"],
+        "Website": ["website", "site", "web site"],
+        "K10 App": ["k10", "k10 app", "k-10", "k 10 app"],
+        "School Integrations": ["school integrations", "school integration", "schools integration"],
+      };
+      for (const [tag, aliases] of Object.entries(_aliases)) {
+        if (aliases.some((a) => _lower.includes(a))) { turn.resolvedProjectTag = tag; break; }
+      }
+    } catch { /* ignore */ }
+    console.log("[classifyTurn]", {
+      intentMatched: turn.intentMatched,
+      isDataIntent: turn.isDataIntent,
+      bypassTools: turn.bypassTools,
+      needsMeetingSourceClarification: turn.needsMeetingSourceClarification,
+      explicitSourceMeetingRequest: turn.explicitSourceMeetingRequest,
+      resolvedProjectTag: turn.resolvedProjectTag,
+      toolCount: filteredTools.length,
+    });
 
     if (isDataIntent && !isVoiceMode && !mustAskMeetingSource && mode !== "briefing" && filteredTools.length > 0) {
       // Phase 1.5 tool-first guardrail: forbid speculation, require tool grounding.

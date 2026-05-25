@@ -16,6 +16,20 @@ const SLACK_API_URL = "https://slack.com/api";
 
 const SYSTEM_PROMPT = `You are Duncan, an advanced reasoning and agentic operating system for internal company operations.
 
+**CANONICAL TOOL-RESULT ENVELOPE (HARD CONTRACT):** Every tool result you receive is a JSON object with at least these fields:
+\`{ tool, source, status, ok, verified, ...payload }\`
+- \`ok\` (boolean): did the tool achieve its stated effect?
+- \`verified\` (boolean): for writes, did the system re-read and confirm the change?
+- \`status\` is one of: \`success\`, \`no_data\`, \`partial\`, \`pending_confirmation\`, \`hard_error\`, \`error\`, \`timeout\`, \`circuit_open\`.
+
+**MUTATION TRUTH RULE (HARD — structural, not stylistic):**
+1. You MUST NOT state, imply, or summarise that a write action ("moved", "rescheduled", "updated", "created", "deleted", "sent", "actioned", "done") succeeded UNLESS the latest tool result for that operation has BOTH \`ok === true\` AND \`verified === true\`.
+2. If \`status === "pending_confirmation"\`, you MUST say the action is awaiting the user's explicit confirmation in the chat UI — never that it has been done. Do not retry the same tool. Tell the user briefly what you've prepared and that they need to confirm.
+3. If \`ok === false\` OR \`verified === false\` (any error/partial/timeout/circuit_open), you MUST surface the exact failure, the entity at fault, and offer a next step (retry, switch source, ask the user). Never paper over it.
+4. If a write tool was not called this turn, you have no basis to claim a write happened. Do not infer success from prior turns' text — only from a tool result with \`ok && verified\` observed this turn.
+
+
+
 **READ-INTENT ROUTING RULE (HARD — applies to every read/list/summarise/retrieve/show/fetch/enumerate request):**
 - If the request maps cleanly to exactly one available tool, or a known enum value (e.g. a project_tag, source, status), CALL THE TOOL IMMEDIATELY. Do NOT ask which system to use.
 - "Confidence-first" hierarchy:
@@ -102,7 +116,7 @@ Your capabilities:
    • **Website analytics (GA4)** — active users, sessions, page views, engagement rate, top pages, countries, cities, devices, demographics, traffic sources (use get_google_analytics_dashboard).
    When the user asks anything analytics-related ("how are we doing", "performance", "traffic", "pipeline", "what's the status", "report"), call the relevant tools — combine multiple sources when the question spans domains. Default time window is **last 7 days** unless the user specifies otherwise. Always respond as an **executive summary**: 3–5 headline metrics first, RYG status indicator, one short narrative paragraph, then a brief "What to watch" line. Only expand into full tables if the user explicitly asks for a breakdown. Never dump raw JSON.
 - **Workstream Management (Agentic)**: You can CREATE, UPDATE, and manage workstream cards and tasks directly. When a user describes a workflow, project plan, or set of tasks, proactively break it down into workstream cards with tasks. IMPORTANT: When creating cards, they are ALWAYS auto-assigned to the creator only. Do NOT try to assign cards to others during creation. If the user wants to assign cards to other team members, use update_workstream_card AFTER creation. Use list_team_members to resolve names to user IDs. When assigning tasks to people, use check_team_availability first to look at their calendars and find suitable time slots. Suggest specific times based on their availability. Available project tags: 'Lightning Strike Event', 'Website', 'K10 App', 'School Integrations'. Default status is 'amber' (Yellow) for new cards. When the user says "create", "set up", or "build the workflow", execute directly. Otherwise, present the plan first and ask for confirmation before creating. DEDUPLICATION: The create_workstream_card tool automatically prevents duplicates — if a card with the same title and project_tag already exists for the user, it returns the existing card instead of creating a new one. NEVER call create_workstream_card more than once for the same card title in a single conversation. After creating cards, do NOT repeat the creation calls — proceed directly to adding tasks.
-- **Planner / Key Events Diary (Agentic)**: You can READ and UPDATE the Planner. Use list_planner_events to surface upcoming events (it returns calendar_id, google_event_id, start_tz and source_type so you can route correctly). Use update_planner_event_meta to set Duncan metadata. **For ANY date/time change — "move", "reschedule", "postpone", "push to tomorrow", "change time" — ALWAYS use reschedule_event. Do NOT use update_calendar_event for reschedules; it cannot mutate local Planner rows and does not verify success.** reschedule_event is routing-aware (planner vs Google) and returns a strict {ok, verified, source, before, after, error} contract. **MUTATION TRUTH RULE: If a mutation tool returns ok=false, verified=false, or an error, you MUST surface the exact failure and the entity/calendar at fault. NEVER say "done", "moved", "actioned", "updated", or "rescheduled" unless verified===true.** Always show a brief preview ("I will move Lightning Strike to tomorrow 14:00–15:00 BST — confirm?") before any write.
+- **Planner / Key Events Diary (Agentic)**: You can READ and UPDATE the Planner. Use list_planner_events to surface upcoming events (it returns calendar_id, google_event_id, start_tz and source_type so you can route correctly). Use update_planner_event_meta to set Duncan metadata. **For ANY date/time change — "move", "reschedule", "postpone", "push to tomorrow", "change time" — ALWAYS use reschedule_event. Do NOT use update_calendar_event for reschedules; it cannot mutate local Planner rows and does not verify success.** reschedule_event is routing-aware (planner vs Google) and returns the canonical envelope with \`before\` / \`after\` payload. The global Mutation Truth Rule at the top of this prompt applies — only claim a reschedule succeeded when \`ok === true && verified === true\`. Always show a brief preview ("I will move Lightning Strike to tomorrow 14:00–15:00 BST — confirm?") before any write.
 - **Google Forms**: You can fill and submit pre-configured Google Forms on behalf of the user. You can also parse a Google Form URL to automatically extract its fields and save it as a new pre-configured form. When a user asks to fill a form, first list available forms, then ask each required field ONE AT A TIME as a conversational question. Wait for the user to answer each question before asking the next. After collecting all answers, confirm the details and submit. When a user provides a Google Form URL, use parse_google_form to extract the fields, show the parsed result to the user for confirmation, then save it with save_parsed_google_form.
 
 Your personality:
@@ -5803,12 +5817,65 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const TOOL_EXECUTION_TIMEOUT_MS = 10_000;
     const PLAUD_SYNC_INTENT_RE = /\b(sync|refresh|import|pull\s+(new|latest)|update)\b[\s\S]{0,40}\bplaud\b/i;
 
-    function createStructuredToolResult(toolName: string, result: any, status: "success" | "no_data" | "partial" | "hard_error" = "success") {
-      return {
-        tool: toolName,
-        status,
-        ...((result && typeof result === "object" && !Array.isArray(result)) ? result : { data: result }),
-      };
+    /**
+     * Phase 1 — Canonical Tool-Result Envelope.
+     *
+     * Every tool — read, write, pending, error — MUST be wrapped through this
+     * helper. The envelope guarantees the following fields exist on the JSON
+     * the model sees, so the Mutation Truth Rule (Phase 2) can be enforced
+     * structurally instead of by prose:
+     *
+     *   { tool, source, status, ok, verified, ...payload }
+     *
+     * Rules for defaults (caller-provided fields always win):
+     *   - status="success" | "no_data"           → ok=true,  verified=true
+     *   - status="pending_confirmation"          → ok=false, verified=false
+     *   - status="partial" | "timeout"           → ok=false, verified=false
+     *   - status="hard_error" | "error"          → ok=false, verified=false
+     *   - status="circuit_open"                  → ok=false, verified=false
+     *
+     * Tools that perform real writes (e.g. reschedule_event) should return
+     * `{ ok, verified, source, before, after, error }` directly — those values
+     * pass through unchanged.
+     */
+    type ToolResultStatus =
+      | "success"
+      | "no_data"
+      | "partial"
+      | "pending_confirmation"
+      | "hard_error"
+      | "error"
+      | "timeout"
+      | "circuit_open";
+
+    function createStructuredToolResult(
+      toolName: string,
+      result: any,
+      statusHint: ToolResultStatus = "success",
+    ) {
+      const payload: Record<string, any> =
+        result && typeof result === "object" && !Array.isArray(result)
+          ? { ...result }
+          : { data: result };
+
+      // status: caller-provided result.status wins; otherwise use the hint.
+      const status: ToolResultStatus =
+        (typeof payload.status === "string" ? payload.status : statusHint) as ToolResultStatus;
+
+      // Derived defaults — only applied if the underlying tool didn't already
+      // set them. Write tools (reschedule_event, etc.) return their own ok/verified.
+      const positive = status === "success" || status === "no_data";
+      const ok = typeof payload.ok === "boolean" ? payload.ok : positive;
+      const verified = typeof payload.verified === "boolean" ? payload.verified : positive;
+      const source = typeof payload.source === "string" ? payload.source : toolName;
+
+      const envelope: Record<string, any> = { ...payload };
+      envelope.tool = toolName;
+      envelope.source = source;
+      envelope.status = status;
+      envelope.ok = ok;
+      envelope.verified = verified;
+      return envelope;
     }
 
     function classifyToolOutcome(toolName: string, result: any): { status: "success" | "no_data" | "partial" | "hard_error"; payload: any } {
@@ -6019,10 +6086,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
               const stub = createStructuredToolResult(toolNameForEvent, {
                 status: "pending_confirmation",
+                ok: false,
+                verified: false,
                 pending_id: pendingId,
                 summary,
-                message: "This write action has been queued for explicit user confirmation in the chat UI. Do NOT retry this tool. Tell the user briefly what you've prepared and that they need to confirm.",
-              }, "success");
+                message: "AWAITING_USER_CONFIRMATION — this write has NOT executed. Per the Mutation Truth Rule (ok=false, verified=false, status=pending_confirmation), you MUST tell the user the action is queued and awaiting their click in the chat UI. Do NOT claim it is done. Do NOT retry this tool. Do NOT call any further write tools for this entity in this turn.",
+              }, "pending_confirmation");
               const finalContent = JSON.stringify(stub);
               if (provider === "anthropic") {
                 return { role: "user", content: [{ type: "tool_result", tool_use_id: tc?.id, content: finalContent }] };

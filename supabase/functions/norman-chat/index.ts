@@ -4670,6 +4670,7 @@ const WRITE_TOOL_LABELS: Record<string, string> = {
   update_workstream_card: "Update workstream card",
   submit_google_form: "Submit Google Form",
   update_planner_event_meta: "Update planner event",
+  reschedule_event: "Reschedule event (planner or Google Calendar)",
   send_pdf_for_signature: "Send PDF for e-signature (DocuSign)",
 };
 

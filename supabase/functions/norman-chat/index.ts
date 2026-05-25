@@ -674,8 +674,9 @@ const MEETING_TOOLS = [
         properties: {
           source: { type: "string", enum: ["gemini", "plaud"], description: "Which ingestion source to pull from." },
           limit: { type: "number", description: "Max results (default 10, max 25)." },
-          from_date: { type: "string", description: "YYYY-MM-DD lower bound on meeting_date." },
-          to_date: { type: "string", description: "YYYY-MM-DD upper bound on meeting_date." },
+          from_date: { type: "string", description: "YYYY-MM-DD lower bound on meeting_date. Ignored if 'window' is set." },
+          to_date: { type: "string", description: "YYYY-MM-DD upper bound on meeting_date. Ignored if 'window' is set." },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Resolve a date window in the caller's timezone instead of supplying from_date/to_date." },
         },
         required: ["source"],
       },

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Plug, Settings, LogOut, X, ChevronDown, CheckCircle2, Mail, FileText, MessageSquare, Calendar, FolderOpen, GitBranch, Zap, Menu, Layers, Megaphone, Crown, Inbox, Receipt, BookOpen } from "lucide-react";
+import { LayoutDashboard, Home, Plug, Settings, LogOut, X, ChevronDown, CheckCircle2, Mail, FileText, MessageSquare, Calendar, FolderOpen, GitBranch, Zap, Menu, Layers, Megaphone, Crown, Inbox, Receipt, BookOpen } from "lucide-react";
 import { canViewBriefing } from "@/lib/ceoAccess";
 import ChatHistory from "@/components/ChatHistory";
 import { useGeneralChatsContext } from "@/hooks/GeneralChatsContext";
@@ -146,7 +146,7 @@ const Sidebar = ({
             )
           }
         >
-          <LayoutDashboard className="h-4 w-4" />
+          <Home className="h-4 w-4" />
           Dashboard
         </RouterNavLink>
 

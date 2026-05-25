@@ -5219,6 +5219,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
     if (calendarAccessToken) {
       tools.push(...CALENDAR_TOOLS);
     }
+    // reschedule_event is always available — handles local Planner rows even without a personal Google Calendar token.
+    tools.push(...RESCHEDULE_TOOLS);
     if (azureStorageAvailable) {
       tools.push(...DOCUMENT_TOOLS);
     }

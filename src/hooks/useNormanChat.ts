@@ -456,7 +456,11 @@ export function useNormanChat() {
         body: JSON.stringify({ pendingId, action }),
       });
       const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) throw new Error(data?.error || `Confirmation failed (${resp.status})`);
+      // For confirm, do NOT throw on 502 — the response body carries the canonical
+      // envelope (ok/verified/error) and we want to surface it honestly to the user.
+      if (!resp.ok && action !== "confirm") {
+        throw new Error(data?.error || `Confirmation failed (${resp.status})`);
+      }
       return data;
     },
     []
@@ -467,10 +471,20 @@ export function useNormanChat() {
       setPendingWrites((prev) => prev.map((p) => (p.pendingId === pendingId ? { ...p, state: "confirming" } : p)));
       try {
         const data = await callConfirmEndpoint(pendingId, "confirm");
-        setPendingWrites((prev) =>
-          prev.map((p) => (p.pendingId === pendingId ? { ...p, state: "executed", result: data?.result } : p))
-        );
-        toast.success("Action confirmed and executed.");
+        const verifiedOk = data?.ok === true && data?.verified === true;
+        if (verifiedOk) {
+          setPendingWrites((prev) =>
+            prev.map((p) => (p.pendingId === pendingId ? { ...p, state: "executed", result: data?.result ?? data } : p))
+          );
+          const where = data?.source === "google" ? "Google Calendar" : data?.source === "planner" ? "Planner" : null;
+          toast.success(where ? `Verified — change applied in ${where}.` : "Verified — change applied.");
+        } else {
+          const errMsg = data?.error || "The write did not verify. Nothing was persisted.";
+          setPendingWrites((prev) =>
+            prev.map((p) => (p.pendingId === pendingId ? { ...p, state: "failed", error: errMsg, result: data?.result ?? data } : p))
+          );
+          toast.error(errMsg);
+        }
       } catch (e: any) {
         const msg = e?.message || "Confirmation failed";
         setPendingWrites((prev) =>

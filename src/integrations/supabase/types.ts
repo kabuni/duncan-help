@@ -271,6 +271,57 @@ export type Database = {
           },
         ]
       }
+      calendar_mutation_audit: {
+        Row: {
+          actor_user_id: string | null
+          after_state: Json | null
+          before_state: Json | null
+          calendar_id: string | null
+          created_at: string
+          error: string | null
+          event_id: string | null
+          google_event_id: string | null
+          id: string
+          ok: boolean
+          requested: Json
+          source: string
+          tool_name: string
+          verified: boolean
+        }
+        Insert: {
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          calendar_id?: string | null
+          created_at?: string
+          error?: string | null
+          event_id?: string | null
+          google_event_id?: string | null
+          id?: string
+          ok?: boolean
+          requested?: Json
+          source: string
+          tool_name: string
+          verified?: boolean
+        }
+        Update: {
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          calendar_id?: string | null
+          created_at?: string
+          error?: string | null
+          event_id?: string | null
+          google_event_id?: string | null
+          id?: string
+          ok?: boolean
+          requested?: Json
+          source?: string
+          tool_name?: string
+          verified?: boolean
+        }
+        Relationships: []
+      }
       candidates: {
         Row: {
           attachment_filename: string | null

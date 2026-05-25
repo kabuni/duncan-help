@@ -2063,17 +2063,23 @@ async function executeWorkstreamTool(
       const { data: cards, error } = await cardsQuery;
       if (error) throw new Error(`Failed to list workstream cards: ${error.message}`);
       const cardList = cards || [];
+      const windowEcho = resolvedWindow
+        ? ` window=${resolvedWindow.label}[${resolvedWindow.startISO}..${resolvedWindow.endISO}) tz=${resolvedWindow.timezone}`
+        : "";
+      const filtersWithWindow = resolvedWindow
+        ? { ...args, resolved_window: resolvedWindow }
+        : args;
       if (cardList.length === 0) {
         const rr = createReadResult({
           data: [],
           source: "workstreams_db",
           freshness_sla_seconds: 30,
           row_count: 0,
-          filters_applied: args,
-          query_echo: `workstream_cards where status=${args.status ?? "open"}${args.project_tag ? ` project_tag=${args.project_tag}` : ""}`,
+          filters_applied: filtersWithWindow,
+          query_echo: `workstream_cards where status=${args.status ?? "open"}${args.project_tag ? ` project_tag=${args.project_tag}` : ""}${windowEcho}`,
           empty_reason: "no_matches",
         });
-        return { count: 0, cards: [], filter: args, read_result: rr, meta: { readResult: true } };
+        return { count: 0, cards: [], filter: filtersWithWindow, read_result: rr, meta: { readResult: true } };
       }
 
       const cardIds = cardList.map((c: any) => c.id);

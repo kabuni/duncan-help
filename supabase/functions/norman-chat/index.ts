@@ -2004,7 +2004,16 @@ async function executeWorkstreamTool(
           .eq("user_id", userId);
         restrictCardIds = (myAssign || []).map((r: any) => r.card_id);
         if (restrictCardIds.length === 0) {
-          return { count: 0, cards: [], filter: { ...args, applied: "assignee=me (none)" } };
+          const rr = createReadResult({
+            data: [],
+            source: "workstreams_db",
+            freshness_sla_seconds: 30,
+            row_count: 0,
+            filters_applied: { ...args, applied: "assignee=me (none)" },
+            query_echo: "workstream_cards where assignee=me",
+            empty_reason: "no_matches",
+          });
+          return { count: 0, cards: [], filter: { ...args, applied: "assignee=me (none)" }, read_result: rr, meta: { readResult: true } };
         }
       }
 

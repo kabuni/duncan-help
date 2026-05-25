@@ -4625,7 +4625,8 @@ async function executeSlackTool(toolName: string, args: any, accessToken: string
 async function executeCalendarTool(
   toolName: string,
   args: any,
-  accessToken: string
+  accessToken: string,
+  identity?: ResolvedIdentity,
 ): Promise<any> {
   const headers = {
     Authorization: `Bearer ${accessToken}`,

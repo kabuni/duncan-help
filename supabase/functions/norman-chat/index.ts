@@ -5287,6 +5287,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       ...EXEC_SUMMARY_TOOLS,
       ...RELEASE_TOOLS,
       ...LOVABLE_CONTRIBUTORS_TOOLS,
+      ...RESCHEDULE_TOOLS,
     ];
 
     // Build the filtered toolset. If no intent matches, fall back to the full tools array.

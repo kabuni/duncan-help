@@ -6086,10 +6086,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
               const stub = createStructuredToolResult(toolNameForEvent, {
                 status: "pending_confirmation",
+                ok: false,
+                verified: false,
                 pending_id: pendingId,
                 summary,
-                message: "This write action has been queued for explicit user confirmation in the chat UI. Do NOT retry this tool. Tell the user briefly what you've prepared and that they need to confirm.",
-              }, "success");
+                message: "AWAITING_USER_CONFIRMATION — this write has NOT executed. Per the Mutation Truth Rule (ok=false, verified=false, status=pending_confirmation), you MUST tell the user the action is queued and awaiting their click in the chat UI. Do NOT claim it is done. Do NOT retry this tool. Do NOT call any further write tools for this entity in this turn.",
+              }, "pending_confirmation");
               const finalContent = JSON.stringify(stub);
               if (provider === "anthropic") {
                 return { role: "user", content: [{ type: "tool_result", tool_use_id: tc?.id, content: finalContent }] };

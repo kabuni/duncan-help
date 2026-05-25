@@ -3785,6 +3785,27 @@ async function executeMeetingTool(
         }
       }
 
+      const sourceFilters = { source, limit, from_date: args.from_date ?? null, to_date: args.to_date ?? null, ...(resolvedMeetingWindow ? { resolved_window: resolvedMeetingWindow } : {}) };
+      const sourceWindowEcho = resolvedMeetingWindow
+        ? ` window=${resolvedMeetingWindow.label}[${resolvedMeetingWindow.from_date}..${resolvedMeetingWindow.to_date}] tz=${resolvedMeetingWindow.timezone}`
+        : "";
+      const queryEchoSrc = `meetings source=${source}${sourceWindowEcho} limit=${limit}`;
+      if (meetings.length === 0) {
+        const rr = createReadResult({
+          data: [], source: "meetings_db", freshness_sla_seconds: 60, row_count: 0,
+          filters_applied: sourceFilters, query_echo: queryEchoSrc, empty_reason: "no_matches",
+        });
+        return {
+          count: 0, scope: "source_fallback", source, is_fallback: true, meetings: [],
+          read_result: rr, meta: { readResult: true },
+          disclosure: `No recent meetings ingested from ${source === "gemini" ? "Gemini (Google Meet notes)" : "Plaud"} in this window.`,
+        };
+      }
+      const rr = createReadResult({
+        data: meetings, source: "meetings_db", freshness_sla_seconds: 60, row_count: meetings.length,
+        truncated: meetings.length >= limit,
+        filters_applied: sourceFilters, query_echo: queryEchoSrc,
+      });
       return {
         count: meetings.length,
         scope: "source_fallback",
@@ -3792,6 +3813,8 @@ async function executeMeetingTool(
         is_fallback: true,
         disclosure: `These are recent meetings ingested from ${source === "gemini" ? "Gemini (Google Meet notes)" : "Plaud"}. They are NOT attributed to you — ownership was not verified. Present them as fallback results and make this clear to the user.`,
         meetings,
+        read_result: rr,
+        meta: { readResult: true },
       };
     }
 

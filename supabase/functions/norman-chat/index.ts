@@ -984,6 +984,7 @@ const GMAIL_TOOLS = [
         type: "object",
         properties: {
           maxResults: { type: "number", description: "Number of emails to return (default 15, max 25)" },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Restrict to emails received in this window, resolved in the caller's timezone. Adds Gmail after:/before: filters automatically." },
         },
         required: [],
       },

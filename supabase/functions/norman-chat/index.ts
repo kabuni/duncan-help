@@ -16,6 +16,19 @@ const SLACK_API_URL = "https://slack.com/api";
 
 const SYSTEM_PROMPT = `You are Duncan, an advanced reasoning and agentic operating system for internal company operations.
 
+**READ-INTENT ROUTING RULE (HARD — applies to every read/list/summarise/retrieve/show/fetch/enumerate request):**
+- If the request maps cleanly to exactly one available tool, or a known enum value (e.g. a project_tag, source, status), CALL THE TOOL IMMEDIATELY. Do NOT ask which system to use.
+- "Confidence-first" hierarchy:
+  A. One obvious source → execute directly, no clarification.
+  B. Multiple LIVE connected sources actually support the request → query the most likely one (or both) and tell the user what you did.
+  C. No matching source → then ask the user.
+- Default behaviour is **act first**, not **clarify defensively**. Asking unnecessary clarification questions is a failure mode.
+
+**SINGLE-SOURCE EXECUTION RULE:** If exactly one tool supports the entity AND the entity matches a known enum / project_tag / source value (even fuzzily), call the tool directly. Example: "Lightning Strike Event" matches workstream_cards.project_tag → call list_workstream_cards immediately. Never ask "should I pull this from Workstreams or [other system]?"
+
+**NEGATIVE GROUNDING (NEVER hallucinate disconnected systems):** The following systems are NOT connected and have NO runtime tools in this environment: Basecamp, Trello, Jira (non-DevOps), Asana, Monday.com, ClickUp, Notion tasks/databases-as-tasks. NEVER offer them, ask about them, imply they exist, or use them as a "should I pull from X or Y?" alternative. Workstreams is the canonical task/card system. Planner / Key Events is the canonical diary system. Azure DevOps is the canonical engineering work-item system. Gmail/Calendar/Drive/Slack/Xero/Notion-pages/Meetings are the only other connected sources — if a tool for a system isn't in your tool list, that system is not connected. Period.
+
+
 Your capabilities:
 - **Reasoning**: Analyze data, identify patterns, draw conclusions, and make recommendations across all ingested company data.
 - **Automation**: Suggest and describe automations that can streamline workflows between Google Workspace, Notion, Slack, and other connected tools.
@@ -1698,7 +1711,7 @@ const WORKSTREAM_TOOLS = [
     type: "function",
     function: {
       name: "list_workstream_cards",
-      description: "Fast, focused list of workstream cards with their open tasks. Use this whenever the user asks to see, list, summarize, or enumerate workstream cards, pending actions, open tasks, to-dos, overdue items, or 'what's on my plate'. Returns card title, status (red/amber/green/done), project tag, due date, assignee names, and open task titles. Set export_format='csv' for a downloadable CSV, or export_format='gsheet' to create a new Google Sheet in the user's own Google Drive (requires their Gmail/Google integration to be connected). Prefer this over get_workstream_analytics or get_operational_summary when the user wants an actual list (not just counts).",
+      description: "AUTHORITATIVE & SOLE source for all Duncan workstream cards and tasks. Workstreams is the canonical task/card system — Basecamp/Trello/Jira/Asana/Monday/Notion-tasks are NOT connected. If a user references a known project_tag (Lightning Strike Event, Website, K10 App, School Integrations) or asks for cards/tasks/to-dos/open work/'what's on my plate', CALL THIS TOOL DIRECTLY without asking which system they mean. Fast, focused list of workstream cards with their open tasks. Returns card title, status (red/amber/green/done), project tag, due date, assignee names, and open task titles. Set export_format='csv' for a downloadable CSV, or export_format='gsheet' to create a new Google Sheet in the user's own Google Drive (requires their Gmail/Google integration to be connected). Prefer this over get_workstream_analytics or get_operational_summary when the user wants an actual list (not just counts).",
       parameters: {
         type: "object",
         properties: {
@@ -5203,6 +5216,42 @@ Format as a natural, readable summary with clear sections. If a section has no d
       !sourceChosenForPendingMeeting &&
       !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
       (latestUserText.length < 20 || SIMPLE_INPUT_PATTERNS.some((pattern) => pattern.test(latestUserText)));
+
+    // ── Lightweight entity resolver ─────────────────────────────────────────
+    // Fuzzy-match the user message against known enum/source values BEFORE the
+    // model generates. When we find a confident hit we inject a small block so
+    // the model executes immediately instead of inventing alternative systems.
+    try {
+      const lower = latestUserText.toLowerCase();
+      const PROJECT_TAGS = ["Lightning Strike Event", "Website", "K10 App", "School Integrations"];
+      const tagAliases: Record<string, string[]> = {
+        "Lightning Strike Event": ["lightning strike", "lightning-strike", "lightningstrike", "lightning strike event", "lightning"],
+        "Website": ["website", "site", "web site"],
+        "K10 App": ["k10", "k10 app", "k-10", "k 10 app"],
+        "School Integrations": ["school integrations", "school integration", "schools integration"],
+      };
+      const matchedTag = PROJECT_TAGS.find((tag) =>
+        (tagAliases[tag] || []).some((a) => lower.includes(a))
+      );
+      const READ_INTENT_RE = /\b(list|show|open|all|view|see|fetch|get|pull|display|enumerate|what'?s|whats|summari[sz]e|summary|cards?|tasks?|to[- ]?dos?|pending|overdue|on my plate|active|outstanding|in progress)\b/i;
+      const isReadIntent = READ_INTENT_RE.test(latestUserText);
+      const resolverBlocks: string[] = [];
+      if (matchedTag && isReadIntent) {
+        resolverBlocks.push(
+          `## RESOLVED ENTITY (pre-computed — DO NOT ask for clarification)\n` +
+          `- project_tag: "${matchedTag}" (matched from the user's message)\n` +
+          `- canonical source: Workstreams (workstream_cards table)\n` +
+          `- confidence: high\n` +
+          `- required action: call \`list_workstream_cards\` with { project_tag: "${matchedTag}", status: "open" } immediately. Do NOT ask the user which system to pull from. Basecamp/Trello/Jira/Asana/Monday/Notion-tasks are NOT connected and must not be offered.`
+        );
+      }
+      if (resolverBlocks.length > 0) {
+        systemContent += `\n\n` + resolverBlocks.join("\n\n");
+      }
+    } catch (_resolverErr) {
+      // Non-fatal — resolver is a best-effort pre-pass.
+    }
+
 
     // First call to AI with tools if calendar is connected
     const requestBody: any = {

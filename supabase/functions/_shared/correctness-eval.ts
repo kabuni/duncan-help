@@ -128,7 +128,7 @@ export const GOLDEN_FIXTURES: GoldenFixture[] = [
     id: "calendar/empty-clean",
     domain: "calendar",
     prompt: "Anything on my calendar today?",
-    draft: "You have nothing on your calendar today.",
+    draft: "Nothing on your calendar today.",
     envelopes: [calendarEnvelope({ rows: [] })],
     rubric: { must_not_flag: ["silent_empty", "unbacked_claim"], exact_count: 0 },
   },

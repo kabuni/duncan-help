@@ -1,13 +1,19 @@
-import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
+import { useState, useRef, useEffect, useCallback, forwardRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Trash2, Loader2, Download, Copy, Check,
-  Sparkles, Lightbulb,
+  Loader2, Download, Copy, Check,
+  Sparkles, Lightbulb, MoreVertical, Plus, ChevronDown,
 } from "lucide-react";
 import FeatureRequestModal from "@/components/FeatureRequestModal";
 import ReactMarkdown from "react-markdown";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
 import remarkGfm from "remark-gfm";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useNavigate, useLocation } from "react-router-dom";
 import WelcomeModal from "@/components/WelcomeModal";
 import { useNormanChat } from "@/hooks/useNormanChat";

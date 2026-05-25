@@ -1000,6 +1000,7 @@ const GMAIL_TOOLS = [
         properties: {
           query: { type: "string", description: "Gmail search query (e.g., 'from:john@example.com', 'subject:invoice', 'has:attachment', 'after:2026/01/01')" },
           maxResults: { type: "number", description: "Max results (default 15)" },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Restrict to messages received in this window (caller's timezone). If set, after:/before: are appended to your query — do not include them yourself." },
         },
         required: ["query"],
       },

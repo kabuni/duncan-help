@@ -4888,6 +4888,31 @@ serve(async (req) => {
     userId = user.id;
     userEmail = user.email || "";
 
+    // Phase 9.4 — resolve canonical caller identity once per request.
+    // Single source of truth for timezone, working hours, manager, admin flag.
+    // Used by system prompt, calendar/workstream window math, and (soon) every read tool.
+    const identityCache = new IdentityCache();
+    let resolvedIdentity: ResolvedIdentity;
+    try {
+      resolvedIdentity = await resolveIdentity(supabaseAdmin, userId, identityCache);
+    } catch (e) {
+      console.warn("[identity] resolve failed, using fallback:", e);
+      resolvedIdentity = await resolveIdentity(supabaseAdmin, userId, identityCache).catch(() => ({
+        user_id: userId,
+        profile_id: null,
+        email: userEmail || null,
+        display_name: null,
+        department: null,
+        role_title: null,
+        timezone: "Europe/London",
+        working_hours: { start: "09:00", end: "18:00", days: [1, 2, 3, 4, 5] },
+        manager_id: null,
+        is_admin: false,
+        source: "fallback" as const,
+        resolved_at: new Date().toISOString(),
+      }));
+    }
+
     // Phase 1.5: parallelize pre-LLM warm-up (integrations + forms) instead of sequential awaits.
     const [
       calendarTokenResult,

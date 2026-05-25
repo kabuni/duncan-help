@@ -6242,7 +6242,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
             if (!calendarAccessToken) {
               result = { error: "Google Calendar is not connected. Please connect it via the Integrations page." };
             } else {
-              result = await withToolTimeout(tc.function.name, executeCalendarTool(tc.function.name, args, calendarAccessToken));
+              result = await withToolTimeout(tc.function.name, executeCalendarTool(tc.function.name, args, calendarAccessToken, resolvedIdentity));
             }
           } else if (documentToolNames.includes(tc.function.name)) {
             if (!azureStorageAvailable) {

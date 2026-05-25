@@ -236,3 +236,13 @@ export function resolveWindow(
     timezone: id.timezone,
   };
 }
+
+/** Format an instant as YYYY-MM-DD in the given tz. Useful for date-only filters. */
+export function localDateInTz(instant: Date, tz: string): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(instant).map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}

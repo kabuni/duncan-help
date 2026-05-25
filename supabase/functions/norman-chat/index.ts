@@ -9,6 +9,13 @@ import {
   type EmptyReason,
 } from "../_shared/tool-envelope.ts";
 import { lintAssistantDraft, type ToolCallRecord } from "../_shared/correctness-linter.ts";
+import {
+  IdentityCache,
+  resolveIdentity,
+  resolveWindow,
+  formatIdentityForPrompt,
+  type ResolvedIdentity,
+} from "../_shared/identity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -207,17 +214,22 @@ const CALENDAR_TOOLS = [
     type: "function",
     function: {
       name: "list_calendar_events",
-      description: "List upcoming calendar events. Use this when the user asks about their schedule, meetings, or calendar.",
+      description: "List upcoming calendar events. Use this when the user asks about their schedule, meetings, or calendar. Prefer the `window` shortcut (today/tomorrow/this_week/next_week) — it is resolved in the caller's timezone. Only pass timeMin/timeMax for custom ranges.",
       parameters: {
         type: "object",
         properties: {
+          window: {
+            type: "string",
+            enum: ["today", "tomorrow", "this_week", "next_week"],
+            description: "Convenience window resolved in the caller's local timezone. Overrides timeMin/timeMax when set.",
+          },
           timeMin: {
             type: "string",
-            description: "Start time in ISO 8601 format. Defaults to now.",
+            description: "Start time in ISO 8601 format. Defaults to now. Ignored if `window` is set.",
           },
           timeMax: {
             type: "string",
-            description: "End time in ISO 8601 format. If not specified, returns next 7 days.",
+            description: "End time in ISO 8601 format. If not specified, returns next 7 days. Ignored if `window` is set.",
           },
           maxResults: {
             type: "number",
@@ -4613,7 +4625,8 @@ async function executeSlackTool(toolName: string, args: any, accessToken: string
 async function executeCalendarTool(
   toolName: string,
   args: any,
-  accessToken: string
+  accessToken: string,
+  identity?: ResolvedIdentity,
 ): Promise<any> {
   const headers = {
     Authorization: `Bearer ${accessToken}`,
@@ -4622,8 +4635,21 @@ async function executeCalendarTool(
 
   switch (toolName) {
     case "list_calendar_events": {
-      const timeMin = args.timeMin || new Date().toISOString();
-      const timeMax = args.timeMax || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      // Phase 9.4 — prefer `window` resolved in caller TZ over ad-hoc ISO inputs.
+      let timeMin: string;
+      let timeMax: string;
+      let windowLabel: string | undefined;
+      let tzUsed = identity?.timezone ?? "UTC";
+      if (args.window && identity) {
+        const w = resolveWindow(identity, args.window);
+        timeMin = w.startISO;
+        timeMax = w.endISO;
+        windowLabel = w.label;
+        tzUsed = w.timezone;
+      } else {
+        timeMin = args.timeMin || new Date().toISOString();
+        timeMax = args.timeMax || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      }
       const maxResults = args.maxResults || 10;
 
       const url = new URL(`${GOOGLE_CALENDAR_API}/calendars/primary/events`);
@@ -4632,10 +4658,13 @@ async function executeCalendarTool(
       url.searchParams.set("maxResults", String(maxResults));
       url.searchParams.set("singleEvents", "true");
       url.searchParams.set("orderBy", "startTime");
+      if (identity?.timezone) url.searchParams.set("timeZone", identity.timezone);
+
+      const filters = { timeMin, timeMax, maxResults, window: windowLabel, timezone: tzUsed };
+      const queryEcho = `calendar.events?timeMin=${timeMin}&timeMax=${timeMax}&tz=${tzUsed}${windowLabel ? `&window=${windowLabel}` : ""}`;
 
       const response = await fetch(url.toString(), { headers });
       if (!response.ok) {
-        const error = await response.text();
         // Phase 9: tag upstream failure as a typed empty rather than throwing
         // so the model can hedge instead of fabricating events.
         return createReadResult({
@@ -4643,8 +4672,8 @@ async function executeCalendarTool(
           source: "google_calendar",
           freshness_sla_seconds: 60,
           row_count: 0,
-          filters_applied: { timeMin, timeMax, maxResults },
-          query_echo: `calendar.events?timeMin=${timeMin}&timeMax=${timeMax}`,
+          filters_applied: filters,
+          query_echo: queryEcho,
           empty_reason: response.status === 401 || response.status === 403
             ? "scope_missing"
             : "upstream_error",
@@ -4658,8 +4687,8 @@ async function executeCalendarTool(
         freshness_sla_seconds: 60,
         row_count: items.length,
         truncated: items.length >= maxResults,
-        filters_applied: { timeMin, timeMax, maxResults },
-        query_echo: `calendar.events?timeMin=${timeMin}&timeMax=${timeMax}`,
+        filters_applied: filters,
+        query_echo: queryEcho,
         empty_reason: items.length === 0 ? "no_matches" : undefined,
       });
     }
@@ -4881,6 +4910,31 @@ serve(async (req) => {
     userId = user.id;
     userEmail = user.email || "";
 
+    // Phase 9.4 — resolve canonical caller identity once per request.
+    // Single source of truth for timezone, working hours, manager, admin flag.
+    // Used by system prompt, calendar/workstream window math, and (soon) every read tool.
+    const identityCache = new IdentityCache();
+    let resolvedIdentity: ResolvedIdentity;
+    try {
+      resolvedIdentity = await resolveIdentity(supabaseAdmin, userId, identityCache);
+    } catch (e) {
+      console.warn("[identity] resolve failed, using fallback:", e);
+      resolvedIdentity = await resolveIdentity(supabaseAdmin, userId, identityCache).catch(() => ({
+        user_id: userId,
+        profile_id: null,
+        email: userEmail || null,
+        display_name: null,
+        department: null,
+        role_title: null,
+        timezone: "Europe/London",
+        working_hours: { start: "09:00", end: "18:00", days: [1, 2, 3, 4, 5] },
+        manager_id: null,
+        is_admin: false,
+        source: "fallback" as const,
+        resolved_at: new Date().toISOString(),
+      }));
+    }
+
     // Phase 1.5: parallelize pre-LLM warm-up (integrations + forms) instead of sequential awaits.
     const [
       calendarTokenResult,
@@ -4900,7 +4954,13 @@ serve(async (req) => {
     const googleForms = formsResult?.data;
 
     // Adjust system prompt based on mode and integration availability
-    let systemContent = SYSTEM_PROMPT + `\n\nCurrent date and time: ${new Date().toISOString()} (UTC).`;
+    // Phase 9.4 — inject canonical identity block (incl. local "now" in caller TZ).
+    // Keep UTC line too so existing prompt patterns that key off "Current date and time" still match.
+    let systemContent = SYSTEM_PROMPT
+      + `\n\nCurrent date and time: ${new Date().toISOString()} (UTC).`
+      + `\n\n## CALLER IDENTITY (canonical — use these for "today", "this week", "my time")\n`
+      + formatIdentityForPrompt(resolvedIdentity)
+      + `\n\nWhen the user says "today" / "tomorrow" / "this week", interpret them in the caller's timezone above, NOT UTC.`;
 
     // Always inject available forms into the system prompt so the model has field data across all turns
     if (googleForms && googleForms.length > 0) {
@@ -6182,7 +6242,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
             if (!calendarAccessToken) {
               result = { error: "Google Calendar is not connected. Please connect it via the Integrations page." };
             } else {
-              result = await withToolTimeout(tc.function.name, executeCalendarTool(tc.function.name, args, calendarAccessToken));
+              result = await withToolTimeout(tc.function.name, executeCalendarTool(tc.function.name, args, calendarAccessToken, resolvedIdentity));
             }
           } else if (documentToolNames.includes(tc.function.name)) {
             if (!azureStorageAvailable) {

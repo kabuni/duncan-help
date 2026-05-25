@@ -2578,6 +2578,14 @@ async function executeWorkstreamTool(
         eventsUrl.searchParams.set("orderBy", "startTime");
         eventsUrl.searchParams.set("maxResults", "100");
 
+        // Resolve per-member identity (timezone, working hours). Falls back to caller tz.
+        const memberIdentity = identityCache
+          ? await resolveIdentity(supabaseAdmin, uid, identityCache).catch(() => null)
+          : null;
+        const memberTz = memberIdentity?.timezone ?? callerTz;
+        const memberWH = memberIdentity?.working_hours ?? { start: "09:00", end: "18:00", days: [1, 2, 3, 4, 5] };
+        eventsUrl.searchParams.set("timeZone", memberTz);
+
         const eventsResp = await fetch(eventsUrl.toString(), {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
@@ -2596,34 +2604,53 @@ async function executeWorkstreamTool(
             end: e.end.dateTime,
           }));
 
-        // Find free slots (working hours 9am-6pm)
+        // Helper: convert a local "YYYY-MM-DD HH:MM" in tz to a UTC Date.
+        const localInTzToUtc = (y: number, m: number, d: number, hh: number, mm: number, tz: string) => {
+          const utcGuess = new Date(Date.UTC(y, m - 1, d, hh, mm, 0));
+          const offsetMin = (new Date(utcGuess.toLocaleString("en-US", { timeZone: tz })).getTime()
+                            - utcGuess.getTime()) / 60000;
+          return new Date(utcGuess.getTime() - offsetMin * 60000);
+        };
+        // Helper: get YYYY-MM-DD + day-of-week for a UTC instant in tz.
+        const localPartsInTz = (dt: Date, tz: string) => {
+          const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+            timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short",
+          }).formatToParts(dt).map((p) => [p.type, p.value]));
+          const dowMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+          return {
+            y: Number(parts.year), m: Number(parts.month), d: Number(parts.day),
+            iso: `${parts.year}-${parts.month}-${parts.day}`,
+            dow: dowMap[parts.weekday as string] ?? 0,
+          };
+        };
+
+        const [whStartH, whStartM] = memberWH.start.split(":").map(Number);
+        const [whEndH, whEndM] = memberWH.end.split(":").map(Number);
+
+        // Find free slots in member's local working hours.
         const freeSlots: any[] = [];
         for (let d = 0; d < numDays; d++) {
-          const dayStart = new Date(startDate.getTime() + d * 24 * 60 * 60 * 1000);
-          const workStart = new Date(dayStart);
-          workStart.setUTCHours(9, 0, 0, 0);
-          const workEnd = new Date(dayStart);
-          workEnd.setUTCHours(18, 0, 0, 0);
-          
-          // Skip weekends
-          const dayOfWeek = workStart.getDay();
-          if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+          const dayInstant = new Date(startDate.getTime() + d * 86400000);
+          const { y, m, d: dd, iso, dow } = localPartsInTz(dayInstant, memberTz);
+          if (!memberWH.days.includes(dow)) continue; // not a working day for this member
 
-          // Get busy periods for this day
+          const workStart = localInTzToUtc(y, m, dd, whStartH, whStartM, memberTz);
+          const workEnd = localInTzToUtc(y, m, dd, whEndH, whEndM, memberTz);
+
+          // Get busy periods overlapping the work window
           const dayEvents = events.filter((e: any) => {
             const eStart = new Date(e.start);
             const eEnd = new Date(e.end);
             return eStart < workEnd && eEnd > workStart;
           }).sort((a: any, b: any) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
-          // Find gaps
           let cursor = workStart.getTime();
           for (const evt of dayEvents) {
             const evtStart = Math.max(new Date(evt.start).getTime(), workStart.getTime());
             const evtEnd = Math.min(new Date(evt.end).getTime(), workEnd.getTime());
             if (evtStart > cursor && (evtStart - cursor) >= taskDuration * 60 * 1000) {
               freeSlots.push({
-                date: workStart.toISOString().split("T")[0],
+                date: iso,
                 start: new Date(cursor).toISOString(),
                 end: new Date(evtStart).toISOString(),
                 duration_minutes: Math.round((evtStart - cursor) / 60000),
@@ -2631,10 +2658,9 @@ async function executeWorkstreamTool(
             }
             cursor = Math.max(cursor, evtEnd);
           }
-          // Gap after last event
           if (cursor < workEnd.getTime() && (workEnd.getTime() - cursor) >= taskDuration * 60 * 1000) {
             freeSlots.push({
-              date: workStart.toISOString().split("T")[0],
+              date: iso,
               start: new Date(cursor).toISOString(),
               end: workEnd.toISOString(),
               duration_minutes: Math.round((workEnd.getTime() - cursor) / 60000),
@@ -2646,6 +2672,8 @@ async function executeWorkstreamTool(
           user_id: uid,
           name: memberName,
           calendar_connected: true,
+          timezone: memberTz,
+          working_hours: memberWH,
           busy_events_count: events.length,
           busy_events: events.slice(0, 15), // Cap to avoid token overflow
           free_slots: freeSlots,
@@ -2653,7 +2681,14 @@ async function executeWorkstreamTool(
         });
       }
 
-      return { availability: results, checked_from: startDate.toISOString(), checked_to: endDate.toISOString(), task_duration_minutes: taskDuration };
+      return {
+        availability: results,
+        checked_from: startDate.toISOString(),
+        checked_to: endDate.toISOString(),
+        window: windowLabel,
+        caller_timezone: callerTz,
+        task_duration_minutes: taskDuration,
+      };
     }
 
     default:

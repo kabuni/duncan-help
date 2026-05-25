@@ -9,7 +9,10 @@
 // Pure data layer — no HTTP, no LLM. Cached per request-scope via a Map
 // the caller owns so repeated lookups inside one turn don't re-query.
 
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+// Use a structural type instead of importing the SDK to avoid version-mismatch
+// errors when callers pin different @supabase/supabase-js versions.
+// deno-lint-ignore no-explicit-any
+type SupabaseClient = any;
 
 export interface ResolvedIdentity {
   user_id: string;

@@ -3569,7 +3569,8 @@ async function executeMeetingTool(
       supabaseUrl,
       authHeader,
       userId,
-      meetingFlowState
+      meetingFlowState,
+      identity
     );
     if (toolName === "get_meeting" && !meetingFlowState.listedIds.has(args?.meeting_id)) {
       console.log("[MEETING FLOW FINAL]", { user: userId, tool: toolName, args, corrected, action: "returned_list_instead" });

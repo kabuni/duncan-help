@@ -4992,10 +4992,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const latestUserMessage = [...messages].reverse().find((message: any) => message?.role === "user");
     const latestUserText = extractPlainText(latestUserMessage?.content).trim();
 
-    // Phase 1: cap rounds at 2 by default; allow 3 only for voice or explicit deep-analysis intents.
-    const DEEP_INTENT_RE = /\b(analy[sz]e|deep\s*dive|compare|cross[-\s]?reference|investigate|audit|thorough|comprehensive)\b/i;
-    const allowExtraRound = isVoiceMode || DEEP_INTENT_RE.test(latestUserText);
-    const MAX_TOOL_ROUNDS = allowExtraRound ? 3 : 2;
+    // Phase 5: raise the tool-call ceiling to 6 rounds so multi-step
+    // operational sequences (resolve entity → list → fetch detail → mutate →
+    // re-verify → narrate) can complete in a single turn without the loop
+    // tripping the cap mid-task. The 90s wall-clock budget is the real
+    // upper bound and prevents runaway loops.
+    const MAX_TOOL_ROUNDS = 6;
     const MAX_EXECUTION_TIME_MS = 90_000;
     // Broad: any user message mentioning meetings/calls + an intent verb (fetch/get/show/give/what)
     // OR meeting-notes/summary/discussions phrasing — triggers source disambiguation.

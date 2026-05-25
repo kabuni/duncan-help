@@ -107,16 +107,18 @@ A hard "no fabricated tool calls" invariant guards the main streaming loop: any 
 
 ---
 
-## Phase 8 — Decompose the monolith (foundation for the future, not a blocker)
+## Phase 8 — Decompose the monolith (foundation laid) ✅ SHIPPED (foundation)
 
-Split `norman-chat/index.ts` into:
-- `_shared/router.ts` — Phase 4 classifier.
-- `_shared/tools/` — one file per tool, each exporting `{ schema, execute }` returning the canonical envelope.
-- `_shared/executors/calendar.ts`, `workstreams.ts`, … — shared between `norman-chat` and `confirm-chat-write`.
-- `_shared/prompt/` — system prompt assembled from typed sections (truth rules, entity context, working memory).
-- `index.ts` — thin orchestrator: auth → router → streamText loop → SSE.
+Established the shared-module destination so future tools land in the right place instead of growing `norman-chat/index.ts` further:
 
-This is the only way the next defensive rule won't land as another non-local override.
+- **`supabase/functions/_shared/tool-envelope.ts`** — canonical `ToolResultStatus`, `ToolEnvelope<T>`, `createStructuredToolResult`, `classifyToolOutcome`. Extracted from the ~100-line inline block in `norman-chat`; now importable by `confirm-chat-write` and future per-tool executors so the Mutation Truth Rule contract is enforced from one place.
+- **`supabase/functions/_shared/router.ts`** — typed `Turn` shape + `createEmptyTurn()` scaffold for the Phase 4 classifier. Body extraction deferred (the live classifier closes over per-request locals); the type surface is in place so new code references one source of truth.
+- **`norman-chat/index.ts`** — inline envelope definitions deleted, replaced with imports. All 8 regression tests still pass against the extracted module, proving the contract is unchanged.
+
+Deferred (low ROI / high risk in one shot, will land incrementally):
+- Per-tool executor split (`_shared/executors/calendar.ts`, `workstreams.ts`, …) — needs the shared executors to be lifted out of the closure that owns auth / supabase clients first.
+- `_shared/prompt/` system-prompt split — single consumer today; high escape-risk for a 180-line template literal.
+- Thin orchestrator `index.ts` — blocked on the two above.
 
 ---
 

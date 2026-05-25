@@ -1755,6 +1755,7 @@ const WORKSTREAM_TOOLS = [
           overdue_only: { type: "boolean", description: "If true, only cards whose due_date has passed or that contain overdue open tasks." },
           include_tasks: { type: "boolean", description: "Include open task titles per card (default true)." },
           limit: { type: "number", description: "Max cards to return (default 30, max 1000 when exporting, otherwise 100)." },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Filter cards whose due_date falls in this window, resolved in the caller's timezone. Use this instead of computing dates yourself." },
           export_format: { type: "string", enum: ["json", "csv", "gsheet"], description: "'csv' uploads a CSV to private storage and returns a 1-hour signed download_url. 'gsheet' creates a Google Sheet in the user's own Drive using their connected Google account and returns the spreadsheet URL. Default: json." },
         },
         required: [],

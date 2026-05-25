@@ -5855,20 +5855,13 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const verified = typeof payload.verified === "boolean" ? payload.verified : positive;
       const source = typeof payload.source === "string" ? payload.source : toolName;
 
-      return {
-        tool: toolName,
-        source,
-        status,
-        ok,
-        verified,
-        ...payload,
-        // Re-pin canonical fields last so payload spread can't accidentally clobber them.
-        status,
-        ok,
-        verified,
-        source,
-        tool: toolName,
-      };
+      const envelope: Record<string, any> = { ...payload };
+      envelope.tool = toolName;
+      envelope.source = source;
+      envelope.status = status;
+      envelope.ok = ok;
+      envelope.verified = verified;
+      return envelope;
     }
 
     function classifyToolOutcome(toolName: string, result: any): { status: "success" | "no_data" | "partial" | "hard_error"; payload: any } {

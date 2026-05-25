@@ -6460,13 +6460,29 @@ Format as a natural, readable summary with clear sections. If a section has no d
         const content = (results?.[0] as any)?.content;
         let parsed: any = null;
         try { parsed = typeof content === "string" ? JSON.parse(content) : content; } catch { parsed = { raw: content }; }
-        const ok = parsed?.status !== "hard_error";
-        return new Response(JSON.stringify({ ok, result: parsed }), {
-          status: ok ? 200 : 502,
+
+        // Mutation Truth Rule: the canonical envelope's ok+verified is the source of truth.
+        // hard_error / partial / no envelope = not verified.
+        const envelopeOk = parsed?.ok === true && parsed?.verified === true;
+        const status = parsed?.status ?? (envelopeOk ? "success" : "hard_error");
+
+        return new Response(JSON.stringify({
+          ok: envelopeOk,
+          verified: parsed?.verified === true,
+          status,
+          source: parsed?.source ?? null,
+          tool: row.tool_name,
+          summary: row.summary ?? null,
+          before: parsed?.before ?? null,
+          after: parsed?.after ?? null,
+          error: parsed?.error ?? null,
+          result: parsed,
+        }), {
+          status: envelopeOk ? 200 : 502,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } catch (e: any) {
-        return new Response(JSON.stringify({ ok: false, error: e?.message || "Execution failed" }), {
+        return new Response(JSON.stringify({ ok: false, verified: false, status: "hard_error", error: e?.message || "Execution failed" }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }

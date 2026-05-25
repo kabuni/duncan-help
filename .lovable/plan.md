@@ -8,7 +8,7 @@ The root cause is not any single bug — it is **architectural drift**: `norman-
 
 ---
 
-## Phase 1 — Canonical Tool-Result Envelope (foundation)
+## Phase 1 — Canonical Tool-Result Envelope (foundation) ✅ SHIPPED
 
 Every tool — read, write, pending, or error — returns the **same shape**. The model can then enforce truth with one rule instead of N idioms.
 
@@ -36,7 +36,7 @@ Wrap every tool executor through a single `wrapToolResult()` helper so no tool c
 
 ---
 
-## Phase 2 — Mutation Truth Rule that actually fires
+## Phase 2 — Mutation Truth Rule that actually fires ✅ SHIPPED
 
 Replace today's prose rule with a **structural** rule in the system prompt tied to the envelope:
 
@@ -46,7 +46,7 @@ Because every tool now returns the same fields, this rule is enforceable and tes
 
 ---
 
-## Phase 3 — Fix the calendar mutation path end-to-end
+## Phase 3 — Fix the calendar mutation path end-to-end ✅ SHIPPED
 
 Two paths exist today (interceptor stub + `confirm-chat-write`) and neither closes the loop. Collapse to one flow:
 

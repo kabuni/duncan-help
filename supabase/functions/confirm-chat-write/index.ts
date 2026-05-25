@@ -102,21 +102,43 @@ Deno.serve(async (req) => {
       const errMsg = (execJson && execJson.error) || execText || `Execution failed (${execResp.status})`;
       await admin
         .from("chat_write_pending")
-        .update({ status: "failed", error: String(errMsg).slice(0, 2000), executed_at: new Date().toISOString() })
+        .update({ status: "failed", error: String(errMsg).slice(0, 2000), executed_at: new Date().toISOString(), result: execJson ?? { raw: execText } })
         .eq("id", pendingId);
-      return json({ error: errMsg, status: "failed" }, 502);
+      return json({
+        status: "failed",
+        ok: false,
+        verified: false,
+        error: errMsg,
+        result: execJson ?? { raw: execText },
+      }, 502);
     }
+
+    // Mutation Truth Rule: only mark executed when the executor verified the write.
+    const verifiedOk = execJson?.ok === true && execJson?.verified === true;
+    const persistedStatus = verifiedOk ? "executed" : "failed";
 
     await admin
       .from("chat_write_pending")
       .update({
-        status: "executed",
+        status: persistedStatus,
         result: execJson ?? { raw: execText },
+        error: verifiedOk ? null : (execJson?.error || "Write did not verify"),
         executed_at: new Date().toISOString(),
       })
       .eq("id", pendingId);
 
-    return json({ status: "executed", result: execJson ?? { raw: execText } }, 200);
+    return json({
+      status: persistedStatus,
+      ok: verifiedOk,
+      verified: execJson?.verified === true,
+      source: execJson?.source ?? null,
+      tool: execJson?.tool ?? null,
+      summary: execJson?.summary ?? null,
+      before: execJson?.before ?? null,
+      after: execJson?.after ?? null,
+      error: verifiedOk ? null : (execJson?.error || "Write did not verify"),
+      result: execJson ?? { raw: execText },
+    }, verifiedOk ? 200 : 502);
   } catch (e: any) {
     console.error("[confirm-chat-write] error:", e);
     return json({ error: e?.message || "Unknown error" }, 500);

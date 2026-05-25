@@ -89,7 +89,7 @@ Your capabilities:
    • **Website analytics (GA4)** — active users, sessions, page views, engagement rate, top pages, countries, cities, devices, demographics, traffic sources (use get_google_analytics_dashboard).
    When the user asks anything analytics-related ("how are we doing", "performance", "traffic", "pipeline", "what's the status", "report"), call the relevant tools — combine multiple sources when the question spans domains. Default time window is **last 7 days** unless the user specifies otherwise. Always respond as an **executive summary**: 3–5 headline metrics first, RYG status indicator, one short narrative paragraph, then a brief "What to watch" line. Only expand into full tables if the user explicitly asks for a breakdown. Never dump raw JSON.
 - **Workstream Management (Agentic)**: You can CREATE, UPDATE, and manage workstream cards and tasks directly. When a user describes a workflow, project plan, or set of tasks, proactively break it down into workstream cards with tasks. IMPORTANT: When creating cards, they are ALWAYS auto-assigned to the creator only. Do NOT try to assign cards to others during creation. If the user wants to assign cards to other team members, use update_workstream_card AFTER creation. Use list_team_members to resolve names to user IDs. When assigning tasks to people, use check_team_availability first to look at their calendars and find suitable time slots. Suggest specific times based on their availability. Available project tags: 'Lightning Strike Event', 'Website', 'K10 App', 'School Integrations'. Default status is 'amber' (Yellow) for new cards. When the user says "create", "set up", or "build the workflow", execute directly. Otherwise, present the plan first and ask for confirmation before creating. DEDUPLICATION: The create_workstream_card tool automatically prevents duplicates — if a card with the same title and project_tag already exists for the user, it returns the existing card instead of creating a new one. NEVER call create_workstream_card more than once for the same card title in a single conversation. After creating cards, do NOT repeat the creation calls — proceed directly to adding tasks.
-- **Planner / Key Events Diary (Agentic)**: You can READ and UPDATE the Planner. Use list_planner_events to surface upcoming events, risks, owners, and missing fields. Use update_planner_event_meta to set Duncan metadata (category, owner, objective, success_metric, decision_needed, risks, next_action, risk_level). For changes to date/time/attendees of the underlying calendar event, use create_calendar_event / update_calendar_event / delete_calendar_event instead — those propagate to Google Calendar and back into the Planner via sync. Always show a brief preview ("I'll set risk to red and owner to X — confirm?") before any write.
+- **Planner / Key Events Diary (Agentic)**: You can READ and UPDATE the Planner. Use list_planner_events to surface upcoming events (it returns calendar_id, google_event_id, start_tz and source_type so you can route correctly). Use update_planner_event_meta to set Duncan metadata. **For ANY date/time change — "move", "reschedule", "postpone", "push to tomorrow", "change time" — ALWAYS use reschedule_event. Do NOT use update_calendar_event for reschedules; it cannot mutate local Planner rows and does not verify success.** reschedule_event is routing-aware (planner vs Google) and returns a strict {ok, verified, source, before, after, error} contract. **MUTATION TRUTH RULE: If a mutation tool returns ok=false, verified=false, or an error, you MUST surface the exact failure and the entity/calendar at fault. NEVER say "done", "moved", "actioned", "updated", or "rescheduled" unless verified===true.** Always show a brief preview ("I will move Lightning Strike to tomorrow 14:00–15:00 BST — confirm?") before any write.
 - **Google Forms**: You can fill and submit pre-configured Google Forms on behalf of the user. You can also parse a Google Form URL to automatically extract its fields and save it as a new pre-configured form. When a user asks to fill a form, first list available forms, then ask each required field ONE AT A TIME as a conversational question. Wait for the user to answer each question before asking the next. After collecting all answers, confirm the details and submit. When a user provides a Google Form URL, use parse_google_form to extract the fields, show the parsed result to the user for confirmation, then save it with save_parsed_google_form.
 
 Your personality:
@@ -282,6 +282,29 @@ const CALENDAR_TOOLS = [
           },
         },
         required: ["eventId"],
+      },
+    },
+  },
+];
+
+const RESCHEDULE_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "reschedule_event",
+      description:
+        "CANONICAL tool for moving/rescheduling/postponing any event (planner key event OR Google Calendar event). Use this for ALL date/time changes — 'move to tomorrow', 'reschedule', 'push by 1 hour', 'postpone'. Routing-aware: local Planner rows (calendar_id='local' or google_event_id starting with 'local:') are updated directly in the Planner; real Google events are PATCHed against Duncan's calendar identity. Every call performs post-write verification and returns {ok, verified, source, before, after, error}. NEVER claim a reschedule succeeded unless verified===true.",
+      parameters: {
+        type: "object",
+        properties: {
+          event_id: { type: "string", description: "key_events.id (UUID). Strongly preferred — call list_planner_events first." },
+          google_event_id: { type: "string", description: "Google Calendar event ID (only when event_id is not available)." },
+          calendar_id: { type: "string", description: "Calendar ID. 'local' for planner-only events; otherwise the Google calendar ID from list_planner_events." },
+          startDateTime: { type: "string", description: "New start in ISO 8601 with timezone offset or UTC." },
+          endDateTime: { type: "string", description: "New end in ISO 8601." },
+          timeZone: { type: "string", description: "IANA timezone (e.g. 'Europe/London'). Defaults to event's existing start_tz." },
+        },
+        required: ["startDateTime", "endDateTime"],
       },
     },
   },
@@ -1834,7 +1857,7 @@ async function executePlannerTool(
       const limit = Math.min(Math.max(args.limit ?? 20, 1), 100);
       let q = supabaseAdmin
         .from("key_events")
-        .select("id, title, start_at, end_at, all_day, location, owner, category, event_name, objective, success_metric, decision_needed, risks, next_action, risk_level, risk_reason, missing_fields, is_complete, organizer_email, html_link, start_tz")
+        .select("id, title, start_at, end_at, all_day, location, owner, category, event_name, objective, success_metric, decision_needed, risks, next_action, risk_level, risk_reason, missing_fields, is_complete, organizer_email, html_link, start_tz, calendar_id, google_event_id")
         .eq("deleted_in_google", false);
 
       const now = new Date().toISOString();
@@ -1871,6 +1894,14 @@ async function executePlannerTool(
 
       let rows = data || [];
       if (args.incomplete_only) rows = rows.filter((r: any) => !r.is_complete || (r.missing_fields?.length ?? 0) > 0);
+      // Inject source_type so the model can route mutations correctly.
+      rows = rows.map((r: any) => ({
+        ...r,
+        source_type:
+          r.calendar_id === "local" || (typeof r.google_event_id === "string" && r.google_event_id.startsWith("local:"))
+            ? "planner"
+            : "google",
+      }));
 
       return { count: rows.length, range, events: rows };
     }
@@ -4204,6 +4235,251 @@ async function getCalendarAccessToken(userId: string, supabaseAdmin: any): Promi
   return tokenData.access_token;
 }
 
+// ===== Duncan calendar identity (singleton, admin-managed) =====
+async function getDuncanCalendarContext(
+  supabaseAdmin: any,
+): Promise<{ accessToken: string; calendarId: string } | null> {
+  const clientId = Deno.env.get("GOOGLE_CALENDAR_CLIENT_ID");
+  const clientSecret = Deno.env.get("GOOGLE_CALENDAR_CLIENT_SECRET");
+  if (!clientId || !clientSecret) return null;
+
+  const { data: tok } = await supabaseAdmin
+    .from("duncan_calendar_tokens")
+    .select("*")
+    .limit(1)
+    .maybeSingle();
+  if (!tok) return null;
+
+  let accessToken = tok.access_token as string;
+  const expiry = new Date(tok.token_expiry as string);
+  if (expiry <= new Date()) {
+    const r = await fetch(GOOGLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: tok.refresh_token,
+        grant_type: "refresh_token",
+      }),
+    });
+    if (!r.ok) {
+      console.error("[duncan-cal] refresh failed", await r.text().catch(() => ""));
+      return null;
+    }
+    const nt = await r.json();
+    accessToken = nt.access_token;
+    await supabaseAdmin
+      .from("duncan_calendar_tokens")
+      .update({
+        access_token: accessToken,
+        token_expiry: new Date(Date.now() + nt.expires_in * 1000).toISOString(),
+      })
+      .eq("id", tok.id);
+  }
+  return { accessToken, calendarId: tok.calendar_id || "primary" };
+}
+
+async function auditReschedule(
+  supabaseAdmin: any,
+  row: {
+    actor_user_id: string | null;
+    tool_name: string;
+    event_id?: string | null;
+    source: "planner" | "google" | "unknown";
+    google_event_id?: string | null;
+    calendar_id?: string | null;
+    requested: any;
+    before_state?: any;
+    after_state?: any;
+    ok: boolean;
+    verified: boolean;
+    error?: string | null;
+  },
+) {
+  try {
+    await supabaseAdmin.from("calendar_mutation_audit").insert(row);
+  } catch (e) {
+    console.error("[reschedule] audit insert failed", e);
+  }
+}
+
+// ===== Routing-aware reschedule executor =====
+// Returns the strict contract: { ok, verified, source, before, after, error }
+async function executeRescheduleTool(
+  args: any,
+  supabaseAdmin: any,
+  actorUserId: string | null,
+): Promise<any> {
+  const requested = {
+    event_id: args?.event_id ?? null,
+    google_event_id: args?.google_event_id ?? null,
+    calendar_id: args?.calendar_id ?? null,
+    startDateTime: args?.startDateTime ?? null,
+    endDateTime: args?.endDateTime ?? null,
+    timeZone: args?.timeZone ?? null,
+  };
+
+  if (!requested.startDateTime || !requested.endDateTime) {
+    const out = { ok: false, verified: false, source: "unknown", before: null, after: null, error: "startDateTime and endDateTime are required" };
+    await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "unknown", requested, ok: false, verified: false, error: out.error });
+    return out;
+  }
+  const startDate = new Date(requested.startDateTime);
+  const endDate = new Date(requested.endDateTime);
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || endDate <= startDate) {
+    const out = { ok: false, verified: false, source: "unknown", before: null, after: null, error: "startDateTime/endDateTime invalid or inverted" };
+    await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "unknown", requested, ok: false, verified: false, error: out.error });
+    return out;
+  }
+
+  // 1. Resolve the planner row when possible.
+  let row: any = null;
+  if (requested.event_id) {
+    const { data } = await supabaseAdmin
+      .from("key_events")
+      .select("id, title, start_at, end_at, start_tz, calendar_id, google_event_id, all_day")
+      .eq("id", requested.event_id)
+      .maybeSingle();
+    row = data;
+  } else if (requested.google_event_id) {
+    const { data } = await supabaseAdmin
+      .from("key_events")
+      .select("id, title, start_at, end_at, start_tz, calendar_id, google_event_id, all_day")
+      .eq("google_event_id", requested.google_event_id)
+      .maybeSingle();
+    row = data;
+  }
+
+  const effectiveCalendarId = row?.calendar_id ?? requested.calendar_id ?? null;
+  const effectiveGoogleId = row?.google_event_id ?? requested.google_event_id ?? null;
+  const isLocal =
+    effectiveCalendarId === "local" ||
+    (typeof effectiveGoogleId === "string" && effectiveGoogleId.startsWith("local:"));
+
+  // ==== CASE A: Local planner event — direct UPDATE on key_events ====
+  if (isLocal || (row && (!effectiveGoogleId || effectiveGoogleId.startsWith("local:")))) {
+    if (!row) {
+      const out = { ok: false, verified: false, source: "planner", before: null, after: null, error: "Planner event not found for event_id/google_event_id" };
+      await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "planner", event_id: requested.event_id, google_event_id: effectiveGoogleId, calendar_id: effectiveCalendarId, requested, ok: false, verified: false, error: out.error });
+      return out;
+    }
+    const before = { start_at: row.start_at, end_at: row.end_at, start_tz: row.start_tz };
+    const newStart = startDate.toISOString();
+    const newEnd = endDate.toISOString();
+    const tz = requested.timeZone || row.start_tz || "Europe/London";
+
+    const { error: updErr } = await supabaseAdmin
+      .from("key_events")
+      .update({ start_at: newStart, end_at: newEnd, start_tz: tz, updated_at: new Date().toISOString() })
+      .eq("id", row.id);
+
+    if (updErr) {
+      const out = { ok: false, verified: false, source: "planner", before, after: null, error: `Planner update failed: ${updErr.message}` };
+      await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "planner", event_id: row.id, google_event_id: row.google_event_id, calendar_id: row.calendar_id, requested, before_state: before, ok: false, verified: false, error: out.error });
+      return out;
+    }
+
+    // Re-fetch + verify
+    const { data: after } = await supabaseAdmin
+      .from("key_events")
+      .select("start_at, end_at, start_tz")
+      .eq("id", row.id)
+      .maybeSingle();
+
+    const verified =
+      !!after &&
+      new Date(after.start_at).getTime() === startDate.getTime() &&
+      new Date(after.end_at).getTime() === endDate.getTime();
+
+    const out = {
+      ok: verified,
+      verified,
+      source: "planner",
+      before,
+      after,
+      error: verified ? null : "Planner row did not reflect the requested datetimes after update",
+    };
+    await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "planner", event_id: row.id, google_event_id: row.google_event_id, calendar_id: row.calendar_id, requested, before_state: before, after_state: after, ok: out.ok, verified: out.verified, error: out.error });
+    return out;
+  }
+
+  // ==== CASE B: Real Google Calendar event — PATCH via Duncan identity ====
+  if (!effectiveGoogleId) {
+    const out = { ok: false, verified: false, source: "google", before: null, after: null, error: "Missing google_event_id for non-local event" };
+    await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "google", event_id: requested.event_id, calendar_id: effectiveCalendarId, requested, ok: false, verified: false, error: out.error });
+    return out;
+  }
+  const duncan = await getDuncanCalendarContext(supabaseAdmin);
+  if (!duncan) {
+    const out = { ok: false, verified: false, source: "google", before: null, after: null, error: "Duncan calendar is not connected (no duncan_calendar_tokens). An admin must reconnect it." };
+    await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "google", event_id: requested.event_id, google_event_id: effectiveGoogleId, calendar_id: effectiveCalendarId, requested, ok: false, verified: false, error: out.error });
+    return out;
+  }
+  const calendarId = effectiveCalendarId || duncan.calendarId;
+  const headers = { Authorization: `Bearer ${duncan.accessToken}`, "Content-Type": "application/json" };
+
+  // GET before-state (also confirms the event actually exists on this calendar).
+  const beforeResp = await fetch(
+    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(effectiveGoogleId)}`,
+    { headers },
+  );
+  if (!beforeResp.ok) {
+    const txt = await beforeResp.text().catch(() => "");
+    const out = { ok: false, verified: false, source: "google", before: null, after: null, error: `Google GET ${beforeResp.status}: ${txt.slice(0, 400)}` };
+    await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "google", event_id: requested.event_id, google_event_id: effectiveGoogleId, calendar_id: calendarId, requested, ok: false, verified: false, error: out.error });
+    return out;
+  }
+  const beforeGoogle = await beforeResp.json();
+  const tz = requested.timeZone || beforeGoogle?.start?.timeZone || row?.start_tz || "Europe/London";
+
+  // PATCH — only mutate start/end/timezone; preserve everything else (attendees, conferencing, recurrence, reminders).
+  const patchBody = {
+    start: { dateTime: startDate.toISOString(), timeZone: tz },
+    end: { dateTime: endDate.toISOString(), timeZone: tz },
+  };
+  const patchResp = await fetch(
+    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(effectiveGoogleId)}?sendUpdates=all`,
+    { method: "PATCH", headers, body: JSON.stringify(patchBody) },
+  );
+  if (!patchResp.ok) {
+    const txt = await patchResp.text().catch(() => "");
+    const out = { ok: false, verified: false, source: "google", before: { start: beforeGoogle?.start, end: beforeGoogle?.end, updated: beforeGoogle?.updated }, after: null, error: `Google PATCH ${patchResp.status}: ${txt.slice(0, 400)}` };
+    await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "google", event_id: requested.event_id, google_event_id: effectiveGoogleId, calendar_id: calendarId, requested, before_state: out.before, ok: false, verified: false, error: out.error });
+    return out;
+  }
+
+  // RE-GET + verify
+  const afterResp = await fetch(
+    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(effectiveGoogleId)}`,
+    { headers },
+  );
+  const afterGoogle = afterResp.ok ? await afterResp.json() : null;
+  const sameInstant = (iso: string | undefined, target: Date) =>
+    !!iso && new Date(iso).getTime() === target.getTime();
+  const verified =
+    !!afterGoogle &&
+    sameInstant(afterGoogle?.start?.dateTime, startDate) &&
+    sameInstant(afterGoogle?.end?.dateTime, endDate) &&
+    afterGoogle?.updated !== beforeGoogle?.updated;
+
+  const before = { start: beforeGoogle?.start, end: beforeGoogle?.end, updated: beforeGoogle?.updated };
+  const after = { start: afterGoogle?.start, end: afterGoogle?.end, updated: afterGoogle?.updated };
+
+  const out = {
+    ok: verified,
+    verified,
+    source: "google",
+    before,
+    after,
+    error: verified ? null : "Google Calendar event did not reflect the requested datetimes after PATCH",
+  };
+  await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "google", event_id: requested.event_id, google_event_id: effectiveGoogleId, calendar_id: calendarId, requested, before_state: before, after_state: after, ok: out.ok, verified: out.verified, error: out.error });
+  return out;
+}
+
+
+
 async function decryptSlackToken(encryptedToken: string, secret: string): Promise<string> {
   if (!encryptedToken.startsWith("aes-256-gcm:")) return encryptedToken;
   const [, ivPart, ciphertextPart] = encryptedToken.split(":");
@@ -4382,6 +4658,7 @@ const WRITE_TOOLS = new Set<string>([
   "update_workstream_card",
   "submit_google_form",
   "update_planner_event_meta",
+  "reschedule_event",
   "send_pdf_for_signature",
 ]);
 
@@ -4396,6 +4673,7 @@ const WRITE_TOOL_LABELS: Record<string, string> = {
   update_workstream_card: "Update workstream card",
   submit_google_form: "Submit Google Form",
   update_planner_event_meta: "Update planner event",
+  reschedule_event: "Reschedule event (planner or Google Calendar)",
   send_pdf_for_signature: "Send PDF for e-signature (DocuSign)",
 };
 
@@ -4423,6 +4701,8 @@ function summarizeWriteAction(toolName: string, args: any): string {
         return `${label} ${args?.form_id || args?.id || "?"}`;
       case "update_planner_event_meta":
         return `${label} ${args?.event_id || args?.id || "?"}`;
+      case "reschedule_event":
+        return `${label}: ${args?.event_id || args?.google_event_id || "?"} → ${args?.startDateTime || "?"} – ${args?.endDateTime || "?"}`;
       case "send_pdf_for_signature":
         return `${label}: "${args?.file_name || "PDF"}" → ${args?.recipient_name || "?"} <${args?.recipient_email || "?"}>`;
       default:
@@ -4939,6 +5219,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
     if (calendarAccessToken) {
       tools.push(...CALENDAR_TOOLS);
     }
+    // reschedule_event is always available — handles local Planner rows even without a personal Google Calendar token.
+    tools.push(...RESCHEDULE_TOOLS);
     if (azureStorageAvailable) {
       tools.push(...DOCUMENT_TOOLS);
     }
@@ -4986,7 +5268,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       { groups: [CALENDAR_TOOLS], re: /\b(calendar|diary|schedule|availability|free\/busy|free busy|book\b|meeting room|reschedule|invite|invites|event|events|appointment)\b/i },
       { groups: [MEETING_TOOLS], re: /\b(meeting notes?|meetings?\b|recap|action items?|transcript|plaud|gemini|google\s*meet|recording|summary of (the|my|our)\b|minutes\b)\b/i },
       { groups: [WORKSTREAM_TOOLS], re: /\b(workstream|workstreams|kanban|card|cards|ryg|amber|red\/yellow|status update|owner of|pending action|pending actions|action items?|open tasks?|my tasks?|to[- ]?dos?|on my plate|overdue|csv|download|spreadsheet|excel|google sheet|export)\b/i },
-      { groups: [PLANNER_TOOLS], re: /\b(planner|plan\b|roadmap|milestone|sprint plan|backlog|to-do list)\b/i },
+      { groups: [PLANNER_TOOLS, CALENDAR_TOOLS], re: /\b(planner|plan\b|roadmap|milestone|sprint plan|backlog|to-do list|reschedule|postpone|move (it|this|the meeting|to tomorrow)|push (back|forward) (the|my)|change (the )?(date|time))\b/i },
       { groups: [ANALYTICS_TOOLS], re: /\b(analytic|analytics|metric|metrics|kpi|dashboard|trend|report|reporting|chart|graph)\b/i },
       { groups: [GOOGLE_DRIVE_TOOLS], re: /\b(drive|google drive|gdrive|folder|shared drive|doc\b|docs\b|sheet\b|sheets\b|slide|slides|file in)\b/i },
       { groups: [DOCUMENT_TOOLS], re: /\b(document|documents|file|files|attachment|policy|policies|contract|nda|sop|playbook|handbook|wiki|knowledge base)\b/i },
@@ -5005,6 +5287,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       ...EXEC_SUMMARY_TOOLS,
       ...RELEASE_TOOLS,
       ...LOVABLE_CONTRIBUTORS_TOOLS,
+      ...RESCHEDULE_TOOLS,
     ];
 
     // Build the filtered toolset. If no intent matches, fall back to the full tools array.
@@ -5024,7 +5307,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
           const name = t?.function?.name;
           if (!name || seen.has(name)) return false;
           // Respect connection gates: drop tools whose backing integration isn't available.
-          if (CALENDAR_TOOLS.includes(t) && !calendarAccessToken) return false;
+          // reschedule_event must remain available even without a personal Google Calendar token
+          // (it covers local Planner rows and uses the Duncan calendar identity for Google events).
+          if (CALENDAR_TOOLS.includes(t) && !calendarAccessToken && name !== "reschedule_event") return false;
           if (DOCUMENT_TOOLS.includes(t) && !azureStorageAvailable) return false;
           if (NOTION_TOOLS.includes(t) && !notionToken) return false;
           
@@ -5714,7 +5999,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
           
 
           
-          if (calendarToolNames.includes(tc.function.name)) {
+          if (tc.function.name === "reschedule_event") {
+            result = await withToolTimeout(tc.function.name, executeRescheduleTool(args, supabaseAdmin, userId || null));
+          } else if (calendarToolNames.includes(tc.function.name)) {
             if (!calendarAccessToken) {
               result = { error: "Google Calendar is not connected. Please connect it via the Integrations page." };
             } else {

@@ -214,17 +214,22 @@ const CALENDAR_TOOLS = [
     type: "function",
     function: {
       name: "list_calendar_events",
-      description: "List upcoming calendar events. Use this when the user asks about their schedule, meetings, or calendar.",
+      description: "List upcoming calendar events. Use this when the user asks about their schedule, meetings, or calendar. Prefer the `window` shortcut (today/tomorrow/this_week/next_week) — it is resolved in the caller's timezone. Only pass timeMin/timeMax for custom ranges.",
       parameters: {
         type: "object",
         properties: {
+          window: {
+            type: "string",
+            enum: ["today", "tomorrow", "this_week", "next_week"],
+            description: "Convenience window resolved in the caller's local timezone. Overrides timeMin/timeMax when set.",
+          },
           timeMin: {
             type: "string",
-            description: "Start time in ISO 8601 format. Defaults to now.",
+            description: "Start time in ISO 8601 format. Defaults to now. Ignored if `window` is set.",
           },
           timeMax: {
             type: "string",
-            description: "End time in ISO 8601 format. If not specified, returns next 7 days.",
+            description: "End time in ISO 8601 format. If not specified, returns next 7 days. Ignored if `window` is set.",
           },
           maxResults: {
             type: "number",

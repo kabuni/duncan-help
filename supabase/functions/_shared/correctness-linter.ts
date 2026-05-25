@@ -47,6 +47,8 @@ const DOMAIN_TRIGGERS: Record<string, RegExp[]> = {
   gmail: [
     /\byou have \d+ (?:unread|new) emails?/i,
     /\bno emails from\b/i,
+    /\b(?:sent|emailed) you \d+ (?:email|message)s?\b/i,
+    /\bunread email from\b/i,
   ],
   meetings: [
     /\bin (?:the|your) (?:last|recent) meeting\b/i,

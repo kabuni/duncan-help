@@ -8,7 +8,7 @@ The root cause is not any single bug — it is **architectural drift**: `norman-
 
 ---
 
-## Phase 1 — Canonical Tool-Result Envelope (foundation)
+## Phase 1 — Canonical Tool-Result Envelope (foundation) ✅ SHIPPED
 
 Every tool — read, write, pending, or error — returns the **same shape**. The model can then enforce truth with one rule instead of N idioms.
 

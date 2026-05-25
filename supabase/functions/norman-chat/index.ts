@@ -9,6 +9,13 @@ import {
   type EmptyReason,
 } from "../_shared/tool-envelope.ts";
 import { lintAssistantDraft, type ToolCallRecord } from "../_shared/correctness-linter.ts";
+import {
+  IdentityCache,
+  resolveIdentity,
+  resolveWindow,
+  formatIdentityForPrompt,
+  type ResolvedIdentity,
+} from "../_shared/identity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

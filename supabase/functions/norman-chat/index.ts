@@ -5263,7 +5263,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       { groups: [CALENDAR_TOOLS], re: /\b(calendar|diary|schedule|availability|free\/busy|free busy|book\b|meeting room|reschedule|invite|invites|event|events|appointment)\b/i },
       { groups: [MEETING_TOOLS], re: /\b(meeting notes?|meetings?\b|recap|action items?|transcript|plaud|gemini|google\s*meet|recording|summary of (the|my|our)\b|minutes\b)\b/i },
       { groups: [WORKSTREAM_TOOLS], re: /\b(workstream|workstreams|kanban|card|cards|ryg|amber|red\/yellow|status update|owner of|pending action|pending actions|action items?|open tasks?|my tasks?|to[- ]?dos?|on my plate|overdue|csv|download|spreadsheet|excel|google sheet|export)\b/i },
-      { groups: [PLANNER_TOOLS], re: /\b(planner|plan\b|roadmap|milestone|sprint plan|backlog|to-do list)\b/i },
+      { groups: [PLANNER_TOOLS, CALENDAR_TOOLS], re: /\b(planner|plan\b|roadmap|milestone|sprint plan|backlog|to-do list|reschedule|postpone|move (it|this|the meeting|to tomorrow)|push (back|forward) (the|my)|change (the )?(date|time))\b/i },
       { groups: [ANALYTICS_TOOLS], re: /\b(analytic|analytics|metric|metrics|kpi|dashboard|trend|report|reporting|chart|graph)\b/i },
       { groups: [GOOGLE_DRIVE_TOOLS], re: /\b(drive|google drive|gdrive|folder|shared drive|doc\b|docs\b|sheet\b|sheets\b|slide|slides|file in)\b/i },
       { groups: [DOCUMENT_TOOLS], re: /\b(document|documents|file|files|attachment|policy|policies|contract|nda|sop|playbook|handbook|wiki|knowledge base)\b/i },

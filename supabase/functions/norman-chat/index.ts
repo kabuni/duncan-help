@@ -4932,7 +4932,13 @@ serve(async (req) => {
     const googleForms = formsResult?.data;
 
     // Adjust system prompt based on mode and integration availability
-    let systemContent = SYSTEM_PROMPT + `\n\nCurrent date and time: ${new Date().toISOString()} (UTC).`;
+    // Phase 9.4 — inject canonical identity block (incl. local "now" in caller TZ).
+    // Keep UTC line too so existing prompt patterns that key off "Current date and time" still match.
+    let systemContent = SYSTEM_PROMPT
+      + `\n\nCurrent date and time: ${new Date().toISOString()} (UTC).`
+      + `\n\n## CALLER IDENTITY (canonical — use these for "today", "this week", "my time")\n`
+      + formatIdentityForPrompt(resolvedIdentity)
+      + `\n\nWhen the user says "today" / "tomorrow" / "this week", interpret them in the caller's timezone above, NOT UTC.`;
 
     // Always inject available forms into the system prompt so the model has field data across all turns
     if (googleForms && googleForms.length > 0) {

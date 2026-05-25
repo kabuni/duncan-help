@@ -6929,6 +6929,22 @@ Format as a natural, readable summary with clear sections. If a section has no d
             enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: footer } }] })}\n\n`);
           }
 
+          // Phase 9.7: shadow-mode correctness linter. Logs violations only.
+          try {
+            const linterReport = lintAssistantDraft(
+              lastFullContent || "",
+              executedToolEnvelopes,
+              "shadow",
+            );
+            (turnLog as any).correctness = {
+              violations: linterReport.violations.length,
+              kinds: linterReport.violations.map(v => v.kind),
+              read_results: linterReport.readResultsSeen.length,
+            };
+          } catch (linterErr) {
+            console.warn("[correctness-linter] failed:", linterErr);
+          }
+
           console.log("FINAL RESPONSE SENT TO UI:");
           console.log({
             fullContentLength: lastFullContent?.length || 0,

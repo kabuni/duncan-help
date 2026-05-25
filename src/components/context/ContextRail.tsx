@@ -52,8 +52,8 @@ const HomeContext = () => {
 
   const now = new Date();
   const upcoming = events
-    .filter(e => new Date(e.starts_at) >= now)
-    .sort((a, b) => +new Date(a.starts_at) - +new Date(b.starts_at))
+    .filter(e => new Date(e.start_at) >= now)
+    .sort((a, b) => +new Date(a.start_at) - +new Date(b.start_at))
     .slice(0, 3);
 
   const pending = approvals.filter(a => a.status === "pending").slice(0, 3);
@@ -75,7 +75,7 @@ const HomeContext = () => {
               key={e.id}
               label={e.title}
               right={<span className="text-[10px] text-muted-foreground">
-                {new Date(e.starts_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                {new Date(e.start_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
               </span>}
               onClick={() => navigate("/diary")}
             />
@@ -172,10 +172,10 @@ const PlannerContext = () => {
   const { events } = useKeyEvents();
   const today = new Date();
   const todayKey = today.toDateString();
-  const todays = events.filter(e => new Date(e.starts_at).toDateString() === todayKey);
+  const todays = events.filter(e => new Date(e.start_at).toDateString() === todayKey);
   const upcoming = events
-    .filter(e => new Date(e.starts_at) > today && new Date(e.starts_at).toDateString() !== todayKey)
-    .sort((a, b) => +new Date(a.starts_at) - +new Date(b.starts_at))
+    .filter(e => new Date(e.start_at) > today && new Date(e.start_at).toDateString() !== todayKey)
+    .sort((a, b) => +new Date(a.start_at) - +new Date(b.start_at))
     .slice(0, 5);
 
   return (
@@ -189,7 +189,7 @@ const PlannerContext = () => {
               key={e.id}
               label={e.title}
               right={<span className="text-[10px] text-muted-foreground">
-                {new Date(e.starts_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                {new Date(e.start_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
               </span>}
             />
           ))
@@ -201,7 +201,7 @@ const PlannerContext = () => {
             key={e.id}
             label={e.title}
             right={<span className="text-[10px] text-muted-foreground">
-              {new Date(e.starts_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+              {new Date(e.start_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
             </span>}
           />
         ))}

@@ -4635,8 +4635,21 @@ async function executeCalendarTool(
 
   switch (toolName) {
     case "list_calendar_events": {
-      const timeMin = args.timeMin || new Date().toISOString();
-      const timeMax = args.timeMax || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      // Phase 9.4 — prefer `window` resolved in caller TZ over ad-hoc ISO inputs.
+      let timeMin: string;
+      let timeMax: string;
+      let windowLabel: string | undefined;
+      let tzUsed = identity?.timezone ?? "UTC";
+      if (args.window && identity) {
+        const w = resolveWindow(identity, args.window);
+        timeMin = w.startISO;
+        timeMax = w.endISO;
+        windowLabel = w.label;
+        tzUsed = w.timezone;
+      } else {
+        timeMin = args.timeMin || new Date().toISOString();
+        timeMax = args.timeMax || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      }
       const maxResults = args.maxResults || 10;
 
       const url = new URL(`${GOOGLE_CALENDAR_API}/calendars/primary/events`);
@@ -4645,10 +4658,13 @@ async function executeCalendarTool(
       url.searchParams.set("maxResults", String(maxResults));
       url.searchParams.set("singleEvents", "true");
       url.searchParams.set("orderBy", "startTime");
+      if (identity?.timezone) url.searchParams.set("timeZone", identity.timezone);
+
+      const filters = { timeMin, timeMax, maxResults, window: windowLabel, timezone: tzUsed };
+      const queryEcho = `calendar.events?timeMin=${timeMin}&timeMax=${timeMax}&tz=${tzUsed}${windowLabel ? `&window=${windowLabel}` : ""}`;
 
       const response = await fetch(url.toString(), { headers });
       if (!response.ok) {
-        const error = await response.text();
         // Phase 9: tag upstream failure as a typed empty rather than throwing
         // so the model can hedge instead of fabricating events.
         return createReadResult({
@@ -4656,8 +4672,8 @@ async function executeCalendarTool(
           source: "google_calendar",
           freshness_sla_seconds: 60,
           row_count: 0,
-          filters_applied: { timeMin, timeMax, maxResults },
-          query_echo: `calendar.events?timeMin=${timeMin}&timeMax=${timeMax}`,
+          filters_applied: filters,
+          query_echo: queryEcho,
           empty_reason: response.status === 401 || response.status === 403
             ? "scope_missing"
             : "upstream_error",
@@ -4671,8 +4687,8 @@ async function executeCalendarTool(
         freshness_sla_seconds: 60,
         row_count: items.length,
         truncated: items.length >= maxResults,
-        filters_applied: { timeMin, timeMax, maxResults },
-        query_echo: `calendar.events?timeMin=${timeMin}&timeMax=${timeMax}`,
+        filters_applied: filters,
+        query_echo: queryEcho,
         empty_reason: items.length === 0 ? "no_matches" : undefined,
       });
     }

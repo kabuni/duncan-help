@@ -110,3 +110,102 @@ export function classifyToolOutcome(
 
   return { status: "success", payload: createStructuredToolResult(toolName, result, "success") };
 }
+
+// ============================================================================
+// Phase 9.1 — Read Truth Rule envelope
+// ----------------------------------------------------------------------------
+// Read tools wrap their payload in a ReadResult so the LLM (and the post-LLM
+// correctness linter) can verify that every factual claim has provenance,
+// freshness, and a non-silent empty reason.
+//
+// This is additive — existing tools keep returning ToolEnvelope until they
+// are migrated. The correctness linter only enforces ReadResult-backed
+// claims once a tool has been opted in via meta.readResult = true.
+// ============================================================================
+
+export type EmptyReason =
+  | "no_matches"          // query ran fine, zero rows in the resolved window
+  | "scope_missing"       // OAuth scope / permission not granted
+  | "integration_disconnected"
+  | "out_of_window"       // resolved window excluded everything the user meant
+  | "permission_denied"   // RLS / RBAC blocked the read
+  | "rate_limited"
+  | "upstream_error";
+
+export interface ReadResult<T = unknown> {
+  ok: true;
+  data: T;
+  source: string;                 // e.g. "google_calendar", "workstreams_db"
+  fetched_at: string;             // ISO timestamp the read completed
+  freshness_sla_seconds: number;  // claims older than this must be hedged
+  row_count: number;
+  truncated: boolean;
+  filters_applied: Record<string, unknown>;
+  query_echo: string;             // human-readable echo of the resolved query
+  empty_reason?: EmptyReason;     // REQUIRED when row_count === 0
+  conflicts?: Array<{ field: string; sources: string[]; values: unknown[] }>;
+}
+
+export interface ReadResultInput<T = unknown> {
+  data: T;
+  source: string;
+  freshness_sla_seconds: number;
+  row_count: number;
+  filters_applied: Record<string, unknown>;
+  query_echo: string;
+  truncated?: boolean;
+  empty_reason?: EmptyReason;
+  conflicts?: ReadResult<T>["conflicts"];
+}
+
+/**
+ * Build a Phase 9 ReadResult envelope. Throws when row_count===0 and no
+ * empty_reason was provided — silent empties are the exact failure mode this
+ * phase exists to kill.
+ */
+export function createReadResult<T>(input: ReadResultInput<T>): ReadResult<T> {
+  if (input.row_count === 0 && !input.empty_reason) {
+    throw new Error(
+      `createReadResult(${input.source}): row_count=0 requires an explicit empty_reason ` +
+        `(no_matches | scope_missing | integration_disconnected | out_of_window | permission_denied | rate_limited | upstream_error)`,
+    );
+  }
+  return {
+    ok: true,
+    data: input.data,
+    source: input.source,
+    fetched_at: new Date().toISOString(),
+    freshness_sla_seconds: input.freshness_sla_seconds,
+    row_count: input.row_count,
+    truncated: input.truncated ?? false,
+    filters_applied: input.filters_applied,
+    query_echo: input.query_echo,
+    empty_reason: input.empty_reason,
+    conflicts: input.conflicts,
+  };
+}
+
+/**
+ * Wrap a ReadResult inside the existing ToolEnvelope so legacy plumbing keeps
+ * working. Sets meta.readResult = true so the correctness linter knows this
+ * tool is opted in to Phase 9 enforcement.
+ */
+export function wrapReadResultAsEnvelope<T>(
+  toolName: string,
+  read: ReadResult<T>,
+): Record<string, any> {
+  const status: ToolResultStatus = read.row_count === 0 ? "no_data" : "success";
+  const envelope = createStructuredToolResult(toolName, {
+    source: read.source,
+    data: read.data,
+    read_result: read,
+    meta: { readResult: true, fetched_at: read.fetched_at, row_count: read.row_count },
+  }, status);
+  return envelope;
+}
+
+export function isReadResultEnvelope(env: Record<string, any> | undefined | null): boolean {
+  if (!env || typeof env !== "object") return false;
+  const meta = (env as any).meta;
+  return !!(meta && meta.readResult === true);
+}

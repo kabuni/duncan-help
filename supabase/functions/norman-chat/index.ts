@@ -4607,10 +4607,32 @@ async function executeCalendarTool(
       const response = await fetch(url.toString(), { headers });
       if (!response.ok) {
         const error = await response.text();
-        throw new Error(`Failed to list events: ${error}`);
+        // Phase 9: tag upstream failure as a typed empty rather than throwing
+        // so the model can hedge instead of fabricating events.
+        return createReadResult({
+          data: [],
+          source: "google_calendar",
+          freshness_sla_seconds: 60,
+          row_count: 0,
+          filters_applied: { timeMin, timeMax, maxResults },
+          query_echo: `calendar.events?timeMin=${timeMin}&timeMax=${timeMax}`,
+          empty_reason: response.status === 401 || response.status === 403
+            ? "scope_missing"
+            : "upstream_error",
+        });
       }
       const data = await response.json();
-      return data.items || [];
+      const items = data.items || [];
+      return createReadResult({
+        data: items,
+        source: "google_calendar",
+        freshness_sla_seconds: 60,
+        row_count: items.length,
+        truncated: items.length >= maxResults,
+        filters_applied: { timeMin, timeMax, maxResults },
+        query_echo: `calendar.events?timeMin=${timeMin}&timeMax=${timeMax}`,
+        empty_reason: items.length === 0 ? "no_matches" : undefined,
+      });
     }
 
     case "create_calendar_event": {

@@ -5991,7 +5991,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
           
 
           
-          if (calendarToolNames.includes(tc.function.name)) {
+          if (tc.function.name === "reschedule_event") {
+            result = await withToolTimeout(tc.function.name, executeRescheduleTool(args, supabaseAdmin, userId || null));
+          } else if (calendarToolNames.includes(tc.function.name)) {
             if (!calendarAccessToken) {
               result = { error: "Google Calendar is not connected. Please connect it via the Integrations page." };
             } else {

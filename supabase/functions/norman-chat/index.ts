@@ -3932,7 +3932,20 @@ async function executeMeetingTool(
         };
       });
 
-      return { query: searchTerm, found: results.length, meetings: results };
+      const filters = { query: searchTerm, limit: 10 };
+      const echo = `meetings transcript ilike "%${searchTerm}%" limit=10`;
+      if (results.length === 0) {
+        const rr = createReadResult({
+          data: [], source: "meetings_db", freshness_sla_seconds: 60, row_count: 0,
+          filters_applied: filters, query_echo: echo, empty_reason: "no_matches",
+        });
+        return { query: searchTerm, found: 0, meetings: [], read_result: rr, meta: { readResult: true } };
+      }
+      const rr = createReadResult({
+        data: results, source: "meetings_db", freshness_sla_seconds: 60, row_count: results.length,
+        truncated: results.length >= 10, filters_applied: filters, query_echo: echo,
+      });
+      return { query: searchTerm, found: results.length, meetings: results, read_result: rr, meta: { readResult: true } };
     }
 
     default:

@@ -36,7 +36,7 @@ Wrap every tool executor through a single `wrapToolResult()` helper so no tool c
 
 ---
 
-## Phase 2 — Mutation Truth Rule that actually fires
+## Phase 2 — Mutation Truth Rule that actually fires ✅ SHIPPED
 
 Replace today's prose rule with a **structural** rule in the system prompt tied to the envelope:
 

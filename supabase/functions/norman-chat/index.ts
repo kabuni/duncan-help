@@ -6608,6 +6608,40 @@ Format as a natural, readable summary with clear sections. If a section has no d
         let aggregatedContent = "";
         let lastFullContent = "";
 
+        // Phase 7 — Structured per-turn observability.
+        const turnId = (globalThis.crypto?.randomUUID?.() ?? `turn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
+        const turnStartedAt = Date.now();
+        const turnLog = {
+          turn_id: turnId,
+          user_id: userId,
+          intent: (typeof turn !== "undefined" ? (turn as any)?.intentMatched ?? null : null) as string | null,
+          bypass_tools: (typeof turn !== "undefined" ? (turn as any)?.bypassTools ?? false : false) as boolean,
+          tools_called: [] as string[],
+          mutation_ok: null as boolean | null,
+          mutation_verified: null as boolean | null,
+          rounds: 0,
+          empty_completion: false,
+          fabricated_tool_call: false,
+        };
+        const recordTurnToolOutcomes = (toolResults: any[]) => {
+          for (const msg of toolResults || []) {
+            const content = msg?.content;
+            let parsed: any = null;
+            if (typeof content === "string") {
+              try { parsed = JSON.parse(content); } catch { parsed = null; }
+            } else if (content && typeof content === "object") {
+              parsed = content;
+            }
+            if (!parsed) continue;
+            if (typeof parsed.ok === "boolean") {
+              turnLog.mutation_ok = parsed.ok && (turnLog.mutation_ok !== false);
+            }
+            if (typeof parsed.verified === "boolean") {
+              turnLog.mutation_verified = parsed.verified && (turnLog.mutation_verified !== false);
+            }
+          }
+        };
+
 
         // Phase 1.5: SSE heartbeat — keep the connection alive and prevent
         // perceived freezing during long tool execution / LLM round-trips.
@@ -6659,6 +6693,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               // Phase 6: recovery is text-only. Never execute tool calls from
               // a recovery turn — they were not part of the user-visible stream.
               if (recovery.error) {
+                turnLog.empty_completion = true;
                 emitDuncanEvent({
                   duncan_event: "empty_completion",
                   error: recovery.error,
@@ -6732,6 +6767,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
                 round,
                 fabricated: fabricated.map((tc: any) => ({ id: tc?.id, name: tc?.function?.name })),
               });
+              turnLog.fabricated_tool_call = true;
               emitDuncanEvent({
                 duncan_event: "empty_completion",
                 error: {
@@ -6749,7 +6785,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
               detected: provider,
             });
             recordToolCalls(toolCalls);
+            for (const tc of toolCalls) {
+              const n = tc?.function?.name;
+              if (n) turnLog.tools_called.push(n);
+            }
             const toolResults = await executeToolCalls(toolCalls, provider, { emit: emitDuncanEvent });
+            recordTurnToolOutcomes(toolResults);
             const toolResultsString = JSON.stringify(toolResults);
             const allToolResultsNoData = toolResults.length > 0 && toolResults.every((message: any) => {
               const content = message?.content;
@@ -6887,6 +6928,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               });
               const recovery = await recoverEmptyCompletion(finalMessages);
               if (recovery.error) {
+                turnLog.empty_completion = true;
                 emitDuncanEvent({
                   duncan_event: "empty_completion",
                   error: recovery.error,
@@ -6918,6 +6960,15 @@ Format as a natural, readable summary with clear sections. If a section has no d
             preview: lastFullContent?.slice(0, 200),
             sources: sourcesUsed,
           });
+
+          // Phase 7: single structured per-turn log line.
+          turnLog.rounds = round;
+          console.info("[turn]", {
+            ...turnLog,
+            duration_ms: Date.now() - turnStartedAt,
+            ok: true,
+          });
+
           clearInterval(heartbeat);
           enqueue("data: [DONE]\n\n");
           controller.close();
@@ -6925,6 +6976,13 @@ Format as a natural, readable summary with clear sections. If a section has no d
           console.error("norman-chat streaming error:", streamErr);
           const message = streamErr instanceof Error ? streamErr.message : "Unknown streaming error";
           enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: `\n\n⚠️ Error: ${message}` } }] })}\n\n`);
+          // Phase 7: structured per-turn log on failure path too.
+          console.info("[turn]", {
+            ...turnLog,
+            duration_ms: Date.now() - turnStartedAt,
+            ok: false,
+            error: message,
+          });
           clearInterval(heartbeat);
           enqueue("data: [DONE]\n\n");
           controller.close();

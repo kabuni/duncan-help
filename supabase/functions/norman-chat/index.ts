@@ -2051,6 +2051,15 @@ async function executeWorkstreamTool(
       if (restrictCardIds) cardsQuery = cardsQuery.in("id", restrictCardIds);
       if (args.overdue_only) cardsQuery = cardsQuery.lt("due_date", nowIso);
 
+      // Caller-timezone window resolution (Phase 9.4 / 9.6).
+      let resolvedWindow: { startISO: string; endISO: string; label: string; timezone: string } | null = null;
+      if (args.window && identity) {
+        resolvedWindow = resolveWindow(identity, args.window);
+        cardsQuery = cardsQuery
+          .gte("due_date", resolvedWindow.startISO)
+          .lt("due_date", resolvedWindow.endISO);
+      }
+
       const { data: cards, error } = await cardsQuery;
       if (error) throw new Error(`Failed to list workstream cards: ${error.message}`);
       const cardList = cards || [];

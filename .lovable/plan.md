@@ -1,155 +1,114 @@
-# Duncan Production-Readiness Plan — Execution Truth & Routing Reliability
+# Phase 9 — Correctness Layer
 
-## Goal
-
-Eliminate the class of failures where Duncan **claims success without verified execution** or **invents disconnected systems** instead of acting. After this plan, every tool call has a single canonical contract, every write is verified end-to-end, and the model is structurally unable to lie about outcomes.
-
-The root cause is not any single bug — it is **architectural drift**: `norman-chat/index.ts` has grown to 6,730 lines with overlapping defensive layers, inconsistent tool-result shapes, a broken confirmation loop, and a too-tight tool-round budget. The plan below fixes the architecture, not the symptoms.
+Phases 1–8 stopped Duncan from lying about *writes*. Phase 9 stops Duncan from being confidently wrong about *reads* — the much larger surface. The strategy: treat every fact Duncan states as a typed claim with a provenance, a freshness budget, and a confidence floor. If those can't be satisfied, Duncan must hedge or refuse — same posture as the Mutation Truth Rule, applied to knowledge.
 
 ---
 
-## Phase 1 — Canonical Tool-Result Envelope (foundation) ✅ SHIPPED
+## 9.1 Read Truth Rule (mirror of Mutation Truth Rule)
 
-Every tool — read, write, pending, or error — returns the **same shape**. The model can then enforce truth with one rule instead of N idioms.
+Add a `ReadResult<T>` envelope to `_shared/tool-envelope.ts`:
 
-```ts
-type ToolResult<T = unknown> = {
-  ok: boolean;                  // did the tool achieve its stated effect?
-  verified: boolean;            // for writes: did we re-read and confirm?
-  status: "success" | "no_data" | "partial" | "pending_confirmation"
-        | "error" | "timeout" | "circuit_open";
-  source: string;               // e.g. "google_calendar", "workstream_cards"
-  data?: T;                     // results / before-after / list payload
-  error?: { code: string; message: string; retryable: boolean };
-  pending?: { pendingId: string; summary: string };  // only when status=pending_confirmation
-  meta?: Record<string, unknown>;
-};
+```text
+{
+  ok: true,
+  data: T,
+  source: "google_calendar" | "workstreams_db" | "gmail" | ...,
+  fetched_at: ISO,
+  freshness_sla_seconds: number,
+  row_count: number,
+  truncated: boolean,
+  filters_applied: Record<string,unknown>,
+  query_echo: string         // exact filter the tool ran
+}
 ```
 
-Rules:
-- Read tools: `ok=true, verified=true, status="success"|"no_data"`.
-- Write tools (direct execution): `ok` and `verified` reflect the post-write read-back.
-- Write tools (confirmation path): `ok=false, verified=false, status="pending_confirmation"` — never "success".
-- Errors: `ok=false, verified=false`, populated `error`.
+Rule enforced in the system prompt + a post-LLM linter:
+- Any factual claim about user data MUST cite a `source` from this turn's `ReadResult`s.
+- Claims older than `freshness_sla_seconds` must be marked "as of {fetched_at}".
+- If `truncated: true` Duncan must say so before summarising.
+- If no matching `ReadResult` exists for a claim → strip the claim, replace with "I don't have that".
 
-Wrap every tool executor through a single `wrapToolResult()` helper so no tool can return a free-form shape.
+## 9.2 Tool result honesty — kill silent empties
 
----
+Today many `get_*` tools return `[]` indistinguishably for "no data" vs "filter excluded everything" vs "auth scope missing". Phase 9 splits these:
 
-## Phase 2 — Mutation Truth Rule that actually fires ✅ SHIPPED
+- `empty_reason: "no_matches" | "scope_missing" | "integration_disconnected" | "out_of_window" | "permission_denied"`
+- Tools refuse to return `[]` without one of these tags.
+- The LLM is instructed: never say "you have no meetings" — say "no meetings in the window 2026-05-25 → 2026-06-01 from Google Calendar (Plaud not queried)".
 
-Replace today's prose rule with a **structural** rule in the system prompt tied to the envelope:
+## 9.3 Query echo + filter discipline
 
-> Before stating any write succeeded, you MUST have observed `ok=true AND verified=true` in the latest tool result for that operation. If `status="pending_confirmation"`, you MUST tell the user the action is awaiting their confirmation and not claim it is done. If `verified=false`, you MUST say it could not be confirmed and offer to retry.
+Every read tool must echo back:
+- the resolved time window (with timezone),
+- the resolved user id / project id,
+- which integrations were and were NOT consulted.
 
-Because every tool now returns the same fields, this rule is enforceable and testable.
+This kills the most common silent-wrong: Duncan answers from Google Calendar when the user meant Plaud, or queries `now()` UTC when the user is in BST.
 
----
+## 9.4 Cross-source reconciliation
 
-## Phase 3 — Fix the calendar mutation path end-to-end ✅ SHIPPED
+For overlapping domains (meetings: Plaud + Meet + Calendar; tasks: Workstreams + Basecamp + DevOps), add a thin `reconcile_*` layer that:
+- fetches from all relevant sources in parallel,
+- deduplicates by stable keys (calendar event id, basecamp todo id, devops work item id),
+- emits conflicts as `{ field, sources: [...], values: [...] }` rather than silently picking one.
 
-Two paths exist today (interceptor stub + `confirm-chat-write`) and neither closes the loop. Collapse to one flow:
+LLM prompt: surface conflicts to the user, never paper over them.
 
-1. `reschedule_event` / `create_event` / `cancel_event` executors:
-   - Look up the event (fail loud if not found — never "optimistic success").
-   - Perform the Google Calendar mutation.
-   - **Re-read the event** from Google and diff against expected after-state.
-   - Write an `event_mutation_audit` row: `{ user_id, tool, args, before, after, verified, error, request_id }`.
-   - Return the canonical envelope with `before` / `after` in `data`.
-2. `confirm-chat-write` invokes the **same executor** (shared module), then streams the canonical envelope back into the original chat thread via a new `duncan_event: "write_result"` SSE event. No more detached results.
-3. Remove the silent "summary" string from the pending stub — it was being misread as a success claim.
+## 9.5 Stale-cache and pagination hygiene
 
----
+- Every cached read carries a TTL; expired reads are re-fetched, never served stale without a label.
+- All list tools default to a hard cap (e.g. 50) and set `truncated: true` rather than silently dropping.
+- Add `next_cursor` to every list tool; remove unbounded `LIMIT 1000` queries (Supabase default trap is documented in memory).
 
-## Phase 4 — Collapse defensive layers into one router ✅ SHIPPED
+## 9.6 Identity & timezone resolution
 
-Today: `mustAskMeetingSource`, `shouldBypassTools`, `INTENT_RULES`, and the new entity resolver all bias behavior independently and contradict the act-first prompt. Replace with **one** deterministic router invoked once per turn:
+Single resolver `_shared/identity.ts` that returns:
+`{ user_id, profile_id, email, timezone, working_hours, manager_id }`
 
-```
-classifyTurn(userMessage, history) →
-  { intent: "read"|"write"|"chitchat",
-    resolvedEntities: {...},
-    requiredTools: [...],
-    needsClarification: boolean,
-    clarificationReason?: string }
-```
+All read tools take this object — no more ad-hoc `auth.uid()` + UTC math scattered across 30 files. Eliminates the class of "wrong person / wrong day" errors.
 
-Rules baked in:
-- Single matching tool + matching enum → execute, never clarify.
-- Disconnected systems (Basecamp/Trello/Jira/Asana/Monday/Notion-tasks) → never offer as alternatives.
-- Genuinely ambiguous (no enum match, no tool match) → clarify with a specific question.
+## 9.7 Post-LLM correctness linter
 
-Delete `mustAskMeetingSource`, `shouldBypassTools`, and `INTENT_RULES`. The router is the only gate.
+A small deterministic pass between the model's draft answer and the SSE flush:
 
----
+1. Extract every `[Source: …]`-style citation and every assertion that *looks* factual (regex for dates, names, counts, statuses).
+2. For each, verify a matching `ReadResult` exists in this turn's tool log.
+3. Unverifiable claims → either strip + replace with a hedge, or re-prompt the model with the violations.
 
-## Phase 5 — Raise `MAX_TOOL_ROUNDS` and add per-conversation state ✅ SHIPPED
+Same shape as the Phase 6 typed-error guard, applied to reads.
 
-- `MAX_TOOL_ROUNDS`: 2 → **6**. A correct write requires list → preview → execute → verify; 2 forces the model to skip verification.
-- Per-conversation working memory (in-edge, derived from `chat_write_pending` + last N tool results) injected into the system prompt: pending writes, last tool results with `ok/verified`, resolved entities. When the user asks "did it work?", the model has a source of truth other than its own prior text.
+## 9.8 Evaluation harness
 
----
+`supabase/functions/norman-chat/correctness_eval.ts`:
+- 50 golden prompts covering calendar, workstreams, recruitment, gmail, meetings, analytics.
+- Each prompt has a fixture (frozen DB snapshot + frozen integration responses) and a rubric (must-cite, must-not-claim, must-hedge-if-missing).
+- Runs in CI alongside `mutation_truth_test.ts`. Failing a rubric blocks deploy.
 
-## Phase 6 — Kill silent recovery paths ✅ SHIPPED
+## 9.9 User-visible "show your working"
 
-`recoverEmptyCompletion` is now **text-only**: tools are never offered during recovery, any tool calls the model attempts to emit are discarded, and if no usable text comes back the function returns a typed `{ code: "empty_completion", retryable: true }` error envelope that is surfaced to the client as a `duncan_event: "empty_completion"` SSE event.
+In the chat UI, attach a collapsible "Sources" panel to every assistant turn listing the `ReadResult` envelopes that backed the answer (source, fetched_at, row_count, filters). Users can spot wrong assumptions instantly — and so can we when triaging bug reports.
 
-A hard "no fabricated tool calls" invariant guards the main streaming loop: any malformed tool call (missing `id`, missing `function.name`, non-string `arguments`) is refused before execution, with a typed `fabricated_tool_call` event emitted to the client. Tool calls may now only originate from the model's streamed output for the current turn — silent re-invocation of write tools is structurally impossible.
+## 9.10 Roll-out order
 
----
+1. Land `ReadResult` envelope + `empty_reason` taxonomy (no behaviour change yet).
+2. Migrate the three highest-traffic read tools (`get_calendar_events`, `list_workstreams`, `search_meetings`) to emit it.
+3. Ship the post-LLM correctness linter in shadow mode (logs violations, doesn't block).
+4. Add the identity/timezone resolver and retrofit those three tools.
+5. Add the eval harness with 10 prompts; expand to 50.
+6. Flip the linter from shadow to enforcing.
+7. Migrate remaining read tools in priority order.
+8. Ship the "Sources" UI panel.
 
-## Phase 7 — Observability & regression guardrails ✅ SHIPPED
+## Definition of done
 
-- `calendar_mutation_audit` table already exists with admin read RLS; Phase 7 migration adds **per-user own-row read** policy + `(actor_user_id, created_at desc)` index so users can self-serve their own calendar mutation history.
-- `norman-chat` now emits a single structured `[turn]` log line per request: `{ turn_id, user_id, intent, bypass_tools, tools_called, mutation_ok, mutation_verified, rounds, empty_completion, fabricated_tool_call, duration_ms, ok, error? }`. Logged on both success and failure paths. `mutation_ok` / `mutation_verified` are aggregated by parsing every tool result envelope and AND-ing the booleans, so any non-verified tool result poisons the turn-level flag.
-- Deno regression tests (`supabase/functions/norman-chat/mutation_truth_test.ts`, **8 tests passing**) pin the canonical envelope classification table and the Mutation Truth Rule itself: `success`/`no_data` → ok+verified, `pending_confirmation` → never a success, `partial`/`hard_error`/`timeout`/`circuit_open` → unverified failures, and `ok=true` with `verified=false` is structurally a failure. Phase 6 typed errors (`empty_completion`, `fabricated_tool_call`) are asserted retryable.
-- Manual QA matrix in `/release-manager` deferred to release-prep; structural tests + audit table + per-turn log are sufficient regression guards for the four historical failure modes.
+- 100% of read tools return `ReadResult`.
+- 0% of assistant turns contain factual claims without a matching `ReadResult` in the same turn (measured by the linter).
+- Golden eval ≥ 90% pass rate, with hedging counted as correct when data is missing.
+- "Sources" panel visible in production for every chat reply.
 
----
+## Out of scope for Phase 9
 
-## Phase 8 — Decompose the monolith (foundation laid) ✅ SHIPPED (foundation)
-
-Established the shared-module destination so future tools land in the right place instead of growing `norman-chat/index.ts` further:
-
-- **`supabase/functions/_shared/tool-envelope.ts`** — canonical `ToolResultStatus`, `ToolEnvelope<T>`, `createStructuredToolResult`, `classifyToolOutcome`. Extracted from the ~100-line inline block in `norman-chat`; now importable by `confirm-chat-write` and future per-tool executors so the Mutation Truth Rule contract is enforced from one place.
-- **`supabase/functions/_shared/router.ts`** — typed `Turn` shape + `createEmptyTurn()` scaffold for the Phase 4 classifier. Body extraction deferred (the live classifier closes over per-request locals); the type surface is in place so new code references one source of truth.
-- **`norman-chat/index.ts`** — inline envelope definitions deleted, replaced with imports. All 8 regression tests still pass against the extracted module, proving the contract is unchanged.
-
-Deferred (low ROI / high risk in one shot, will land incrementally):
-- Per-tool executor split (`_shared/executors/calendar.ts`, `workstreams.ts`, …) — needs the shared executors to be lifted out of the closure that owns auth / supabase clients first.
-- `_shared/prompt/` system-prompt split — single consumer today; high escape-risk for a 180-line template literal.
-- Thin orchestrator `index.ts` — blocked on the two above.
-
----
-
-## Rollout order (each phase shippable independently)
-
-1. Phase 1 + Phase 2 — envelope + truth rule. Low risk, high leverage.
-2. Phase 3 — calendar verification + audit table. Fixes the Lightning Strike incident class.
-3. Phase 5 — raise tool rounds + working memory.
-4. Phase 4 — collapse defensive layers into the router.
-5. Phase 6 — remove silent recovery.
-6. Phase 7 — tests + observability (lands alongside each phase, finalised here).
-7. Phase 8 — decomposition. Done last so prior phases ship fast.
-
----
-
-## Technical notes
-
-- **Files touched (initial phases):** `supabase/functions/norman-chat/index.ts`, `supabase/functions/confirm-chat-write/index.ts`, new `supabase/functions/_shared/*`, new migration for `event_mutation_audit`, new Deno test files under `supabase/functions/norman-chat/`.
-- **Migrations:** `event_mutation_audit` table (RLS: admins read all, users read own); index on `(user_id, created_at desc)`.
-- **No frontend changes** required for Phases 1–6 beyond rendering the new `write_result` SSE event in `useNormanChat.ts` (small addition to `handleDuncanEvent`).
-- **Backwards compatibility:** envelope is additive; existing tool consumers keep working until each tool is migrated. Migrate read tools first (safest), then writes.
-- **Risk:** medium. All changes are in the AI orchestration layer; no user data schema changes beyond an append-only audit table.
-
----
-
-## Definition of "production ready"
-
-- Every tool returns the canonical envelope.
-- No write can be reported as successful without `ok=true AND verified=true`.
-- Pending-confirmation writes are surfaced honestly in chat.
-- No tool call exists that wasn't emitted by the model this turn.
-- Router is the single source of clarification decisions.
-- Test suite covers the four historical failure modes (false reschedule success, Basecamp hallucination, "did it work?" lie, recurring-event mis-edit).
-- Audit table shows before/after for every calendar mutation in the last 30 days.
+- New integrations.
+- LLM model swaps.
+- Voice / mobile UI work.
+- Anything mutation-side (Phases 1–8 already cover it).

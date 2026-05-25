@@ -1,13 +1,19 @@
-import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
+import { useState, useRef, useEffect, useCallback, forwardRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Trash2, Loader2, Download, Copy, Check,
-  Sparkles, Lightbulb,
+  Loader2, Download, Copy, Check,
+  Sparkles, Lightbulb, MoreVertical, Plus, ChevronDown,
 } from "lucide-react";
 import FeatureRequestModal from "@/components/FeatureRequestModal";
 import ReactMarkdown from "react-markdown";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
 import remarkGfm from "remark-gfm";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useNavigate, useLocation } from "react-router-dom";
 import WelcomeModal from "@/components/WelcomeModal";
 import { useNormanChat } from "@/hooks/useNormanChat";
@@ -77,6 +83,27 @@ const MessageBubble = forwardRef<HTMLDivElement, {
   const contentRef = useRef<HTMLDivElement>(null);
   const isUser = msg.role === "user";
   const senderLabel = isUser ? userName : "Duncan";
+  const [expanded, setExpanded] = useState(false);
+
+  // Extract trailing Sources block from assistant content → render as tag chips
+  const { body, sources } = useMemo(() => {
+    if (isUser) return { body: msg.content, sources: [] as string[] };
+    const text = msg.content;
+    // Match a trailing line like "Sources: a, b, c" or "**Sources:** a, b" (with optional newline)
+    const m = text.match(/\n+\s*(?:\*\*)?Sources?(?:\s+used)?:?\s*(?:\*\*)?\s*([^\n]+?)\s*$/i);
+    if (!m) return { body: text, sources: [] as string[] };
+    const list = m[1]
+      .split(/[,;•·|]| and /i)
+      .map((s) => s.replace(/^[\s\-*–]+|[\s.*–]+$/g, "").trim())
+      .filter((s) => s.length > 0 && s.length < 80);
+    if (!list.length) return { body: text, sources: [] as string[] };
+    return { body: text.slice(0, m.index ?? text.length).trimEnd(), sources: list };
+  }, [msg.content, isUser]);
+
+  // "See more" toggle: long assistant responses get collapsed at ~720 chars
+  const LONG_THRESHOLD = 720;
+  const isLong = !isUser && body.length > LONG_THRESHOLD;
+  const displayed = !isLong || expanded ? body : body.slice(0, LONG_THRESHOLD).replace(/\s+\S*$/, "") + "…";
 
   return (
     <motion.div ref={ref} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className={`flex gap-2 sm:gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
@@ -107,8 +134,33 @@ const MessageBubble = forwardRef<HTMLDivElement, {
                     }
                     return <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80 underline underline-offset-2">{children}</a>;
                   },
-                }}>{msg.content}</ReactMarkdown>
+                }}>{displayed}</ReactMarkdown>
               </div>
+
+              {isLong && (
+                <button
+                  onClick={() => setExpanded((v) => !v)}
+                  className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:text-primary/80 transition-colors"
+                >
+                  <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
+                  {expanded ? "See less" : "See more"}
+                </button>
+              )}
+
+              {sources.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {sources.map((src, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center rounded-full border border-border/60 bg-secondary/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                      title={src}
+                    >
+                      {src}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               <div className="mt-2 flex justify-end border-t border-border/30 pt-2">
                 <CopyButton content={msg.content} messageRef={contentRef} />
               </div>
@@ -444,17 +496,30 @@ const Index = () => {
             </h2>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button onClick={() => setFeatureRequestOpen(true)} className="flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
-              <Lightbulb className="h-3 w-3" /> <span className="hidden sm:inline">Request Feature</span>
+            <button
+              onClick={handleClearChat}
+              className="flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+            >
+              <Plus className="h-3 w-3" /> <span className="hidden sm:inline">New Chat</span>
             </button>
-            <button onClick={() => navigate("/whats-new")} className="flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
-              <Sparkles className="h-3 w-3" /> <span className="hidden sm:inline">What's New</span>
-            </button>
-            {hasMessages && (
-              <button onClick={handleClearChat} className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2 sm:px-3 py-1.5 sm:py-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                <Trash2 className="h-3 w-3" /> <span className="hidden sm:inline">New Chat</span>
-              </button>
-            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+                  aria-label="More options"
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onClick={() => setFeatureRequestOpen(true)}>
+                  <Lightbulb className="h-3.5 w-3.5 mr-2" /> Request Feature
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/whats-new")}>
+                  <Sparkles className="h-3.5 w-3.5 mr-2" /> What's New
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 

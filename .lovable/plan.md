@@ -46,7 +46,7 @@ Because every tool now returns the same fields, this rule is enforceable and tes
 
 ---
 
-## Phase 3 — Fix the calendar mutation path end-to-end
+## Phase 3 — Fix the calendar mutation path end-to-end ✅ SHIPPED
 
 Two paths exist today (interceptor stub + `confirm-chat-write`) and neither closes the loop. Collapse to one flow:
 

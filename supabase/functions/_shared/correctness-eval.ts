@@ -78,9 +78,9 @@ function calendarEnvelope(opts: {
     filters_applied: { window: "today" },
     query_echo: "calendar.events?window=today",
     empty_reason: opts.empty_reason ?? (opts.rows.length === 0 ? "no_matches" : undefined),
-    fetched_at: opts.fetched_at,
   });
-  return { tool: "list_calendar_events", envelope: wrapReadResultAsEnvelope(rr) };
+  if (opts.fetched_at) (rr as { fetched_at: string }).fetched_at = opts.fetched_at;
+  return { tool: "list_calendar_events", envelope: wrapReadResultAsEnvelope("list_calendar_events", rr) };
 }
 
 function workstreamsEnvelope(opts: {
@@ -98,7 +98,7 @@ function workstreamsEnvelope(opts: {
     query_echo: "workstream_cards where status in (red,amber,green)",
     empty_reason: opts.empty_reason ?? (opts.rows.length === 0 ? "no_matches" : undefined),
   });
-  return { tool: "list_workstream_cards", envelope: wrapReadResultAsEnvelope(rr) };
+  return { tool: "list_workstream_cards", envelope: wrapReadResultAsEnvelope("list_workstream_cards", rr) };
 }
 
 function gmailEnvelope(opts: {
@@ -114,7 +114,7 @@ function gmailEnvelope(opts: {
     query_echo: "gmail.messages?q=is:unread",
     empty_reason: opts.empty_reason ?? (opts.rows.length === 0 ? "no_matches" : undefined),
   });
-  return { tool: "list_gmail_messages", envelope: wrapReadResultAsEnvelope(rr) };
+  return { tool: "list_gmail_messages", envelope: wrapReadResultAsEnvelope("list_gmail_messages", rr) };
 }
 
 // ----------------------------------------------------------------------------

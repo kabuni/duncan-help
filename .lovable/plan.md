@@ -83,7 +83,7 @@ Delete `mustAskMeetingSource`, `shouldBypassTools`, and `INTENT_RULES`. The rout
 
 ---
 
-## Phase 5 — Raise `MAX_TOOL_ROUNDS` and add per-conversation state
+## Phase 5 — Raise `MAX_TOOL_ROUNDS` and add per-conversation state ✅ SHIPPED
 
 - `MAX_TOOL_ROUNDS`: 2 → **6**. A correct write requires list → preview → execute → verify; 2 forces the model to skip verification.
 - Per-conversation working memory (in-edge, derived from `chat_write_pending` + last N tool results) injected into the system prompt: pending writes, last tool results with `ok/verified`, resolved entities. When the user asks "did it work?", the model has a source of truth other than its own prior text.

@@ -6498,9 +6498,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
           } else if (xeroToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeXeroTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || "", userId || ""));
            } else if (gmailToolNames.includes(tc.function.name)) {
-              result = await withToolTimeout(tc.function.name, executeGmailTool(tc.function.name, args, supabaseUrl, authHeader || ""));
-           } else if (driveToolNames.includes(tc.function.name)) {
-              result = await withToolTimeout(tc.function.name, executeDriveTool(tc.function.name, args, supabaseUrl, authHeader || ""));
+              result = await withToolTimeout(tc.function.name, executeGmailTool(tc.function.name, args, supabaseUrl, authHeader || "", resolvedIdentity));
+          } else if (driveToolNames.includes(tc.function.name)) {
+              result = await withToolTimeout(tc.function.name, executeDriveTool(tc.function.name, args, supabaseUrl, authHeader || "", resolvedIdentity));
             } else if (slackToolNames.includes(tc.function.name)) {
               if (!slackConnection) {
                 result = { error: "Slack is not connected. Please connect it via the Integrations page." };

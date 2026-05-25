@@ -6246,6 +6246,11 @@ Format as a natural, readable summary with clear sections. If a section has no d
           const toolName = tc?.function?.name ?? "unknown_tool";
           const toolOutcome = classifyToolOutcome(toolName, result);
 
+          // Phase 9: capture the envelope for the post-LLM correctness linter.
+          try {
+            executedToolEnvelopes.push({ tool: toolName, envelope: toolOutcome.payload as any });
+          } catch { /* non-fatal */ }
+
           // Phase 2b: feed circuit breaker + emit tool_end
           if (toolOutcome.status === "hard_error") {
             recordToolFailure(toolName);

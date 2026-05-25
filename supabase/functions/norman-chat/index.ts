@@ -2481,11 +2481,37 @@ async function executeWorkstreamTool(
     }
 
     case "check_team_availability": {
-      const { user_ids, date, days: daysAhead, task_duration_minutes } = args;
-      const startDate = date ? new Date(date + "T00:00:00Z") : new Date();
-      startDate.setUTCHours(0, 0, 0, 0);
-      const numDays = Math.min(daysAhead || 3, 7);
-      const endDate = new Date(startDate.getTime() + numDays * 24 * 60 * 60 * 1000);
+      const { user_ids, date, days: daysAhead, task_duration_minutes, window } = args;
+      const callerTz = identity?.timezone ?? "UTC";
+      let startDate: Date;
+      let endDate: Date;
+      let windowLabel: string;
+      if (window && identity) {
+        const w = resolveWindow(identity, window);
+        startDate = new Date(w.startISO);
+        endDate = new Date(w.endISO);
+        windowLabel = w.label;
+      } else if (date) {
+        startDate = new Date(date + "T00:00:00Z");
+        startDate.setUTCHours(0, 0, 0, 0);
+        const numDays = Math.min(daysAhead || 3, 7);
+        endDate = new Date(startDate.getTime() + numDays * 24 * 60 * 60 * 1000);
+        windowLabel = `${date}+${numDays}d`;
+      } else if (identity) {
+        // Default: "today" in caller's timezone, then numDays ahead.
+        const w = resolveWindow(identity, "today");
+        startDate = new Date(w.startISO);
+        const numDays = Math.min(daysAhead || 3, 7);
+        endDate = new Date(startDate.getTime() + numDays * 24 * 60 * 60 * 1000);
+        windowLabel = `today(${callerTz})+${numDays}d`;
+      } else {
+        startDate = new Date();
+        startDate.setUTCHours(0, 0, 0, 0);
+        const numDays = Math.min(daysAhead || 3, 7);
+        endDate = new Date(startDate.getTime() + numDays * 24 * 60 * 60 * 1000);
+        windowLabel = `utc+${numDays}d`;
+      }
+      const numDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000));
       const taskDuration = task_duration_minutes || 60;
 
       const clientId = Deno.env.get("GOOGLE_CALENDAR_CLIENT_ID");

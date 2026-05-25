@@ -1790,8 +1790,9 @@ const WORKSTREAM_TOOLS = [
         type: "object",
         properties: {
           user_ids: { type: "array", items: { type: "string" }, description: "Array of user_id UUIDs to check calendars for" },
-          date: { type: "string", description: "Date to check in YYYY-MM-DD format (defaults to today)" },
-          days: { type: "number", description: "Number of days to look ahead (default: 3, max: 7)" },
+          date: { type: "string", description: "Date to check in YYYY-MM-DD format (defaults to today in the caller's timezone). Ignored if 'window' is provided." },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Resolve the check range in the caller's timezone. Preferred over date/days for natural-language windows like 'today' or 'this week'." },
+          days: { type: "number", description: "Number of days to look ahead from `date` (default: 3, max: 7). Ignored if 'window' is provided." },
           task_duration_minutes: { type: "number", description: "How long the task needs in minutes (default: 60). Duncan uses this to find suitable free slots." },
         },
         required: ["user_ids"],

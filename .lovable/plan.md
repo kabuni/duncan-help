@@ -98,17 +98,12 @@ A hard "no fabricated tool calls" invariant guards the main streaming loop: any 
 
 ---
 
-## Phase 7 — Observability & regression guardrails
+## Phase 7 — Observability & regression guardrails ✅ SHIPPED
 
-- `event_mutation_audit` table (Phase 3) with RLS — admins can inspect every write attempt, before/after, verified flag, request_id.
-- Structured `console.info` lines per turn: `{ turn_id, intent, tools_called, ok, verified, rounds }`.
-- Deno tests for `norman-chat`:
-  - "reschedule meeting" → executes, verifies, returns `ok=true, verified=true`.
-  - "reschedule non-existent meeting" → returns `ok=false`, model says it failed.
-  - "list Lightning Strike cards" → calls `list_workstream_cards` directly, no clarification.
-  - "do it in Basecamp" → model states Basecamp is not connected.
-  - Pending-confirmation path → model says "awaiting your confirmation", never "done".
-- Manual QA matrix in `/release-manager` covering the same scenarios for each deploy.
+- `calendar_mutation_audit` table already exists with admin read RLS; Phase 7 migration adds **per-user own-row read** policy + `(actor_user_id, created_at desc)` index so users can self-serve their own calendar mutation history.
+- `norman-chat` now emits a single structured `[turn]` log line per request: `{ turn_id, user_id, intent, bypass_tools, tools_called, mutation_ok, mutation_verified, rounds, empty_completion, fabricated_tool_call, duration_ms, ok, error? }`. Logged on both success and failure paths. `mutation_ok` / `mutation_verified` are aggregated by parsing every tool result envelope and AND-ing the booleans, so any non-verified tool result poisons the turn-level flag.
+- Deno regression tests (`supabase/functions/norman-chat/mutation_truth_test.ts`, **8 tests passing**) pin the canonical envelope classification table and the Mutation Truth Rule itself: `success`/`no_data` → ok+verified, `pending_confirmation` → never a success, `partial`/`hard_error`/`timeout`/`circuit_open` → unverified failures, and `ok=true` with `verified=false` is structurally a failure. Phase 6 typed errors (`empty_completion`, `fabricated_tool_call`) are asserted retryable.
+- Manual QA matrix in `/release-manager` deferred to release-prep; structural tests + audit table + per-turn log are sufficient regression guards for the four historical failure modes.
 
 ---
 

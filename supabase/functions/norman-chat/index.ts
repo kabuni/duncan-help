@@ -6767,6 +6767,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
                 round,
                 fabricated: fabricated.map((tc: any) => ({ id: tc?.id, name: tc?.function?.name })),
               });
+              turnLog.fabricated_tool_call = true;
               emitDuncanEvent({
                 duncan_event: "empty_completion",
                 error: {

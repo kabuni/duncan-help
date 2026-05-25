@@ -4232,6 +4232,251 @@ async function getCalendarAccessToken(userId: string, supabaseAdmin: any): Promi
   return tokenData.access_token;
 }
 
+// ===== Duncan calendar identity (singleton, admin-managed) =====
+async function getDuncanCalendarContext(
+  supabaseAdmin: any,
+): Promise<{ accessToken: string; calendarId: string } | null> {
+  const clientId = Deno.env.get("GOOGLE_CALENDAR_CLIENT_ID");
+  const clientSecret = Deno.env.get("GOOGLE_CALENDAR_CLIENT_SECRET");
+  if (!clientId || !clientSecret) return null;
+
+  const { data: tok } = await supabaseAdmin
+    .from("duncan_calendar_tokens")
+    .select("*")
+    .limit(1)
+    .maybeSingle();
+  if (!tok) return null;
+
+  let accessToken = tok.access_token as string;
+  const expiry = new Date(tok.token_expiry as string);
+  if (expiry <= new Date()) {
+    const r = await fetch(GOOGLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: tok.refresh_token,
+        grant_type: "refresh_token",
+      }),
+    });
+    if (!r.ok) {
+      console.error("[duncan-cal] refresh failed", await r.text().catch(() => ""));
+      return null;
+    }
+    const nt = await r.json();
+    accessToken = nt.access_token;
+    await supabaseAdmin
+      .from("duncan_calendar_tokens")
+      .update({
+        access_token: accessToken,
+        token_expiry: new Date(Date.now() + nt.expires_in * 1000).toISOString(),
+      })
+      .eq("id", tok.id);
+  }
+  return { accessToken, calendarId: tok.calendar_id || "primary" };
+}
+
+async function auditReschedule(
+  supabaseAdmin: any,
+  row: {
+    actor_user_id: string | null;
+    tool_name: string;
+    event_id?: string | null;
+    source: "planner" | "google" | "unknown";
+    google_event_id?: string | null;
+    calendar_id?: string | null;
+    requested: any;
+    before_state?: any;
+    after_state?: any;
+    ok: boolean;
+    verified: boolean;
+    error?: string | null;
+  },
+) {
+  try {
+    await supabaseAdmin.from("calendar_mutation_audit").insert(row);
+  } catch (e) {
+    console.error("[reschedule] audit insert failed", e);
+  }
+}
+
+// ===== Routing-aware reschedule executor =====
+// Returns the strict contract: { ok, verified, source, before, after, error }
+async function executeRescheduleTool(
+  args: any,
+  supabaseAdmin: any,
+  actorUserId: string | null,
+): Promise<any> {
+  const requested = {
+    event_id: args?.event_id ?? null,
+    google_event_id: args?.google_event_id ?? null,
+    calendar_id: args?.calendar_id ?? null,
+    startDateTime: args?.startDateTime ?? null,
+    endDateTime: args?.endDateTime ?? null,
+    timeZone: args?.timeZone ?? null,
+  };
+
+  if (!requested.startDateTime || !requested.endDateTime) {
+    const out = { ok: false, verified: false, source: "unknown", before: null, after: null, error: "startDateTime and endDateTime are required" };
+    await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "unknown", requested, ok: false, verified: false, error: out.error });
+    return out;
+  }
+  const startDate = new Date(requested.startDateTime);
+  const endDate = new Date(requested.endDateTime);
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || endDate <= startDate) {
+    const out = { ok: false, verified: false, source: "unknown", before: null, after: null, error: "startDateTime/endDateTime invalid or inverted" };
+    await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "unknown", requested, ok: false, verified: false, error: out.error });
+    return out;
+  }
+
+  // 1. Resolve the planner row when possible.
+  let row: any = null;
+  if (requested.event_id) {
+    const { data } = await supabaseAdmin
+      .from("key_events")
+      .select("id, title, start_at, end_at, start_tz, calendar_id, google_event_id, all_day")
+      .eq("id", requested.event_id)
+      .maybeSingle();
+    row = data;
+  } else if (requested.google_event_id) {
+    const { data } = await supabaseAdmin
+      .from("key_events")
+      .select("id, title, start_at, end_at, start_tz, calendar_id, google_event_id, all_day")
+      .eq("google_event_id", requested.google_event_id)
+      .maybeSingle();
+    row = data;
+  }
+
+  const effectiveCalendarId = row?.calendar_id ?? requested.calendar_id ?? null;
+  const effectiveGoogleId = row?.google_event_id ?? requested.google_event_id ?? null;
+  const isLocal =
+    effectiveCalendarId === "local" ||
+    (typeof effectiveGoogleId === "string" && effectiveGoogleId.startsWith("local:"));
+
+  // ==== CASE A: Local planner event — direct UPDATE on key_events ====
+  if (isLocal || (row && (!effectiveGoogleId || effectiveGoogleId.startsWith("local:")))) {
+    if (!row) {
+      const out = { ok: false, verified: false, source: "planner", before: null, after: null, error: "Planner event not found for event_id/google_event_id" };
+      await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "planner", event_id: requested.event_id, google_event_id: effectiveGoogleId, calendar_id: effectiveCalendarId, requested, ok: false, verified: false, error: out.error });
+      return out;
+    }
+    const before = { start_at: row.start_at, end_at: row.end_at, start_tz: row.start_tz };
+    const newStart = startDate.toISOString();
+    const newEnd = endDate.toISOString();
+    const tz = requested.timeZone || row.start_tz || "Europe/London";
+
+    const { error: updErr } = await supabaseAdmin
+      .from("key_events")
+      .update({ start_at: newStart, end_at: newEnd, start_tz: tz, updated_at: new Date().toISOString() })
+      .eq("id", row.id);
+
+    if (updErr) {
+      const out = { ok: false, verified: false, source: "planner", before, after: null, error: `Planner update failed: ${updErr.message}` };
+      await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "planner", event_id: row.id, google_event_id: row.google_event_id, calendar_id: row.calendar_id, requested, before_state: before, ok: false, verified: false, error: out.error });
+      return out;
+    }
+
+    // Re-fetch + verify
+    const { data: after } = await supabaseAdmin
+      .from("key_events")
+      .select("start_at, end_at, start_tz")
+      .eq("id", row.id)
+      .maybeSingle();
+
+    const verified =
+      !!after &&
+      new Date(after.start_at).getTime() === startDate.getTime() &&
+      new Date(after.end_at).getTime() === endDate.getTime();
+
+    const out = {
+      ok: verified,
+      verified,
+      source: "planner",
+      before,
+      after,
+      error: verified ? null : "Planner row did not reflect the requested datetimes after update",
+    };
+    await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "planner", event_id: row.id, google_event_id: row.google_event_id, calendar_id: row.calendar_id, requested, before_state: before, after_state: after, ok: out.ok, verified: out.verified, error: out.error });
+    return out;
+  }
+
+  // ==== CASE B: Real Google Calendar event — PATCH via Duncan identity ====
+  if (!effectiveGoogleId) {
+    const out = { ok: false, verified: false, source: "google", before: null, after: null, error: "Missing google_event_id for non-local event" };
+    await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "google", event_id: requested.event_id, calendar_id: effectiveCalendarId, requested, ok: false, verified: false, error: out.error });
+    return out;
+  }
+  const duncan = await getDuncanCalendarContext(supabaseAdmin);
+  if (!duncan) {
+    const out = { ok: false, verified: false, source: "google", before: null, after: null, error: "Duncan calendar is not connected (no duncan_calendar_tokens). An admin must reconnect it." };
+    await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "google", event_id: requested.event_id, google_event_id: effectiveGoogleId, calendar_id: effectiveCalendarId, requested, ok: false, verified: false, error: out.error });
+    return out;
+  }
+  const calendarId = effectiveCalendarId || duncan.calendarId;
+  const headers = { Authorization: `Bearer ${duncan.accessToken}`, "Content-Type": "application/json" };
+
+  // GET before-state (also confirms the event actually exists on this calendar).
+  const beforeResp = await fetch(
+    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(effectiveGoogleId)}`,
+    { headers },
+  );
+  if (!beforeResp.ok) {
+    const txt = await beforeResp.text().catch(() => "");
+    const out = { ok: false, verified: false, source: "google", before: null, after: null, error: `Google GET ${beforeResp.status}: ${txt.slice(0, 400)}` };
+    await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "google", event_id: requested.event_id, google_event_id: effectiveGoogleId, calendar_id: calendarId, requested, ok: false, verified: false, error: out.error });
+    return out;
+  }
+  const beforeGoogle = await beforeResp.json();
+  const tz = requested.timeZone || beforeGoogle?.start?.timeZone || row?.start_tz || "Europe/London";
+
+  // PATCH — only mutate start/end/timezone; preserve everything else (attendees, conferencing, recurrence, reminders).
+  const patchBody = {
+    start: { dateTime: startDate.toISOString(), timeZone: tz },
+    end: { dateTime: endDate.toISOString(), timeZone: tz },
+  };
+  const patchResp = await fetch(
+    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(effectiveGoogleId)}?sendUpdates=all`,
+    { method: "PATCH", headers, body: JSON.stringify(patchBody) },
+  );
+  if (!patchResp.ok) {
+    const txt = await patchResp.text().catch(() => "");
+    const out = { ok: false, verified: false, source: "google", before: { start: beforeGoogle?.start, end: beforeGoogle?.end, updated: beforeGoogle?.updated }, after: null, error: `Google PATCH ${patchResp.status}: ${txt.slice(0, 400)}` };
+    await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "google", event_id: requested.event_id, google_event_id: effectiveGoogleId, calendar_id: calendarId, requested, before_state: out.before, ok: false, verified: false, error: out.error });
+    return out;
+  }
+
+  // RE-GET + verify
+  const afterResp = await fetch(
+    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(effectiveGoogleId)}`,
+    { headers },
+  );
+  const afterGoogle = afterResp.ok ? await afterResp.json() : null;
+  const sameInstant = (iso: string | undefined, target: Date) =>
+    !!iso && new Date(iso).getTime() === target.getTime();
+  const verified =
+    !!afterGoogle &&
+    sameInstant(afterGoogle?.start?.dateTime, startDate) &&
+    sameInstant(afterGoogle?.end?.dateTime, endDate) &&
+    afterGoogle?.updated !== beforeGoogle?.updated;
+
+  const before = { start: beforeGoogle?.start, end: beforeGoogle?.end, updated: beforeGoogle?.updated };
+  const after = { start: afterGoogle?.start, end: afterGoogle?.end, updated: afterGoogle?.updated };
+
+  const out = {
+    ok: verified,
+    verified,
+    source: "google",
+    before,
+    after,
+    error: verified ? null : "Google Calendar event did not reflect the requested datetimes after PATCH",
+  };
+  await auditReschedule(supabaseAdmin, { actor_user_id: actorUserId, tool_name: "reschedule_event", source: "google", event_id: requested.event_id, google_event_id: effectiveGoogleId, calendar_id: calendarId, requested, before_state: before, after_state: after, ok: out.ok, verified: out.verified, error: out.error });
+  return out;
+}
+
+
+
 async function decryptSlackToken(encryptedToken: string, secret: string): Promise<string> {
   if (!encryptedToken.startsWith("aes-256-gcm:")) return encryptedToken;
   const [, ivPart, ciphertextPart] = encryptedToken.split(":");

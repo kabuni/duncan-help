@@ -90,11 +90,11 @@ Delete `mustAskMeetingSource`, `shouldBypassTools`, and `INTENT_RULES`. The rout
 
 ---
 
-## Phase 6 — Kill silent recovery paths
+## Phase 6 — Kill silent recovery paths ✅ SHIPPED
 
-`recoverEmptyCompletion` currently re-invents truncated tool calls with no awareness of the confirmation contract. Replace with:
-- On empty completion: return a typed error envelope to the client, surface a retry affordance. Never silently re-call write tools.
-- Add a "no fabricated tool calls" invariant: a tool call must have originated from the streamed model output for this turn.
+`recoverEmptyCompletion` is now **text-only**: tools are never offered during recovery, any tool calls the model attempts to emit are discarded, and if no usable text comes back the function returns a typed `{ code: "empty_completion", retryable: true }` error envelope that is surfaced to the client as a `duncan_event: "empty_completion"` SSE event.
+
+A hard "no fabricated tool calls" invariant guards the main streaming loop: any malformed tool call (missing `id`, missing `function.name`, non-string `arguments`) is refused before execution, with a typed `fabricated_tool_call` event emitted to the client. Tool calls may now only originate from the model's streamed output for the current turn — silent re-invocation of write tools is structurally impossible.
 
 ---
 

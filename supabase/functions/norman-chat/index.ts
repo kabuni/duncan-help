@@ -3701,6 +3701,11 @@ async function executeMeetingTool(
         for (const r of trimmed) meetingFlowState.listedIds.add(r.id);
       }
 
+      const meetingFilters = { ...args, ...(resolvedMeetingWindow ? { resolved_window: resolvedMeetingWindow } : {}) };
+      const meetingWindowEcho = resolvedMeetingWindow
+        ? ` window=${resolvedMeetingWindow.label}[${resolvedMeetingWindow.from_date}..${resolvedMeetingWindow.to_date}] tz=${resolvedMeetingWindow.timezone}`
+        : "";
+
       if (trimmed.length === 0) {
         let isAdmin = false;
         try {
@@ -3708,12 +3713,20 @@ async function executeMeetingTool(
           isAdmin = !!data;
         } catch { /* ignore */ }
 
+        const rr = createReadResult({
+          data: [], source: "meetings_db", freshness_sla_seconds: 60, row_count: 0,
+          filters_applied: meetingFilters,
+          query_echo: `meetings scope=${scope}${meetingWindowEcho} limit=${limit}`,
+          empty_reason: "no_matches",
+        });
         console.log("[MEETING FLOW FINAL]", { user: userId, tool: "list_meetings", args, corrected, action: "no_results", isAdmin });
         return {
           count: 0,
           scope,
           empty: true,
           meetings: [],
+          read_result: rr,
+          meta: { readResult: true },
           message: "I couldn't find any meetings directly linked to you based on email/participant data.",
           hint: "Ownership requires a verified email/host/participant match. Some meetings may exist in the system but aren't attributed to you.",
           fallback_available: true,
@@ -3726,8 +3739,14 @@ async function executeMeetingTool(
           admin_recovery_available: isAdmin,
         };
       }
+      const rrOk = createReadResult({
+        data: trimmed, source: "meetings_db", freshness_sla_seconds: 60, row_count: trimmed.length,
+        truncated: trimmed.length >= limit,
+        filters_applied: meetingFilters,
+        query_echo: `meetings scope=${scope}${meetingWindowEcho} limit=${limit}`,
+      });
       console.log("[MEETING FLOW FINAL]", { user: userId, tool: "list_meetings", args, corrected, count: trimmed.length });
-      return { count: trimmed.length, scope, meetings: trimmed };
+      return { count: trimmed.length, scope, meetings: trimmed, read_result: rrOk, meta: { readResult: true } };
     }
 
     case "list_meetings_by_source": {

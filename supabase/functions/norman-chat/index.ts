@@ -3796,7 +3796,8 @@ async function executeMeetingTool(
           supabaseUrl,
           authHeader,
           userId,
-          { listedIds: new Set(), userIntent: intent }
+          { listedIds: new Set(), userIntent: intent },
+          identity
         );
         console.log("[MEETING FLOW FINAL]", { user: userId, tool: toolName, args, corrected: true, action: "returned_list_instead" });
         return {

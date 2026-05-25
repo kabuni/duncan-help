@@ -112,3 +112,41 @@ In the chat UI, attach a collapsible "Sources" panel to every assistant turn lis
 - LLM model swaps.
 - Voice / mobile UI work.
 - Anything mutation-side (Phases 1–8 already cover it).
+
+## Decommissioned integrations (hard-negative)
+
+The following systems are NOT pending migration targets. They are explicitly
+decommissioned and must be treated as hard-negatives in the router, provenance
+layer, and correctness linter. Any model attempt to cite them is an
+`unbacked_claim` by definition.
+
+- Basecamp
+- Trello
+- Asana
+- Notion
+- Xero
+- Legal/NDA tools
+- General Google Workspace (beyond the dedicated Gmail/Calendar/Drive paths)
+
+Rule: the router must refuse to dispatch to these sources, and the linter must
+flag any assistant turn that names them as a source.
+
+## Remaining Phase 9 active read surfaces
+
+Only these domains are still pending migration onto the ReadResult + identity/
+window contract:
+
+- Azure DevOps
+- Hireflix
+- Recruitment candidate reads
+- RAG / project knowledge paths
+
+## Roll-out (post-9.7)
+
+1. Continue shadow-mode telemetry for 48–72h across the 6 already-migrated
+   domains (Calendar, Workstreams, Team Availability, Gmail, Drive, Meetings).
+2. Manually review real production conversations against shadow violations.
+3. Flip selective enforcement on the migrated domains for **only**:
+   `unbacked_claim`, `silent_empty`, `truncation_hidden`.
+4. Then migrate the four remaining active surfaces above.
+5. Expand enforcement to additional violation classes once telemetry supports it.

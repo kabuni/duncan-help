@@ -6976,6 +6976,13 @@ Format as a natural, readable summary with clear sections. If a section has no d
           console.error("norman-chat streaming error:", streamErr);
           const message = streamErr instanceof Error ? streamErr.message : "Unknown streaming error";
           enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: `\n\n⚠️ Error: ${message}` } }] })}\n\n`);
+          // Phase 7: structured per-turn log on failure path too.
+          console.info("[turn]", {
+            ...turnLog,
+            duration_ms: Date.now() - turnStartedAt,
+            ok: false,
+            error: message,
+          });
           clearInterval(heartbeat);
           enqueue("data: [DONE]\n\n");
           controller.close();

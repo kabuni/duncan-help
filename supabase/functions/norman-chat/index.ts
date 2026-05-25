@@ -2039,7 +2039,6 @@ async function executeWorkstreamTool(
       if (error) throw new Error(`Failed to list workstream cards: ${error.message}`);
       const cardList = cards || [];
       if (cardList.length === 0) {
-      if (cardList.length === 0) {
         const rr = createReadResult({
           data: [],
           source: "workstreams_db",
@@ -2050,7 +2049,6 @@ async function executeWorkstreamTool(
           empty_reason: "no_matches",
         });
         return { count: 0, cards: [], filter: args, read_result: rr, meta: { readResult: true } };
-      }
       }
 
       const cardIds = cardList.map((c: any) => c.id);

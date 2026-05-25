@@ -6928,6 +6928,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               });
               const recovery = await recoverEmptyCompletion(finalMessages);
               if (recovery.error) {
+                turnLog.empty_completion = true;
                 emitDuncanEvent({
                   duncan_event: "empty_completion",
                   error: recovery.error,
@@ -6959,6 +6960,15 @@ Format as a natural, readable summary with clear sections. If a section has no d
             preview: lastFullContent?.slice(0, 200),
             sources: sourcesUsed,
           });
+
+          // Phase 7: single structured per-turn log line.
+          turnLog.rounds = round;
+          console.info("[turn]", {
+            ...turnLog,
+            duration_ms: Date.now() - turnStartedAt,
+            ok: true,
+          });
+
           clearInterval(heartbeat);
           enqueue("data: [DONE]\n\n");
           controller.close();

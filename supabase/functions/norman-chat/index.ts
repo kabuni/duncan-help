@@ -6721,6 +6721,28 @@ Format as a natural, readable summary with clear sections. If a section has no d
             round++;
             console.log(`Tool call round ${round}:`, toolCalls.map(tc => tc.function.name));
 
+            // Phase 6 invariant: every tool call MUST have originated from the
+            // streamed model output for this turn. consumeSSEStream is the only
+            // producer; reject anything malformed before execution.
+            const fabricated = toolCalls.filter((tc: any) =>
+              !tc?.id || !tc?.function?.name || typeof tc?.function?.arguments !== "string"
+            );
+            if (fabricated.length > 0) {
+              console.error("FABRICATED/MALFORMED TOOL CALL DETECTED — refusing to execute", {
+                round,
+                fabricated: fabricated.map((tc: any) => ({ id: tc?.id, name: tc?.function?.name })),
+              });
+              emitDuncanEvent({
+                duncan_event: "empty_completion",
+                error: {
+                  code: "fabricated_tool_call",
+                  message: "Refused a tool call that did not originate from the streamed model output.",
+                  retryable: true,
+                },
+              });
+              break;
+            }
+
             const provider = detectToolResultProvider(toolCalls);
             console.log("DETECTED PROVIDER:", {
               tool_id: toolCalls[0]?.id,

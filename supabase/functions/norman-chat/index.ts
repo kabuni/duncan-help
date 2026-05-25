@@ -5269,6 +5269,69 @@ Format as a natural, readable summary with clear sections. If a section has no d
     }
 
 
+    // ================================================================
+    // Phase 4: classifyTurn — single deterministic router.
+    // Collapses the previously scattered defensive layers
+    // (mustAskMeetingSource, shouldBypassTools, INTENT_RULES,
+    // inline entity resolver) into ONE canonical readout.
+    // Downstream code reads `turn.*` instead of the individual flags;
+    // the original locals are kept as aliases for backward compat so
+    // the rest of this function remains untouched.
+    // ================================================================
+    const turn = {
+      latestUserText,
+      isVoiceMode,
+      // intent signals
+      isDataIntent: false as boolean,           // filled below
+      intentMatched: false as boolean,          // filled below
+      // disambiguation
+      needsMeetingSourceClarification: mustAskMeetingSource,
+      explicitSourceMeetingRequest,
+      sourceAlreadyChosen,
+      // execution gates
+      bypassTools: false as boolean,            // filled below
+      // pre-resolved entities (deterministic, high-confidence)
+      resolvedProjectTag: null as string | null, // filled below
+    };
+
+    // Phase 5: working-memory injection — surface any pending writes the
+    // user has queued in the last few minutes so the model never claims
+    // a write succeeded when it is actually awaiting confirmation, and
+    // can refer back to recent verified writes by id when asked.
+    try {
+      if (userId) {
+        const sinceIso = new Date(Date.now() - 10 * 60_000).toISOString();
+        const { data: pendingRows } = await supabaseAdmin
+          .from("chat_write_pending")
+          .select("id, tool_name, summary, status, created_at, executed_at, result")
+          .eq("user_id", userId)
+          .gte("created_at", sinceIso)
+          .order("created_at", { ascending: false })
+          .limit(5);
+        if (pendingRows && pendingRows.length > 0) {
+          const lines = pendingRows.map((r: any) => {
+            const env = r.result || {};
+            const verified = env.ok === true && env.verified === true;
+            const tail =
+              r.status === "executed" && verified
+                ? `verified=true (source=${env.source ?? "?"})`
+                : r.status === "failed"
+                ? `failed: ${(env.error || r.error || "unknown").toString().slice(0, 120)}`
+                : `status=${r.status}`;
+            return `- [${r.id.slice(0, 8)}] ${r.tool_name} — ${r.summary ?? "(no summary)"} — ${tail}`;
+          });
+          systemContent +=
+            `\n\n## WORKING MEMORY — recent write actions (last 10 minutes)\n` +
+            `Use these as ground truth when the user asks "did that go through?", "did you move it?", or refers to a recent change.\n` +
+            `Only claim a write succeeded when its line shows \`verified=true\`. ` +
+            `Lines marked \`status=pending\` or \`status=confirmed\` are still AWAITING the user's click in the chat UI — do NOT claim those have executed.\n` +
+            lines.join("\n");
+        }
+      }
+    } catch (_workingMemoryErr) {
+      // Non-fatal — working memory is best-effort.
+    }
+
     // First call to AI with tools if calendar is connected
     const requestBody: any = {
       model: CHAT_MODEL,

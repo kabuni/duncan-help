@@ -4,8 +4,11 @@ import { streamLLM } from "../_shared/llm.ts";
 import {
   classifyToolOutcome,
   createStructuredToolResult,
+  createReadResult,
   type ToolResultStatus,
+  type EmptyReason,
 } from "../_shared/tool-envelope.ts";
+import { lintAssistantDraft, type ToolCallRecord } from "../_shared/correctness-linter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -2001,7 +2004,16 @@ async function executeWorkstreamTool(
           .eq("user_id", userId);
         restrictCardIds = (myAssign || []).map((r: any) => r.card_id);
         if (restrictCardIds.length === 0) {
-          return { count: 0, cards: [], filter: { ...args, applied: "assignee=me (none)" } };
+          const rr = createReadResult({
+            data: [],
+            source: "workstreams_db",
+            freshness_sla_seconds: 30,
+            row_count: 0,
+            filters_applied: { ...args, applied: "assignee=me (none)" },
+            query_echo: "workstream_cards where assignee=me",
+            empty_reason: "no_matches",
+          });
+          return { count: 0, cards: [], filter: { ...args, applied: "assignee=me (none)" }, read_result: rr, meta: { readResult: true } };
         }
       }
 
@@ -2027,7 +2039,16 @@ async function executeWorkstreamTool(
       if (error) throw new Error(`Failed to list workstream cards: ${error.message}`);
       const cardList = cards || [];
       if (cardList.length === 0) {
-        return { count: 0, cards: [], filter: args };
+        const rr = createReadResult({
+          data: [],
+          source: "workstreams_db",
+          freshness_sla_seconds: 30,
+          row_count: 0,
+          filters_applied: args,
+          query_echo: `workstream_cards where status=${args.status ?? "open"}${args.project_tag ? ` project_tag=${args.project_tag}` : ""}`,
+          empty_reason: "no_matches",
+        });
+        return { count: 0, cards: [], filter: args, read_result: rr, meta: { readResult: true } };
       }
 
       const cardIds = cardList.map((c: any) => c.id);
@@ -2249,7 +2270,18 @@ async function executeWorkstreamTool(
         };
       }
 
-      return { count: result.length, cards: result, filter: args };
+      {
+        const rr = createReadResult({
+          data: result,
+          source: "workstreams_db",
+          freshness_sla_seconds: 30,
+          row_count: result.length,
+          truncated: result.length >= limit,
+          filters_applied: args,
+          query_echo: `workstream_cards where status=${args.status ?? "open"}${args.project_tag ? ` project_tag=${args.project_tag}` : ""} limit ${limit}`,
+        });
+        return { count: result.length, cards: result, filter: args, read_result: rr, meta: { readResult: true } };
+      }
     }
 
 
@@ -4604,10 +4636,32 @@ async function executeCalendarTool(
       const response = await fetch(url.toString(), { headers });
       if (!response.ok) {
         const error = await response.text();
-        throw new Error(`Failed to list events: ${error}`);
+        // Phase 9: tag upstream failure as a typed empty rather than throwing
+        // so the model can hedge instead of fabricating events.
+        return createReadResult({
+          data: [],
+          source: "google_calendar",
+          freshness_sla_seconds: 60,
+          row_count: 0,
+          filters_applied: { timeMin, timeMax, maxResults },
+          query_echo: `calendar.events?timeMin=${timeMin}&timeMax=${timeMax}`,
+          empty_reason: response.status === 401 || response.status === 403
+            ? "scope_missing"
+            : "upstream_error",
+        });
       }
       const data = await response.json();
-      return data.items || [];
+      const items = data.items || [];
+      return createReadResult({
+        data: items,
+        source: "google_calendar",
+        freshness_sla_seconds: 60,
+        row_count: items.length,
+        truncated: items.length >= maxResults,
+        filters_applied: { timeMin, timeMax, maxResults },
+        query_echo: `calendar.events?timeMin=${timeMin}&timeMax=${timeMax}`,
+        empty_reason: items.length === 0 ? "no_matches" : undefined,
+      });
     }
 
     case "create_calendar_event": {
@@ -6192,6 +6246,11 @@ Format as a natural, readable summary with clear sections. If a section has no d
           const toolName = tc?.function?.name ?? "unknown_tool";
           const toolOutcome = classifyToolOutcome(toolName, result);
 
+          // Phase 9: capture the envelope for the post-LLM correctness linter.
+          try {
+            executedToolEnvelopes.push({ tool: toolName, envelope: toolOutcome.payload as any });
+          } catch { /* non-fatal */ }
+
           // Phase 2b: feed circuit breaker + emit tool_end
           if (toolOutcome.status === "hard_error") {
             recordToolFailure(toolName);
@@ -6431,6 +6490,10 @@ Format as a natural, readable summary with clear sections. If a section has no d
       
     };
     const sourcesUsed: Record<string, number> = {};
+    // Phase 9: collect every executed tool envelope so the post-LLM
+    // correctness linter can verify that the model's claims are backed by
+    // ReadResult-tagged tool outputs from this turn.
+    const executedToolEnvelopes: ToolCallRecord[] = [];
     const recordToolCalls = (toolCalls: any[]) => {
       for (const tc of toolCalls || []) {
         const name = tc?.function?.name;
@@ -6864,6 +6927,22 @@ Format as a natural, readable summary with clear sections. If a section has no d
               .map(([label, count]) => (count > 1 ? `${label} (${count})` : label))
               .join(" · ")}`;
             enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: footer } }] })}\n\n`);
+          }
+
+          // Phase 9.7: shadow-mode correctness linter. Logs violations only.
+          try {
+            const linterReport = lintAssistantDraft(
+              lastFullContent || "",
+              executedToolEnvelopes,
+              "shadow",
+            );
+            (turnLog as any).correctness = {
+              violations: linterReport.violations.length,
+              kinds: linterReport.violations.map(v => v.kind),
+              read_results: linterReport.readResultsSeen.length,
+            };
+          } catch (linterErr) {
+            console.warn("[correctness-linter] failed:", linterErr);
           }
 
           console.log("FINAL RESPONSE SENT TO UI:");

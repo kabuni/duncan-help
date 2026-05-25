@@ -1891,6 +1891,14 @@ async function executePlannerTool(
 
       let rows = data || [];
       if (args.incomplete_only) rows = rows.filter((r: any) => !r.is_complete || (r.missing_fields?.length ?? 0) > 0);
+      // Inject source_type so the model can route mutations correctly.
+      rows = rows.map((r: any) => ({
+        ...r,
+        source_type:
+          r.calendar_id === "local" || (typeof r.google_event_id === "string" && r.google_event_id.startsWith("local:"))
+            ? "planner"
+            : "google",
+      }));
 
       return { count: rows.length, range, events: rows };
     }

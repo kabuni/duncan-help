@@ -14,6 +14,7 @@ import {
   resolveIdentity,
   resolveWindow,
   formatIdentityForPrompt,
+  localDateInTz,
   type ResolvedIdentity,
 } from "../_shared/identity.ts";
 
@@ -627,8 +628,9 @@ const MEETING_TOOLS = [
           status: { type: "string", description: "Filter by status: pending, transcribed, audio_only, analyzed" },
           limit: { type: "number", description: "Max results (default 20)" },
           search: { type: "string", description: "Keyword(s) to match in title or transcript. Words are matched independently (OR), so partial / misspelled queries still work." },
-          from_date: { type: "string", description: "Only return meetings on or after this date (YYYY-MM-DD)." },
-          to_date: { type: "string", description: "Only return meetings on or before this date (YYYY-MM-DD)." },
+          from_date: { type: "string", description: "Only return meetings on or after this date (YYYY-MM-DD). Ignored if 'window' is set." },
+          to_date: { type: "string", description: "Only return meetings on or before this date (YYYY-MM-DD). Ignored if 'window' is set." },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Resolve a date window in the caller's timezone. Preferred over from_date/to_date for natural-language ranges." },
           scope: { type: "string", enum: ["mine", "all"], description: "'mine' (default) returns only the current user's meetings. 'all' requires admin and returns the full company list — use ONLY when the user explicitly asks for everyone's meetings." },
         },
         required: [],
@@ -673,8 +675,9 @@ const MEETING_TOOLS = [
         properties: {
           source: { type: "string", enum: ["gemini", "plaud"], description: "Which ingestion source to pull from." },
           limit: { type: "number", description: "Max results (default 10, max 25)." },
-          from_date: { type: "string", description: "YYYY-MM-DD lower bound on meeting_date." },
-          to_date: { type: "string", description: "YYYY-MM-DD upper bound on meeting_date." },
+          from_date: { type: "string", description: "YYYY-MM-DD lower bound on meeting_date. Ignored if 'window' is set." },
+          to_date: { type: "string", description: "YYYY-MM-DD upper bound on meeting_date. Ignored if 'window' is set." },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Resolve a date window in the caller's timezone instead of supplying from_date/to_date." },
         },
         required: ["source"],
       },
@@ -984,6 +987,7 @@ const GMAIL_TOOLS = [
         type: "object",
         properties: {
           maxResults: { type: "number", description: "Number of emails to return (default 15, max 25)" },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Restrict to emails received in this window, resolved in the caller's timezone. Adds Gmail after:/before: filters automatically." },
         },
         required: [],
       },
@@ -999,6 +1003,7 @@ const GMAIL_TOOLS = [
         properties: {
           query: { type: "string", description: "Gmail search query (e.g., 'from:john@example.com', 'subject:invoice', 'has:attachment', 'after:2026/01/01')" },
           maxResults: { type: "number", description: "Max results (default 15)" },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Restrict to messages received in this window (caller's timezone). If set, after:/before: are appended to your query — do not include them yourself." },
         },
         required: ["query"],
       },
@@ -2995,7 +3000,8 @@ async function executeGmailTool(
   toolName: string,
   args: any,
   supabaseUrl: string,
-  authHeader: string
+  authHeader: string,
+  identity?: ResolvedIdentity,
 ): Promise<any> {
   async function callGmailApi(action: string, body: Record<string, any> = {}) {
     const res = await fetch(`${supabaseUrl}/functions/v1/gmail-api`, {
@@ -3012,51 +3018,84 @@ async function executeGmailTool(
     return data;
   }
 
+  // Translate a caller-TZ window into Gmail after:/before: clauses (yyyy/mm/dd).
+  function windowToGmailQuery(window?: string): { suffix: string; window?: any } {
+    if (!window || !identity) return { suffix: "" };
+    const w = resolveWindow(identity, window as any);
+    const after = localDateInTz(new Date(w.startISO), identity.timezone).replaceAll("-", "/");
+    const before = localDateInTz(new Date(w.endISO), identity.timezone).replaceAll("-", "/");
+    return { suffix: ` after:${after} before:${before}`, window: { ...w, after, before } };
+  }
+
   switch (toolName) {
     case "list_gmail_emails": {
-      const data = await callGmailApi("list", { maxResults: args.maxResults || 15 });
+      const maxResults = Math.min(args.maxResults || 15, 25);
+      const win = windowToGmailQuery(args.window);
+      const data = win.suffix
+        ? await callGmailApi("search", { query: `in:inbox${win.suffix}`.trim(), maxResults })
+        : await callGmailApi("list", { maxResults });
+      const emails = (data.emails || []).map((e: any) => ({
+        id: e.id, from: e.from, subject: e.subject, date: e.date, snippet: e.snippet, unread: e.isUnread,
+      }));
+      const filters = { maxResults, ...(win.window ? { resolved_window: win.window } : {}) };
+      const queryEcho = `gmail list inbox${win.suffix} maxResults=${maxResults}`;
+      if (emails.length === 0) {
+        const rr = createReadResult({
+          data: [], source: "gmail", freshness_sla_seconds: 60, row_count: 0,
+          filters_applied: filters, query_echo: queryEcho, empty_reason: "no_matches",
+        });
+        return { count: 0, emails: [], read_result: rr, meta: { readResult: true }, hint: "No matching messages." };
+      }
+      const rr = createReadResult({
+        data: emails, source: "gmail", freshness_sla_seconds: 60, row_count: emails.length,
+        truncated: emails.length >= maxResults, filters_applied: filters, query_echo: queryEcho,
+      });
       return {
-        count: (data.emails || []).length,
-        emails: (data.emails || []).map((e: any) => ({
-          id: e.id,
-          from: e.from,
-          subject: e.subject,
-          date: e.date,
-          snippet: e.snippet,
-          unread: e.isUnread,
-        })),
+        count: emails.length, emails, read_result: rr, meta: { readResult: true },
         hint: "Use the 'id' with read_gmail_email to get full content.",
       };
     }
 
     case "search_gmail": {
-      const data = await callGmailApi("search", { query: args.query, maxResults: args.maxResults || 15 });
+      const maxResults = Math.min(args.maxResults || 15, 25);
+      const win = windowToGmailQuery(args.window);
+      const query = `${args.query}${win.suffix}`.trim();
+      const data = await callGmailApi("search", { query, maxResults });
+      const emails = (data.emails || []).map((e: any) => ({
+        id: e.id, from: e.from, subject: e.subject, date: e.date, snippet: e.snippet, unread: e.isUnread,
+      }));
+      const filters = { query: args.query, maxResults, ...(win.window ? { resolved_window: win.window } : {}) };
+      const queryEcho = `gmail search "${query}" maxResults=${maxResults}`;
+      if (emails.length === 0) {
+        const rr = createReadResult({
+          data: [], source: "gmail", freshness_sla_seconds: 60, row_count: 0,
+          filters_applied: filters, query_echo: queryEcho, empty_reason: "no_matches",
+        });
+        return { count: 0, emails: [], read_result: rr, meta: { readResult: true } };
+      }
+      const rr = createReadResult({
+        data: emails, source: "gmail", freshness_sla_seconds: 60, row_count: emails.length,
+        truncated: emails.length >= maxResults, filters_applied: filters, query_echo: queryEcho,
+      });
       return {
-        count: (data.emails || []).length,
-        emails: (data.emails || []).map((e: any) => ({
-          id: e.id,
-          from: e.from,
-          subject: e.subject,
-          date: e.date,
-          snippet: e.snippet,
-          unread: e.isUnread,
-        })),
+        count: emails.length, emails, read_result: rr, meta: { readResult: true },
         hint: "Use the 'id' with read_gmail_email to get full content.",
       };
     }
 
     case "read_gmail_email": {
       const data = await callGmailApi("read", { messageId: args.messageId });
-      return {
-        id: data.id,
-        from: data.from,
-        to: data.to,
-        cc: data.cc || null,
-        subject: data.subject,
-        date: data.date,
-        body: data.textBody || data.htmlBody?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 5000) || data.snippet,
-        unread: data.isUnread,
+      const body = data.textBody || data.htmlBody?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 5000) || data.snippet;
+      const payload = {
+        id: data.id, from: data.from, to: data.to, cc: data.cc || null,
+        subject: data.subject, date: data.date, body, unread: data.isUnread,
       };
+      const rr = createReadResult({
+        data: payload, source: "gmail", freshness_sla_seconds: 300, row_count: 1,
+        filters_applied: { messageId: args.messageId },
+        query_echo: `gmail read message=${args.messageId}`,
+      });
+      return { ...payload, read_result: rr, meta: { readResult: true } };
     }
 
     case "send_gmail_email": {
@@ -3141,7 +3180,8 @@ async function executeDriveTool(
   toolName: string,
   args: any,
   supabaseUrl: string,
-  authHeader: string
+  authHeader: string,
+  _identity?: ResolvedIdentity,
 ): Promise<any> {
   async function callDriveApi(action: string, body: Record<string, any> = {}) {
     const res = await fetch(`${supabaseUrl}/functions/v1/google-drive-api`, {
@@ -3162,53 +3202,69 @@ async function executeDriveTool(
     case "drive_list_files": {
       const WEEKLY_REPORTS_FOLDER = "1R5JxrnLsSGPu4iRMqn02oCOHmGbRSW7G";
       let folderId = args.folderId;
-      // Sanitize invalid/placeholder values — default to Weekly Reports folder
       if (!folderId || folderId === "." || folderId === "/" || folderId === "root" || folderId.length < 5) {
         folderId = WEEKLY_REPORTS_FOLDER;
       }
-      const data = await callDriveApi("list", {
-        folderId,
-        query: args.query,
+      const data = await callDriveApi("list", { folderId, query: args.query });
+      const files = (data.files || []).map((f: any) => ({
+        id: f.id, name: f.name, mimeType: f.mimeType, modifiedTime: f.modifiedTime,
+        isFolder: f.mimeType === "application/vnd.google-apps.folder",
+      }));
+      const filters = { folderId, query: args.query ?? null };
+      const queryEcho = `drive list folder=${folderId}${args.query ? ` query="${args.query}"` : ""}`;
+      if (files.length === 0) {
+        const rr = createReadResult({
+          data: [], source: "google_drive", freshness_sla_seconds: 300, row_count: 0,
+          filters_applied: filters, query_echo: queryEcho, empty_reason: "no_matches",
+        });
+        return { files: [], read_result: rr, meta: { readResult: true } };
+      }
+      const rr = createReadResult({
+        data: files, source: "google_drive", freshness_sla_seconds: 300, row_count: files.length,
+        filters_applied: filters, query_echo: queryEcho,
       });
       return {
-        files: (data.files || []).map((f: any) => ({
-          id: f.id,
-          name: f.name,
-          mimeType: f.mimeType,
-          modifiedTime: f.modifiedTime,
-          isFolder: f.mimeType === "application/vnd.google-apps.folder",
-        })),
+        files, read_result: rr, meta: { readResult: true },
         hint: "Use file 'id' with drive_get_content to read a file, or with drive_list_files as folderId to enter a folder.",
       };
     }
 
     case "drive_search": {
-      const data = await callDriveApi("search", {
-        name: args.name,
-        mimeType: args.mimeType,
-        parentId: args.parentId,
+      const data = await callDriveApi("search", { name: args.name, mimeType: args.mimeType, parentId: args.parentId });
+      const files = (data.files || []).map((f: any) => ({
+        id: f.id, name: f.name, mimeType: f.mimeType, modifiedTime: f.modifiedTime,
+        isFolder: f.mimeType === "application/vnd.google-apps.folder",
+      }));
+      const filters = { name: args.name ?? null, mimeType: args.mimeType ?? null, parentId: args.parentId ?? null };
+      const queryEcho = `drive search name="${args.name ?? ""}" mime=${args.mimeType ?? "*"}`;
+      if (files.length === 0) {
+        const rr = createReadResult({
+          data: [], source: "google_drive", freshness_sla_seconds: 300, row_count: 0,
+          filters_applied: filters, query_echo: queryEcho, empty_reason: "no_matches",
+        });
+        return { files: [], read_result: rr, meta: { readResult: true } };
+      }
+      const rr = createReadResult({
+        data: files, source: "google_drive", freshness_sla_seconds: 300, row_count: files.length,
+        filters_applied: filters, query_echo: queryEcho,
       });
-      return {
-        files: (data.files || []).map((f: any) => ({
-          id: f.id,
-          name: f.name,
-          mimeType: f.mimeType,
-          modifiedTime: f.modifiedTime,
-          isFolder: f.mimeType === "application/vnd.google-apps.folder",
-        })),
-      };
+      return { files, read_result: rr, meta: { readResult: true } };
     }
 
     case "drive_get_content": {
-      const data = await callDriveApi("get_content", {
-        fileId: args.fileId,
-        mimeType: args.mimeType,
-      });
-      return {
+      const data = await callDriveApi("get_content", { fileId: args.fileId, mimeType: args.mimeType });
+      const payload = {
         content: data.content,
         truncated: data.truncated || false,
         encoding: data.encoding || "text",
       };
+      const rr = createReadResult({
+        data: payload, source: "google_drive", freshness_sla_seconds: 600, row_count: 1,
+        truncated: payload.truncated,
+        filters_applied: { fileId: args.fileId, mimeType: args.mimeType },
+        query_echo: `drive get_content file=${args.fileId}`,
+      });
+      return { ...payload, read_result: rr, meta: { readResult: true } };
     }
 
     default:
@@ -3428,8 +3484,19 @@ async function executeMeetingTool(
   supabaseUrl: string,
   authHeader: string,
   userId: string,
-  meetingFlowState?: { listedIds: Set<string>; sourceFallbackIds?: Set<string>; userIntent: string }
+  meetingFlowState?: { listedIds: Set<string>; sourceFallbackIds?: Set<string>; userIntent: string },
+  identity?: ResolvedIdentity,
 ): Promise<any> {
+  // Resolve caller-TZ window once. If args.window provided, derive from_date/to_date in caller's tz.
+  let resolvedMeetingWindow: { startISO: string; endISO: string; label: string; timezone: string; from_date: string; to_date: string } | null = null;
+  if (args?.window && identity) {
+    const w = resolveWindow(identity, args.window);
+    const from_date = localDateInTz(new Date(w.startISO), identity.timezone);
+    // endISO is exclusive; subtract 1 day for inclusive to_date.
+    const to_date = localDateInTz(new Date(new Date(w.endISO).getTime() - 86400000), identity.timezone);
+    resolvedMeetingWindow = { ...w, from_date, to_date };
+    args = { ...args, from_date, to_date };
+  }
   const intent = meetingFlowState?.userIntent || "";
   let corrected = false;
 
@@ -3502,7 +3569,8 @@ async function executeMeetingTool(
       supabaseUrl,
       authHeader,
       userId,
-      meetingFlowState
+      meetingFlowState,
+      identity
     );
     if (toolName === "get_meeting" && !meetingFlowState.listedIds.has(args?.meeting_id)) {
       console.log("[MEETING FLOW FINAL]", { user: userId, tool: toolName, args, corrected, action: "returned_list_instead" });
@@ -3633,6 +3701,11 @@ async function executeMeetingTool(
         for (const r of trimmed) meetingFlowState.listedIds.add(r.id);
       }
 
+      const meetingFilters = { ...args, ...(resolvedMeetingWindow ? { resolved_window: resolvedMeetingWindow } : {}) };
+      const meetingWindowEcho = resolvedMeetingWindow
+        ? ` window=${resolvedMeetingWindow.label}[${resolvedMeetingWindow.from_date}..${resolvedMeetingWindow.to_date}] tz=${resolvedMeetingWindow.timezone}`
+        : "";
+
       if (trimmed.length === 0) {
         let isAdmin = false;
         try {
@@ -3640,12 +3713,20 @@ async function executeMeetingTool(
           isAdmin = !!data;
         } catch { /* ignore */ }
 
+        const rr = createReadResult({
+          data: [], source: "meetings_db", freshness_sla_seconds: 60, row_count: 0,
+          filters_applied: meetingFilters,
+          query_echo: `meetings scope=${scope}${meetingWindowEcho} limit=${limit}`,
+          empty_reason: "no_matches",
+        });
         console.log("[MEETING FLOW FINAL]", { user: userId, tool: "list_meetings", args, corrected, action: "no_results", isAdmin });
         return {
           count: 0,
           scope,
           empty: true,
           meetings: [],
+          read_result: rr,
+          meta: { readResult: true },
           message: "I couldn't find any meetings directly linked to you based on email/participant data.",
           hint: "Ownership requires a verified email/host/participant match. Some meetings may exist in the system but aren't attributed to you.",
           fallback_available: true,
@@ -3658,8 +3739,14 @@ async function executeMeetingTool(
           admin_recovery_available: isAdmin,
         };
       }
+      const rrOk = createReadResult({
+        data: trimmed, source: "meetings_db", freshness_sla_seconds: 60, row_count: trimmed.length,
+        truncated: trimmed.length >= limit,
+        filters_applied: meetingFilters,
+        query_echo: `meetings scope=${scope}${meetingWindowEcho} limit=${limit}`,
+      });
       console.log("[MEETING FLOW FINAL]", { user: userId, tool: "list_meetings", args, corrected, count: trimmed.length });
-      return { count: trimmed.length, scope, meetings: trimmed };
+      return { count: trimmed.length, scope, meetings: trimmed, read_result: rrOk, meta: { readResult: true } };
     }
 
     case "list_meetings_by_source": {
@@ -3698,6 +3785,27 @@ async function executeMeetingTool(
         }
       }
 
+      const sourceFilters = { source, limit, from_date: args.from_date ?? null, to_date: args.to_date ?? null, ...(resolvedMeetingWindow ? { resolved_window: resolvedMeetingWindow } : {}) };
+      const sourceWindowEcho = resolvedMeetingWindow
+        ? ` window=${resolvedMeetingWindow.label}[${resolvedMeetingWindow.from_date}..${resolvedMeetingWindow.to_date}] tz=${resolvedMeetingWindow.timezone}`
+        : "";
+      const queryEchoSrc = `meetings source=${source}${sourceWindowEcho} limit=${limit}`;
+      if (meetings.length === 0) {
+        const rr = createReadResult({
+          data: [], source: "meetings_db", freshness_sla_seconds: 60, row_count: 0,
+          filters_applied: sourceFilters, query_echo: queryEchoSrc, empty_reason: "no_matches",
+        });
+        return {
+          count: 0, scope: "source_fallback", source, is_fallback: true, meetings: [],
+          read_result: rr, meta: { readResult: true },
+          disclosure: `No recent meetings ingested from ${source === "gemini" ? "Gemini (Google Meet notes)" : "Plaud"} in this window.`,
+        };
+      }
+      const rr = createReadResult({
+        data: meetings, source: "meetings_db", freshness_sla_seconds: 60, row_count: meetings.length,
+        truncated: meetings.length >= limit,
+        filters_applied: sourceFilters, query_echo: queryEchoSrc,
+      });
       return {
         count: meetings.length,
         scope: "source_fallback",
@@ -3705,6 +3813,8 @@ async function executeMeetingTool(
         is_fallback: true,
         disclosure: `These are recent meetings ingested from ${source === "gemini" ? "Gemini (Google Meet notes)" : "Plaud"}. They are NOT attributed to you — ownership was not verified. Present them as fallback results and make this clear to the user.`,
         meetings,
+        read_result: rr,
+        meta: { readResult: true },
       };
     }
 
@@ -3728,7 +3838,8 @@ async function executeMeetingTool(
           supabaseUrl,
           authHeader,
           userId,
-          { listedIds: new Set(), userIntent: intent }
+          { listedIds: new Set(), userIntent: intent },
+          identity
         );
         console.log("[MEETING FLOW FINAL]", { user: userId, tool: toolName, args, corrected: true, action: "returned_list_instead" });
         return {
@@ -3748,13 +3859,29 @@ async function executeMeetingTool(
         .maybeSingle();
       if (error) throw new Error(`Failed to load meeting: ${error.message}`);
       if (!data) {
+        const rr = createReadResult({
+          data: null, source: "meetings_db", freshness_sla_seconds: 300, row_count: 0,
+          filters_applied: { meeting_id: args.meeting_id },
+          query_echo: `meetings get id=${args.meeting_id}`,
+          empty_reason: "no_matches",
+        });
         console.log("[MEETING FLOW FINAL]", { user: userId, tool: toolName, args, corrected, action: "not_found" });
-        return { error: "Meeting not found or you do not have access to it.", fallback_message: "I couldn't find that meeting. Try listing your recent meetings first." };
+        return {
+          error: "Meeting not found or you do not have access to it.",
+          fallback_message: "I couldn't find that meeting. Try listing your recent meetings first.",
+          read_result: rr, meta: { readResult: true },
+        };
       }
-      return {
-        ...data,
-        transcript: data.transcript ? data.transcript.slice(0, 40000) : null,
-      };
+      const transcriptFull = data.transcript || "";
+      const transcript = transcriptFull ? transcriptFull.slice(0, 40000) : null;
+      const payload = { ...data, transcript };
+      const rr = createReadResult({
+        data: payload, source: "meetings_db", freshness_sla_seconds: 300, row_count: 1,
+        truncated: !!(transcriptFull && transcriptFull.length > 40000),
+        filters_applied: { meeting_id: args.meeting_id },
+        query_echo: `meetings get id=${args.meeting_id}`,
+      });
+      return { ...payload, read_result: rr, meta: { readResult: true } };
     }
 
     case "analyze_meetings": {
@@ -3805,7 +3932,20 @@ async function executeMeetingTool(
         };
       });
 
-      return { query: searchTerm, found: results.length, meetings: results };
+      const filters = { query: searchTerm, limit: 10 };
+      const echo = `meetings transcript ilike "%${searchTerm}%" limit=10`;
+      if (results.length === 0) {
+        const rr = createReadResult({
+          data: [], source: "meetings_db", freshness_sla_seconds: 60, row_count: 0,
+          filters_applied: filters, query_echo: echo, empty_reason: "no_matches",
+        });
+        return { query: searchTerm, found: 0, meetings: [], read_result: rr, meta: { readResult: true } };
+      }
+      const rr = createReadResult({
+        data: results, source: "meetings_db", freshness_sla_seconds: 60, row_count: results.length,
+        truncated: results.length >= 10, filters_applied: filters, query_echo: echo,
+      });
+      return { query: searchTerm, found: results.length, meetings: results, read_result: rr, meta: { readResult: true } };
     }
 
     default:
@@ -6349,7 +6489,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
                   message: "Skipped Plaud sync. This is a slow operation and only runs when the user explicitly asks to sync, refresh, import, or update Plaud meeting data. Use list_meetings / search_meeting_transcripts / get_meeting instead for existing data.",
                 }, "no_data");
               } else {
-                result = await withToolTimeout(tc.function.name, executeMeetingTool(tc.function.name, args, supabaseAdmin, supabaseUser, supabaseUrl, authHeader || "", userId || "", meetingFlowState));
+                result = await withToolTimeout(tc.function.name, executeMeetingTool(tc.function.name, args, supabaseAdmin, supabaseUser, supabaseUrl, authHeader || "", userId || "", meetingFlowState, resolvedIdentity));
               }
           } else if (azureDevOpsToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeAzureDevOpsTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));
@@ -6358,9 +6498,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
           } else if (xeroToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeXeroTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || "", userId || ""));
            } else if (gmailToolNames.includes(tc.function.name)) {
-              result = await withToolTimeout(tc.function.name, executeGmailTool(tc.function.name, args, supabaseUrl, authHeader || ""));
-           } else if (driveToolNames.includes(tc.function.name)) {
-              result = await withToolTimeout(tc.function.name, executeDriveTool(tc.function.name, args, supabaseUrl, authHeader || ""));
+              result = await withToolTimeout(tc.function.name, executeGmailTool(tc.function.name, args, supabaseUrl, authHeader || "", resolvedIdentity));
+          } else if (driveToolNames.includes(tc.function.name)) {
+              result = await withToolTimeout(tc.function.name, executeDriveTool(tc.function.name, args, supabaseUrl, authHeader || "", resolvedIdentity));
             } else if (slackToolNames.includes(tc.function.name)) {
               if (!slackConnection) {
                 result = { error: "Slack is not connected. Please connect it via the Integrations page." };

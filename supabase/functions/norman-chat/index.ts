@@ -4655,6 +4655,7 @@ const WRITE_TOOLS = new Set<string>([
   "update_workstream_card",
   "submit_google_form",
   "update_planner_event_meta",
+  "reschedule_event",
   "send_pdf_for_signature",
 ]);
 

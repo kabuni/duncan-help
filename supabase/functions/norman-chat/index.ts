@@ -6864,6 +6864,12 @@ Format as a natural, readable summary with clear sections. If a section has no d
                 hadIncompleteToolCall: finalResult.hadIncompleteToolCall,
               });
               const recovery = await recoverEmptyCompletion(finalMessages);
+              if (recovery.error) {
+                emitDuncanEvent({
+                  duncan_event: "empty_completion",
+                  error: recovery.error,
+                });
+              }
               lastFullContent = recovery.fullContent;
               enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: recovery.fullContent } }] })}\n\n`);
             }

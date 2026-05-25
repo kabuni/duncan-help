@@ -3000,7 +3000,8 @@ async function executeGmailTool(
   toolName: string,
   args: any,
   supabaseUrl: string,
-  authHeader: string
+  authHeader: string,
+  identity?: ResolvedIdentity,
 ): Promise<any> {
   async function callGmailApi(action: string, body: Record<string, any> = {}) {
     const res = await fetch(`${supabaseUrl}/functions/v1/gmail-api`, {
@@ -3017,51 +3018,84 @@ async function executeGmailTool(
     return data;
   }
 
+  // Translate a caller-TZ window into Gmail after:/before: clauses (yyyy/mm/dd).
+  function windowToGmailQuery(window?: string): { suffix: string; window?: any } {
+    if (!window || !identity) return { suffix: "" };
+    const w = resolveWindow(identity, window as any);
+    const after = localDateInTz(new Date(w.startISO), identity.timezone).replaceAll("-", "/");
+    const before = localDateInTz(new Date(w.endISO), identity.timezone).replaceAll("-", "/");
+    return { suffix: ` after:${after} before:${before}`, window: { ...w, after, before } };
+  }
+
   switch (toolName) {
     case "list_gmail_emails": {
-      const data = await callGmailApi("list", { maxResults: args.maxResults || 15 });
+      const maxResults = Math.min(args.maxResults || 15, 25);
+      const win = windowToGmailQuery(args.window);
+      const data = win.suffix
+        ? await callGmailApi("search", { query: `in:inbox${win.suffix}`.trim(), maxResults })
+        : await callGmailApi("list", { maxResults });
+      const emails = (data.emails || []).map((e: any) => ({
+        id: e.id, from: e.from, subject: e.subject, date: e.date, snippet: e.snippet, unread: e.isUnread,
+      }));
+      const filters = { maxResults, ...(win.window ? { resolved_window: win.window } : {}) };
+      const queryEcho = `gmail list inbox${win.suffix} maxResults=${maxResults}`;
+      if (emails.length === 0) {
+        const rr = createReadResult({
+          data: [], source: "gmail", freshness_sla_seconds: 60, row_count: 0,
+          filters_applied: filters, query_echo: queryEcho, empty_reason: "no_matches",
+        });
+        return { count: 0, emails: [], read_result: rr, meta: { readResult: true }, hint: "No matching messages." };
+      }
+      const rr = createReadResult({
+        data: emails, source: "gmail", freshness_sla_seconds: 60, row_count: emails.length,
+        truncated: emails.length >= maxResults, filters_applied: filters, query_echo: queryEcho,
+      });
       return {
-        count: (data.emails || []).length,
-        emails: (data.emails || []).map((e: any) => ({
-          id: e.id,
-          from: e.from,
-          subject: e.subject,
-          date: e.date,
-          snippet: e.snippet,
-          unread: e.isUnread,
-        })),
+        count: emails.length, emails, read_result: rr, meta: { readResult: true },
         hint: "Use the 'id' with read_gmail_email to get full content.",
       };
     }
 
     case "search_gmail": {
-      const data = await callGmailApi("search", { query: args.query, maxResults: args.maxResults || 15 });
+      const maxResults = Math.min(args.maxResults || 15, 25);
+      const win = windowToGmailQuery(args.window);
+      const query = `${args.query}${win.suffix}`.trim();
+      const data = await callGmailApi("search", { query, maxResults });
+      const emails = (data.emails || []).map((e: any) => ({
+        id: e.id, from: e.from, subject: e.subject, date: e.date, snippet: e.snippet, unread: e.isUnread,
+      }));
+      const filters = { query: args.query, maxResults, ...(win.window ? { resolved_window: win.window } : {}) };
+      const queryEcho = `gmail search "${query}" maxResults=${maxResults}`;
+      if (emails.length === 0) {
+        const rr = createReadResult({
+          data: [], source: "gmail", freshness_sla_seconds: 60, row_count: 0,
+          filters_applied: filters, query_echo: queryEcho, empty_reason: "no_matches",
+        });
+        return { count: 0, emails: [], read_result: rr, meta: { readResult: true } };
+      }
+      const rr = createReadResult({
+        data: emails, source: "gmail", freshness_sla_seconds: 60, row_count: emails.length,
+        truncated: emails.length >= maxResults, filters_applied: filters, query_echo: queryEcho,
+      });
       return {
-        count: (data.emails || []).length,
-        emails: (data.emails || []).map((e: any) => ({
-          id: e.id,
-          from: e.from,
-          subject: e.subject,
-          date: e.date,
-          snippet: e.snippet,
-          unread: e.isUnread,
-        })),
+        count: emails.length, emails, read_result: rr, meta: { readResult: true },
         hint: "Use the 'id' with read_gmail_email to get full content.",
       };
     }
 
     case "read_gmail_email": {
       const data = await callGmailApi("read", { messageId: args.messageId });
-      return {
-        id: data.id,
-        from: data.from,
-        to: data.to,
-        cc: data.cc || null,
-        subject: data.subject,
-        date: data.date,
-        body: data.textBody || data.htmlBody?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 5000) || data.snippet,
-        unread: data.isUnread,
+      const body = data.textBody || data.htmlBody?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 5000) || data.snippet;
+      const payload = {
+        id: data.id, from: data.from, to: data.to, cc: data.cc || null,
+        subject: data.subject, date: data.date, body, unread: data.isUnread,
       };
+      const rr = createReadResult({
+        data: payload, source: "gmail", freshness_sla_seconds: 300, row_count: 1,
+        filters_applied: { messageId: args.messageId },
+        query_echo: `gmail read message=${args.messageId}`,
+      });
+      return { ...payload, read_result: rr, meta: { readResult: true } };
     }
 
     case "send_gmail_email": {

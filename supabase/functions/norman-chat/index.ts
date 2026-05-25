@@ -1854,7 +1854,7 @@ async function executePlannerTool(
       const limit = Math.min(Math.max(args.limit ?? 20, 1), 100);
       let q = supabaseAdmin
         .from("key_events")
-        .select("id, title, start_at, end_at, all_day, location, owner, category, event_name, objective, success_metric, decision_needed, risks, next_action, risk_level, risk_reason, missing_fields, is_complete, organizer_email, html_link, start_tz")
+        .select("id, title, start_at, end_at, all_day, location, owner, category, event_name, objective, success_metric, decision_needed, risks, next_action, risk_level, risk_reason, missing_fields, is_complete, organizer_email, html_link, start_tz, calendar_id, google_event_id")
         .eq("deleted_in_google", false);
 
       const now = new Date().toISOString();

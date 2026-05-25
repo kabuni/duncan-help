@@ -3484,8 +3484,19 @@ async function executeMeetingTool(
   supabaseUrl: string,
   authHeader: string,
   userId: string,
-  meetingFlowState?: { listedIds: Set<string>; sourceFallbackIds?: Set<string>; userIntent: string }
+  meetingFlowState?: { listedIds: Set<string>; sourceFallbackIds?: Set<string>; userIntent: string },
+  identity?: ResolvedIdentity,
 ): Promise<any> {
+  // Resolve caller-TZ window once. If args.window provided, derive from_date/to_date in caller's tz.
+  let resolvedMeetingWindow: { startISO: string; endISO: string; label: string; timezone: string; from_date: string; to_date: string } | null = null;
+  if (args?.window && identity) {
+    const w = resolveWindow(identity, args.window);
+    const from_date = localDateInTz(new Date(w.startISO), identity.timezone);
+    // endISO is exclusive; subtract 1 day for inclusive to_date.
+    const to_date = localDateInTz(new Date(new Date(w.endISO).getTime() - 86400000), identity.timezone);
+    resolvedMeetingWindow = { ...w, from_date, to_date };
+    args = { ...args, from_date, to_date };
+  }
   const intent = meetingFlowState?.userIntent || "";
   let corrected = false;
 

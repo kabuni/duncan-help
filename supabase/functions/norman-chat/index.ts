@@ -1755,6 +1755,7 @@ const WORKSTREAM_TOOLS = [
           overdue_only: { type: "boolean", description: "If true, only cards whose due_date has passed or that contain overdue open tasks." },
           include_tasks: { type: "boolean", description: "Include open task titles per card (default true)." },
           limit: { type: "number", description: "Max cards to return (default 30, max 1000 when exporting, otherwise 100)." },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Filter cards whose due_date falls in this window, resolved in the caller's timezone. Use this instead of computing dates yourself." },
           export_format: { type: "string", enum: ["json", "csv", "gsheet"], description: "'csv' uploads a CSV to private storage and returns a 1-hour signed download_url. 'gsheet' creates a Google Sheet in the user's own Drive using their connected Google account and returns the spreadsheet URL. Default: json." },
         },
         required: [],
@@ -1789,8 +1790,9 @@ const WORKSTREAM_TOOLS = [
         type: "object",
         properties: {
           user_ids: { type: "array", items: { type: "string" }, description: "Array of user_id UUIDs to check calendars for" },
-          date: { type: "string", description: "Date to check in YYYY-MM-DD format (defaults to today)" },
-          days: { type: "number", description: "Number of days to look ahead (default: 3, max: 7)" },
+          date: { type: "string", description: "Date to check in YYYY-MM-DD format (defaults to today in the caller's timezone). Ignored if 'window' is provided." },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Resolve the check range in the caller's timezone. Preferred over date/days for natural-language windows like 'today' or 'this week'." },
+          days: { type: "number", description: "Number of days to look ahead from `date` (default: 3, max: 7). Ignored if 'window' is provided." },
           task_duration_minutes: { type: "number", description: "How long the task needs in minutes (default: 60). Duncan uses this to find suitable free slots." },
         },
         required: ["user_ids"],
@@ -1981,7 +1983,9 @@ async function executeWorkstreamTool(
   toolName: string,
   args: any,
   supabaseAdmin: any,
-  userId: string
+  userId: string,
+  identity?: ResolvedIdentity,
+  identityCache?: IdentityCache,
 ): Promise<any> {
   switch (toolName) {
     case "list_team_members": {
@@ -2047,20 +2051,35 @@ async function executeWorkstreamTool(
       if (restrictCardIds) cardsQuery = cardsQuery.in("id", restrictCardIds);
       if (args.overdue_only) cardsQuery = cardsQuery.lt("due_date", nowIso);
 
+      // Caller-timezone window resolution (Phase 9.4 / 9.6).
+      let resolvedWindow: { startISO: string; endISO: string; label: string; timezone: string } | null = null;
+      if (args.window && identity) {
+        resolvedWindow = resolveWindow(identity, args.window);
+        cardsQuery = cardsQuery
+          .gte("due_date", resolvedWindow.startISO)
+          .lt("due_date", resolvedWindow.endISO);
+      }
+
       const { data: cards, error } = await cardsQuery;
       if (error) throw new Error(`Failed to list workstream cards: ${error.message}`);
       const cardList = cards || [];
+      const windowEcho = resolvedWindow
+        ? ` window=${resolvedWindow.label}[${resolvedWindow.startISO}..${resolvedWindow.endISO}) tz=${resolvedWindow.timezone}`
+        : "";
+      const filtersWithWindow = resolvedWindow
+        ? { ...args, resolved_window: resolvedWindow }
+        : args;
       if (cardList.length === 0) {
         const rr = createReadResult({
           data: [],
           source: "workstreams_db",
           freshness_sla_seconds: 30,
           row_count: 0,
-          filters_applied: args,
-          query_echo: `workstream_cards where status=${args.status ?? "open"}${args.project_tag ? ` project_tag=${args.project_tag}` : ""}`,
+          filters_applied: filtersWithWindow,
+          query_echo: `workstream_cards where status=${args.status ?? "open"}${args.project_tag ? ` project_tag=${args.project_tag}` : ""}${windowEcho}`,
           empty_reason: "no_matches",
         });
-        return { count: 0, cards: [], filter: args, read_result: rr, meta: { readResult: true } };
+        return { count: 0, cards: [], filter: filtersWithWindow, read_result: rr, meta: { readResult: true } };
       }
 
       const cardIds = cardList.map((c: any) => c.id);
@@ -2289,10 +2308,10 @@ async function executeWorkstreamTool(
           freshness_sla_seconds: 30,
           row_count: result.length,
           truncated: result.length >= limit,
-          filters_applied: args,
-          query_echo: `workstream_cards where status=${args.status ?? "open"}${args.project_tag ? ` project_tag=${args.project_tag}` : ""} limit ${limit}`,
+          filters_applied: filtersWithWindow,
+          query_echo: `workstream_cards where status=${args.status ?? "open"}${args.project_tag ? ` project_tag=${args.project_tag}` : ""}${windowEcho} limit ${limit}`,
         });
-        return { count: result.length, cards: result, filter: args, read_result: rr, meta: { readResult: true } };
+        return { count: result.length, cards: result, filter: filtersWithWindow, read_result: rr, meta: { readResult: true } };
       }
     }
 
@@ -2462,11 +2481,37 @@ async function executeWorkstreamTool(
     }
 
     case "check_team_availability": {
-      const { user_ids, date, days: daysAhead, task_duration_minutes } = args;
-      const startDate = date ? new Date(date + "T00:00:00Z") : new Date();
-      startDate.setUTCHours(0, 0, 0, 0);
-      const numDays = Math.min(daysAhead || 3, 7);
-      const endDate = new Date(startDate.getTime() + numDays * 24 * 60 * 60 * 1000);
+      const { user_ids, date, days: daysAhead, task_duration_minutes, window } = args;
+      const callerTz = identity?.timezone ?? "UTC";
+      let startDate: Date;
+      let endDate: Date;
+      let windowLabel: string;
+      if (window && identity) {
+        const w = resolveWindow(identity, window);
+        startDate = new Date(w.startISO);
+        endDate = new Date(w.endISO);
+        windowLabel = w.label;
+      } else if (date) {
+        startDate = new Date(date + "T00:00:00Z");
+        startDate.setUTCHours(0, 0, 0, 0);
+        const numDays = Math.min(daysAhead || 3, 7);
+        endDate = new Date(startDate.getTime() + numDays * 24 * 60 * 60 * 1000);
+        windowLabel = `${date}+${numDays}d`;
+      } else if (identity) {
+        // Default: "today" in caller's timezone, then numDays ahead.
+        const w = resolveWindow(identity, "today");
+        startDate = new Date(w.startISO);
+        const numDays = Math.min(daysAhead || 3, 7);
+        endDate = new Date(startDate.getTime() + numDays * 24 * 60 * 60 * 1000);
+        windowLabel = `today(${callerTz})+${numDays}d`;
+      } else {
+        startDate = new Date();
+        startDate.setUTCHours(0, 0, 0, 0);
+        const numDays = Math.min(daysAhead || 3, 7);
+        endDate = new Date(startDate.getTime() + numDays * 24 * 60 * 60 * 1000);
+        windowLabel = `utc+${numDays}d`;
+      }
+      const numDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000));
       const taskDuration = task_duration_minutes || 60;
 
       const clientId = Deno.env.get("GOOGLE_CALENDAR_CLIENT_ID");
@@ -2533,6 +2578,14 @@ async function executeWorkstreamTool(
         eventsUrl.searchParams.set("orderBy", "startTime");
         eventsUrl.searchParams.set("maxResults", "100");
 
+        // Resolve per-member identity (timezone, working hours). Falls back to caller tz.
+        const memberIdentity = identityCache
+          ? await resolveIdentity(supabaseAdmin, uid, identityCache).catch(() => null)
+          : null;
+        const memberTz = memberIdentity?.timezone ?? callerTz;
+        const memberWH = memberIdentity?.working_hours ?? { start: "09:00", end: "18:00", days: [1, 2, 3, 4, 5] };
+        eventsUrl.searchParams.set("timeZone", memberTz);
+
         const eventsResp = await fetch(eventsUrl.toString(), {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
@@ -2551,34 +2604,53 @@ async function executeWorkstreamTool(
             end: e.end.dateTime,
           }));
 
-        // Find free slots (working hours 9am-6pm)
+        // Helper: convert a local "YYYY-MM-DD HH:MM" in tz to a UTC Date.
+        const localInTzToUtc = (y: number, m: number, d: number, hh: number, mm: number, tz: string) => {
+          const utcGuess = new Date(Date.UTC(y, m - 1, d, hh, mm, 0));
+          const offsetMin = (new Date(utcGuess.toLocaleString("en-US", { timeZone: tz })).getTime()
+                            - utcGuess.getTime()) / 60000;
+          return new Date(utcGuess.getTime() - offsetMin * 60000);
+        };
+        // Helper: get YYYY-MM-DD + day-of-week for a UTC instant in tz.
+        const localPartsInTz = (dt: Date, tz: string) => {
+          const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+            timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short",
+          }).formatToParts(dt).map((p) => [p.type, p.value]));
+          const dowMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+          return {
+            y: Number(parts.year), m: Number(parts.month), d: Number(parts.day),
+            iso: `${parts.year}-${parts.month}-${parts.day}`,
+            dow: dowMap[parts.weekday as string] ?? 0,
+          };
+        };
+
+        const [whStartH, whStartM] = memberWH.start.split(":").map(Number);
+        const [whEndH, whEndM] = memberWH.end.split(":").map(Number);
+
+        // Find free slots in member's local working hours.
         const freeSlots: any[] = [];
         for (let d = 0; d < numDays; d++) {
-          const dayStart = new Date(startDate.getTime() + d * 24 * 60 * 60 * 1000);
-          const workStart = new Date(dayStart);
-          workStart.setUTCHours(9, 0, 0, 0);
-          const workEnd = new Date(dayStart);
-          workEnd.setUTCHours(18, 0, 0, 0);
-          
-          // Skip weekends
-          const dayOfWeek = workStart.getDay();
-          if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+          const dayInstant = new Date(startDate.getTime() + d * 86400000);
+          const { y, m, d: dd, iso, dow } = localPartsInTz(dayInstant, memberTz);
+          if (!memberWH.days.includes(dow)) continue; // not a working day for this member
 
-          // Get busy periods for this day
+          const workStart = localInTzToUtc(y, m, dd, whStartH, whStartM, memberTz);
+          const workEnd = localInTzToUtc(y, m, dd, whEndH, whEndM, memberTz);
+
+          // Get busy periods overlapping the work window
           const dayEvents = events.filter((e: any) => {
             const eStart = new Date(e.start);
             const eEnd = new Date(e.end);
             return eStart < workEnd && eEnd > workStart;
           }).sort((a: any, b: any) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
-          // Find gaps
           let cursor = workStart.getTime();
           for (const evt of dayEvents) {
             const evtStart = Math.max(new Date(evt.start).getTime(), workStart.getTime());
             const evtEnd = Math.min(new Date(evt.end).getTime(), workEnd.getTime());
             if (evtStart > cursor && (evtStart - cursor) >= taskDuration * 60 * 1000) {
               freeSlots.push({
-                date: workStart.toISOString().split("T")[0],
+                date: iso,
                 start: new Date(cursor).toISOString(),
                 end: new Date(evtStart).toISOString(),
                 duration_minutes: Math.round((evtStart - cursor) / 60000),
@@ -2586,10 +2658,9 @@ async function executeWorkstreamTool(
             }
             cursor = Math.max(cursor, evtEnd);
           }
-          // Gap after last event
           if (cursor < workEnd.getTime() && (workEnd.getTime() - cursor) >= taskDuration * 60 * 1000) {
             freeSlots.push({
-              date: workStart.toISOString().split("T")[0],
+              date: iso,
               start: new Date(cursor).toISOString(),
               end: workEnd.toISOString(),
               duration_minutes: Math.round((workEnd.getTime() - cursor) / 60000),
@@ -2601,6 +2672,8 @@ async function executeWorkstreamTool(
           user_id: uid,
           name: memberName,
           calendar_connected: true,
+          timezone: memberTz,
+          working_hours: memberWH,
           busy_events_count: events.length,
           busy_events: events.slice(0, 15), // Cap to avoid token overflow
           free_slots: freeSlots,
@@ -2608,7 +2681,14 @@ async function executeWorkstreamTool(
         });
       }
 
-      return { availability: results, checked_from: startDate.toISOString(), checked_to: endDate.toISOString(), task_duration_minutes: taskDuration };
+      return {
+        availability: results,
+        checked_from: startDate.toISOString(),
+        checked_to: endDate.toISOString(),
+        window: windowLabel,
+        caller_timezone: callerTz,
+        task_duration_minutes: taskDuration,
+      };
     }
 
     default:
@@ -6290,7 +6370,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
            } else if (analyticsToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeAnalyticsTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));
           } else if (workstreamMgmtToolNames.includes(tc.function.name)) {
-              result = await withToolTimeout(tc.function.name, executeWorkstreamTool(tc.function.name, args, supabaseAdmin, userId || ""));
+              result = await withToolTimeout(tc.function.name, executeWorkstreamTool(tc.function.name, args, supabaseAdmin, userId || "", resolvedIdentity, identityCache));
           } else if (plannerToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executePlannerTool(tc.function.name, args, supabaseAdmin));
           } else if (execSummaryToolNames.includes(tc.function.name)) {

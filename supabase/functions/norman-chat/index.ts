@@ -6656,21 +6656,13 @@ Format as a natural, readable summary with clear sections. If a section has no d
               });
               const recovery = await recoverEmptyCompletion(conversationMessages);
 
-              if (recovery.toolCalls.length > 0) {
-                console.log("RECOVERY PRODUCED TOOL CALLS", recovery.toolCalls.map((tc) => tc?.function?.name));
-                const provider = detectToolResultProvider(recovery.toolCalls);
-                recordToolCalls(recovery.toolCalls);
-                const toolResults = await executeToolCalls(recovery.toolCalls, provider, { emit: emitDuncanEvent });
-                const assistantMsg: any = { role: "assistant", tool_calls: recovery.toolCalls };
-                if (recovery.fullContent) assistantMsg.content = recovery.fullContent;
-                conversationMessages.push(assistantMsg, ...toolResults);
-                round++;
-                currentResponse = await fetchAIWithRetry({
-                  messages: sanitizeConversationMessages(conversationMessages),
-                  stream: true,
-                  tools: filteredTools,
+              // Phase 6: recovery is text-only. Never execute tool calls from
+              // a recovery turn — they were not part of the user-visible stream.
+              if (recovery.error) {
+                emitDuncanEvent({
+                  duncan_event: "empty_completion",
+                  error: recovery.error,
                 });
-                continue;
               }
 
               forcedRecoveryContent = recovery.fullContent;

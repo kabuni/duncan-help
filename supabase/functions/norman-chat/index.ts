@@ -5217,6 +5217,42 @@ Format as a natural, readable summary with clear sections. If a section has no d
       !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
       (latestUserText.length < 20 || SIMPLE_INPUT_PATTERNS.some((pattern) => pattern.test(latestUserText)));
 
+    // ── Lightweight entity resolver ─────────────────────────────────────────
+    // Fuzzy-match the user message against known enum/source values BEFORE the
+    // model generates. When we find a confident hit we inject a small block so
+    // the model executes immediately instead of inventing alternative systems.
+    try {
+      const lower = latestUserText.toLowerCase();
+      const PROJECT_TAGS = ["Lightning Strike Event", "Website", "K10 App", "School Integrations"];
+      const tagAliases: Record<string, string[]> = {
+        "Lightning Strike Event": ["lightning strike", "lightning-strike", "lightningstrike", "lightning strike event", "lightning"],
+        "Website": ["website", "site", "web site"],
+        "K10 App": ["k10", "k10 app", "k-10", "k 10 app"],
+        "School Integrations": ["school integrations", "school integration", "schools integration"],
+      };
+      const matchedTag = PROJECT_TAGS.find((tag) =>
+        (tagAliases[tag] || []).some((a) => lower.includes(a))
+      );
+      const READ_INTENT_RE = /\b(list|show|open|all|view|see|fetch|get|pull|display|enumerate|what'?s|whats|summari[sz]e|summary|cards?|tasks?|to[- ]?dos?|pending|overdue|on my plate|active|outstanding|in progress)\b/i;
+      const isReadIntent = READ_INTENT_RE.test(latestUserText);
+      const resolverBlocks: string[] = [];
+      if (matchedTag && isReadIntent) {
+        resolverBlocks.push(
+          `## RESOLVED ENTITY (pre-computed — DO NOT ask for clarification)\n` +
+          `- project_tag: "${matchedTag}" (matched from the user's message)\n` +
+          `- canonical source: Workstreams (workstream_cards table)\n` +
+          `- confidence: high\n` +
+          `- required action: call \`list_workstream_cards\` with { project_tag: "${matchedTag}", status: "open" } immediately. Do NOT ask the user which system to pull from. Basecamp/Trello/Jira/Asana/Monday/Notion-tasks are NOT connected and must not be offered.`
+        );
+      }
+      if (resolverBlocks.length > 0) {
+        systemContent += `\n\n` + resolverBlocks.join("\n\n");
+      }
+    } catch (_resolverErr) {
+      // Non-fatal — resolver is a best-effort pre-pass.
+    }
+
+
     // First call to AI with tools if calendar is connected
     const requestBody: any = {
       model: CHAT_MODEL,

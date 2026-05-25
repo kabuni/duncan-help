@@ -6693,6 +6693,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               // Phase 6: recovery is text-only. Never execute tool calls from
               // a recovery turn — they were not part of the user-visible stream.
               if (recovery.error) {
+                turnLog.empty_completion = true;
                 emitDuncanEvent({
                   duncan_event: "empty_completion",
                   error: recovery.error,

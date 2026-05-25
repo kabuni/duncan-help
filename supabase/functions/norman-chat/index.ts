@@ -5301,7 +5301,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
           const name = t?.function?.name;
           if (!name || seen.has(name)) return false;
           // Respect connection gates: drop tools whose backing integration isn't available.
-          if (CALENDAR_TOOLS.includes(t) && !calendarAccessToken) return false;
+          // reschedule_event must remain available even without a personal Google Calendar token
+          // (it covers local Planner rows and uses the Duncan calendar identity for Google events).
+          if (CALENDAR_TOOLS.includes(t) && !calendarAccessToken && name !== "reschedule_event") return false;
           if (DOCUMENT_TOOLS.includes(t) && !azureStorageAvailable) return false;
           if (NOTION_TOOLS.includes(t) && !notionToken) return false;
           

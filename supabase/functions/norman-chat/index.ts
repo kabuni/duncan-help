@@ -5803,11 +5803,71 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const TOOL_EXECUTION_TIMEOUT_MS = 10_000;
     const PLAUD_SYNC_INTENT_RE = /\b(sync|refresh|import|pull\s+(new|latest)|update)\b[\s\S]{0,40}\bplaud\b/i;
 
-    function createStructuredToolResult(toolName: string, result: any, status: "success" | "no_data" | "partial" | "hard_error" = "success") {
+    /**
+     * Phase 1 — Canonical Tool-Result Envelope.
+     *
+     * Every tool — read, write, pending, error — MUST be wrapped through this
+     * helper. The envelope guarantees the following fields exist on the JSON
+     * the model sees, so the Mutation Truth Rule (Phase 2) can be enforced
+     * structurally instead of by prose:
+     *
+     *   { tool, source, status, ok, verified, ...payload }
+     *
+     * Rules for defaults (caller-provided fields always win):
+     *   - status="success" | "no_data"           → ok=true,  verified=true
+     *   - status="pending_confirmation"          → ok=false, verified=false
+     *   - status="partial" | "timeout"           → ok=false, verified=false
+     *   - status="hard_error" | "error"          → ok=false, verified=false
+     *   - status="circuit_open"                  → ok=false, verified=false
+     *
+     * Tools that perform real writes (e.g. reschedule_event) should return
+     * `{ ok, verified, source, before, after, error }` directly — those values
+     * pass through unchanged.
+     */
+    type ToolResultStatus =
+      | "success"
+      | "no_data"
+      | "partial"
+      | "pending_confirmation"
+      | "hard_error"
+      | "error"
+      | "timeout"
+      | "circuit_open";
+
+    function createStructuredToolResult(
+      toolName: string,
+      result: any,
+      statusHint: ToolResultStatus = "success",
+    ) {
+      const payload: Record<string, any> =
+        result && typeof result === "object" && !Array.isArray(result)
+          ? { ...result }
+          : { data: result };
+
+      // status: caller-provided result.status wins; otherwise use the hint.
+      const status: ToolResultStatus =
+        (typeof payload.status === "string" ? payload.status : statusHint) as ToolResultStatus;
+
+      // Derived defaults — only applied if the underlying tool didn't already
+      // set them. Write tools (reschedule_event, etc.) return their own ok/verified.
+      const positive = status === "success" || status === "no_data";
+      const ok = typeof payload.ok === "boolean" ? payload.ok : positive;
+      const verified = typeof payload.verified === "boolean" ? payload.verified : positive;
+      const source = typeof payload.source === "string" ? payload.source : toolName;
+
       return {
         tool: toolName,
+        source,
         status,
-        ...((result && typeof result === "object" && !Array.isArray(result)) ? result : { data: result }),
+        ok,
+        verified,
+        ...payload,
+        // Re-pin canonical fields last so payload spread can't accidentally clobber them.
+        status,
+        ok,
+        verified,
+        source,
+        tool: toolName,
       };
     }
 

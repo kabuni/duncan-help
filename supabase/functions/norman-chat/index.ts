@@ -285,6 +285,26 @@ const CALENDAR_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "reschedule_event",
+      description:
+        "CANONICAL tool for moving/rescheduling/postponing any event (planner key event OR Google Calendar event). Use this for ALL date/time changes — 'move to tomorrow', 'reschedule', 'push by 1 hour', 'postpone'. It is routing-aware: local Planner rows (calendar_id='local' or google_event_id starting with 'local:') are updated directly in the Planner; real Google events are PATCHed against Duncan's calendar identity. Every call performs post-write verification and returns a structured {ok, verified, source, before, after, error} payload. NEVER claim a reschedule succeeded unless verified===true.",
+      parameters: {
+        type: "object",
+        properties: {
+          event_id: { type: "string", description: "key_events.id (UUID) when known. Strongly preferred — call list_planner_events first to obtain it." },
+          google_event_id: { type: "string", description: "Google Calendar event ID (only when event_id is not available)." },
+          calendar_id: { type: "string", description: "Calendar ID. Use 'local' for planner-only events; otherwise the Google calendar ID returned by list_planner_events." },
+          startDateTime: { type: "string", description: "New start time in ISO 8601 (e.g. 2026-05-26T14:00:00+01:00). Must include timezone offset OR be UTC." },
+          endDateTime: { type: "string", description: "New end time in ISO 8601. Required." },
+          timeZone: { type: "string", description: "IANA timezone (e.g. 'Europe/London'). Defaults to the event's existing start_tz." },
+        },
+        required: ["startDateTime", "endDateTime"],
+      },
+    },
+  },
 ];
 
 const DOCUMENT_TOOLS = [

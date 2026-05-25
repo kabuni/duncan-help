@@ -3180,7 +3180,8 @@ async function executeDriveTool(
   toolName: string,
   args: any,
   supabaseUrl: string,
-  authHeader: string
+  authHeader: string,
+  _identity?: ResolvedIdentity,
 ): Promise<any> {
   async function callDriveApi(action: string, body: Record<string, any> = {}) {
     const res = await fetch(`${supabaseUrl}/functions/v1/google-drive-api`, {
@@ -3201,53 +3202,69 @@ async function executeDriveTool(
     case "drive_list_files": {
       const WEEKLY_REPORTS_FOLDER = "1R5JxrnLsSGPu4iRMqn02oCOHmGbRSW7G";
       let folderId = args.folderId;
-      // Sanitize invalid/placeholder values — default to Weekly Reports folder
       if (!folderId || folderId === "." || folderId === "/" || folderId === "root" || folderId.length < 5) {
         folderId = WEEKLY_REPORTS_FOLDER;
       }
-      const data = await callDriveApi("list", {
-        folderId,
-        query: args.query,
+      const data = await callDriveApi("list", { folderId, query: args.query });
+      const files = (data.files || []).map((f: any) => ({
+        id: f.id, name: f.name, mimeType: f.mimeType, modifiedTime: f.modifiedTime,
+        isFolder: f.mimeType === "application/vnd.google-apps.folder",
+      }));
+      const filters = { folderId, query: args.query ?? null };
+      const queryEcho = `drive list folder=${folderId}${args.query ? ` query="${args.query}"` : ""}`;
+      if (files.length === 0) {
+        const rr = createReadResult({
+          data: [], source: "google_drive", freshness_sla_seconds: 300, row_count: 0,
+          filters_applied: filters, query_echo: queryEcho, empty_reason: "no_matches",
+        });
+        return { files: [], read_result: rr, meta: { readResult: true } };
+      }
+      const rr = createReadResult({
+        data: files, source: "google_drive", freshness_sla_seconds: 300, row_count: files.length,
+        filters_applied: filters, query_echo: queryEcho,
       });
       return {
-        files: (data.files || []).map((f: any) => ({
-          id: f.id,
-          name: f.name,
-          mimeType: f.mimeType,
-          modifiedTime: f.modifiedTime,
-          isFolder: f.mimeType === "application/vnd.google-apps.folder",
-        })),
+        files, read_result: rr, meta: { readResult: true },
         hint: "Use file 'id' with drive_get_content to read a file, or with drive_list_files as folderId to enter a folder.",
       };
     }
 
     case "drive_search": {
-      const data = await callDriveApi("search", {
-        name: args.name,
-        mimeType: args.mimeType,
-        parentId: args.parentId,
+      const data = await callDriveApi("search", { name: args.name, mimeType: args.mimeType, parentId: args.parentId });
+      const files = (data.files || []).map((f: any) => ({
+        id: f.id, name: f.name, mimeType: f.mimeType, modifiedTime: f.modifiedTime,
+        isFolder: f.mimeType === "application/vnd.google-apps.folder",
+      }));
+      const filters = { name: args.name ?? null, mimeType: args.mimeType ?? null, parentId: args.parentId ?? null };
+      const queryEcho = `drive search name="${args.name ?? ""}" mime=${args.mimeType ?? "*"}`;
+      if (files.length === 0) {
+        const rr = createReadResult({
+          data: [], source: "google_drive", freshness_sla_seconds: 300, row_count: 0,
+          filters_applied: filters, query_echo: queryEcho, empty_reason: "no_matches",
+        });
+        return { files: [], read_result: rr, meta: { readResult: true } };
+      }
+      const rr = createReadResult({
+        data: files, source: "google_drive", freshness_sla_seconds: 300, row_count: files.length,
+        filters_applied: filters, query_echo: queryEcho,
       });
-      return {
-        files: (data.files || []).map((f: any) => ({
-          id: f.id,
-          name: f.name,
-          mimeType: f.mimeType,
-          modifiedTime: f.modifiedTime,
-          isFolder: f.mimeType === "application/vnd.google-apps.folder",
-        })),
-      };
+      return { files, read_result: rr, meta: { readResult: true } };
     }
 
     case "drive_get_content": {
-      const data = await callDriveApi("get_content", {
-        fileId: args.fileId,
-        mimeType: args.mimeType,
-      });
-      return {
+      const data = await callDriveApi("get_content", { fileId: args.fileId, mimeType: args.mimeType });
+      const payload = {
         content: data.content,
         truncated: data.truncated || false,
         encoding: data.encoding || "text",
       };
+      const rr = createReadResult({
+        data: payload, source: "google_drive", freshness_sla_seconds: 600, row_count: 1,
+        truncated: payload.truncated,
+        filters_applied: { fileId: args.fileId, mimeType: args.mimeType },
+        query_echo: `drive get_content file=${args.fileId}`,
+      });
+      return { ...payload, read_result: rr, meta: { readResult: true } };
     }
 
     default:

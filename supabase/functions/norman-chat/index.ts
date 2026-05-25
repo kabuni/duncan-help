@@ -6489,7 +6489,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
                   message: "Skipped Plaud sync. This is a slow operation and only runs when the user explicitly asks to sync, refresh, import, or update Plaud meeting data. Use list_meetings / search_meeting_transcripts / get_meeting instead for existing data.",
                 }, "no_data");
               } else {
-                result = await withToolTimeout(tc.function.name, executeMeetingTool(tc.function.name, args, supabaseAdmin, supabaseUser, supabaseUrl, authHeader || "", userId || "", meetingFlowState));
+                result = await withToolTimeout(tc.function.name, executeMeetingTool(tc.function.name, args, supabaseAdmin, supabaseUser, supabaseUrl, authHeader || "", userId || "", meetingFlowState, resolvedIdentity));
               }
           } else if (azureDevOpsToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeAzureDevOpsTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));

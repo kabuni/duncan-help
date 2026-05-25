@@ -1983,7 +1983,9 @@ async function executeWorkstreamTool(
   toolName: string,
   args: any,
   supabaseAdmin: any,
-  userId: string
+  userId: string,
+  identity?: ResolvedIdentity,
+  identityCache?: IdentityCache,
 ): Promise<any> {
   switch (toolName) {
     case "list_team_members": {

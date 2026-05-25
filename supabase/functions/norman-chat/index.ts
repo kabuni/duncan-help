@@ -4,8 +4,11 @@ import { streamLLM } from "../_shared/llm.ts";
 import {
   classifyToolOutcome,
   createStructuredToolResult,
+  createReadResult,
   type ToolResultStatus,
+  type EmptyReason,
 } from "../_shared/tool-envelope.ts";
+import { lintAssistantDraft, type ToolCallRecord } from "../_shared/correctness-linter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Home, Plug, Settings, LogOut, X, ChevronDown, CheckCircle2, MessageSquare, Calendar, FolderOpen, GitBranch, Zap, Menu, Layers, Crown, Inbox, Receipt, BookOpen, MoreHorizontal, Mail, Users, MessageCircle } from "lucide-react";
+import { LayoutDashboard, Home, Plug, Settings, LogOut, X, ChevronDown, CheckCircle2, Mail, FileText, MessageSquare, Calendar, FolderOpen, GitBranch, Zap, Menu, Layers, Megaphone, Crown, Inbox, Receipt, BookOpen } from "lucide-react";
 import { canViewBriefing } from "@/lib/ceoAccess";
 import ChatHistory from "@/components/ChatHistory";
 import { useGeneralChatsContext } from "@/hooks/GeneralChatsContext";
@@ -20,7 +20,9 @@ const integrationMeta: Record<string, { label: string; icon: React.ElementType }
   "google-calendar": { label: "Google Calendar", icon: Calendar },
   "azure-blob": { label: "Azure Blob", icon: FolderOpen },
   "azure-devops": { label: "Azure DevOps", icon: GitBranch },
+  
 };
+
 
 export const MobileMenuButton = ({ onClick }: { onClick: () => void }) => (
   <button
@@ -32,25 +34,12 @@ export const MobileMenuButton = ({ onClick }: { onClick: () => void }) => (
   </button>
 );
 
-const navItemClass = ({ isActive }: { isActive: boolean }) =>
-  cn(
-    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150",
-    isActive
-      ? "bg-primary/10 text-primary glow-primary-sm"
-      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-  );
-
-const SectionLabel = ({ children }: { children: React.ReactNode }) => (
-  <p className="px-3 pt-4 pb-1 text-[10px] font-mono uppercase tracking-widest text-muted-foreground/70">
-    {children}
-  </p>
-);
-
 const Sidebar = ({
   mobileOpen,
   onMobileClose,
   onSelectChat,
   onNewChat,
+  chatOps: externalChatOps,
 }: {
   mobileOpen?: boolean;
   onMobileClose?: () => void;
@@ -63,7 +52,6 @@ const Sidebar = ({
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const [connectedApps, setConnectedApps] = useState<string[]>([]);
   const { data: pendingApprovals = 0 } = useApprovalCount();
 
@@ -72,26 +60,26 @@ const Sidebar = ({
       try {
         const { data: companyAll } = await supabase.rpc("get_company_integrations_status");
         const company = (companyAll ?? []).filter((c: any) => c.status === "connected");
-
+        
         const { data: userInt } = await supabase
           .from("user_integrations")
           .select("integration_id")
           .eq("status", "connected");
 
         const ids = new Set<string>();
-        company?.forEach((c) => ids.add(c.integration_id));
-        userInt?.forEach((u) => ids.add(u.integration_id));
-
+        company?.forEach(c => ids.add(c.integration_id));
+        userInt?.forEach(u => ids.add(u.integration_id));
+        
         const [{ data: gcal }, { data: gmail }, { data: azureDevops }] = await Promise.all([
           supabase.from("google_calendar_tokens").select("id").limit(1),
           supabase.from("gmail_tokens").select("id").limit(1),
           supabase.from("azure_devops_tokens").select("id").limit(1),
         ]);
-
+        
         if (gcal?.length) ids.add("google-calendar");
         if (gmail?.length) ids.add("gmail");
         if (azureDevops?.length) ids.add("azure-devops");
-
+        
         setConnectedApps(Array.from(ids));
       } catch {
         // silent
@@ -106,7 +94,9 @@ const Sidebar = ({
   };
 
   const sidebarContent = (
-    <aside className="flex h-full w-64 flex-col border-r border-border bg-sidebar">
+    <aside className={cn(
+      "flex h-full w-64 flex-col border-r border-border bg-sidebar",
+    )}>
       {/* Brand */}
       <div className="flex items-center justify-between px-6 py-6">
         <div className="flex items-center gap-3">
@@ -128,6 +118,7 @@ const Sidebar = ({
             <p className="text-[10px] font-mono tracking-widest text-muted-foreground">KabuniOS</p>
           </div>
         </div>
+        {/* Close button on mobile */}
         <button
           onClick={onMobileClose}
           className="md:hidden flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
@@ -137,166 +128,204 @@ const Sidebar = ({
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
+      <nav className="flex-1 min-h-0 overflow-y-auto space-y-1 px-3 py-4">
         <RouterNavLink
           to="/"
           end
           onClick={() => {
             onMobileClose?.();
             window.dispatchEvent(
-              new CustomEvent("duncan:show-dashboard", { detail: { explicit: true } })
+              new CustomEvent("duncan:show-dashboard", {
+                detail: { explicit: true },
+              })
             );
           }}
-          className={navItemClass}
+          className={({ isActive }) =>
+            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )
+          }
         >
           <Home className="h-4 w-4" />
           Dashboard
         </RouterNavLink>
 
-        {/* WORK */}
-        <SectionLabel>Work</SectionLabel>
-        <div className="space-y-0.5">
-          <RouterNavLink to="/projects" onClick={() => onMobileClose?.()} className={navItemClass}>
-            <Layers className="h-4 w-4" />
-            Projects
-          </RouterNavLink>
-          <RouterNavLink to="/workstreams" onClick={() => onMobileClose?.()} className={navItemClass}>
-            <LayoutDashboard className="h-4 w-4" />
-            Workstreams
-          </RouterNavLink>
-          <RouterNavLink to="/diary" onClick={() => onMobileClose?.()} className={navItemClass}>
-            <Calendar className="h-4 w-4" />
-            Planner
-          </RouterNavLink>
-        </div>
+        <RouterNavLink
+          to="/projects"
+          onClick={() => onMobileClose?.()}
+          className={({ isActive }) =>
+            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )
+          }
+        >
+          <Layers className="h-4 w-4" />
+          Projects
+        </RouterNavLink>
 
-        {/* INTELLIGENCE */}
-        <SectionLabel>Intelligence</SectionLabel>
-        <div className="space-y-0.5">
-          <RouterNavLink to="/operations" onClick={() => onMobileClose?.()} className={navItemClass}>
-            <GitBranch className="h-4 w-4" />
-            Operations
-          </RouterNavLink>
-          <RouterNavLink to="/knowledge-base" onClick={() => onMobileClose?.()} className={navItemClass}>
-            <BookOpen className="h-4 w-4" />
-            Knowledge Base
-          </RouterNavLink>
-          {canViewBriefing(user?.email) && (
-            <RouterNavLink to="/team-briefing" onClick={() => onMobileClose?.()} className={navItemClass}>
-              <Crown className="h-4 w-4" />
-              Team Briefing
-            </RouterNavLink>
+        <RouterNavLink
+          to="/workstreams"
+          onClick={() => onMobileClose?.()}
+          className={({ isActive }) =>
+            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )
+          }
+        >
+          <LayoutDashboard className="h-4 w-4" />
+          Workstreams
+        </RouterNavLink>
+        <RouterNavLink
+          to="/diary"
+          onClick={() => onMobileClose?.()}
+          className={({ isActive }) =>
+            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )
+          }
+        >
+          <Calendar className="h-4 w-4" />
+          Planner
+        </RouterNavLink>
+
+        <RouterNavLink
+          to="/knowledge-base"
+          onClick={() => onMobileClose?.()}
+          className={({ isActive }) =>
+            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )
+          }
+        >
+          <BookOpen className="h-4 w-4" />
+          Knowledge Base
+        </RouterNavLink>
+
+
+        <RouterNavLink
+          to="/approvals"
+          onClick={() => onMobileClose?.()}
+          className={({ isActive }) =>
+            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )
+          }
+        >
+          <Inbox className="h-4 w-4" />
+          <span className="flex-1">Approvals</span>
+          {pendingApprovals > 0 && (
+            <span className="ml-auto rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
+              {pendingApprovals}
+            </span>
           )}
-        </div>
+        </RouterNavLink>
 
-        {/* ADMIN */}
-        <SectionLabel>Admin</SectionLabel>
-        <div className="space-y-0.5">
-          <RouterNavLink to="/approvals" onClick={() => onMobileClose?.()} className={navItemClass}>
-            <Inbox className="h-4 w-4" />
-            <span className="flex-1">Approvals</span>
-            {pendingApprovals > 0 && (
-              <span className="ml-auto rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
-                {pendingApprovals}
-              </span>
-            )}
-          </RouterNavLink>
-          <RouterNavLink to="/purchase-orders" onClick={() => onMobileClose?.()} className={navItemClass}>
-            <Receipt className="h-4 w-4" />
-            Authorisation Requests
-          </RouterNavLink>
-          <div>
-            <button
-              onClick={() => setIntegrationsOpen(!integrationsOpen)}
-              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-150"
-            >
-              <Plug className="h-4 w-4" />
-              <span className="flex-1 text-left">Integrations</span>
-              <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform duration-200", integrationsOpen && "rotate-180")} />
-            </button>
-            {integrationsOpen && (
-              <div className="ml-4 mt-1 space-y-0.5 border-l border-border pl-3">
-                {connectedApps.length === 0 ? (
-                  <p className="px-3 py-2 text-[11px] text-muted-foreground">No apps connected</p>
-                ) : (
-                  connectedApps.map((id) => {
-                    const meta = integrationMeta[id];
-                    if (!meta) return null;
-                    const Icon = meta.icon;
-                    return (
-                      <button
-                        key={id}
-                        onClick={() => handleNavigate("/integrations")}
-                        className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                      >
-                        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="flex-1 text-left truncate">{meta.label}</span>
-                        <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
-                      </button>
-                    );
-                  })
-                )}
-                <button
-                  onClick={() => handleNavigate("/integrations")}
-                  className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-[11px] font-medium text-primary hover:bg-primary/5 transition-colors"
-                >
-                  Manage all →
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <RouterNavLink
+          to="/operations"
+          onClick={() => onMobileClose?.()}
+          className={({ isActive }) =>
+            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )
+          }
+        >
+          <GitBranch className="h-4 w-4" />
+          Operations
+        </RouterNavLink>
 
-        {/* Chat History */}
-        <div className="mt-4">
-          <ChatHistory
-            chats={chatOps.chats}
-            activeChatId={chatOps.activeChatId}
-            onSelectChat={(id) => {
-              chatOps.setActiveChatId(id);
-              onSelectChat?.(id);
-              navigate("/");
-              onMobileClose?.();
-            }}
-            onNewChat={() => {
-              chatOps.startNewChat();
-              onNewChat?.();
-              navigate("/", { state: { newChat: true } });
-              onMobileClose?.();
-            }}
-            onDeleteChat={chatOps.deleteChat}
-            onRenameChat={chatOps.updateTitle}
-            onMobileClose={onMobileClose}
-          />
-        </div>
+        <RouterNavLink
+          to="/purchase-orders"
+          onClick={() => onMobileClose?.()}
+          className={({ isActive }) =>
+            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )
+          }
+        >
+          <Receipt className="h-4 w-4" />
+          Authorisation Requests
+        </RouterNavLink>
 
-        {/* MORE (collapsed) */}
-        <div className="mt-4">
-          <button
-            onClick={() => setMoreOpen(!moreOpen)}
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-150"
+        {canViewBriefing(user?.email) && (
+          <RouterNavLink
+            to="/team-briefing"
+            onClick={() => onMobileClose?.()}
+            className={({ isActive }) =>
+              cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              )
+            }
           >
-            <MoreHorizontal className="h-4 w-4" />
-            <span className="flex-1 text-left">More</span>
-            <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform duration-200", moreOpen && "rotate-180")} />
+            <Crown className="h-4 w-4" />
+            Team Briefing
+          </RouterNavLink>
+        )}
+
+
+        <div>
+          <button
+            onClick={() => setIntegrationsOpen(!integrationsOpen)}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+              "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )}
+          >
+            <Plug className="h-4 w-4" />
+            <span className="flex-1 text-left">Integrations</span>
+            <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform duration-200", integrationsOpen && "rotate-180")} />
           </button>
-          {moreOpen && (
+          {integrationsOpen && (
             <div className="ml-4 mt-1 space-y-0.5 border-l border-border pl-3">
-              <RouterNavLink to="/gmail" onClick={() => onMobileClose?.()} className={navItemClass}>
-                <Mail className="h-4 w-4" />
-                Gmail
-              </RouterNavLink>
-              <RouterNavLink to="/recruitment" onClick={() => onMobileClose?.()} className={navItemClass}>
-                <Users className="h-4 w-4" />
-                Recruitment
-              </RouterNavLink>
-              <RouterNavLink to="/feedback" onClick={() => onMobileClose?.()} className={navItemClass}>
-                <MessageCircle className="h-4 w-4" />
-                Feedback
-              </RouterNavLink>
+              {connectedApps.length === 0 ? (
+                <p className="px-3 py-2 text-[11px] text-muted-foreground">No apps connected</p>
+              ) : (
+                connectedApps.map(id => {
+                  const meta = integrationMeta[id];
+                  if (!meta) return null;
+                  const Icon = meta.icon;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => handleNavigate("/integrations")}
+                      className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                    >
+                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="flex-1 text-left truncate">{meta.label}</span>
+                      <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                    </button>
+                  );
+                })
+              )}
+              <button
+                onClick={() => handleNavigate("/integrations")}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-[11px] font-medium text-primary hover:bg-primary/5 transition-colors"
+              >
+                Manage all →
+              </button>
             </div>
           )}
         </div>
+
+        {/* Chat History */}
+        <ChatHistory
+          chats={chatOps.chats}
+          activeChatId={chatOps.activeChatId}
+          onSelectChat={(id) => {
+            chatOps.setActiveChatId(id);
+            onSelectChat?.(id);
+            navigate("/");
+            onMobileClose?.();
+          }}
+          onNewChat={() => {
+            chatOps.startNewChat();
+            onNewChat?.();
+            navigate("/", { state: { newChat: true } });
+            onMobileClose?.();
+          }}
+          onDeleteChat={chatOps.deleteChat}
+          onRenameChat={chatOps.updateTitle}
+          onMobileClose={onMobileClose}
+        />
       </nav>
 
       {/* User */}
@@ -327,10 +356,12 @@ const Sidebar = ({
 
   return (
     <>
+      {/* Desktop sidebar */}
       <div className="hidden md:block fixed left-0 top-0 z-40 h-screen">
         {sidebarContent}
       </div>
 
+      {/* Mobile sidebar overlay */}
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onMobileClose} />
@@ -340,6 +371,7 @@ const Sidebar = ({
         </div>
       )}
 
+      {/* Settings Panel */}
       <SettingsPanel open={showModal} onClose={() => setShowModal(false)} />
     </>
   );

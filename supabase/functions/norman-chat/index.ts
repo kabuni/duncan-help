@@ -5453,6 +5453,34 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const DATA_INTENT_RE = /\b(meeting|email|inbox|calendar|event|workstream|task|planner|kpi|metric|invoice|xero|devops|work item|drive|document|slack|candidate|recruit|brief|status|summary|report)\b/i;
     const isDataIntent = intentMatched || DATA_INTENT_RE.test(latestUserText);
 
+    // Phase 4: backfill the unified `turn` readout now that all signals are computed.
+    turn.intentMatched = intentMatched;
+    turn.isDataIntent = isDataIntent;
+    turn.bypassTools = shouldBypassTools;
+    // Surface the resolver hit (re-derive from the lightweight matcher above so
+    // we never silently drift between resolver text and turn.* readout).
+    try {
+      const _lower = latestUserText.toLowerCase();
+      const _aliases: Record<string, string[]> = {
+        "Lightning Strike Event": ["lightning strike", "lightning-strike", "lightningstrike", "lightning strike event", "lightning"],
+        "Website": ["website", "site", "web site"],
+        "K10 App": ["k10", "k10 app", "k-10", "k 10 app"],
+        "School Integrations": ["school integrations", "school integration", "schools integration"],
+      };
+      for (const [tag, aliases] of Object.entries(_aliases)) {
+        if (aliases.some((a) => _lower.includes(a))) { turn.resolvedProjectTag = tag; break; }
+      }
+    } catch { /* ignore */ }
+    console.log("[classifyTurn]", {
+      intentMatched: turn.intentMatched,
+      isDataIntent: turn.isDataIntent,
+      bypassTools: turn.bypassTools,
+      needsMeetingSourceClarification: turn.needsMeetingSourceClarification,
+      explicitSourceMeetingRequest: turn.explicitSourceMeetingRequest,
+      resolvedProjectTag: turn.resolvedProjectTag,
+      toolCount: filteredTools.length,
+    });
+
     if (isDataIntent && !isVoiceMode && !mustAskMeetingSource && mode !== "briefing" && filteredTools.length > 0) {
       // Phase 1.5 tool-first guardrail: forbid speculation, require tool grounding.
       systemContent += `\n\n## TOOL-FIRST GUARDRAIL\nThe user is asking about real-time or factual data (meetings, emails, calendar, workstreams, planner, analytics, documents, Slack, Xero, DevOps, recruitment, etc.). You MUST call an appropriate tool to ground your answer. If the relevant integration isn't connected OR a tool returns no matching data, say so plainly in one or two sentences and suggest a concrete next step — NEVER invent meetings, emails, events, candidates, invoices, tasks, or any other records. NEVER summarise hypothetical content.`;

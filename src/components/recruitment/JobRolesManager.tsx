@@ -251,11 +251,6 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
           });
           if (res.error) throw res.error;
           const data = res.data as { success?: boolean; error?: string };
-          // legacy fastApi payload removed:
-          // (was: { job_role_id: newRole.id, title: title.trim(),
-              competencies,
-            }),
-          );
           if (data?.success) {
             toast.success(`Hireflix position created automatically`);
           } else {

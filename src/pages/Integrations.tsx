@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { invokeEdge } from "@/lib/edgeApi";
-import { fastApi, withFastApi } from "@/lib/fastApiClient";
+
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { useSlackConnection } from "@/hooks/useSlackConnection";
 import { useAzureBlobStorage } from "@/hooks/useAzureBlobStorage";
@@ -739,16 +739,12 @@ const IntegrationDetail = ({
       if (isGmail) {
         setGmailLoading(true);
         const { supabase } = await import("@/integrations/supabase/client");
-        await withFastApi(
-          async () => {
-            const { error } = await supabase.functions.invoke("gmail-api", {
-              body: { action: "disconnect" },
-            });
-            if (error) throw error;
-            return null;
-          },
-          () => fastApi("POST", "/gmail/api", { action: "disconnect" }),
-        );
+        {
+          const { error } = await supabase.functions.invoke("gmail-api", {
+            body: { action: "disconnect" },
+          });
+          if (error) throw error;
+        }
         toast.success("Gmail disconnected");
         onClose();
         return;
@@ -757,16 +753,12 @@ const IntegrationDetail = ({
       if (isGoogleDrive) {
         setGoogleDriveLoading(true);
         const { supabase } = await import("@/integrations/supabase/client");
-        await withFastApi(
-          async () => {
-            const { error } = await supabase.functions.invoke("google-drive-api", {
-              body: { action: "disconnect" },
-            });
-            if (error) throw error;
-            return null;
-          },
-          () => fastApi("POST", "/drive/api", { action: "disconnect" }),
-        );
+        {
+          const { error } = await supabase.functions.invoke("google-drive-api", {
+            body: { action: "disconnect" },
+          });
+          if (error) throw error;
+        }
         toast.success("Google Drive disconnected");
         onClose();
         return;
@@ -808,14 +800,8 @@ const IntegrationDetail = ({
       } else if (isGmail) {
         setGmailLoading(true);
         const { supabase } = await import("@/integrations/supabase/client");
-        const data = await withFastApi<{ url?: string }>(
-          async () => {
-            const { data, error } = await supabase.functions.invoke("gmail-auth");
-            if (error) throw error;
-            return data;
-          },
-          () => fastApi("GET", "/gmail/auth"),
-        );
+        const { data, error } = await supabase.functions.invoke<{ url?: string }>("gmail-auth");
+        if (error) throw error;
         if (data?.url) window.location.href = data.url;
         else throw new Error("No auth URL returned");
         setGmailLoading(false);
@@ -824,28 +810,16 @@ const IntegrationDetail = ({
       } else if (isAzureDevOps) {
         setAzureDevOpsLoading(true);
         const { supabase } = await import("@/integrations/supabase/client");
-        const data = await withFastApi<{ url?: string }>(
-          async () => {
-            const { data, error } = await supabase.functions.invoke("azure-devops-auth");
-            if (error) throw error;
-            return data;
-          },
-          () => fastApi("GET", "/azure-devops/auth"),
-        );
+        const { data, error } = await supabase.functions.invoke<{ url?: string }>("azure-devops-auth");
+        if (error) throw error;
         if (data?.url) window.location.href = data.url;
         else throw new Error("No auth URL returned");
         setAzureDevOpsLoading(false);
       } else if (isGoogleDrive) {
         setGoogleDriveLoading(true);
         const { supabase } = await import("@/integrations/supabase/client");
-        const data = await withFastApi<{ url?: string }>(
-          async () => {
-            const { data, error } = await supabase.functions.invoke("google-drive-auth");
-            if (error) throw error;
-            return data;
-          },
-          () => fastApi("GET", "/drive/auth"),
-        );
+        const { data, error } = await supabase.functions.invoke<{ url?: string }>("google-drive-auth");
+        if (error) throw error;
         if (data?.url) window.location.href = data.url;
         else throw new Error("No auth URL returned");
         setGoogleDriveLoading(false);

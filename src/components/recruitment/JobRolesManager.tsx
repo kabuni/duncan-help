@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { fastApi, withFastApi } from "@/lib/fastApiClient";
+
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -122,16 +122,11 @@ export function JobRolesManager() {
     }
     setGenerating(true);
     try {
-      const data = await withFastApi<{ full_text?: string }>(
-        async () => {
-          const res = await supabase.functions.invoke("generate-jd", {
-            body: { job_role_id: "preview", title: title.trim() },
-          });
-          if (res.error) throw res.error;
-          return res.data;
-        },
-        () => fastApi("POST", "/recruitment/generate-jd", { job_role_id: "preview", title: title.trim() }),
-      );
+      const res = await supabase.functions.invoke("generate-jd", {
+        body: { job_role_id: "preview", title: title.trim() },
+      });
+      if (res.error) throw res.error;
+      const data = res.data as { full_text?: string };
       const jdText = data?.full_text;
       if (!jdText) throw new Error("No JD returned");
       setGeneratedJd(jdText);
@@ -211,16 +206,11 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
       if (jdStoragePath && newRole) {
         toast.info("Parsing JD for competencies...");
         try {
-          const data = await withFastApi<{ competencies?: any[] }>(
-            async () => {
-              const res = await supabase.functions.invoke("parse-jd-competencies", {
-                body: { job_role_id: newRole.id, storage_path: jdStoragePath },
-              });
-              if (res.error) throw res.error;
-              return res.data;
-            },
-            () => fastApi("POST", "/recruitment/parse-jd", { job_role_id: newRole.id, storage_path: jdStoragePath }),
-          );
+          const res = await supabase.functions.invoke("parse-jd-competencies", {
+            body: { job_role_id: newRole.id, storage_path: jdStoragePath },
+          });
+          if (res.error) throw res.error;
+          const data = res.data as { competencies?: any[] };
           const competencies = data?.competencies || [];
           toast.success(`Extracted ${competencies.length} competencies from JD`);
         } catch (err: any) {
@@ -230,16 +220,10 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
 
       if (generatedJd && newRole) {
         try {
-          await withFastApi(
-            async () => {
-              const res = await supabase.functions.invoke("generate-jd", {
-                body: { job_role_id: newRole.id, title: title.trim() },
-              });
-              if (res.error) throw res.error;
-              return res.data;
-            },
-            () => fastApi("POST", "/recruitment/generate-jd", { job_role_id: newRole.id, title: title.trim() }),
-          );
+          const res = await supabase.functions.invoke("generate-jd", {
+            body: { job_role_id: newRole.id, title: title.trim() },
+          });
+          if (res.error) throw res.error;
           // Competencies saved by edge function
         } catch {
           // Non-critical
@@ -258,24 +242,15 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
 
           const competencies = roleData?.competencies || [];
 
-          const data = await withFastApi<{ success?: boolean; error?: string }>(
-            async () => {
-              const res = await supabase.functions.invoke("create-hireflix-position", {
-                body: {
-                  job_role_id: newRole.id,
-                  title: title.trim(),
-                  competencies,
-                },
-              });
-              if (res.error) throw res.error;
-              return res.data;
-            },
-            () => fastApi("POST", "/hireflix/create-position", {
+          const res = await supabase.functions.invoke("create-hireflix-position", {
+            body: {
               job_role_id: newRole.id,
               title: title.trim(),
               competencies,
-            }),
-          );
+            },
+          });
+          if (res.error) throw res.error;
+          const data = res.data as { success?: boolean; error?: string };
           if (data?.success) {
             toast.success(`Hireflix position created automatically`);
           } else {
@@ -338,16 +313,10 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
       // Delete the corresponding Hireflix position
       if (hireflixPositionId) {
         try {
-          await withFastApi(
-            async () => {
-              const res = await supabase.functions.invoke("delete-hireflix-position", {
-                body: { hireflix_position_id: hireflixPositionId },
-              });
-              if (res.error) throw res.error;
-              return res.data;
-            },
-            () => fastApi("DELETE", `/hireflix/position/${hireflixPositionId}`),
-          );
+          const res = await supabase.functions.invoke("delete-hireflix-position", {
+            body: { hireflix_position_id: hireflixPositionId },
+          });
+          if (res.error) throw res.error;
         } catch (err: any) {
           // Queue for retry silently
           try {

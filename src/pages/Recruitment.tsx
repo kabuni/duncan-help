@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { fastApi, withFastApi } from "@/lib/fastApiClient";
-import { hasExternalApiBase } from "@/lib/apiConfig";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -217,14 +215,9 @@ const Recruitment = () => {
   const connectGmail = async () => {
     setConnecting(true);
     try {
-      const data = await withFastApi<{ url?: string }>(
-        async () => {
-          const res = await supabase.functions.invoke("gmail-auth");
-          if (res.error) throw res.error;
-          return res.data;
-        },
-        () => fastApi("GET", "/gmail/auth"),
-      );
+      const res = await supabase.functions.invoke("gmail-auth");
+      if (res.error) throw res.error;
+      const data = res.data as { url?: string };
       if (!data?.url) throw new Error("No auth URL returned");
       window.location.href = data.url;
     } catch (err: any) {
@@ -296,14 +289,9 @@ const Recruitment = () => {
   const scoreValues = async () => {
     setScoring(true);
     try {
-      const data = await withFastApi<{ scored: number; failed?: number }>(
-        async () => {
-          const res = await supabase.functions.invoke("score-cv-values");
-          if (res.error) throw res.error;
-          return res.data;
-        },
-        () => fastApi("POST", "/recruitment/score-values", {}),
-      );
+      const res = await supabase.functions.invoke("score-cv-values");
+      if (res.error) throw res.error;
+      const data = res.data as { scored: number; failed?: number };
       toast.success(`Scored ${data.scored} candidate(s) on values.${data.failed ? ` ${data.failed} failed.` : ""}`);
       refetchCandidates();
     } catch (err: any) {
@@ -321,16 +309,11 @@ const Recruitment = () => {
 
     setScoringCompetencies(true);
     try {
-      const data = await withFastApi<{ scored: number; skipped?: number; failed?: number; message?: string }>(
-        async () => {
-          const res = await supabase.functions.invoke("score-cv-competencies", {
-            body: { role_id: selectedRoleId },
-          });
-          if (res.error) throw res.error;
-          return res.data;
-        },
-        () => fastApi("POST", "/recruitment/score-competencies", { role_id: selectedRoleId }),
-      );
+      const res = await supabase.functions.invoke("score-cv-competencies", {
+        body: { role_id: selectedRoleId },
+      });
+      if (res.error) throw res.error;
+      const data = res.data as { scored: number; skipped?: number; failed?: number; message?: string };
       if (data.scored === 0 && data.message) {
         toast.message(data.message);
       } else {
@@ -400,18 +383,13 @@ const Recruitment = () => {
         return;
       }
 
-      const data = await withFastApi<{ invited: number; failed: number; skipped: number; results?: any[] }>(
-        async () => {
-          const res = await supabase.functions.invoke("hireflix-send-invite", {
-            body: {
-              candidate_ids: Array.from(selectedCandidates),
-            },
-          });
-          if (res.error) throw res.error;
-          return res.data;
+      const res = await supabase.functions.invoke("hireflix-send-invite", {
+        body: {
+          candidate_ids: Array.from(selectedCandidates),
         },
-        () => fastApi("POST", "/hireflix/send-invite", { candidate_ids: Array.from(selectedCandidates) }),
-      );
+      });
+      if (res.error) throw res.error;
+      const data = res.data as { invited: number; failed: number; skipped: number; results?: any[] };
       const d = data;
       if (d.invited > 0) {
         toast.success(`Invited ${d.invited} candidate(s).`);

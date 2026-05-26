@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Loader2, Rocket, Sparkles, Bug, FileText, Mail, Send, Eye, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
-import { fastApi, withFastApi } from "@/lib/fastApiClient";
+
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
@@ -171,16 +171,10 @@ function ReleaseCard({ release, isLatest, isAdmin }: { release: Release; isLates
   const handleSendNotification = async () => {
     setSending(true);
     try {
-      const data = await withFastApi<{ gmail?: { sent?: number } }>(
-        async () => {
-          const { data, error } = await supabase.functions.invoke("send-release-emails", {
-            body: { releaseId: release.id },
-          });
-          if (error) throw error;
-          return data;
-        },
-        () => fastApi("POST", "/misc/send-release-emails", { releaseId: release.id }),
-      );
+      const { data, error } = await supabase.functions.invoke<{ gmail?: { sent?: number } }>("send-release-emails", {
+        body: { releaseId: release.id },
+      });
+      if (error) throw error;
       const gmail = data?.gmail;
       toast.success(`Notification sent to ${gmail?.sent ?? 0} users`);
     } catch (err: any) {

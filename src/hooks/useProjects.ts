@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { fastApi, withFastApi } from "@/lib/fastApiClient";
+
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
@@ -436,16 +436,10 @@ export function useProjectFiles(projectId: string | null) {
       // Auto-trigger indexing after upload
       try {
         setExtractingFiles(prev => new Set(prev).add(fileRecord.id));
-        const extractData = await withFastApi<{ chunks_created?: number; text_length?: number }>(
-          async () => {
-            const { data, error } = await supabase.functions.invoke("extract-file-text", {
-              body: { file_id: fileRecord.id },
-            });
-            if (error) throw error;
-            return data;
-          },
-          () => fastApi("POST", "/files/extract", { file_id: fileRecord.id }),
-        );
+        const { data: extractData, error: extractError } = await supabase.functions.invoke<{ chunks_created?: number; text_length?: number }>("extract-file-text", {
+          body: { file_id: fileRecord.id },
+        });
+        if (extractError) throw extractError;
         toast({ title: "File indexed", description: `${extractData?.chunks_created || 0} chunks created` });
         await fetchFiles();
       } catch (indexErr) {
@@ -475,16 +469,10 @@ export function useProjectFiles(projectId: string | null) {
   const extractText = useCallback(async (fileId: string) => {
     setExtractingFiles(prev => new Set(prev).add(fileId));
     try {
-      const data = await withFastApi<{ chunks_created?: number; text_length?: number }>(
-        async () => {
-          const { data, error } = await supabase.functions.invoke("extract-file-text", {
-            body: { file_id: fileId },
-          });
-          if (error) throw error;
-          return data;
-        },
-        () => fastApi("POST", "/files/extract", { file_id: fileId }),
-      );
+      const { data, error } = await supabase.functions.invoke<{ chunks_created?: number; text_length?: number }>("extract-file-text", {
+        body: { file_id: fileId },
+      });
+      if (error) throw error;
 
       await fetchFiles();
       toast({ title: "File indexed", description: `${data?.chunks_created || 0} chunks created (${data?.text_length} chars)` });
@@ -503,16 +491,10 @@ export function useProjectFiles(projectId: string | null) {
 
   const deleteFile = useCallback(async (fileId: string) => {
     try {
-      await withFastApi(
-        async () => {
-          const { error } = await supabase.functions.invoke("delete-project-file", {
-            body: { file_id: fileId },
-          });
-          if (error) throw error;
-          return null;
-        },
-        () => fastApi("POST", "/files/delete", { file_id: fileId }),
-      );
+      const { error } = await supabase.functions.invoke("delete-project-file", {
+        body: { file_id: fileId },
+      });
+      if (error) throw error;
       setFiles(prev => prev.filter(f => f.id !== fileId));
       toast({ title: "File deleted" });
       return true;

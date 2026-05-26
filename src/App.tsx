@@ -15,7 +15,7 @@ import Onboarding from "./pages/Onboarding";
 
 import Integrations from "./pages/Integrations";
 import Auth from "./pages/Auth";
-import Profile from "./pages/Profile";
+
 import ResetPassword from "./pages/ResetPassword";
 import Settings from "./pages/Settings";
 
@@ -70,7 +70,7 @@ const AppContent = () => {
           <Route element={<ProtectedShell />}>
             <Route path="/" element={<Index />} />
             <Route path="/integrations" element={<Integrations />} />
-            <Route path="/profile" element={<Profile />} />
+            <Route path="/profile" element={<Navigate to="/settings" replace />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/recruitment" element={<Recruitment />} />
             <Route path="/operations" element={<Operations />} />

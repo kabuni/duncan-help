@@ -37,9 +37,13 @@ export function useProfile() {
 
   const mutation = useMutation({
     mutationFn: async (updates: Partial<ProfileData>) => {
+      // Defensive: never allow the client to self-modify privileged fields.
+      // approval_status is admin-only and must be changed via AccountApprovals.
+      const { approval_status, requested_role_title, onboarding_step, onboarding_completed_at, ...safe } = updates as any;
+      void approval_status; void requested_role_title; void onboarding_step; void onboarding_completed_at;
       const { error } = await supabase
         .from("profiles")
-        .update(updates as any)
+        .update(safe as any)
         .eq("user_id", user!.id);
       if (error) throw error;
     },

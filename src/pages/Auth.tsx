@@ -210,11 +210,15 @@ const Auth = () => {
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
                     <input
+                      id="signup-display-name"
+                      name="displayName"
                       type="text"
+                      autoComplete="name"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                       placeholder="Your name"
                       required
+                      maxLength={100}
                       className="w-full rounded-lg border border-border bg-card pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary/40 focus:glow-primary-sm transition-all"
                     />
                   </div>
@@ -224,6 +228,8 @@ const Auth = () => {
                   <div className="relative">
                     <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
                     <select
+                      id="signup-department"
+                      name="department"
                       value={department}
                       onChange={(e) => setDepartment(e.target.value)}
                       required
@@ -241,6 +247,8 @@ const Auth = () => {
                   <div className="relative">
                     <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
                     <select
+                      id="signup-role"
+                      name="roleTitle"
                       value={roleTitle}
                       onChange={(e) => setRoleTitle(e.target.value)}
                       required
@@ -260,7 +268,10 @@ const Auth = () => {
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
                 <input
+                  id="auth-email"
+                  name="email"
                   type="email"
+                  autoComplete={isLogin ? "email" : "email"}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@company.com"
@@ -274,7 +285,10 @@ const Auth = () => {
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
                 <input
+                  id="auth-password"
+                  name="password"
                   type="password"
+                  autoComplete={isLogin ? "current-password" : "new-password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
@@ -340,7 +354,10 @@ const Auth = () => {
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
                     <input
+                      id="reset-email"
+                      name="resetEmail"
                       type="email"
+                      autoComplete="email"
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
                       placeholder="you@company.com"

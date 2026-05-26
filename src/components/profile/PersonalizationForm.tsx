@@ -67,12 +67,22 @@ export default function PersonalizationForm({
     setDirty(true);
   };
 
+  const stripHtml = (s: string) => s.replace(/<[^>]*>/g, "");
+
   const handleSave = () => {
-    if (!form.display_name?.trim()) {
+    const displayName = stripHtml(form.display_name ?? "").trim().slice(0, 100);
+    if (!displayName) {
       toast.error("Display name is required");
       return;
     }
-    updateProfile(form, {
+    const sanitized: Partial<ProfileData> = {
+      display_name: displayName,
+      role_title: form.role_title ?? null,
+      department: form.department ?? null,
+      bio: stripHtml(form.bio ?? "").slice(0, 1000),
+      norman_context: stripHtml(form.norman_context ?? "").slice(0, 2000),
+    };
+    updateProfile(sanitized, {
       onSuccess: () => {
         setDirty(false);
         onSaved?.();

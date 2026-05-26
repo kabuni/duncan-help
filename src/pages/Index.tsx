@@ -276,11 +276,22 @@ const Index = () => {
   }, [runBriefing]);
 
   useEffect(() => {
-    navigator.geolocation?.getCurrentPosition(
+    if (!navigator.geolocation) return;
+    if (localStorage.getItem("location_consent") !== "true") {
+      const consent = window.confirm("Duncan uses your approximate location for weather. Allow?");
+      if (!consent) {
+        localStorage.setItem("location_consent", "false");
+        return;
+      }
+      localStorage.setItem("location_consent", "true");
+    }
+    navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
-          const { latitude, longitude } = pos.coords;
-          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code`);
+          // Round to 2dp (~1km) to avoid sending precise location to 3rd party
+          const lat = Math.round(pos.coords.latitude * 100) / 100;
+          const lon = Math.round(pos.coords.longitude * 100) / 100;
+          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code`);
           const data = await res.json();
           const code = data.current.weather_code;
           const desc = code === 0 ? "Clear" : code <= 3 ? "Cloudy" : code <= 48 ? "Foggy" : code <= 67 ? "Rainy" : code <= 77 ? "Snowy" : code <= 82 ? "Showers" : code <= 99 ? "Stormy" : "Clear";

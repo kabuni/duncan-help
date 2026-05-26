@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, forwardRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthUser } from "@/lib/authStorage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -114,7 +115,7 @@ export function PlanningChecklist({
     const title = newTitle.trim();
     if (!title) return;
     setAdding(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = getAuthUser();
     if (!user) {
       toast.error("Not signed in");
       setAdding(false);

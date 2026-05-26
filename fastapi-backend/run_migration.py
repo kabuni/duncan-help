@@ -234,6 +234,193 @@ CREATE TABLE IF NOT EXISTS wiki_pages (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+<<<<<<< HEAD
+=======
+-- Xero integration
+CREATE TABLE IF NOT EXISTS xero_tokens (
+    id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    access_token  text        NOT NULL,
+    refresh_token text,
+    token_expiry  timestamptz,
+    tenant_id     text,
+    connected_by  uuid        REFERENCES users(id),
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    updated_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS xero_invoices (
+    id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    xero_invoice_id  text        NOT NULL UNIQUE,
+    data             jsonb,
+    synced_at        timestamptz,
+    created_at       timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS xero_contacts (
+    id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    xero_contact_id  text        NOT NULL UNIQUE,
+    data             jsonb,
+    synced_at        timestamptz,
+    created_at       timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS sync_logs (
+    id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    integration     text        NOT NULL,
+    records_synced  integer     NOT NULL DEFAULT 0,
+    error           text,
+    synced_at       timestamptz NOT NULL DEFAULT now()
+);
+
+-- Google Analytics
+CREATE TABLE IF NOT EXISTS google_analytics_tokens (
+    id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id       uuid        REFERENCES users(id) ON DELETE CASCADE,
+    access_token  text        NOT NULL,
+    refresh_token text,
+    token_expiry  timestamptz,
+    property_id   text,
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    updated_at    timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (user_id)
+);
+
+-- Google Calendar tokens (per-user, for personal calendar events)
+CREATE TABLE IF NOT EXISTS google_calendar_tokens (
+    id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id       uuid        NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    access_token  text        NOT NULL,
+    refresh_token text,
+    token_expiry  timestamptz,
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    updated_at    timestamptz NOT NULL DEFAULT now()
+);
+
+-- Duncan shared calendar
+CREATE TABLE IF NOT EXISTS duncan_calendar_tokens (
+    id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    access_token  text        NOT NULL,
+    refresh_token text,
+    token_expiry  timestamptz,
+    calendar_id   text,
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    updated_at    timestamptz NOT NULL DEFAULT now()
+);
+
+-- Key Events
+CREATE TABLE IF NOT EXISTS key_events (
+    id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    title       text        NOT NULL,
+    description text,
+    event_date  timestamptz,
+    location    text,
+    owner       text,
+    objective   text,
+    status      text        NOT NULL DEFAULT 'draft',
+    risk_level  text        NOT NULL DEFAULT 'low',
+    external_id text        UNIQUE,
+    created_by  uuid        REFERENCES users(id),
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS key_event_goals (
+    id          uuid    PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id    uuid    NOT NULL REFERENCES key_events(id) ON DELETE CASCADE,
+    goal_text   text    NOT NULL,
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS key_event_approvals (
+    id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id    uuid        NOT NULL REFERENCES key_events(id) ON DELETE CASCADE,
+    requested_by uuid       REFERENCES users(id),
+    approved_by  uuid       REFERENCES users(id),
+    status      text        NOT NULL DEFAULT 'pending',
+    notes       text,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS event_rsvps (
+    id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id    uuid        NOT NULL REFERENCES key_events(id) ON DELETE CASCADE,
+    email       text        NOT NULL,
+    name        text,
+    status      text        NOT NULL DEFAULT 'pending',
+    notes       text,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS event_rsvp_messages (
+    id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    rsvp_id     uuid        NOT NULL REFERENCES event_rsvps(id) ON DELETE CASCADE,
+    direction   text        NOT NULL DEFAULT 'inbound',
+    content     text,
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS key_event_sync_log (
+    id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    synced_count  integer     NOT NULL DEFAULT 0,
+    synced_at     timestamptz NOT NULL DEFAULT now()
+);
+
+-- Departments
+CREATE TABLE IF NOT EXISTS departments (
+    id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        text        NOT NULL UNIQUE,
+    head_user_id uuid       REFERENCES users(id),
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- Purchase Orders
+CREATE TABLE IF NOT EXISTS purchase_orders (
+    id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    title         text        NOT NULL,
+    description   text,
+    amount        numeric(12, 2),
+    currency      text        NOT NULL DEFAULT 'GBP',
+    supplier      text,
+    department_id uuid        REFERENCES departments(id),
+    due_date      timestamptz,
+    status        text        NOT NULL DEFAULT 'draft',
+    line_items    jsonb       NOT NULL DEFAULT '[]',
+    created_by    uuid        REFERENCES users(id),
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    updated_at    timestamptz NOT NULL DEFAULT now()
+);
+
+-- Slack connections (per-user OAuth)
+CREATE TABLE IF NOT EXISTS slack_connections (
+    id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id       uuid        NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    access_token  text        NOT NULL,
+    team_id       text,
+    team_name     text,
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    updated_at    timestamptz NOT NULL DEFAULT now()
+);
+
+-- Schema alignment: add missing columns to existing tables
+ALTER TABLE gmail_tokens ADD COLUMN IF NOT EXISTS email_address text;
+ALTER TABLE gmail_tokens ADD COLUMN IF NOT EXISTS token_expiry  timestamptz;
+ALTER TABLE gmail_tokens ADD COLUMN IF NOT EXISTS scope         text;
+ALTER TABLE company_integrations ADD COLUMN IF NOT EXISTS integration_id text;
+ALTER TABLE company_integrations ADD COLUMN IF NOT EXISTS status text DEFAULT 'disconnected';
+ALTER TABLE company_integrations ADD COLUMN IF NOT EXISTS api_key text;
+ALTER TABLE company_integrations ADD COLUMN IF NOT EXISTS last_sync timestamptz;
+ALTER TABLE releases ADD COLUMN IF NOT EXISTS title       text;
+ALTER TABLE releases ADD COLUMN IF NOT EXISTS summary     text;
+ALTER TABLE releases ADD COLUMN IF NOT EXISTS status      text DEFAULT 'draft';
+ALTER TABLE releases ADD COLUMN IF NOT EXISTS published_at timestamptz;
+ALTER TABLE releases ADD COLUMN IF NOT EXISTS published_by uuid REFERENCES users(id);
+ALTER TABLE candidates ADD COLUMN IF NOT EXISTS phone      text;
+ALTER TABLE candidates ADD COLUMN IF NOT EXISTS location   text;
+ALTER TABLE candidates ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES users(id);
+
+>>>>>>> 811253bb (UI Layer Integration)
 -- NDA submissions + vector search
 CREATE TABLE IF NOT EXISTS nda_submissions (
     id                    uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -282,7 +469,17 @@ BEGIN
         'releases','release_email_logs','social_stats_snapshots',
         'company_integrations','user_integrations','integration_audit_logs',
         'gmail_tokens','wiki_pages',
+<<<<<<< HEAD
         'nda_submissions','nda_chunks'
+=======
+        'nda_submissions','nda_chunks',
+        'xero_tokens','xero_invoices','xero_contacts','sync_logs',
+        'google_analytics_tokens','google_calendar_tokens',
+        'duncan_calendar_tokens',
+        'key_events','key_event_goals','key_event_approvals',
+        'event_rsvps','event_rsvp_messages','key_event_sync_log',
+        'departments','purchase_orders','slack_connections'
+>>>>>>> 811253bb (UI Layer Integration)
     ]) LOOP
         EXECUTE format('GRANT SELECT,INSERT,UPDATE,DELETE ON %I TO duncan_db', t);
     END LOOP;

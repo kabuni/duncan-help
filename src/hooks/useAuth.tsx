@@ -1,10 +1,17 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { createContext, useContext, useEffect, useState, ReactNode, useRef, useCallback } from "react";
+import {
+  getAuthSession,
+  setAuthSession,
+  clearAuthSession,
+  notifyAuthChange,
+  DuncanSession,
+  DuncanUser,
+} from "@/lib/authStorage";
+import { API_BASE_URL } from "@/lib/apiConfig";
 
 interface AuthContextType {
-  session: Session | null;
-  user: User | null;
+  session: DuncanSession | null;
+  user: DuncanUser | null;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -18,35 +25,115 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
+const REFRESH_BUFFER_MS = 5 * 60 * 1000;
+
+const FASTAPI_HEADERS = {
+  "Content-Type": "application/json",
+  "ngrok-skip-browser-warning": "1",
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<DuncanSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const refreshTimer = useRef<number | null>(null);
+  const refreshing = useRef(false);
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setLoading(false);
-        if (event === "SIGNED_OUT") {
-          sessionStorage.removeItem("duncan_briefing_done");
-        }
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+  const clearTimer = useCallback(() => {
+    if (refreshTimer.current !== null) {
+      window.clearTimeout(refreshTimer.current);
+      refreshTimer.current = null;
+    }
   }, []);
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-  };
+  const doSignOut = useCallback(async () => {
+    clearTimer();
+    const sess = getAuthSession();
+    if (sess?.access_token) {
+      try {
+        await fetch(`${API_BASE_URL}/auth/signout`, {
+          method: "POST",
+          headers: { ...FASTAPI_HEADERS, Authorization: `Bearer ${sess.access_token}` },
+        });
+      } catch {
+        // best effort
+      }
+    }
+    clearAuthSession();
+    sessionStorage.removeItem("duncan_briefing_done");
+    setSession(null);
+    notifyAuthChange(false);
+  }, [clearTimer]);
+
+  const doRefresh = useCallback(
+    async (refreshToken: string) => {
+      if (refreshing.current) return;
+      refreshing.current = true;
+      try {
+        const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+          method: "POST",
+          headers: FASTAPI_HEADERS,
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        if (!res.ok) {
+          await doSignOut();
+          return;
+        }
+        const data = await res.json();
+        const newSession: DuncanSession = {
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          expires_at: Math.floor(Date.now() / 1000) + (data.expires_in ?? 3600),
+          user: data.user,
+        };
+        setAuthSession(newSession);
+        setSession(newSession);
+        scheduleRefresh(newSession);
+      } catch {
+        // swallow network errors silently
+      } finally {
+        refreshing.current = false;
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [doSignOut],
+  );
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const scheduleRefresh = useCallback(
+    (sess: DuncanSession) => {
+      clearTimer();
+      if (!sess.expires_at) return;
+      const delay = sess.expires_at * 1000 - Date.now() - REFRESH_BUFFER_MS;
+      if (delay <= 0) {
+        doRefresh(sess.refresh_token);
+        return;
+      }
+      refreshTimer.current = window.setTimeout(() => doRefresh(sess.refresh_token), delay);
+    },
+    [clearTimer, doRefresh],
+  );
+
+  useEffect(() => {
+    const existing = getAuthSession();
+    if (existing) {
+      setSession(existing);
+      scheduleRefresh(existing);
+    }
+    setLoading(false);
+
+    const onAuthChange = (e: Event) => {
+      const { loggedIn } = (e as CustomEvent<{ loggedIn: boolean }>).detail;
+      if (!loggedIn) setSession(null);
+    };
+    window.addEventListener("duncan-auth-change", onAuthChange);
+    return () => {
+      window.removeEventListener("duncan-auth-change", onAuthChange);
+      clearTimer();
+    };
+  }, [scheduleRefresh, clearTimer]);
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signOut: doSignOut }}>
       {children}
     </AuthContext.Provider>
   );

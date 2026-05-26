@@ -162,11 +162,19 @@ async def generate_daily_briefing(
     current_user: dict = Depends(get_current_user),
     conn: asyncpg.Connection = Depends(get_connection),
 ):
+<<<<<<< HEAD
     today = datetime.now(timezone.utc).date().isoformat()
 
     try:
         existing = await conn.fetchrow(
             "SELECT * FROM ceo_briefings WHERE user_id = $1 AND date = $2::date",
+=======
+    today = datetime.now(timezone.utc).date()
+
+    try:
+        existing = await conn.fetchrow(
+            "SELECT * FROM ceo_briefings WHERE user_id = $1 AND date = $2",
+>>>>>>> 811253bb (UI Layer Integration)
             current_user["id"], today,
         )
         if existing and existing.get("shown"):
@@ -236,6 +244,7 @@ Recent activity:
 
 @router.post("/mark-briefing-shown")
 async def mark_briefing_shown(
+<<<<<<< HEAD
     body: dict,
     current_user: dict = Depends(get_current_user),
     conn: asyncpg.Connection = Depends(get_connection),
@@ -245,6 +254,16 @@ async def mark_briefing_shown(
         await conn.execute(
             "UPDATE ceo_briefings SET shown = TRUE WHERE id = $1 AND user_id = $2",
             briefing_id, current_user["id"],
+=======
+    current_user: dict = Depends(get_current_user),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    today = datetime.now(timezone.utc).date()
+    try:
+        await conn.execute(
+            "UPDATE ceo_briefings SET shown = TRUE WHERE user_id = $1 AND date = $2",
+            current_user["id"], today,
+>>>>>>> 811253bb (UI Layer Integration)
         )
     except Exception:
         pass
@@ -256,10 +275,17 @@ async def ceo_briefing_status(
     current_user: dict = Depends(get_current_user),
     conn: asyncpg.Connection = Depends(get_connection),
 ):
+<<<<<<< HEAD
     today = datetime.now(timezone.utc).date().isoformat()
     try:
         row = await conn.fetchrow(
             "SELECT id, shown FROM ceo_briefings WHERE user_id = $1 AND date = $2::date",
+=======
+    today = datetime.now(timezone.utc).date()
+    try:
+        row = await conn.fetchrow(
+            "SELECT id, shown FROM ceo_briefings WHERE user_id = $1 AND date = $2",
+>>>>>>> 811253bb (UI Layer Integration)
             current_user["id"], today,
         )
     except Exception:

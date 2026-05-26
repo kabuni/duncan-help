@@ -1,28 +1,31 @@
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { fastApi, withFastApi } from "@/lib/fastApiClient";
-import { useAuth } from "@/hooks/useAuth";
+import { fastApi } from "@/lib/fastApiClient";
+import { getAuthToken, getAuthUser } from "@/lib/authStorage";
 import { useToast } from "@/hooks/use-toast";
 
-const currentUserDisplayName = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return "You";
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  return profile?.display_name || user.email || "You";
+const currentUserDisplayName = (): string => {
+  const user = getAuthUser();
+  return (user as any)?.display_name || user?.email || "You";
 };
 
 export interface Project {
   id: string;
-  user_id: string;
+  user_id: string;          // alias for owner_user_id
+  owner_user_id: string;
   name: string;
+<<<<<<< HEAD
   system_prompt: string | null;
+=======
+  slug?: string;
+  description?: string | null;
+  system_prompt?: string | null; // alias for description
+  note_template?: string | null;
+  status?: string;
+  member_count?: number;
+  card_count?: number;
+>>>>>>> 811253bb (UI Layer Integration)
   created_at: string;
+  updated_at?: string;
 }
 
 export interface ProjectChat {
@@ -30,6 +33,7 @@ export interface ProjectChat {
   project_id: string;
   title: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface ChatMessage {
@@ -48,7 +52,9 @@ export interface ProjectFile {
   project_id: string;
   file_name: string;
   storage_path: string;
-  extracted_text: string | null;
+  size?: number;
+  mime_type?: string;
+  extracted_text?: string | null;
   created_at: string;
 }
 
@@ -57,65 +63,88 @@ export interface ProjectMember {
   display_name: string | null;
   role_title: string | null;
   avatar_url: string | null;
+  role?: string;
   isOwner: boolean;
 }
 
+function _mapProject(raw: any): Project {
+  return {
+    ...raw,
+    owner_user_id: raw.owner_user_id,
+    user_id: raw.owner_user_id,        // backward-compat alias
+    system_prompt: raw.description,    // backward-compat alias
+  };
+}
+
 export function useProjects() {
-  const { session } = useAuth();
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchProjects = useCallback(async () => {
-    if (!session) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from("projects")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) {
+    try {
+      const data = await fastApi<any[]>("GET", "/get-projects");
+      setProjects((data || []).map(_mapProject));
+    } catch (err: any) {
       toast({ title: "Error", description: "Failed to load projects", variant: "destructive" });
-    } else {
-      setProjects((data as any[]) || []);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [session, toast]);
+  }, [toast]);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
   const createProject = useCallback(async (name: string, systemPrompt?: string) => {
-    if (!session) return null;
-    const { data, error } = await supabase
-      .from("projects")
-      .insert({ user_id: session.user.id, name, system_prompt: systemPrompt || null })
-      .select()
-      .single();
-    if (error) {
-      toast({ title: "Error", description: "Failed to create project", variant: "destructive" });
+    try {
+      const data = await fastApi<any>("POST", "/create-project", {
+        name,
+        description: systemPrompt || null,
+      });
+      const project = _mapProject(data);
+      setProjects(prev => [project, ...prev]);
+      return project;
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Failed to create project", variant: "destructive" });
       return null;
     }
-    setProjects(prev => [data as any, ...prev]);
-    return data as Project;
-  }, [session, toast]);
+  }, [toast]);
 
+<<<<<<< HEAD
   const updateProject = useCallback(async (id: string, updates: { name?: string; system_prompt?: string | null }) => {
     const { error } = await supabase.from("projects").update(updates).eq("id", id);
     if (error) {
       toast({ title: "Error", description: "Failed to update project", variant: "destructive" });
+=======
+  const updateProject = useCallback(async (
+    id: string,
+    updates: { name?: string; system_prompt?: string | null; note_template?: string | null },
+  ) => {
+    try {
+      const data = await fastApi<any>("PUT", `/update-project/${id}`, {
+        name: updates.name,
+        description: updates.system_prompt,  // map system_prompt → description
+        note_template: updates.note_template,
+      });
+      const project = _mapProject(data);
+      setProjects(prev => prev.map(p => p.id === id ? project : p));
+      return true;
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Failed to update project", variant: "destructive" });
+>>>>>>> 811253bb (UI Layer Integration)
       return false;
     }
-    setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
-    return true;
   }, [toast]);
 
   const deleteProject = useCallback(async (id: string) => {
-    const { error } = await supabase.from("projects").delete().eq("id", id);
-    if (error) {
-      toast({ title: "Error", description: "Failed to delete project", variant: "destructive" });
+    try {
+      await fastApi("DELETE", `/delete-project/${id}`);
+      setProjects(prev => prev.filter(p => p.id !== id));
+      return true;
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Failed to delete project", variant: "destructive" });
       return false;
     }
-    setProjects(prev => prev.filter(p => p.id !== id));
-    return true;
   }, [toast]);
 
   return { projects, loading, fetchProjects, createProject, updateProject, deleteProject };
@@ -129,55 +158,51 @@ export function useProjectChats(projectId: string | null) {
   const fetchChats = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from("project_chats")
-      .select("*")
-      .eq("project_id", projectId)
-      .order("created_at", { ascending: false });
-    if (error) {
+    try {
+      const data = await fastApi<any[]>("GET", `/get-project-chats?project_id=${projectId}`);
+      setChats(data || []);
+    } catch (err: any) {
       toast({ title: "Error", description: "Failed to load chats", variant: "destructive" });
-    } else {
-      setChats((data as any[]) || []);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [projectId, toast]);
 
   useEffect(() => { fetchChats(); }, [fetchChats]);
 
   const createChat = useCallback(async (title?: string) => {
     if (!projectId) return null;
-    const { data, error } = await supabase
-      .from("project_chats")
-      .insert({ project_id: projectId, title: title || "New Chat" })
-      .select()
-      .single();
-    if (error) {
+    try {
+      const data = await fastApi<any>(
+        "POST",
+        `/create-project-chat?project_id=${projectId}`,
+        { title: title || "New Chat" },
+      );
+      setChats(prev => [data, ...prev]);
+      return data as ProjectChat;
+    } catch (err: any) {
       toast({ title: "Error", description: "Failed to create chat", variant: "destructive" });
       return null;
     }
-    setChats(prev => [data as any, ...prev]);
-    return data as ProjectChat;
   }, [projectId, toast]);
 
   const updateChatTitle = useCallback(async (chatId: string, title: string) => {
-    const { error } = await supabase
-      .from("project_chats")
-      .update({ title })
-      .eq("id", chatId);
-    if (!error) {
+    try {
+      await fastApi("PUT", `/update-chat/${chatId}`, { title });
       setChats(prev => prev.map(c => c.id === chatId ? { ...c, title } : c));
+    } catch {
+      // non-critical
     }
   }, []);
 
   const deleteChat = useCallback(async (chatId: string) => {
-    const { error } = await supabase
-      .from("project_chats")
-      .delete()
-      .eq("id", chatId);
-    if (!error) {
+    try {
+      await fastApi("DELETE", `/delete-chat/${chatId}`);
       setChats(prev => prev.filter(c => c.id !== chatId));
+      return true;
+    } catch {
+      return false;
     }
-    return !error;
   }, []);
 
   return { chats, loading, fetchChats, createChat, updateChatTitle, deleteChat };
@@ -189,53 +214,27 @@ export function useProjectChat(chatId: string | null) {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
 
-  const enrichMessages = useCallback(async (rows: any[]): Promise<ChatMessage[]> => {
-    const userIds = [...new Set(rows.map((message) => message.user_id).filter(Boolean))];
-    if (userIds.length === 0) return rows as ChatMessage[];
-
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("user_id, display_name, avatar_url")
-      .in("user_id", userIds);
-
-    const profileMap = new Map((profiles || []).map((profile: any) => [profile.user_id, profile]));
-    return rows.map((message) => {
-      const profile = message.user_id ? profileMap.get(message.user_id) : null;
-      return {
-        ...message,
-        sender_name: profile?.display_name || null,
-        sender_avatar_url: profile?.avatar_url || null,
-      };
-    }) as ChatMessage[];
-  }, []);
-
   const fetchAndSetMessages = useCallback(async (targetChatId: string) => {
-    const { data } = await supabase
-      .from("chat_messages")
-      .select("*")
-      .eq("chat_id", targetChatId)
-      .order("created_at", { ascending: true });
-
-    if (data) {
-      setMessages(await enrichMessages(data as any[]));
+    try {
+      const data = await fastApi<any[]>("GET", `/get-chat-messages?chat_id=${targetChatId}`);
+      setMessages((data || []) as ChatMessage[]);
+    } catch {
+      // non-critical refresh
     }
-  }, [enrichMessages]);
+  }, []);
 
   const fetchMessages = useCallback(async () => {
     if (!chatId) { setMessages([]); return; }
     setLoading(true);
-    const { data, error } = await supabase
-      .from("chat_messages")
-      .select("*")
-      .eq("chat_id", chatId)
-      .order("created_at", { ascending: true });
-    if (error) {
+    try {
+      const data = await fastApi<any[]>("GET", `/get-chat-messages?chat_id=${chatId}`);
+      setMessages((data || []) as ChatMessage[]);
+    } catch (err: any) {
       toast({ title: "Error", description: "Failed to load messages", variant: "destructive" });
-    } else {
-      setMessages(await enrichMessages((data as any[]) || []));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [chatId, enrichMessages, toast]);
+  }, [chatId, toast]);
 
   useEffect(() => { fetchMessages(); }, [fetchMessages]);
 
@@ -248,10 +247,9 @@ export function useProjectChat(chatId: string | null) {
     if (!targetChatId || (!message.trim() && attachments.length === 0)) return null;
     setSending(true);
 
-    const displayName = await currentUserDisplayName();
+    const displayName = currentUserDisplayName();
     const userText = message.trim() || "Analyze the attached file(s)";
 
-    // Optimistically add user message
     const tempUserMsg: ChatMessage = {
       id: `temp-user-${Date.now()}`,
       chat_id: targetChatId,
@@ -262,7 +260,6 @@ export function useProjectChat(chatId: string | null) {
       sender_name: displayName,
       sender_avatar_url: null,
     };
-    // Optimistic streaming assistant placeholder
     const tempAssistantId = `temp-assistant-${Date.now()}`;
     const tempAssistantMsg: ChatMessage = {
       id: tempAssistantId,
@@ -283,16 +280,12 @@ export function useProjectChat(chatId: string | null) {
     };
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
-      const url = `${supabaseUrl}/functions/v1/chat-with-project-context`;
+      const token = getAuthToken() || "";
+      const apiBase = import.meta.env.VITE_API_BASE_URL;
+      const extractUrl = `${apiBase}/files/extract`;
 
-      // Extract text from non-image attachments via shared edge function
-      const extractUrl = `${supabaseUrl}/functions/v1/extract-chat-file`;
       const enriched = await Promise.all(attachments.map(async (att) => {
-        if (att.type.startsWith("image/")) return att;
-        if (att.extractedText) return att;
+        if (att.type.startsWith("image/") || att.extractedText) return att;
         try {
           const resp = await fetch(extractUrl, {
             method: "POST",
@@ -309,7 +302,7 @@ export function useProjectChat(chatId: string | null) {
         return att;
       }));
 
-      const resp = await fetch(url, {
+      const resp = await fetch(`${apiBase}/chat-with-project-context`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -329,7 +322,6 @@ export function useProjectChat(chatId: string | null) {
         throw new Error(err.error || `Request failed (${resp.status})`);
       }
 
-      // Stream SSE chunks
       const contentType = resp.headers.get("content-type") || "";
       if (contentType.includes("text/event-stream") && resp.body) {
         const reader = resp.body.getReader();
@@ -356,17 +348,14 @@ export function useProjectChat(chatId: string | null) {
           }
         }
       } else {
-        // Fallback: legacy JSON response
         const data = await resp.json().catch(() => ({}));
         if (data?.reply) upsertAssistant(data.reply);
       }
 
-      // Refetch from DB to get real ids and persisted state
       await fetchAndSetMessages(targetChatId);
       return assistantSoFar || null;
     } catch (err: any) {
       toast({ title: "Error", description: err.message || "Failed to get response", variant: "destructive" });
-      // Remove optimistic messages on failure
       setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id && m.id !== tempAssistantId));
       return null;
     } finally {
@@ -387,17 +376,14 @@ export function useProjectFiles(projectId: string | null) {
   const fetchFiles = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from("project_files")
-      .select("*")
-      .eq("project_id", projectId)
-      .order("created_at", { ascending: false });
-    if (error) {
+    try {
+      const data = await fastApi<any[]>("GET", `/get-project-files/${projectId}`);
+      setFiles((data || []) as ProjectFile[]);
+    } catch (err: any) {
       toast({ title: "Error", description: "Failed to load files", variant: "destructive" });
-    } else {
-      setFiles((data as any[]) || []);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [projectId, toast]);
 
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
@@ -413,51 +399,22 @@ export function useProjectFiles(projectId: string | null) {
 
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-project-file`,
+        `${import.meta.env.VITE_API_BASE_URL}/upload-project-file`,
         {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          },
+          headers: { Authorization: `Bearer ${getAuthToken() || ""}` },
           body: formData,
         }
       );
 
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Upload failed");
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || "Upload failed");
       }
 
       const fileRecord = await response.json();
-      setFiles(prev => [fileRecord, ...prev]);
-      toast({ title: "File uploaded", description: `${file.name} — indexing...` });
-
-      // Auto-trigger indexing after upload
-      try {
-        setExtractingFiles(prev => new Set(prev).add(fileRecord.id));
-        const extractData = await withFastApi<{ chunks_created?: number; text_length?: number }>(
-          async () => {
-            const { data, error } = await supabase.functions.invoke("extract-file-text", {
-              body: { file_id: fileRecord.id },
-            });
-            if (error) throw error;
-            return data;
-          },
-          () => fastApi("POST", "/files/extract", { file_id: fileRecord.id }),
-        );
-        toast({ title: "File indexed", description: `${extractData?.chunks_created || 0} chunks created` });
-        await fetchFiles();
-      } catch (indexErr) {
-        console.error("Auto-index error:", indexErr);
-        toast({ title: "Indexing failed", description: "You can retry from the Files panel.", variant: "destructive" });
-      } finally {
-        setExtractingFiles(prev => {
-          const next = new Set(prev);
-          next.delete(fileRecord.id);
-          return next;
-        });
-      }
-
+      await fetchFiles();
+      toast({ title: "File uploaded", description: `${file.name} — indexed automatically` });
       return fileRecord as ProjectFile;
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
@@ -469,24 +426,16 @@ export function useProjectFiles(projectId: string | null) {
         return next;
       });
     }
-  }, [projectId, toast]);
+  }, [projectId, fetchFiles, toast]);
 
   const extractText = useCallback(async (fileId: string) => {
     setExtractingFiles(prev => new Set(prev).add(fileId));
     try {
-      const data = await withFastApi<{ chunks_created?: number; text_length?: number }>(
-        async () => {
-          const { data, error } = await supabase.functions.invoke("extract-file-text", {
-            body: { file_id: fileId },
-          });
-          if (error) throw error;
-          return data;
-        },
-        () => fastApi("POST", "/files/extract", { file_id: fileId }),
+      const data = await fastApi<{ chunks_created?: number; text_length?: number }>(
+        "POST", "/files/extract", { file_id: fileId },
       );
-
       await fetchFiles();
-      toast({ title: "File indexed", description: `${data?.chunks_created || 0} chunks created (${data?.text_length} chars)` });
+      toast({ title: "File indexed", description: `${data?.chunks_created || 0} chunks created` });
       return true;
     } catch (err: any) {
       toast({ title: "Extraction failed", description: err.message, variant: "destructive" });
@@ -498,20 +447,11 @@ export function useProjectFiles(projectId: string | null) {
         return next;
       });
     }
-  }, [toast, fetchFiles]);
+  }, [fetchFiles, toast]);
 
   const deleteFile = useCallback(async (fileId: string) => {
     try {
-      await withFastApi(
-        async () => {
-          const { error } = await supabase.functions.invoke("delete-project-file", {
-            body: { file_id: fileId },
-          });
-          if (error) throw error;
-          return null;
-        },
-        () => fastApi("POST", "/files/delete", { file_id: fileId }),
-      );
+      await fastApi("DELETE", `/delete-project-file/${fileId}`);
       setFiles(prev => prev.filter(f => f.id !== fileId));
       toast({ title: "File deleted" });
       return true;
@@ -529,142 +469,65 @@ export function useProjectFiles(projectId: string | null) {
 }
 
 export function useProjectMembers(projectId: string | null) {
-  const { session } = useAuth();
   const { toast } = useToast();
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchMembers = useCallback(async () => {
-    if (!projectId || !session) {
-      setMembers([]);
-      return;
-    }
-
+    if (!projectId) { setMembers([]); return; }
     setLoading(true);
-
-    const { data: project, error: projectError } = await supabase
-      .from("projects")
-      .select("user_id")
-      .eq("id", projectId)
-      .single();
-
-    if (projectError || !project) {
-      setLoading(false);
+    try {
+      const data = await fastApi<ProjectMember[]>("GET", `/get-project-members/${projectId}`);
+      setMembers(data || []);
+    } catch (err: any) {
       toast({ title: "Error", description: "Failed to load project members", variant: "destructive" });
-      return;
-    }
-
-    const { data: memberRows, error: memberError } = await supabase
-      .from("project_members")
-      .select("user_id")
-      .eq("project_id", projectId);
-
-    if (memberError) {
+    } finally {
       setLoading(false);
-      toast({ title: "Error", description: "Failed to load project members", variant: "destructive" });
-      return;
     }
+  }, [projectId, toast]);
 
-    const userIds = Array.from(new Set([project.user_id, ...(memberRows || []).map((row: any) => row.user_id)]));
-
-    const { data: profiles, error: profilesError } = await supabase
-      .from("profiles")
-      .select("user_id, display_name, role_title, avatar_url")
-      .in("user_id", userIds);
-
-    if (profilesError) {
-      setLoading(false);
-      toast({ title: "Error", description: "Failed to load member details", variant: "destructive" });
-      return;
-    }
-
-    const profileMap = new Map((profiles || []).map((profile: any) => [profile.user_id, profile]));
-
-    const ownerProfile = profileMap.get(project.user_id);
-    const collaboratorMembers = (memberRows || []).map((row: any) => {
-      const profile = profileMap.get(row.user_id);
-      return {
-        user_id: row.user_id,
-        display_name: profile?.display_name ?? null,
-        role_title: profile?.role_title ?? null,
-        avatar_url: profile?.avatar_url ?? null,
-        isOwner: false,
-      } satisfies ProjectMember;
-    });
-
-    setMembers([
-      {
-        user_id: project.user_id,
-        display_name: ownerProfile?.display_name ?? null,
-        role_title: ownerProfile?.role_title ?? null,
-        avatar_url: ownerProfile?.avatar_url ?? null,
-        isOwner: true,
-      },
-      ...collaboratorMembers,
-    ]);
-    setLoading(false);
-  }, [projectId, session, toast]);
-
-  useEffect(() => {
-    fetchMembers();
-  }, [fetchMembers]);
+  useEffect(() => { fetchMembers(); }, [fetchMembers]);
 
   const addMember = useCallback(async (userId: string) => {
-    if (!projectId || !session || !userId) return false;
-
-    const { error } = await supabase.from("project_members").insert({
-      project_id: projectId,
-      user_id: userId,
-      added_by: session.user.id,
-    } as any);
-
-    if (error) {
-      const isDuplicate = error.code === "23505";
+    if (!projectId || !userId) return false;
+    try {
+      await fastApi("POST", `/add-project-member?project_id=${projectId}`, {
+        user_id: userId,
+        role: "member",
+      });
+      try {
+        await fastApi("POST", "/project-member-added-email", {
+          project_id: projectId,
+          user_id: userId,
+        });
+      } catch {
+        // email notification is non-critical
+      }
+      await fetchMembers();
+      toast({ title: "Member added", description: "Project access has been shared." });
+      return true;
+    } catch (err: any) {
+      const isDuplicate = err.message?.includes("409") || err.message?.includes("already");
       toast({
         title: isDuplicate ? "Already a member" : "Error",
-        description: isDuplicate ? "This user already has access to the project." : "Failed to add member",
+        description: isDuplicate ? "This user already has access to the project." : (err.message || "Failed to add member"),
         variant: isDuplicate ? "default" : "destructive",
       });
       return false;
     }
-
-    try {
-      const { error: emailError } = await supabase.functions.invoke("project-member-added-email", {
-        body: {
-          projectId,
-          collaboratorUserId: userId,
-        },
-      });
-
-      if (emailError) {
-        console.error("Collaborator notification email failed:", emailError.message);
-      }
-    } catch (emailErr) {
-      console.error("Collaborator notification email failed:", emailErr);
-    }
-
-    await fetchMembers();
-    toast({ title: "Member added", description: "Project access has been shared." });
-    return true;
-  }, [fetchMembers, projectId, session, toast]);
+  }, [fetchMembers, projectId, toast]);
 
   const removeMember = useCallback(async (userId: string) => {
     if (!projectId || !userId) return false;
-
-    const { error } = await supabase
-      .from("project_members")
-      .delete()
-      .eq("project_id", projectId)
-      .eq("user_id", userId);
-
-    if (error) {
-      toast({ title: "Error", description: "Failed to remove member", variant: "destructive" });
+    try {
+      await fastApi("DELETE", `/remove-project-member/${projectId}/${userId}`);
+      await fetchMembers();
+      toast({ title: "Member removed", description: "Project access has been removed." });
+      return true;
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Failed to remove member", variant: "destructive" });
       return false;
     }
-
-    await fetchMembers();
-    toast({ title: "Member removed", description: "Project access has been removed." });
-    return true;
   }, [fetchMembers, projectId, toast]);
 
   return { members, loading, addMember, removeMember, refetchMembers: fetchMembers };

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getAuthUser } from "@/lib/authStorage";
 
 export interface GeneralChat {
   id: string;
@@ -38,7 +37,7 @@ export function useGeneralChats() {
 
   // Create a new chat (lazily — only when first message is sent)
   const createChat = useCallback(async (title: string): Promise<string | null> => {
-    const user = getAuthUser();
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
     const { data, error } = await supabase

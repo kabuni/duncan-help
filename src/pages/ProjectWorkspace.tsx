@@ -8,7 +8,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Sidebar, { MobileMenuButton } from "@/components/Sidebar";
 import { supabase } from "@/integrations/supabase/client";
-import { getAuthUser } from "@/lib/authStorage";
 import { useProjects, useProjectChats, useProjectChat, useProjectFiles, useProjectMembers } from "@/hooks/useProjects";
 import { useUserProfiles } from "@/hooks/useWorkstreams";
 import { useProfile } from "@/hooks/useProfile";
@@ -36,7 +35,7 @@ function hasChecklist(text: string): boolean {
 }
 
 async function captureChecklistToPlan(text: string, chatId: string, projectId: string) {
-  const user = getAuthUser();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     toast.error("Not signed in");
     return;

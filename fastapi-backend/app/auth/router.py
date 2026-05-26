@@ -55,32 +55,19 @@ async def _get_profile(conn: asyncpg.Connection, user_id) -> dict | None:
 
 @router.post("/signup", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def signup(body: SignUpRequest, conn: asyncpg.Connection = Depends(get_connection)):
-<<<<<<< HEAD
     if not auth_service.is_allowed_domain(body.email):
-=======
-    email = body.email.strip().lower()
-    if not auth_service.is_allowed_domain(email):
->>>>>>> 811253bb (UI Layer Integration)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Only @{settings.ALLOWED_EMAIL_DOMAINS} email addresses are allowed",
         )
 
-<<<<<<< HEAD
     existing = await auth_service.get_user_by_email(conn, body.email)
-=======
-    existing = await auth_service.get_user_by_email(conn, email)
->>>>>>> 811253bb (UI Layer Integration)
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
     hashed = auth_service.hash_password(body.password)
     user = await auth_service.create_user(
-<<<<<<< HEAD
         conn, body.email, hashed, body.display_name, body.role_title, body.department
-=======
-        conn, email, hashed, body.display_name, body.role_title, body.department
->>>>>>> 811253bb (UI Layer Integration)
     )
 
     return {
@@ -92,12 +79,7 @@ async def signup(body: SignUpRequest, conn: asyncpg.Connection = Depends(get_con
 
 @router.post("/signin", response_model=TokenResponse)
 async def signin(body: SignInRequest, conn: asyncpg.Connection = Depends(get_connection)):
-<<<<<<< HEAD
     user = await auth_service.get_user_by_email(conn, body.email)
-=======
-    email = body.email.strip().lower()
-    user = await auth_service.get_user_by_email(conn, email)
->>>>>>> 811253bb (UI Layer Integration)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
@@ -167,11 +149,7 @@ async def request_password_reset(
     body: PasswordResetRequest,
     conn: asyncpg.Connection = Depends(get_connection),
 ):
-<<<<<<< HEAD
     user = await auth_service.get_user_by_email(conn, body.email)
-=======
-    user = await auth_service.get_user_by_email(conn, body.email.strip().lower())
->>>>>>> 811253bb (UI Layer Integration)
     if user:
         token = secrets.token_urlsafe(32)
         await auth_service.store_password_reset_token(conn, str(user["id"]), token)
@@ -297,52 +275,6 @@ async def google_callback(
     )
 
 
-<<<<<<< HEAD
-=======
-# ── Bootstrap (first admin setup — disable BOOTSTRAP_SECRET after use) ────────
-
-@router.post("/bootstrap-admin")
-async def bootstrap_admin(
-    body: dict,
-    conn: asyncpg.Connection = Depends(get_connection),
-):
-    """
-    One-time endpoint to approve a user and grant them admin role.
-    Requires the BOOTSTRAP_SECRET set in .env.
-    Clear BOOTSTRAP_SECRET after the first admin is set up.
-    """
-    secret = settings.BOOTSTRAP_SECRET
-    if not secret:
-        raise HTTPException(status_code=404, detail="Not found")
-
-    if body.get("secret") != secret:
-        raise HTTPException(status_code=403, detail="Invalid bootstrap secret")
-
-    email = (body.get("email") or "").strip().lower()
-    if not email:
-        raise HTTPException(status_code=400, detail="email is required")
-
-    user = await auth_service.get_user_by_email(conn, email)
-    if not user:
-        raise HTTPException(status_code=404, detail=f"No user found with email {email}")
-
-    user_id = str(user["id"])
-    await auth_service.approve_user(conn, user_id)
-
-    # Grant admin role
-    await conn.execute(
-        """
-        INSERT INTO user_roles (id, user_id, role)
-        VALUES (gen_random_uuid(), $1, 'admin')
-        ON CONFLICT DO NOTHING
-        """,
-        user_id,
-    )
-
-    return {"message": f"{email} is now an active admin. Remove BOOTSTRAP_SECRET from .env."}
-
-
->>>>>>> 811253bb (UI Layer Integration)
 # ── Admin endpoints ────────────────────────────────────────────────────────────
 
 @router.get("/admin/pending-users")

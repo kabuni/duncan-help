@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useProfile } from "@/hooks/useProfile";
-import { getAuthToken } from "@/lib/authStorage";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 type Message = { role: "user" | "assistant"; content: string };
@@ -257,7 +257,8 @@ export function useNormanChat() {
 
       let controller: TaggedController | null = null;
       try {
-        const token = getAuthToken() || "";
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         controller = new AbortController() as TaggedController;
         inflightControllerRef.current = controller;
         const timeoutId = window.setTimeout(() => {
@@ -284,15 +285,13 @@ export function useNormanChat() {
           { role: "user", content: userContent },
         ];
 
-        const chatEndpoint = FASTAPI_CHAT_URL || CHAT_URL;
         const fetchChat = async (): Promise<Response> => {
           console.info(`[Duncan] chat request started mode=${mode} messages=${apiMessages.length}`);
-          return await fetch(chatEndpoint, {
+          return await fetch(CHAT_URL, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
-              "ngrok-skip-browser-warning": "1",
             },
             body: JSON.stringify({ messages: apiMessages, mode, userProfile: profile ?? undefined }),
             signal: controller!.signal,
@@ -300,6 +299,23 @@ export function useNormanChat() {
         };
 
         try {
+          if (FASTAPI_CHAT_URL) {
+            fetch(FASTAPI_CHAT_URL, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+                "ngrok-skip-browser-warning": "true",
+              },
+              body: JSON.stringify({
+                messages: apiMessages,
+                mode,
+                userProfile: profile ?? undefined,
+                stream: false,
+              }),
+            }).catch(() => {});
+          }
+
           let resp = await fetchChat();
           if (resp.status === 429) {
             await new Promise((r) => setTimeout(r, 1500));
@@ -365,7 +381,8 @@ export function useNormanChat() {
 
       try {
         console.info("[Duncan] briefing: fetch start");
-        const token = getAuthToken() || "";
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const controller = new AbortController();
         const timeoutId = window.setTimeout(() => controller.abort(), HEAVY_TIMEOUT_MS);
 
@@ -373,12 +390,11 @@ export function useNormanChat() {
         const apiMessages = [{ role: "user", content: briefingPrompt }];
 
         try {
-          const resp = await fetch(FASTAPI_CHAT_URL || CHAT_URL, {
+          const resp = await fetch(CHAT_URL, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
-              "ngrok-skip-browser-warning": "1",
             },
             body: JSON.stringify({ messages: apiMessages, mode: "briefing", userProfile: profile ?? undefined }),
             signal: controller.signal,

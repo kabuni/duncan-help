@@ -2,12 +2,10 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Loader2, Mail, Lock, User, ArrowRight, Building2, Briefcase } from "lucide-react";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
+import { supabase } from "@/integrations/supabase/client";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { API_BASE_URL } from "@/lib/apiConfig";
-import { setAuthSession, notifyAuthChange } from "@/lib/authStorage";
-import { supabase } from "@/integrations/supabase/client";
 
 const ROLE_TITLES = [
   "Developer",
@@ -28,24 +26,6 @@ const ROLE_TITLES = [
   "Other",
 ];
 
-const FASTAPI_HEADERS = {
-  "Content-Type": "application/json",
-  "ngrok-skip-browser-warning": "1",
-};
-
-async function fastApiPost(path: string, body: unknown) {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    method: "POST",
-    headers: FASTAPI_HEADERS,
-    body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.detail || data?.error || `Request failed (${res.status})`);
-  }
-  return data;
-}
-
 const Auth = () => {
   const { session, loading } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
@@ -61,18 +41,28 @@ const Auth = () => {
   const [resetEmail, setResetEmail] = useState("");
 
   useEffect(() => {
-    // Fetch departments from Supabase DB (anon key, read-only)
     supabase.from("departments").select("id, name").order("name").then(({ data }) => {
       if (data) setDepartments(data);
     });
   }, []);
 
-  const getErrorMessage = (error: unknown) => {
+  const getAuthErrorMessage = (error: unknown) => {
     const message = error instanceof Error ? error.message : String((error as any)?.message ?? error ?? "");
     if (message.toLowerCase().includes("failed to fetch")) {
-      return "Can't reach authentication service. Check your network connection.";
+      return "Can't reach authentication service from this browser. Check VPN/firewall/ad-blockers or try another network.";
     }
     return message || "Authentication failed";
+  };
+
+  const withRetry = async <T,>(request: () => Promise<T>, retries = 1): Promise<T> => {
+    try {
+      return await request();
+    } catch (error) {
+      if (retries > 0 && String((error as any)?.message ?? error).toLowerCase().includes("failed to fetch")) {
+        return withRetry(request, retries - 1);
+      }
+      throw error;
+    }
   };
 
   if (loading) {
@@ -92,33 +82,35 @@ const Auth = () => {
     setSubmitting(true);
 
     try {
+      const { error } = isLogin
+        ? await withRetry(() => supabase.auth.signInWithPassword({ email, password }))
+        : await withRetry(() =>
+            supabase.auth.signUp({
+              email,
+              password,
+              options: {
+                data: {
+                  display_name: displayName,
+                  department: department,
+                  role_title: roleTitle,
+                },
+                emailRedirectTo: window.location.origin,
+              },
+            })
+          );
+
+      if (error) throw error;
+
       if (isLogin) {
-        const data = await fastApiPost("/auth/signin", { email, password });
-        const sess = {
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-          expires_at: Math.floor(Date.now() / 1000) + (data.expires_in ?? 3600),
-          user: data.user,
-        };
-        setAuthSession(sess);
-        notifyAuthChange(true);
-        // Reload page so AuthProvider picks up the new session
-        window.location.href = "/";
+        toast.success("Welcome back to Duncan");
       } else {
-        await fastApiPost("/auth/signup", {
-          email,
-          password,
-          display_name: displayName,
-          role_title: roleTitle,
-          department,
-        });
         setShowSignupSuccess(true);
         setIsLogin(true);
         setPassword("");
       }
     } catch (error: unknown) {
-      console.error("Auth submit failed", error);
-      toast.error(getErrorMessage(error));
+      console.error("Auth submit failed", { error, online: navigator.onLine, origin: window.location.origin });
+      toast.error(getAuthErrorMessage(error));
     } finally {
       setSubmitting(false);
     }
@@ -128,12 +120,17 @@ const Auth = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await fastApiPost("/auth/password-reset/request", { email: resetEmail });
-      toast.success("If that email exists, a reset link has been sent");
+      const { error } = await withRetry(() =>
+        supabase.auth.resetPasswordForEmail(resetEmail, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        })
+      );
+      if (error) throw error;
+      toast.success("Check your email for a password reset link");
       setShowForgotPassword(false);
     } catch (error: unknown) {
-      console.error("Password reset request failed", error);
-      toast.error(getErrorMessage(error));
+      console.error("Password reset request failed", { error, online: navigator.onLine, origin: window.location.origin });
+      toast.error(getAuthErrorMessage(error));
     } finally {
       setSubmitting(false);
     }
@@ -385,12 +382,12 @@ const Auth = () => {
                 className="w-full max-w-sm mx-4 rounded-xl border border-border bg-card p-6 shadow-lg"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h3 className="text-lg font-bold text-foreground mb-2">Account created</h3>
+                <h3 className="text-lg font-bold text-foreground mb-2">Check your email</h3>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Your account has been created for <span className="font-medium text-foreground">{email}</span>.
+                  We sent a verification link to <span className="font-medium text-foreground">{email}</span>.
                 </p>
                 <p className="text-sm text-muted-foreground mb-5">
-                  An admin needs to approve your account before you can access Duncan.
+                  Verify your email first, then wait for an admin to approve your profile before you can access Duncan.
                 </p>
                 <button
                   type="button"

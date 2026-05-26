@@ -1,8 +1,7 @@
 import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { fastApi } from "@/lib/fastApiClient";
-import { getAuthUser } from "@/lib/authStorage";
+import { fastApi, withFastApi } from "@/lib/fastApiClient";
 import { toast } from "sonner";
 
 export interface GmailEmail {
@@ -32,7 +31,18 @@ export interface GmailStatus {
 }
 
 async function gmailApi(action: string, body: Record<string, any> = {}) {
-  return fastApi("POST", "/gmail/api", { action, ...body });
+  const data = await withFastApi(
+    async () => {
+      const { data, error } = await supabase.functions.invoke("gmail-api", {
+        body: { action, ...body },
+      });
+      if (error) throw new Error(error.message || "Gmail API error");
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    () => fastApi("POST", "/gmail/api", { action, ...body }),
+  );
+  return data;
 }
 
 export function useGmailStatus() {
@@ -49,7 +59,14 @@ export function useGmailConnect() {
   const connect = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fastApi<{ url?: string }>("GET", "/gmail/auth");
+      const data = await withFastApi<{ url?: string }>(
+        async () => {
+          const { data, error } = await supabase.functions.invoke("gmail-auth");
+          if (error) throw error;
+          return data;
+        },
+        () => fastApi("GET", "/gmail/auth"),
+      );
       if (data?.url) window.location.href = data.url;
       else throw new Error("No auth URL returned");
     } catch (err: any) {
@@ -160,47 +177,13 @@ export interface GmailWritingProfile {
   auto_drafts_created_today: number;
   auto_drafts_counter_date: string;
   ceo_briefing_optin: boolean;
-<<<<<<< HEAD
-=======
-  auto_draft_filter_mode: "blacklist" | "whitelist";
-  auto_draft_filter_list: string[];
-}
-
-export function useGmailAutoDraftFilterUpdate() {
-  const qc = useQueryClient();
-  return useMutation<void, Error, { mode: "blacklist" | "whitelist"; list: string[] }>({
-    mutationFn: async ({ mode, list }) => {
-      const user = getAuthUser();
-      if (!user) throw new Error("Not signed in");
-      const cleaned = Array.from(
-        new Set(
-          list
-            .map((s) => s.trim().toLowerCase())
-            .filter((s) => s.length > 0 && s.length < 200),
-        ),
-      );
-      const { error } = await supabase
-        .from("gmail_writing_profiles")
-        .upsert(
-          { user_id: user.id, auto_draft_filter_mode: mode, auto_draft_filter_list: cleaned } as any,
-          { onConflict: "user_id" },
-        );
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["gmail-writing-profile"] });
-      toast.success("Auto-draft filter saved");
-    },
-    onError: (err) => toast.error(err.message || "Failed to save filter"),
-  });
->>>>>>> 811253bb (UI Layer Integration)
 }
 
 export function useGmailCEOBriefingOptinToggle() {
   const qc = useQueryClient();
   return useMutation<{ enabled: boolean }, Error, boolean>({
     mutationFn: async (enabled: boolean) => {
-      const user = getAuthUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
       // Upsert so users without an existing profile can still opt in
       const { error } = await supabase
@@ -243,7 +226,12 @@ export function useGmailTrainStyle() {
   const qc = useQueryClient();
   return useMutation<any, Error, number | undefined>({
     mutationFn: async (maxResults?: number) => {
-      return fastApi("POST", "/gmail/train-style", { max_results: maxResults ?? 300 });
+      const { data, error } = await supabase.functions.invoke("gmail-train-style", {
+        body: { maxResults: maxResults ?? 300 },
+      });
+      if (error) throw new Error(error.message || "Training failed");
+      if (data?.error) throw new Error(data.error);
+      return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["gmail-writing-profile"] });
@@ -271,7 +259,7 @@ export function useGmailAutoDraftToggle() {
   const qc = useQueryClient();
   return useMutation<any, Error, boolean>({
     mutationFn: async (enabled: boolean) => {
-      const user = getAuthUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
 
       if (enabled) {

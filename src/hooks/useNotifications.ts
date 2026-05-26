@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getAuthUser } from "@/lib/authStorage";
 
 export interface NotificationRow {
   id: string;
@@ -20,7 +19,8 @@ export function useNotifications() {
   const [userId, setUserId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const uid = getAuthUser()?.id || null;
+    const { data: u } = await supabase.auth.getUser();
+    const uid = u.user?.id || null;
     setUserId(uid);
     if (!uid) {
       setItems([]);

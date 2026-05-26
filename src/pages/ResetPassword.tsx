@@ -2,14 +2,9 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Loader2, Lock, ArrowRight, CheckCircle } from "lucide-react";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
+import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { API_BASE_URL } from "@/lib/apiConfig";
-
-const FASTAPI_HEADERS = {
-  "Content-Type": "application/json",
-  "ngrok-skip-browser-warning": "1",
-};
 
 const ResetPassword = () => {
   const navigate = useNavigate();
@@ -17,13 +12,21 @@ const ResetPassword = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
+  const [isRecovery, setIsRecovery] = useState(false);
 
   useEffect(() => {
-    // FastAPI sends reset link as ?token=...
-    const params = new URLSearchParams(window.location.search);
-    const t = params.get("token");
-    if (t) setToken(t);
+    const hash = window.location.hash;
+    if (hash.includes("type=recovery")) {
+      setIsRecovery(true);
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setIsRecovery(true);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,25 +39,14 @@ const ResetPassword = () => {
       toast.error("Password must be at least 6 characters");
       return;
     }
-    if (!token) {
-      toast.error("Invalid or missing reset token");
-      return;
-    }
 
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/password-reset/confirm`, {
-        method: "POST",
-        headers: FASTAPI_HEADERS,
-        body: JSON.stringify({ token, new_password: password }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.detail || data?.error || "Failed to update password");
-      }
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
       setSuccess(true);
       toast.success("Password updated successfully");
-      setTimeout(() => navigate("/auth"), 2000);
+      setTimeout(() => navigate("/"), 2000);
     } catch (error: any) {
       toast.error(error.message || "Failed to update password");
     } finally {
@@ -62,7 +54,7 @@ const ResetPassword = () => {
     }
   };
 
-  if (!token) {
+  if (!isRecovery) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="text-center">
@@ -96,7 +88,7 @@ const ResetPassword = () => {
           <div className="text-center py-8">
             <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
             <h2 className="text-xl font-bold text-foreground mb-2">Password updated</h2>
-            <p className="text-sm text-muted-foreground">Redirecting you to sign in…</p>
+            <p className="text-sm text-muted-foreground">Redirecting you now…</p>
           </div>
         ) : (
           <>

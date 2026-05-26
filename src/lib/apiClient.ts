@@ -1,5 +1,10 @@
-import { getAuthToken } from "@/lib/authStorage";
+import { supabase } from "@/integrations/supabase/client";
 import { API_BASE_URL, apiHeaders, hasExternalApiBase } from "@/lib/apiConfig";
+
+async function getToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
 
 export interface ApiResponse<T = unknown> {
   data: T;
@@ -19,8 +24,8 @@ class ApiClient {
     }
   }
 
-  private headers(): Record<string, string> {
-    const token = getAuthToken();
+  private async headers(): Promise<Record<string, string>> {
+    const token = await getToken();
     return apiHeaders(token);
   }
 
@@ -29,7 +34,7 @@ class ApiClient {
 
     const res = await fetch(`${this.base}${path}`, {
       method,
-      headers: this.headers(),
+      headers: await this.headers(),
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
 
@@ -63,7 +68,7 @@ class ApiClient {
 
     const res = await fetch(`${this.base}${path}`, {
       method: "POST",
-      headers: this.headers(),
+      headers: await this.headers(),
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     if (!res.ok) {

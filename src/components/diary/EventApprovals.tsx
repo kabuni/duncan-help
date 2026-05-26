@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getAuthUser } from "@/lib/authStorage";
-import { fastApi } from "@/lib/fastApiClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -64,7 +62,9 @@ interface ProfileLite {
 
 async function notify(approvalId: string, kind: "requested" | "decided" | "proposed" | "counter_resolved") {
   try {
-    await fastApi("POST", "/notify-event-approval", { approval_id: approvalId, kind });
+    await supabase.functions.invoke("notify-event-approval", {
+      body: { approval_id: approvalId, kind },
+    });
   } catch (err) {
     // notifications are best-effort
     console.warn("notify-event-approval failed:", err);
@@ -89,11 +89,12 @@ export function EventApprovals({ eventId }: { eventId: string }) {
   const [suggestNote, setSuggestNote] = useState<string>("");
 
   async function load() {
-    const [{ data: r }, { data: p }] = await Promise.all([
+    const [{ data: u }, { data: r }, { data: p }] = await Promise.all([
+      supabase.auth.getUser(),
       supabase.from("key_event_approvals" as any).select("*").eq("event_id", eventId).order("created_at"),
       supabase.from("profiles").select("id, user_id, display_name").eq("approval_status", "approved"),
     ]);
-    const uid = getAuthUser()?.id || null;
+    const uid = u.user?.id || null;
     setCurrentUserId(uid);
     const profileList = (p as any[]) || [];
     setProfiles(profileList);

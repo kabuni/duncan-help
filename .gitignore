@@ -24,5 +24,3 @@ dist-ssr
 *.sw?
 fastapi-backend/.env
 fastapi-backend/duncan/
-__pycache__/
-*.pyc

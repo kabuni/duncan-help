@@ -26,7 +26,6 @@ import { EventAttachments } from "./EventAttachments";
 import { EventApprovals } from "./EventApprovals";
 import { TimezonePicker, zonedDateTimeToISO, isoToDateInTz, isoToTimeInTz } from "./TimezonePicker";
 import { supabase } from "@/integrations/supabase/client";
-import { getAuthUser } from "@/lib/authStorage";
 import { toast } from "sonner";
 
 const DEFAULT_TZ = "Europe/London";
@@ -133,7 +132,8 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
   useEffect(() => {
     if (!open) return;
     (async () => {
-      const uid = getAuthUser()?.id || null;
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u.user?.id || null;
       setCurrentUserId(uid);
       const { data } = await supabase
         .from("profiles")

@@ -7,8 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
-import { getAuthUser } from "@/lib/authStorage";
-import { fastApi } from "@/lib/fastApiClient";
 import { toast } from "sonner";
 import { Paperclip, X, Plus, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -126,7 +124,8 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
   useEffect(() => {
     if (!open) return;
     (async () => {
-      const uid = getAuthUser()?.id;
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
       const [{ data }, calRes] = await Promise.all([
         supabase
           .from("profiles")
@@ -244,7 +243,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     const missing: string[] = [];
     if (!draft.owner.trim()) missing.push("owner");
 
-    const authUser = getAuthUser();
+    const { data: { user: authUser } } = await supabase.auth.getUser();
 
     const { data: inserted, error } = await supabase
       .from("key_events" as any)
@@ -280,7 +279,8 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       return;
     }
 
-    const uid = getAuthUser()?.id;
+    const { data: userData } = await supabase.auth.getUser();
+    const uid = userData.user?.id;
 
     if (files.length > 0 && uid) {
       await uploadFiles((inserted as any).id, uid);
@@ -303,24 +303,31 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       // Fire-and-forget Slack DMs to each assigned approver
       const approvalRows = (insertedApprovals as unknown as { id: string }[] | null) || [];
       for (const row of approvalRows) {
-        fastApi("POST", "/notify-event-approval", { approval_id: row.id, kind: "requested" })
+        supabase.functions
+          .invoke("notify-event-approval", {
+            body: { approval_id: row.id, kind: "requested" },
+          })
           .catch((err) => console.warn("notify-event-approval failed:", err));
       }
     }
 
     let personalSyncMsg: string | null = null;
     if (syncToPersonal && personalCalConnected) {
-      try {
-        await fastApi("POST", "/add-event-to-personal-calendar", {
-          event_name: draft.event_name.trim(),
-          category: draft.category,
-          start_at: startISO,
-          end_at: endISO,
-          all_day: draft.all_day,
-          location: draft.location.trim() || null,
-          notes: draft.raw_description.trim() || null,
-        });
-      } catch (syncErr: any) {
+      const { error: syncErr } = await supabase.functions.invoke(
+        "add-event-to-personal-calendar",
+        {
+          body: {
+            event_name: draft.event_name.trim(),
+            category: draft.category,
+            start_at: startISO,
+            end_at: endISO,
+            all_day: draft.all_day,
+            location: draft.location.trim() || null,
+            notes: draft.raw_description.trim() || null,
+          },
+        },
+      );
+      if (syncErr) {
         personalSyncMsg = `Saved to diary, but personal calendar sync failed: ${syncErr.message}`;
       }
     }

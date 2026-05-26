@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { fastApi } from "@/lib/fastApiClient";
 import { toast } from "sonner";
 
 export type BriefingType = "morning";
@@ -69,7 +68,10 @@ export const useCEOBriefing = (type: BriefingType) => {
   const pollOnce = useCallback(
     async (jobId: string) => {
       try {
-        const data = await fastApi("POST", "/ceo-briefing-status", { job_id: jobId });
+        const { data, error } = await supabase.functions.invoke("ceo-briefing-status", {
+          body: { job_id: jobId },
+        });
+        if (error) throw error;
 
         const status = data?.status as JobState["status"] | undefined;
         const jobError = typeof data?.error === "string" ? data.error : null;
@@ -131,8 +133,11 @@ export const useCEOBriefing = (type: BriefingType) => {
     setGenerating(true);
     setJob({ jobId: "", status: "queued", progress: 0, phase: "Queued" });
     try {
-      const data = await fastApi("POST", "/ceo-briefing", { briefing_type: type });
-      if ((data as any)?.error) throw new Error((data as any).error);
+      const { data, error } = await supabase.functions.invoke("ceo-briefing", {
+        body: { briefing_type: type },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       const jobId = data?.job_id as string | undefined;
       if (!jobId) {

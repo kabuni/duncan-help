@@ -40,6 +40,39 @@ const Auth = () => {
   const [showSignupSuccess, setShowSignupSuccess] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
 
+  // Client-side brute-force throttle: 5 failed sign-ins => 15 min lockout
+  const LOCKOUT_MS = 15 * 60 * 1000;
+  const MAX_ATTEMPTS = 5;
+  const [failedAttempts, setFailedAttempts] = useState<number>(() => {
+    const raw = localStorage.getItem("auth_failed_attempts");
+    return raw ? parseInt(raw, 10) || 0 : 0;
+  });
+  const [lockoutUntil, setLockoutUntil] = useState<number>(() => {
+    const raw = localStorage.getItem("auth_lockout_until");
+    return raw ? parseInt(raw, 10) || 0 : 0;
+  });
+  const [nowTs, setNowTs] = useState(Date.now());
+
+  useEffect(() => {
+    if (lockoutUntil <= Date.now()) return;
+    const id = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [lockoutUntil]);
+
+  useEffect(() => {
+    if (lockoutUntil && nowTs >= lockoutUntil) {
+      setLockoutUntil(0);
+      setFailedAttempts(0);
+      localStorage.removeItem("auth_lockout_until");
+      localStorage.removeItem("auth_failed_attempts");
+    }
+  }, [nowTs, lockoutUntil]);
+
+  const isLockedOut = lockoutUntil > nowTs;
+  const lockoutRemainingMs = Math.max(0, lockoutUntil - nowTs);
+  const lockoutMinutes = Math.floor(lockoutRemainingMs / 60000);
+  const lockoutSeconds = Math.floor((lockoutRemainingMs % 60000) / 1000);
+
   useEffect(() => {
     supabase.from("departments").select("id, name").order("name").then(({ data }) => {
       if (data) setDepartments(data);

@@ -190,7 +190,17 @@ serve(async (req) => {
           await supaAdmin.from("duncan_calendar_tokens").update({ calendar_id: calendarId }).eq("id", tokenRow.id);
         }
       }
-      if (!calendarId) throw new Error(`Calendar "${TARGET_CALENDAR_NAME}" not found in Duncan's account`);
+      if (!calendarId) {
+        const createRes = await fetch("https://www.googleapis.com/calendar/v3/calendars", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ summary: TARGET_CALENDAR_NAME, timeZone: "Europe/London" }),
+        });
+        if (!createRes.ok) throw new Error(`Calendar "${TARGET_CALENDAR_NAME}" not found and could not be created: ${await createRes.text()}`);
+        const created = await createRes.json();
+        calendarId = created.id;
+        await supaAdmin.from("duncan_calendar_tokens").update({ calendar_id: calendarId, calendar_name: TARGET_CALENDAR_NAME }).eq("id", tokenRow.id);
+      }
     }
 
     // Hard scope guard

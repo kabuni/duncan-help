@@ -4045,6 +4045,10 @@ export type Database = {
         Args: { body?: Json; function_name: string }
         Returns: number
       }
+      can_access_project: {
+        Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
       get_company_integration_secret: {
         Args: { p_integration_id: string }
         Returns: string

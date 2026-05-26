@@ -1,8 +1,10 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+// External FastAPI shadow backend is disabled.
+// Previously read VITE_API_BASE_URL (an ngrok tunnel); removed for security
+// so no auth tokens or app traffic leave Supabase.
+export const API_BASE_URL = "";
 
 export const API_HEADERS: Record<string, string> = {
   "Content-Type": "application/json",
-  "ngrok-skip-browser-warning": "1",
 };
 
 export function apiHeaders(accessToken?: string | null): Record<string, string> {
@@ -12,4 +14,4 @@ export function apiHeaders(accessToken?: string | null): Record<string, string> 
   };
 }
 
-export const hasExternalApiBase = API_BASE_URL.trim().length > 0;
+export const hasExternalApiBase = false;

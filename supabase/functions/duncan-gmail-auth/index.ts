@@ -9,8 +9,9 @@ const corsHeaders = {
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const SCOPES = [
-  "https://www.googleapis.com/auth/calendar",
-  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/gmail.modify",
   "openid",
   "email",
 ].join(" ");
@@ -21,11 +22,11 @@ serve(async (req) => {
   }
 
   try {
-    const clientId = Deno.env.get("GOOGLE_CALENDAR_CLIENT_ID");
+    const clientId = Deno.env.get("GMAIL_CLIENT_ID");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    if (!clientId) throw new Error("GOOGLE_CALENDAR_CLIENT_ID not configured");
+    if (!clientId) throw new Error("GMAIL_CLIENT_ID not configured");
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -46,7 +47,7 @@ serve(async (req) => {
       });
     }
 
-    // Admin check
+    // Admin check (Duncan shared mailbox is admin-only)
     const supaAdmin = createClient(supabaseUrl, serviceKey);
     const { data: roles } = await supaAdmin
       .from("user_roles")
@@ -60,7 +61,7 @@ serve(async (req) => {
       });
     }
 
-    const redirectUri = `${supabaseUrl}/functions/v1/duncan-calendar-callback`;
+    const redirectUri = `${supabaseUrl}/functions/v1/duncan-gmail-callback`;
     const state = btoa(JSON.stringify({ uid: user.id, t: Date.now() }));
 
     const url = new URL(GOOGLE_AUTH_URL);

@@ -1,152 +1,70 @@
-# Phase 9 — Correctness Layer
+## Goal
 
-Phases 1–8 stopped Duncan from lying about *writes*. Phase 9 stops Duncan from being confidently wrong about *reads* — the much larger surface. The strategy: treat every fact Duncan states as a typed claim with a provenance, a freshness budget, and a confidence floor. If those can't be satisfied, Duncan must hedge or refuse — same posture as the Mutation Truth Rule, applied to knowledge.
+Give admins the ability to operate Duncan's own Google account (duncan@kabuni.com) — calendar CRUD and mailbox read + send — directly from the Duncan chat, alongside (not replacing) their personal Gmail/Calendar.
 
----
+## Current state
 
-## 9.1 Read Truth Rule (mirror of Mutation Truth Rule)
+- `duncan_calendar_tokens` already exists as a singleton, admin-managed table, but scopes are **read-only** (`calendar.readonly`, `calendar.events.readonly`) and only used by the `reschedule_event` tool.
+- No equivalent table or OAuth flow for Duncan's Gmail.
+- All other `CALENDAR_TOOLS` and `GMAIL_TOOLS` in `norman-chat` operate on the **caller's personal** Google account via `google_calendar_tokens` / `gmail_tokens`.
+- Admin status is already determined via `has_role(uid, 'admin')`.
 
-Add a `ReadResult<T>` envelope to `_shared/tool-envelope.ts`:
+## Design
+
+Add a `mailbox: "self" | "duncan"` argument to the existing Gmail and Calendar tools (default `"self"` to preserve current behavior). When `"duncan"` is passed, `norman-chat` resolves the singleton Duncan tokens; if the caller isn't admin or Duncan isn't connected, the tool returns a clean error and Duncan tells the user. No new tools, no model retraining on new names.
+
+System prompt is updated so the model knows: "If the caller is an admin and asks about Duncan's inbox/calendar/'as Duncan', pass `mailbox: 'duncan'`. Otherwise default to the caller's own account."
+
+## Changes
+
+### 1. Database (singleton tokens for Duncan's Gmail)
 
 ```text
-{
-  ok: true,
-  data: T,
-  source: "google_calendar" | "workstreams_db" | "gmail" | ...,
-  fetched_at: ISO,
-  freshness_sla_seconds: number,
-  row_count: number,
-  truncated: boolean,
-  filters_applied: Record<string,unknown>,
-  query_echo: string         // exact filter the tool ran
-}
+duncan_gmail_tokens (singleton, mirrors duncan_calendar_tokens)
+  id, google_account_email, access_token, refresh_token,
+  token_expiry, scopes, created_at, updated_at
++ RLS: service-role only; admin-readable status via get_duncan_gmail_status()
 ```
 
-Rule enforced in the system prompt + a post-LLM linter:
-- Any factual claim about user data MUST cite a `source` from this turn's `ReadResult`s.
-- Claims older than `freshness_sla_seconds` must be marked "as of {fetched_at}".
-- If `truncated: true` Duncan must say so before summarising.
-- If no matching `ReadResult` exists for a claim → strip the claim, replace with "I don't have that".
+Plus a one-time scope upgrade for the existing Duncan **calendar** OAuth so we can write events:
+- Add `https://www.googleapis.com/auth/calendar` and `calendar.events` to `duncan-calendar-auth` SCOPES.
+- Admin will need to "Reconnect Duncan calendar" once from Settings to grant the new scopes.
 
-## 9.2 Tool result honesty — kill silent empties
+### 2. Edge functions
 
-Today many `get_*` tools return `[]` indistinguishably for "no data" vs "filter excluded everything" vs "auth scope missing". Phase 9 splits these:
+New:
+- `duncan-gmail-auth` + `duncan-gmail-callback` — same pattern as `duncan-calendar-auth/callback`, admin-only, scopes: `gmail.readonly`, `gmail.send`, `gmail.modify` (needed for thread reads + sending; no compose-only required).
 
-- `empty_reason: "no_matches" | "scope_missing" | "integration_disconnected" | "out_of_window" | "permission_denied"`
-- Tools refuse to return `[]` without one of these tags.
-- The LLM is instructed: never say "you have no meetings" — say "no meetings in the window 2026-05-25 → 2026-06-01 from Google Calendar (Plaud not queried)".
+Updated:
+- `duncan-calendar-auth` — broaden SCOPES to writable calendar.
+- `norman-chat/index.ts`:
+  - Add `getDuncanGmailContext()` helper (mirrors `getDuncanCalendarContext`) with refresh-token flow.
+  - Add `mailbox` enum to: `list_calendar_events`, `create_calendar_event`, `update_calendar_event`, `delete_calendar_event`, `list_gmail_emails`, `search_gmail`, `read_gmail_email`, `read_gmail_thread`, `send_gmail_email`. (`draft_gmail_reply` stays self-only — Duncan's drafts folder isn't useful.)
+  - In each tool executor: if `mailbox === "duncan"`, check admin role → resolve Duncan token → call Google with that token instead of the caller's. Non-admins get `{ error: "Duncan mailbox is admin-only" }`.
+  - System prompt: add a paragraph telling the model how/when to set `mailbox: 'duncan'`, plus the existing send-email confirmation rule applies (and we'll make it extra explicit: "When sending from Duncan, the From address is duncan@kabuni.com — confirm with the user before sending.").
 
-## 9.3 Query echo + filter discipline
+### 3. Frontend (admin-only connection UI)
 
-Every read tool must echo back:
-- the resolved time window (with timezone),
-- the resolved user id / project id,
-- which integrations were and were NOT consulted.
+In `src/components/settings/` — add a new admin-only `SettingsDuncanMailbox.tsx` panel (or extend the existing admin section), surfaced inside `Settings` for `isAdmin === true`:
+- Card 1: **Duncan Calendar** — shows current connection (uses existing `get_duncan_calendar_status`), "Reconnect with write access" button → invokes `duncan-calendar-auth`.
+- Card 2: **Duncan Mailbox** — same pattern using new `get_duncan_gmail_status` RPC, "Connect duncan@kabuni.com" / "Disconnect" buttons → invokes `duncan-gmail-auth`.
 
-This kills the most common silent-wrong: Duncan answers from Google Calendar when the user meant Plaud, or queries `now()` UTC when the user is in BST.
+Both cards explain: "Admins can ask Duncan in chat to read or send mail from this inbox, or change events on Duncan's calendar."
 
-## 9.4 Cross-source reconciliation
+No changes to the chat UI itself — the model picks `mailbox: 'duncan'` based on the user's wording ("as Duncan", "Duncan's inbox", "Duncan's calendar", "from duncan@kabuni.com").
 
-For overlapping domains (meetings: Plaud + Meet + Calendar; tasks: Workstreams + Basecamp + DevOps), add a thin `reconcile_*` layer that:
-- fetches from all relevant sources in parallel,
-- deduplicates by stable keys (calendar event id, basecamp todo id, devops work item id),
-- emits conflicts as `{ field, sources: [...], values: [...] }` rather than silently picking one.
+### 4. Memory
 
-LLM prompt: surface conflicts to the user, never paper over them.
+Add a new memory entry `mem://integrations/duncan-mailbox-shared-identity` describing the singleton + admin-only access model, and update the index to reference it.
 
-## 9.5 Stale-cache and pagination hygiene
+## Out of scope
 
-- Every cached read carries a TTL; expired reads are re-fetched, never served stale without a label.
-- All list tools default to a hard cap (e.g. 50) and set `truncated: true` rather than silently dropping.
-- Add `next_cursor` to every list tool; remove unbounded `LIMIT 1000` queries (Supabase default trap is documented in memory).
+- Draft replies as Duncan (drafts live in Duncan's Gmail UI, not useful here).
+- Per-user audit log for Duncan-mailbox actions (existing `calendar_mutation_audit` already covers calendar writes; we'll extend it to log Gmail sends in a follow-up if you want).
+- Non-admin access to Duncan's mailbox.
 
-## 9.6 Identity & timezone resolution
+## Technical notes
 
-Single resolver `_shared/identity.ts` that returns:
-`{ user_id, profile_id, email, timezone, working_hours, manager_id }`
-
-All read tools take this object — no more ad-hoc `auth.uid()` + UTC math scattered across 30 files. Eliminates the class of "wrong person / wrong day" errors.
-
-## 9.7 Post-LLM correctness linter
-
-A small deterministic pass between the model's draft answer and the SSE flush:
-
-1. Extract every `[Source: …]`-style citation and every assertion that *looks* factual (regex for dates, names, counts, statuses).
-2. For each, verify a matching `ReadResult` exists in this turn's tool log.
-3. Unverifiable claims → either strip + replace with a hedge, or re-prompt the model with the violations.
-
-Same shape as the Phase 6 typed-error guard, applied to reads.
-
-## 9.8 Evaluation harness
-
-`supabase/functions/norman-chat/correctness_eval.ts`:
-- 50 golden prompts covering calendar, workstreams, recruitment, gmail, meetings, analytics.
-- Each prompt has a fixture (frozen DB snapshot + frozen integration responses) and a rubric (must-cite, must-not-claim, must-hedge-if-missing).
-- Runs in CI alongside `mutation_truth_test.ts`. Failing a rubric blocks deploy.
-
-## 9.9 User-visible "show your working"
-
-In the chat UI, attach a collapsible "Sources" panel to every assistant turn listing the `ReadResult` envelopes that backed the answer (source, fetched_at, row_count, filters). Users can spot wrong assumptions instantly — and so can we when triaging bug reports.
-
-## 9.10 Roll-out order
-
-1. Land `ReadResult` envelope + `empty_reason` taxonomy (no behaviour change yet).
-2. Migrate the three highest-traffic read tools (`get_calendar_events`, `list_workstreams`, `search_meetings`) to emit it.
-3. Ship the post-LLM correctness linter in shadow mode (logs violations, doesn't block).
-4. Add the identity/timezone resolver and retrofit those three tools.
-5. Add the eval harness with 10 prompts; expand to 50.
-6. Flip the linter from shadow to enforcing.
-7. Migrate remaining read tools in priority order.
-8. Ship the "Sources" UI panel.
-
-## Definition of done
-
-- 100% of read tools return `ReadResult`.
-- 0% of assistant turns contain factual claims without a matching `ReadResult` in the same turn (measured by the linter).
-- Golden eval ≥ 90% pass rate, with hedging counted as correct when data is missing.
-- "Sources" panel visible in production for every chat reply.
-
-## Out of scope for Phase 9
-
-- New integrations.
-- LLM model swaps.
-- Voice / mobile UI work.
-- Anything mutation-side (Phases 1–8 already cover it).
-
-## Decommissioned integrations (hard-negative)
-
-The following systems are NOT pending migration targets. They are explicitly
-decommissioned and must be treated as hard-negatives in the router, provenance
-layer, and correctness linter. Any model attempt to cite them is an
-`unbacked_claim` by definition.
-
-- Basecamp
-- Trello
-- Asana
-- Notion
-- Xero
-- Legal/NDA tools
-- General Google Workspace (beyond the dedicated Gmail/Calendar/Drive paths)
-
-Rule: the router must refuse to dispatch to these sources, and the linter must
-flag any assistant turn that names them as a source.
-
-## Remaining Phase 9 active read surfaces
-
-Only these domains are still pending migration onto the ReadResult + identity/
-window contract:
-
-- Azure DevOps
-- Hireflix
-- Recruitment candidate reads
-- RAG / project knowledge paths
-
-## Roll-out (post-9.7)
-
-1. Continue shadow-mode telemetry for 48–72h across the 6 already-migrated
-   domains (Calendar, Workstreams, Team Availability, Gmail, Drive, Meetings).
-2. Manually review real production conversations against shadow violations.
-3. Flip selective enforcement on the migrated domains for **only**:
-   `unbacked_claim`, `silent_empty`, `truncation_hidden`.
-4. Then migrate the four remaining active surfaces above.
-5. Expand enforcement to additional violation classes once telemetry supports it.
+- Reuses `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` and `GOOGLE_CALENDAR_CLIENT_ID/SECRET` already in vault — no new secrets.
+- The OAuth callback URL pattern is `${SUPABASE_URL}/functions/v1/duncan-gmail-callback` — admin must add this redirect URI to the existing Google OAuth client.
+- Admin check enforced **twice**: once in the auth edge function (matches current `duncan-calendar-auth` pattern), once inside each tool executor in norman-chat before resolving Duncan tokens.

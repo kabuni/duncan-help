@@ -215,15 +215,10 @@ const CALENDAR_TOOLS = [
     type: "function",
     function: {
       name: "list_calendar_events",
-      description: "List upcoming calendar events. Defaults to the caller's own Google Calendar. Set mailbox='duncan' (admin-only) to read events from Duncan's shared calendar (duncan@kabuni.com). Prefer the `window` shortcut (today/tomorrow/this_week/next_week) — it is resolved in the caller's timezone. Only pass timeMin/timeMax for custom ranges.",
+      description: "List upcoming calendar events. Use this when the user asks about their schedule, meetings, or calendar. Prefer the `window` shortcut (today/tomorrow/this_week/next_week) — it is resolved in the caller's timezone. Only pass timeMin/timeMax for custom ranges.",
       parameters: {
         type: "object",
         properties: {
-          mailbox: {
-            type: "string",
-            enum: ["self", "duncan"],
-            description: "Whose calendar to act on. 'self' (default) = the signed-in user. 'duncan' = duncan@kabuni.com shared calendar (admin-only).",
-          },
           window: {
             type: "string",
             enum: ["today", "tomorrow", "this_week", "next_week"],

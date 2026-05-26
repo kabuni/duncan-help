@@ -40,6 +40,39 @@ const Auth = () => {
   const [showSignupSuccess, setShowSignupSuccess] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
 
+  // Client-side brute-force throttle: 5 failed sign-ins => 15 min lockout
+  const LOCKOUT_MS = 15 * 60 * 1000;
+  const MAX_ATTEMPTS = 5;
+  const [failedAttempts, setFailedAttempts] = useState<number>(() => {
+    const raw = localStorage.getItem("auth_failed_attempts");
+    return raw ? parseInt(raw, 10) || 0 : 0;
+  });
+  const [lockoutUntil, setLockoutUntil] = useState<number>(() => {
+    const raw = localStorage.getItem("auth_lockout_until");
+    return raw ? parseInt(raw, 10) || 0 : 0;
+  });
+  const [nowTs, setNowTs] = useState(Date.now());
+
+  useEffect(() => {
+    if (lockoutUntil <= Date.now()) return;
+    const id = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [lockoutUntil]);
+
+  useEffect(() => {
+    if (lockoutUntil && nowTs >= lockoutUntil) {
+      setLockoutUntil(0);
+      setFailedAttempts(0);
+      localStorage.removeItem("auth_lockout_until");
+      localStorage.removeItem("auth_failed_attempts");
+    }
+  }, [nowTs, lockoutUntil]);
+
+  const isLockedOut = lockoutUntil > nowTs;
+  const lockoutRemainingMs = Math.max(0, lockoutUntil - nowTs);
+  const lockoutMinutes = Math.floor(lockoutRemainingMs / 60000);
+  const lockoutSeconds = Math.floor((lockoutRemainingMs % 60000) / 1000);
+
   useEffect(() => {
     supabase.from("departments").select("id, name").order("name").then(({ data }) => {
       if (data) setDepartments(data);
@@ -79,6 +112,10 @@ const Auth = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLogin && isLockedOut) {
+      toast.error(`Too many failed attempts. Try again in ${lockoutMinutes}:${String(lockoutSeconds).padStart(2, "0")}.`);
+      return;
+    }
     setSubmitting(true);
 
     try {
@@ -102,6 +139,10 @@ const Auth = () => {
       if (error) throw error;
 
       if (isLogin) {
+        setFailedAttempts(0);
+        setLockoutUntil(0);
+        localStorage.removeItem("auth_failed_attempts");
+        localStorage.removeItem("auth_lockout_until");
         toast.success("Welcome back to Duncan");
       } else {
         setShowSignupSuccess(true);
@@ -110,11 +151,27 @@ const Auth = () => {
       }
     } catch (error: unknown) {
       console.error("Auth submit failed", { error, online: navigator.onLine, origin: window.location.origin });
-      toast.error(getAuthErrorMessage(error));
+      if (isLogin) {
+        const next = failedAttempts + 1;
+        setFailedAttempts(next);
+        localStorage.setItem("auth_failed_attempts", String(next));
+        if (next >= MAX_ATTEMPTS) {
+          const until = Date.now() + LOCKOUT_MS;
+          setLockoutUntil(until);
+          localStorage.setItem("auth_lockout_until", String(until));
+          setNowTs(Date.now());
+          toast.error("Too many failed attempts. Sign-in disabled for 15 minutes.");
+        } else {
+          toast.error(`${getAuthErrorMessage(error)} (${MAX_ATTEMPTS - next} attempts left)`);
+        }
+      } else {
+        toast.error(getAuthErrorMessage(error));
+      }
     } finally {
       setSubmitting(false);
     }
   };
+
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -313,11 +370,13 @@ const Auth = () => {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || (isLogin && isLockedOut)}
               className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-all"
             >
               {submitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
+              ) : isLogin && isLockedOut ? (
+                <>Locked — {lockoutMinutes}:{String(lockoutSeconds).padStart(2, "0")}</>
               ) : (
                 <>
                   {isLogin ? "Sign in" : "Create account"}
@@ -325,6 +384,11 @@ const Auth = () => {
                 </>
               )}
             </button>
+            {isLogin && isLockedOut && (
+              <p className="text-xs text-destructive text-center">
+                Too many failed attempts. Sign-in disabled for {lockoutMinutes}:{String(lockoutSeconds).padStart(2, "0")}.
+              </p>
+            )}
           </form>
 
           {!isLogin && (

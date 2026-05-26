@@ -250,10 +250,15 @@ const CALENDAR_TOOLS = [
     type: "function",
     function: {
       name: "create_calendar_event",
-      description: "Create a new calendar event. Use this when the user wants to schedule a meeting or add an event.",
+      description: "Create a new calendar event. Defaults to the caller's own Google Calendar. Set mailbox='duncan' (admin-only) to create the event on Duncan's shared calendar (duncan@kabuni.com).",
       parameters: {
         type: "object",
         properties: {
+          mailbox: {
+            type: "string",
+            enum: ["self", "duncan"],
+            description: "Whose calendar to write to. 'self' (default) or 'duncan' (admin-only).",
+          },
           summary: {
             type: "string",
             description: "Title of the event",

@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const APP_URL = Deno.env.get("APP_URL") || "https://duncan.help";
-const TARGET_CALENDAR_NAME = "Duncan | Key Events";
+const TARGET_CALENDAR_NAME = "Duncan | Planner";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -69,7 +69,7 @@ serve(async (req) => {
       }
     } catch (_e) { /* ignore */ }
 
-    // Find the "Duncan | Key Events" calendar
+    // Find the "Duncan | Planner" calendar
     let calendarId: string | null = null;
     const listRes = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=250", {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -87,6 +87,18 @@ serve(async (req) => {
     // Replace any existing token row (only one allowed)
     await supaAdmin.from("duncan_calendar_tokens").delete().not("id", "is", null);
 
+    if (!calendarId) {
+      const createRes = await fetch("https://www.googleapis.com/calendar/v3/calendars", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ summary: TARGET_CALENDAR_NAME, timeZone: "Europe/London" }),
+      });
+      if (createRes.ok) {
+        const created = await createRes.json();
+        calendarId = created.id;
+      }
+    }
+
     const { error: insErr } = await supaAdmin.from("duncan_calendar_tokens").insert({
       access_token: accessToken,
       refresh_token: refreshToken,
@@ -98,8 +110,7 @@ serve(async (req) => {
     });
     if (insErr) throw insErr;
 
-    const status = calendarId ? "connected" : "connected_no_calendar";
-    return Response.redirect(`${APP_URL}/diary?duncan_calendar=${status}`, 302);
+    return Response.redirect(`${APP_URL}/diary?duncan_calendar=connected`, 302);
   } catch (err: any) {
     console.error("duncan-calendar-callback error", err);
     return Response.redirect(`${APP_URL}/diary?duncan_calendar=error&reason=${encodeURIComponent(err.message || "callback_failed")}`, 302);

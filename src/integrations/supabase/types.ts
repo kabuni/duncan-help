@@ -852,6 +852,39 @@ export type Database = {
         }
         Relationships: []
       }
+      duncan_gmail_tokens: {
+        Row: {
+          access_token: string
+          created_at: string
+          google_account_email: string
+          id: string
+          refresh_token: string
+          scopes: string | null
+          token_expiry: string
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string
+          google_account_email: string
+          id?: string
+          refresh_token: string
+          scopes?: string | null
+          token_expiry: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          google_account_email?: string
+          id?: string
+          refresh_token?: string
+          scopes?: string | null
+          token_expiry?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       event_rsvp_messages: {
         Row: {
           created_at: string
@@ -4037,6 +4070,15 @@ export type Database = {
           connected: boolean
           google_account_email: string
           last_updated: string
+        }[]
+      }
+      get_duncan_gmail_status: {
+        Args: never
+        Returns: {
+          connected: boolean
+          google_account_email: string
+          last_updated: string
+          scopes: string
         }[]
       }
       get_my_meetings: {

@@ -7,10 +7,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthUser } from "@/lib/authStorage";
+import { fastApi } from "@/lib/fastApiClient";
 import { toast } from "sonner";
 import { Paperclip, X, Plus, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { TimezonePicker, zonedDateTimeToISO } from "./TimezonePicker";
+import { CATEGORY_LIST } from "./categoryMeta";
 
 const DEFAULT_TZ = (() => {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London"; } catch { return "Europe/London"; }
@@ -38,6 +41,12 @@ interface DraftApproval {
   approver_profile_id: string | null;
 }
 
+interface DraftCollaborator {
+  profile_id: string;
+  display_name: string;
+  role: string;
+}
+
 const sanitizeFileName = (fileName: string) => {
   const ext = fileName.includes(".") ? fileName.split(".").pop()?.toLowerCase() ?? "" : "";
   const base = ext ? fileName.slice(0, -(ext.length + 1)) : fileName;
@@ -50,18 +59,7 @@ const sanitizeFileName = (fileName: string) => {
   return ext ? `${safe}.${ext}` : safe;
 };
 
-const CATEGORIES = [
-  "Event",
-  "Holiday",
-  "Marketing",
-  "Launch",
-  "Investor",
-  "Product",
-  "Operations",
-  "Travel",
-  "Releases",
-  "Other",
-];
+const CATEGORIES = [...CATEGORY_LIST, "Other"];
 
 interface Props {
   open: boolean;
@@ -113,6 +111,9 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
   const [appApprover, setAppApprover] = useState("none");
   const [personalCalConnected, setPersonalCalConnected] = useState(false);
   const [syncToPersonal, setSyncToPersonal] = useState(false);
+  const [collaborators, setCollaborators] = useState<DraftCollaborator[]>([]);
+  const [collabPerson, setCollabPerson] = useState<string>("");
+  const [collabRole, setCollabRole] = useState<string>("");
 
   // Re-seed start/end dates whenever the dialog re-opens with a (possibly new) default date.
   useEffect(() => {
@@ -124,8 +125,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
   useEffect(() => {
     if (!open) return;
     (async () => {
-      const { data: userData } = await supabase.auth.getUser();
-      const uid = userData.user?.id;
+      const uid = getAuthUser()?.id;
       const [{ data }, calRes] = await Promise.all([
         supabase
           .from("profiles")
@@ -175,6 +175,9 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     setAppLabel("");
     setAppApprover("none");
     setSyncToPersonal(false);
+    setCollaborators([]);
+    setCollabPerson("");
+    setCollabRole("");
   }
 
   async function uploadFiles(eventId: string, userId: string) {
@@ -223,14 +226,18 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     setSaving(true);
 
     const tz = draft.start_tz || DEFAULT_TZ;
+    // For all-day events anchor at UTC noon so the calendar date never shifts
+    // across the viewer's timezone (a UTC-midnight value displays as the
+    // previous day for any negative offset; UTC 23:59 displays as the next day
+    // for any positive offset). UTC noon is safe for every IANA zone.
     const startISO = draft.all_day
-      ? zonedDateTimeToISO(draft.start_date, "00:00", tz)
+      ? zonedDateTimeToISO(draft.start_date, "12:00", "UTC")
       : zonedDateTimeToISO(draft.start_date, draft.start_time || "09:00", tz);
     const endISO = draft.all_day
-      ? zonedDateTimeToISO(effectiveEndDate, "23:59", tz)
+      ? zonedDateTimeToISO(effectiveEndDate, "12:00", "UTC")
       : zonedDateTimeToISO(effectiveEndDate, draft.end_time || draft.start_time || "10:00", tz);
 
-    if (new Date(endISO) <= new Date(startISO)) {
+    if (!draft.all_day && new Date(endISO) <= new Date(startISO)) {
       setSaving(false);
       toast.error("End must be after the start");
       return;
@@ -243,7 +250,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     const missing: string[] = [];
     if (!draft.owner.trim()) missing.push("owner");
 
-    const { data: { user: authUser } } = await supabase.auth.getUser();
+    const authUser = getAuthUser();
 
     const { data: inserted, error } = await supabase
       .from("key_events" as any)
@@ -269,6 +276,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
         attendees: [],
         deleted_in_google: false,
         created_by: authUser?.id ?? null,
+        collaborators,
       })
       .select("id")
       .single();
@@ -279,8 +287,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       return;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
-    const uid = userData.user?.id;
+    const uid = getAuthUser()?.id;
 
     if (files.length > 0 && uid) {
       await uploadFiles((inserted as any).id, uid);
@@ -303,31 +310,24 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       // Fire-and-forget Slack DMs to each assigned approver
       const approvalRows = (insertedApprovals as unknown as { id: string }[] | null) || [];
       for (const row of approvalRows) {
-        supabase.functions
-          .invoke("notify-event-approval", {
-            body: { approval_id: row.id, kind: "requested" },
-          })
+        fastApi("POST", "/notify-event-approval", { approval_id: row.id, kind: "requested" })
           .catch((err) => console.warn("notify-event-approval failed:", err));
       }
     }
 
     let personalSyncMsg: string | null = null;
     if (syncToPersonal && personalCalConnected) {
-      const { error: syncErr } = await supabase.functions.invoke(
-        "add-event-to-personal-calendar",
-        {
-          body: {
-            event_name: draft.event_name.trim(),
-            category: draft.category,
-            start_at: startISO,
-            end_at: endISO,
-            all_day: draft.all_day,
-            location: draft.location.trim() || null,
-            notes: draft.raw_description.trim() || null,
-          },
-        },
-      );
-      if (syncErr) {
+      try {
+        await fastApi("POST", "/add-event-to-personal-calendar", {
+          event_name: draft.event_name.trim(),
+          category: draft.category,
+          start_at: startISO,
+          end_at: endISO,
+          all_day: draft.all_day,
+          location: draft.location.trim() || null,
+          notes: draft.raw_description.trim() || null,
+        });
+      } catch (syncErr: any) {
         personalSyncMsg = `Saved to diary, but personal calendar sync failed: ${syncErr.message}`;
       }
     }
@@ -511,6 +511,80 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
               rows={3}
               placeholder="Optional context"
             />
+          </div>
+
+          <div className="col-span-2 space-y-1.5">
+            <Label>Collaborators</Label>
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              Add others who play a role on this event (e.g. Designer, Copy, Producer). The Owner stays accountable.
+            </p>
+            {collaborators.length > 0 && (
+              <ul className="space-y-1">
+                {collaborators.map((c, i) => (
+                  <li key={i} className="flex items-center gap-2 text-xs border border-border rounded-md px-2 py-1">
+                    <span className="truncate">{c.display_name}</span>
+                    <Badge variant="outline" className="text-[10px]">{c.role || "Collaborator"}</Badge>
+                    <button
+                      type="button"
+                      onClick={() => setCollaborators((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="text-muted-foreground hover:text-destructive shrink-0 ml-auto"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="border border-dashed border-border rounded-md p-2 space-y-1.5">
+              <div className="flex flex-col sm:flex-row gap-1.5">
+                <Select key={`collab-${collaborators.length}`} value={collabPerson} onValueChange={setCollabPerson}>
+                  <SelectTrigger className="h-8 text-xs flex-1 min-w-0">
+                    <SelectValue placeholder="Pick a person" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {profiles
+                      .slice()
+                      .filter((p) => p.display_name && p.display_name !== draft.owner)
+                      .filter((p) => !collaborators.some((c) => c.profile_id === p.id))
+                      .sort((a, b) => (a.display_name || "").localeCompare(b.display_name || ""))
+                      .map((p) => (
+                        <SelectItem key={p.id} value={p.id} className="text-xs">
+                          {p.display_name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  value={collabRole}
+                  onChange={(e) => setCollabRole(e.target.value)}
+                  placeholder="Role (e.g. Designer)"
+                  className="h-8 text-xs flex-1 min-w-0"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs shrink-0"
+                  disabled={!collabPerson}
+                  onClick={() => {
+                    const p = profiles.find((x) => x.id === collabPerson);
+                    if (!p) return;
+                    setCollaborators((prev) => [
+                      ...prev,
+                      {
+                        profile_id: p.id,
+                        display_name: p.display_name || "Unnamed",
+                        role: collabRole.trim(),
+                      },
+                    ]);
+                    setCollabPerson("");
+                    setCollabRole("");
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Add
+                </Button>
+              </div>
+            </div>
           </div>
 
           <div className="col-span-2 space-y-1.5">

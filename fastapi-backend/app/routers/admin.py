@@ -34,8 +34,9 @@ class CompanyIntegrationRequest(BaseModel):
 
 
 class FinalizeReleaseRequest(BaseModel):
-    version: str
-    changes: list[str]
+    release_id: Optional[str] = None
+    version: Optional[str] = None
+    changes: Optional[list[dict]] = None
     breaking_changes: Optional[list[str]] = None
 
 
@@ -102,29 +103,127 @@ async def finalize_release(
     conn: asyncpg.Connection = Depends(get_connection),
 ):
     import json as _json
-    changes_text = "\n".join(f"- {c}" for c in body.changes)
-    breaking_text = "\n".join(f"- {c}" for c in (body.breaking_changes or []))
 
-    opts = CallLLMOptions(
-        workflow="finalize-release",
-        messages=[
-            {"role": "system", "content": "Generate professional release notes for Duncan (Kabuni's internal platform). Be concise and user-focused. Format as markdown."},
-            {"role": "user", "content": f"Version: {body.version}\n\nChanges:\n{changes_text}\n\n{f'Breaking Changes:{chr(10)}{breaking_text}' if body.breaking_changes else ''}"},
-        ],
-        max_tokens=1000,
-    )
-    res = await call_llm_with_fallback(opts)
-    release_notes = res["choices"][0]["message"].get("content") or ""
+    # If release_id given, load existing release from DB
+    if body.release_id:
+        release = await conn.fetchrow("SELECT * FROM releases WHERE id = $1", body.release_id)
+        if not release:
+            raise HTTPException(status_code=404, detail="Release not found")
+        release = dict(release)
+        version = release.get("version") or body.version or "1.0"
+        changes = release.get("changes") or body.changes or []
+        existing_title = release.get("title")
+        existing_summary = release.get("summary")
+    else:
+        version = body.version or "1.0"
+        changes = body.changes or []
+        existing_title = None
+        existing_summary = None
 
+    needs_title = not existing_title or existing_title.strip() in ("", "Draft")
+    needs_summary = not existing_summary or not existing_summary.strip()
+
+    title = existing_title or f"Release {version}"
+    summary = existing_summary or ""
+
+    if (needs_title or needs_summary) and changes:
+        changes_text = "\n".join(
+            f"- [{c.get('type','change')}] {c.get('description', str(c))}" if isinstance(c, dict) else f"- {c}"
+            for c in changes
+        )
+        opts = CallLLMOptions(
+            workflow="finalize-release",
+            messages=[
+                {"role": "system", "content": "You write concise release notes for an internal company tool called Duncan. Output strict JSON with keys 'title' (max 8 words, no version number) and 'summary' (1-2 sentences, plain English, what users will notice)."},
+                {"role": "user", "content": f"Release version {version} contains these changes:\n{changes_text}\n\nReturn JSON: {{\"title\": \"...\", \"summary\": \"...\"}}"},
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=300,
+        )
+        res = await call_llm_with_fallback(opts)
+        try:
+            parsed = _json.loads(res["choices"][0]["message"].get("content") or "{}")
+            if needs_title and parsed.get("title"):
+                title = parsed["title"]
+            if needs_summary and parsed.get("summary"):
+                summary = parsed["summary"]
+        except Exception:
+            pass
+
+    if not summary:
+        summary = f"{len(changes)} change{'s' if len(changes) != 1 else ''} in this release."
+
+    if body.release_id:
+        await conn.execute(
+            """UPDATE releases
+               SET title = $1, summary = $2, status = 'published',
+                   published_at = NOW(), published_by = $3, updated_at = NOW()
+               WHERE id = $4""",
+            title, summary, current_user["id"], body.release_id,
+        )
+        release_id = body.release_id
+    else:
+        release_id = str(uuid.uuid4())
+        await conn.execute(
+            """INSERT INTO releases (id, version, title, summary, notes, changes, breaking_changes,
+                                     status, published_at, published_by, created_by, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 'published', NOW(), $8, $8, NOW(), NOW())""",
+            release_id, version, title, summary,
+            f"# {title}\n\n{summary}",
+            _json.dumps(changes), _json.dumps(body.breaking_changes or []),
+            current_user["id"],
+        )
+
+    return {"release_id": release_id, "version": version, "title": title, "summary": summary}
+
+
+@router.get("/releases")
+async def get_releases(
+    limit: int = 20,
+    current_user: dict = Depends(get_current_user),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    try:
+        rows = await conn.fetch(
+            "SELECT * FROM releases ORDER BY created_at DESC LIMIT $1",
+            min(limit, 100),
+        )
+        return [dict(r) for r in rows]
+    except Exception as e:
+        logger.warning(f"releases table not available: {e}")
+        return []
+
+
+@router.post("/releases", status_code=201)
+async def create_release(
+    body: dict,
+    current_user: dict = Depends(require_moderator_or_admin),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    import json as _json
     release_id = str(uuid.uuid4())
+    version = body.get("version") or "1.0"
+    title = body.get("title") or f"Release {version}"
+    changes = body.get("changes") or []
     await conn.execute(
-        """INSERT INTO releases (id, version, notes, changes, breaking_changes, created_by, created_at)
-           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, NOW())""",
-        release_id, body.version, release_notes,
-        _json.dumps(body.changes), _json.dumps(body.breaking_changes or []),
-        current_user["id"],
+        """INSERT INTO releases (id, version, title, summary, changes, status, created_by, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5::jsonb, 'draft', $6, NOW(), NOW())""",
+        release_id, version, title, body.get("summary"), _json.dumps(changes), current_user["id"],
     )
-    return {"release_id": release_id, "version": body.version, "notes": release_notes}
+    row = await conn.fetchrow("SELECT * FROM releases WHERE id = $1", release_id)
+    return dict(row)
+
+
+@router.get("/releases/{release_id}")
+async def get_release(
+    release_id: str,
+    current_user: dict = Depends(get_current_user),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    row = await conn.fetchrow("SELECT * FROM releases WHERE id = $1", release_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Release not found")
+    return dict(row)
 
 
 @router.post("/send-release-emails")

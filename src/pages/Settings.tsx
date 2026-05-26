@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Settings as SettingsIcon, User, UserCheck } from "lucide-react";
+import { Settings as SettingsIcon, User, UserCheck, Users } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { LogOut } from "lucide-react";
 import AccountApprovals from "@/components/settings/AccountApprovals";
+import AdminUserManagement from "@/components/settings/AdminUserManagement";
 
 const Settings = () => {
   const { user, signOut } = useAuth();
@@ -41,6 +42,25 @@ const Settings = () => {
                 <h3 className="text-sm font-semibold text-foreground">Account Approvals</h3>
               </div>
               <AccountApprovals />
+            </motion.section>
+          )}
+
+          {/* Admin: User Management */}
+          {isAdmin && (
+            <motion.section
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.07 }}
+              className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-6"
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Users className="h-4 w-4 text-primary" />
+                <h3 className="text-sm font-semibold text-foreground">User Management</h3>
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Review registered users and bulk-delete inactive or test accounts.
+              </p>
+              <AdminUserManagement />
             </motion.section>
           )}
 

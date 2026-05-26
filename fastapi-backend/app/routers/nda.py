@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Optional
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.auth.dependencies import get_current_user
@@ -510,3 +510,63 @@ async def vectorize_nda(
         "chunks_created": len(chunks),
         "total_tokens": sum(c["token_count"] for c in chunks),
     }
+
+
+# ── DocuSign webhook ───────────────────────────────────────────────────────────
+
+@router.post("/docusign-webhook")
+async def docusign_webhook(
+    request: Request,
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    """Receives DocuSign Connect webhook events and updates NDA submission status."""
+    body_bytes = await request.body()
+    content_type = request.headers.get("content-type", "")
+
+    envelope_id = None
+    event_type = None
+
+    if "xml" in content_type:
+        import re as _re
+        env_match = _re.search(r"<EnvelopeID>(.*?)</EnvelopeID>", body_bytes.decode("utf-8", errors="ignore"))
+        evt_match = _re.search(r"<EnvelopStatus>(.*?)</EnvelopStatus>", body_bytes.decode("utf-8", errors="ignore"))
+        if env_match:
+            envelope_id = env_match.group(1)
+        if evt_match:
+            event_type = evt_match.group(1).lower()
+    else:
+        try:
+            payload = json.loads(body_bytes)
+            envelope_id = payload.get("envelopeId") or (payload.get("data") or {}).get("envelopeId")
+            event_type = (payload.get("event") or "").lower()
+        except Exception:
+            pass
+
+    if not envelope_id:
+        return {"received": True, "warning": "No envelope ID found in payload"}
+
+    status_map = {
+        "envelope-completed": "completed",
+        "completed": "completed",
+        "envelope-declined": "declined",
+        "declined": "declined",
+        "envelope-voided": "voided",
+        "voided": "voided",
+        "envelope-sent": "sent",
+        "sent": "sent",
+        "envelope-delivered": "delivered",
+        "delivered": "delivered",
+    }
+    new_status = status_map.get(event_type)
+
+    if new_status:
+        try:
+            await conn.execute(
+                "UPDATE nda_submissions SET status = $1, updated_at = NOW() WHERE docusign_envelope_id = $2",
+                new_status, envelope_id,
+            )
+            logger.info(f"DocuSign webhook: envelope {envelope_id} → {new_status}")
+        except Exception as e:
+            logger.error(f"DocuSign webhook DB update failed: {e}")
+
+    return {"received": True, "envelope_id": envelope_id, "status": new_status}

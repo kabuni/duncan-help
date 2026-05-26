@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthUser } from "@/lib/authStorage";
 import { Button } from "@/components/ui/button";
 import { Paperclip, Trash2, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -54,8 +55,7 @@ export function EventAttachments({ eventId }: Props) {
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
+    const userId = getAuthUser()?.id;
     if (!userId) {
       toast.error("Not signed in");
       return;

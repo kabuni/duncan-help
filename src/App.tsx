@@ -9,6 +9,7 @@ import { useAuthSync } from "@/hooks/useAuthSync";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
+import Onboarding from "./pages/Onboarding";
 
 import Integrations from "./pages/Integrations";
 import Auth from "./pages/Auth";
@@ -28,7 +29,11 @@ import ReleaseManager from "./pages/ReleaseManager";
 import WhatsNew from "./pages/WhatsNew";
 import CEOBriefing from "./pages/CEOBriefing";
 import KeyEventsDiary from "./pages/KeyEventsDiary";
+import Approvals from "./pages/Approvals";
+import PurchaseOrders from "./pages/PurchaseOrders";
+
 import SlackCallback from "./pages/SlackCallback";
+import KnowledgeBase from "./pages/KnowledgeBase";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +50,7 @@ const AppContent = () => {
           <Route path="/auth" element={<Auth />} />
           <Route path="/auth/slack/callback" element={<ProtectedRoute><SlackCallback /></ProtectedRoute>} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           
           <Route path="/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
@@ -63,6 +69,10 @@ const AppContent = () => {
           <Route path="/whats-new" element={<ProtectedRoute><WhatsNew /></ProtectedRoute>} />
           <Route path="/team-briefing" element={<ProtectedRoute><CEOBriefing /></ProtectedRoute>} />
           <Route path="/diary" element={<ProtectedRoute><KeyEventsDiary /></ProtectedRoute>} />
+          <Route path="/approvals" element={<ProtectedRoute><Approvals /></ProtectedRoute>} />
+          <Route path="/purchase-orders" element={<ProtectedRoute><PurchaseOrders /></ProtectedRoute>} />
+          <Route path="/knowledge-base" element={<ProtectedRoute><KnowledgeBase /></ProtectedRoute>} />
+          <Route path="/travel" element={<Navigate to="/purchase-orders?tab=travel" replace />} />
           <Route path="/ceo" element={<Navigate to="/team-briefing" replace />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

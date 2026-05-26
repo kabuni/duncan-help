@@ -52,3 +52,34 @@ export function extractSentences(buffer: string): {
 
   return { sentences, remainder };
 }
+
+/**
+ * Eager variant: in addition to full sentence boundaries (. ! ?), also
+ * accepts soft phrase boundaries (, ; : —) once the unspoken buffer is
+ * long enough. Used during streaming so TTS can start sooner.
+ */
+export function extractSpeakable(
+  buffer: string,
+  opts: { eager?: boolean; minSoftLen?: number } = {}
+): { sentences: string[]; remainder: string } {
+  const { sentences, remainder } = extractSentences(buffer);
+  if (!opts.eager) return { sentences, remainder };
+
+  const minLen = opts.minSoftLen ?? 60;
+  if (remainder.length < minLen) return { sentences, remainder };
+
+  // Find last soft boundary followed by whitespace within remainder.
+  const softRe = /[,;:—–](\s+)/g;
+  let lastEnd = -1;
+  let m: RegExpExecArray | null;
+  while ((m = softRe.exec(remainder)) !== null) {
+    lastEnd = m.index + 1; // include the punctuation char
+  }
+  if (lastEnd < minLen) return { sentences, remainder };
+
+  const head = remainder.slice(0, lastEnd).trim();
+  const tail = remainder.slice(lastEnd).replace(/^\s+/, "");
+  if (head.length > 0) sentences.push(head);
+  return { sentences, remainder: tail };
+}
+

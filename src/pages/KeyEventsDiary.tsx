@@ -13,8 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import { useKeyEvents, type KeyEvent, type WorkstreamCard } from "@/hooks/useKeyEvents";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { RefreshCw, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { RefreshCw, Plus, ChevronLeft, ChevronRight, Mail } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
@@ -198,10 +199,19 @@ export default function KeyEventsDiary() {
   const [date, setDate] = useState<Date>(new Date());
   const [riskFilter, setRiskFilter] = useState<"all" | "atrisk">("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const toggleCategory = (key: string) => {
+    setSelectedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   const [selectedEvent, setSelectedEvent] = useState<KeyEvent | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<Date | null>(null);
+  const [scanningRsvps, setScanningRsvps] = useState(false);
   const [viewTz, setViewTzState] = useState<ViewTz>(() => {
     if (typeof window === "undefined") return "Europe/London";
     return (localStorage.getItem(VIEW_TZ_KEY) as ViewTz | null) || detectDefaultViewTz();
@@ -248,6 +258,9 @@ export default function KeyEventsDiary() {
     if (ownerFilter !== "all") {
       filteredEvents = filteredEvents.filter((e) => (e.owner || "") === ownerFilter);
     }
+    if (selectedCategories.size > 0) {
+      filteredEvents = filteredEvents.filter((e) => e.category && selectedCategories.has(e.category));
+    }
 
     const evItems: CalItem[] = filteredEvents
       .filter((e) => e.start_at)
@@ -270,12 +283,31 @@ export default function KeyEventsDiary() {
       });
 
     return evItems;
-  }, [events, riskFilter, ownerFilter]);
+  }, [events, riskFilter, ownerFilter, selectedCategories]);
 
 
   function handleSelectItem(item: CalItem) {
     setSelectedEvent(item.resource.data);
     setDrawerOpen(true);
+  }
+
+  async function scanRsvps() {
+    setScanningRsvps(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("process-rsvp-emails");
+      if (error) throw error;
+      const summary = data as { scanned?: number; rsvps?: number; skipped?: number; errors?: string[] } | null;
+      if (summary?.errors && summary.errors.length > 0) {
+        toast.warning(`RSVP scan completed with ${summary.errors.length} error(s)`);
+        console.warn("RSVP scan errors:", summary.errors);
+      } else {
+        toast.success(`RSVP scan complete — ${summary?.rsvps ?? 0} new, ${summary?.skipped ?? 0} skipped`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "RSVP scan failed");
+    } finally {
+      setScanningRsvps(false);
+    }
   }
 
   const eventPropGetter = (item: CalItem) => {
@@ -331,7 +363,7 @@ export default function KeyEventsDiary() {
 
   return (
     <AppLayout>
-      <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 min-h-[calc(100dvh-3.5rem)] overflow-x-hidden">
+      <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 h-[calc(100dvh-3.5rem)] md:h-[100dvh] min-h-0 overflow-y-auto overflow-x-hidden">
         <header className="space-y-1 shrink-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight">Duncan Planner</h1>
@@ -397,6 +429,18 @@ export default function KeyEventsDiary() {
                   {syncing ? "Syncing…" : "Sync"}
                 </Button>
               )}
+              {isAdmin && (
+                <Button
+                  className="flex-1 sm:flex-none whitespace-nowrap"
+                  variant="outline"
+                  size="sm"
+                  onClick={scanRsvps}
+                  disabled={scanningRsvps}
+                >
+                  <Mail className={cn("h-3.5 w-3.5 mr-1.5", scanningRsvps && "animate-pulse")} />
+                  {scanningRsvps ? "Scanning RSVPs…" : "Scan RSVPs"}
+                </Button>
+              )}
               <Button className="flex-1 sm:flex-none whitespace-nowrap" size="sm" variant="outline" onClick={() => { setAddDate(new Date()); setAddOpen(true); }}>
                 <Plus className="h-3.5 w-3.5 mr-1.5" /> Add event
               </Button>
@@ -412,25 +456,52 @@ export default function KeyEventsDiary() {
         <div className="shrink-0 min-w-0 overflow-hidden lg:px-1">
           <div className="flex items-center gap-x-2 gap-y-1.5 text-[10px] sm:text-[11px] text-muted-foreground overflow-x-auto pb-1 whitespace-nowrap scrollbar-thin lg:flex-wrap lg:overflow-visible lg:pb-0 lg:whitespace-normal">
             <span className="font-mono uppercase tracking-wider text-[10px] shrink-0">Categories</span>
-            {Object.entries(CATEGORY_META).map(([key, meta]) => (
-              <span key={key} className="inline-flex items-center gap-1.5 shrink-0">
-                <span
-                  aria-hidden
-                  className="inline-block h-2 w-2 rounded-sm"
-                  style={{ background: `hsl(${meta.hsl})` }}
-                />
-                <span aria-hidden>{meta.icon}</span>
-                <span>{meta.label}</span>
-              </span>
-            ))}
+            {Object.entries(CATEGORY_META).map(([key, meta]) => {
+              const active = selectedCategories.has(key);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => toggleCategory(key)}
+                  aria-pressed={active}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 shrink-0 rounded-full border px-2 py-0.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    active
+                      ? "border-transparent text-foreground font-medium shadow-sm"
+                      : "border-border/60 hover:border-border hover:bg-accent/40",
+                  )}
+                  style={
+                    active
+                      ? {
+                          background: `hsl(${meta.hsl} / 0.18)`,
+                          boxShadow: `0 0 0 1px hsl(${meta.hsl} / 0.55), 0 0 8px hsl(${meta.hsl} / 0.25)`,
+                        }
+                      : undefined
+                  }
+                >
+                  <span aria-hidden className="inline-block h-2 w-2 rounded-sm" style={{ background: `hsl(${meta.hsl})` }} />
+                  <span aria-hidden>{meta.icon}</span>
+                  <span>{meta.label}</span>
+                </button>
+              );
+            })}
+            {selectedCategories.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedCategories(new Set())}
+                className="ml-1 shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-[10px] uppercase tracking-wider hover:bg-accent"
+              >
+                Clear
+              </button>
+            )}
           </div>
         </div>
 
-        <Card className="p-2 sm:p-3 flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
+        <Card className="p-2 sm:p-3 shrink-0 min-w-0 flex flex-col overflow-visible">
           {loading ? (
             <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
           ) : (
-            <div className="flex-1 min-h-[60vh] md:min-h-[420px] min-w-0 overflow-hidden">
+            <div className="min-h-[900px] md:min-h-[820px] min-w-0 overflow-visible">
               {isMobile ? (
                 <MobileAgenda
                   items={calItems}
@@ -468,7 +539,13 @@ export default function KeyEventsDiary() {
                     const uk = formatTimeInTz(ev.start_at, "Europe/London");
                     const ind = formatTimeInTz(ev.start_at, "Asia/Kolkata");
                     const times = ev.all_day ? "All day" : `UK ${uk} · IN ${ind}`;
-                    return `${ev.event_name || ev.title} · ${times}${ev.owner ? ` · ${ev.owner}` : ""}`;
+                    const ownerStr = ev.owner ? ` · ${ev.owner}` : "";
+                    const collabs = (ev.collaborators || []).slice(0, 3)
+                      .map((c) => `${c.display_name}${c.role ? ` (${c.role})` : ""}`)
+                      .join(", ");
+                    const more = (ev.collaborators?.length || 0) > 3 ? ` +${(ev.collaborators?.length || 0) - 3} more` : "";
+                    const collabStr = collabs ? `\n+ ${ev.collaborators!.length} collaborator${ev.collaborators!.length === 1 ? "" : "s"}: ${collabs}${more}` : "";
+                    return `${ev.event_name || ev.title} · ${times}${ownerStr}${collabStr}`;
                   }}
                 />
               )}

@@ -42,6 +42,11 @@ type HubspotSummary = {
   key_contacts?: Array<Record<string, unknown>>;
   lists?: Array<Record<string, unknown>>;
   credential_diagnostics?: Record<string, unknown>;
+  form_metrics?: {
+    newsletter: { form_name: string | null; total: number; last_30d: number; found: boolean };
+    scout: { form_name: string | null; total: number; last_30d: number; found: boolean };
+    location_breakdown: Array<{ location: string; newsletter_count: number; scout_count: number }>;
+  } | null;
 };
 
 // Marketing forms (HubSpot Forms API) — fetched dynamically, no hardcoded names.
@@ -549,6 +554,179 @@ async function fetchHubspotForms(token: string, source: CredentialSource) {
   return results;
 }
 
+type FormMetric = {
+  form_id: string | null;
+  form_name: string | null;
+  total: number;
+  last_30d: number;
+  contact_ids_30d: string[];
+  contact_emails_30d: string[];
+  found: boolean;
+};
+
+function pickForm(forms: any[], includes: string[]): any | null {
+  for (const inc of includes) {
+    const m = forms.find((f) => typeof f?.name === "string" && f.name.toLowerCase().includes(inc));
+    if (m) return m;
+  }
+  return null;
+}
+
+async function fetchFormMetrics(token: string, source: CredentialSource, form: any | null): Promise<FormMetric> {
+  if (!form?.id && !form?.guid) {
+    return { form_id: null, form_name: null, total: 0, last_30d: 0, contact_ids_30d: [], contact_emails_30d: [], found: false };
+  }
+  const formId = form.id ?? form.guid;
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  let after: string | null = null;
+  let total = 0;
+  let last30 = 0;
+  const ids = new Set<string>();
+  const emails = new Set<string>();
+  let pages = 0;
+  let totalCaptured = false;
+
+  while (pages < 20) {
+    pages++;
+    const path = `/form-integrations/v1/submissions/forms/${formId}?limit=50${after ? `&after=${encodeURIComponent(after)}` : ""}`;
+    let resp: any;
+    try {
+      resp = await hubspotApi(path, token, "summary", source);
+    } catch (err) {
+      logHubspot("form_metrics fetch failed", { formId, page: pages, error: err instanceof Error ? err.message : String(err) });
+      break;
+    }
+    if (!totalCaptured) {
+      const t = typeof resp?.total === "number" ? resp.total : typeof resp?.totalCount === "number" ? resp.totalCount : null;
+      if (t !== null) { total = t; totalCaptured = true; }
+    }
+    const results: any[] = Array.isArray(resp?.results) ? resp.results : [];
+    let oldestInPage = Infinity;
+    for (const sub of results) {
+      const ts = typeof sub?.submittedAt === "number" ? sub.submittedAt : Date.parse(sub?.submittedAt || "");
+      if (Number.isFinite(ts)) oldestInPage = Math.min(oldestInPage, ts);
+      if (Number.isFinite(ts) && ts >= cutoff) {
+        last30++;
+        const vid = sub?.contact?.vid ?? sub?.contactId ?? null;
+        if (vid) ids.add(String(vid));
+        const values: any[] = Array.isArray(sub?.values) ? sub.values : [];
+        const emailField = values.find((v) => typeof v?.name === "string" && v.name.toLowerCase() === "email");
+        if (emailField?.value) emails.add(String(emailField.value).toLowerCase());
+      }
+    }
+    const next = resp?.paging?.next?.after ?? null;
+    if (!next) break;
+    if (oldestInPage < cutoff) break; // past 30d window
+    after = next;
+  }
+
+  if (!totalCaptured) total = last30; // fallback
+  return {
+    form_id: formId,
+    form_name: form?.name ?? null,
+    total,
+    last_30d: last30,
+    contact_ids_30d: [...ids],
+    contact_emails_30d: [...emails],
+    found: true,
+  };
+}
+
+async function fetchContactsLocations(token: string, source: CredentialSource, ids: string[], emails: string[]): Promise<Map<string, { city: string | null; country: string | null; email: string | null }>> {
+  const map = new Map<string, { city: string | null; country: string | null; email: string | null }>();
+  const props = ["city", "country", "email"];
+
+  async function batchRead(idValues: string[], idProperty?: string) {
+    for (let i = 0; i < idValues.length; i += 100) {
+      const inputs = idValues.slice(i, i + 100).map((v) => ({ id: v }));
+      try {
+        const body: any = { properties: props, inputs };
+        if (idProperty) body.idProperty = idProperty;
+        const resp = await hubspotApiPost("/crm/v3/objects/contacts/batch/read", body, token, "summary", source);
+        const results: any[] = Array.isArray(resp?.results) ? resp.results : [];
+        for (const c of results) {
+          const id = String(c?.id ?? "");
+          const email = c?.properties?.email ? String(c.properties.email).toLowerCase() : null;
+          const entry = {
+            city: c?.properties?.city || null,
+            country: c?.properties?.country || null,
+            email,
+          };
+          if (id) map.set(id, entry);
+          if (email) map.set(`email:${email}`, entry);
+        }
+      } catch (err) {
+        logHubspot("contacts batch_read failed", { count: inputs.length, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  }
+
+  if (ids.length > 0) await batchRead(ids);
+  if (emails.length > 0) await batchRead(emails, "email");
+  return map;
+}
+
+function aggregateLocationBreakdown(
+  newsletter: FormMetric,
+  scout: FormMetric,
+  locMap: Map<string, { city: string | null; country: string | null; email: string | null }>,
+): Array<{ location: string; newsletter_count: number; scout_count: number }> {
+  const counts = new Map<string, { newsletter_count: number; scout_count: number }>();
+
+  function locFor(id: string | null, email: string | null): string {
+    let entry = id ? locMap.get(id) : undefined;
+    if (!entry && email) entry = locMap.get(`email:${email.toLowerCase()}`);
+    if (!entry) return "Unknown";
+    const label = [entry.city, entry.country].filter(Boolean).join(", ");
+    return label || "Unknown";
+  }
+
+  function tally(metric: FormMetric, key: "newsletter_count" | "scout_count") {
+    const n = Math.max(metric.contact_ids_30d.length, metric.contact_emails_30d.length);
+    for (let i = 0; i < n; i++) {
+      const id = metric.contact_ids_30d[i] ?? null;
+      const email = metric.contact_emails_30d[i] ?? null;
+      const loc = locFor(id, email);
+      const cur = counts.get(loc) ?? { newsletter_count: 0, scout_count: 0 };
+      cur[key]++;
+      counts.set(loc, cur);
+    }
+  }
+
+  tally(newsletter, "newsletter_count");
+  tally(scout, "scout_count");
+
+  return [...counts.entries()]
+    .map(([location, v]) => ({ location, ...v }))
+    .sort((a, b) => (b.newsletter_count + b.scout_count) - (a.newsletter_count + a.scout_count))
+    .slice(0, 10);
+}
+
+async function buildHubspotFormMetrics(token: string, source: CredentialSource) {
+  try {
+    const formsPayload = await hubspotApi("/marketing/v3/forms?limit=100", token, "summary", source);
+    const forms: any[] = Array.isArray(formsPayload?.results) ? formsPayload.results : [];
+    const newsletterForm = pickForm(forms, ["newsletter", "subscribe", "signup", "sign up"]);
+    const scoutForm = pickForm(forms, ["scout"]);
+    const [newsletter, scout] = await Promise.all([
+      fetchFormMetrics(token, source, newsletterForm),
+      fetchFormMetrics(token, source, scoutForm),
+    ]);
+    const allIds = [...new Set([...newsletter.contact_ids_30d, ...scout.contact_ids_30d])];
+    const allEmails = [...new Set([...newsletter.contact_emails_30d, ...scout.contact_emails_30d])];
+    const locMap = await fetchContactsLocations(token, source, allIds, allEmails);
+    const location_breakdown = aggregateLocationBreakdown(newsletter, scout, locMap);
+    return {
+      newsletter: { form_name: newsletter.form_name, total: newsletter.total, last_30d: newsletter.last_30d, found: newsletter.found },
+      scout: { form_name: scout.form_name, total: scout.total, last_30d: scout.last_30d, found: scout.found },
+      location_breakdown,
+    };
+  } catch (err) {
+    logHubspot("form_metrics aggregation failed", { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  }
+}
+
 function normalizeBearerToken(token: string | null | undefined) {
   const trimmed = token?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : null;
@@ -824,7 +1002,26 @@ Deno.serve(async (req) => {
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const verifiedAt = new Date().toISOString();
   const authHeader = req.headers.get("Authorization");
-  const isTrustedInternalCall = !!authHeader && !!SUPABASE_SERVICE_ROLE_KEY && authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`;
+  // Trusted internal calls (e.g. ceo-briefing) authenticate with the service role key.
+  // Accept either an exact match against SUPABASE_SERVICE_ROLE_KEY (legacy) OR a JWT
+  // whose role claim is "service_role" (new signing-keys system).
+  const bearerToken = authHeader ? authHeader.replace(/^Bearer\s+/i, "") : "";
+  let isTrustedInternalCall = !!bearerToken && !!SUPABASE_SERVICE_ROLE_KEY && bearerToken === SUPABASE_SERVICE_ROLE_KEY;
+  if (!isTrustedInternalCall && bearerToken) {
+    try {
+      const parts = bearerToken.split(".");
+      if (parts.length === 3) {
+        const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        const padding = padded.length % 4 ? "=".repeat(4 - (padded.length % 4)) : "";
+        const claims = JSON.parse(atob(padded + padding));
+        if (claims?.role === "service_role") {
+          isTrustedInternalCall = true;
+        }
+      }
+    } catch (_e) {
+      // ignore — fall through to user-JWT validation
+    }
+  }
 
   if (!(action === "team_briefing_summary" && isTrustedInternalCall)) {
     const user = await getUser(req);
@@ -871,15 +1068,17 @@ Deno.serve(async (req) => {
       }
 
       await hubspotApi("/crm/v3/objects/companies?limit=1&properties=name", resolved.token, "verify", resolved.source);
-      const [companies, deals, contacts, lists] = await Promise.all([
+      const [companies, deals, contacts, lists, formMetrics] = await Promise.all([
         hubspotApi("/crm/v3/objects/companies?limit=50&properties=name,hs_lastmodifieddate,hubspotscore,notes_last_updated", resolved.token, "summary", resolved.source),
         hubspotApi("/crm/v3/objects/deals?limit=50&associations=companies,contacts&properties=dealname,dealstage,hs_lastmodifieddate,amount,closedate,hubspot_owner_id", resolved.token, "summary", resolved.source),
         hubspotApi("/crm/v3/objects/contacts?limit=50&properties=firstname,lastname,email,company,lifecyclestage,hubspot_owner_id,lastmodifieddate,notes_last_updated", resolved.token, "summary", resolved.source),
         fetchHubspotForms(resolved.token, resolved.source),
+        buildHubspotFormMetrics(resolved.token, resolved.source),
       ]);
 
       return json({
         ...buildTeamBriefingSummary(companies, deals, contacts, resolved.lastSync ?? verifiedAt, null, null, lists),
+        form_metrics: formMetrics,
         credential_source: resolved.source,
         verification_path: "/crm/v3/objects/companies",
         credential_diagnostics: resolved.diagnostics,

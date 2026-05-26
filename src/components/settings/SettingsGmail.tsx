@@ -1,4 +1,5 @@
-import { Mail, Loader2, Sparkles, Trash2, RefreshCw, CheckCircle2, Wand2, Eye } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Mail, Loader2, Sparkles, Trash2, RefreshCw, CheckCircle2, Wand2, Eye, X, Plus } from "lucide-react";
 import {
   useGmailWritingProfile,
   useGmailTrainStyle,
@@ -6,8 +7,10 @@ import {
   useGmailStatus,
   useGmailAutoDraftToggle,
   useGmailCEOBriefingOptinToggle,
+  useGmailAutoDraftFilterUpdate,
 } from "@/hooks/useGmailIntegration";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
 import { formatDistanceToNow } from "date-fns";
 
 export default function SettingsGmail() {
@@ -18,6 +21,8 @@ export default function SettingsGmail() {
   const autoDraftToggle = useGmailAutoDraftToggle();
   const ceoOptinToggle = useGmailCEOBriefingOptinToggle();
 
+  const filterUpdate = useGmailAutoDraftFilterUpdate();
+
   const trained = profile?.last_trained_at;
   const autoDraftEnabled = profile?.auto_draft_enabled ?? false;
   const ceoOptinEnabled = profile?.ceo_briefing_optin ?? false;
@@ -26,6 +31,38 @@ export default function SettingsGmail() {
   const draftsToday = profile?.auto_drafts_counter_date === today
     ? profile?.auto_drafts_created_today ?? 0
     : 0;
+
+  const [filterMode, setFilterMode] = useState<"blacklist" | "whitelist">(
+    profile?.auto_draft_filter_mode ?? "blacklist",
+  );
+  const [filterList, setFilterList] = useState<string[]>(profile?.auto_draft_filter_list ?? []);
+  const [filterInput, setFilterInput] = useState("");
+
+  useEffect(() => {
+    if (profile) {
+      setFilterMode(profile.auto_draft_filter_mode ?? "blacklist");
+      setFilterList(profile.auto_draft_filter_list ?? []);
+    }
+  }, [profile?.auto_draft_filter_mode, profile?.auto_draft_filter_list?.join(",")]);
+
+  const addFilterEntry = () => {
+    const v = filterInput.trim().toLowerCase();
+    if (!v) return;
+    if (filterList.includes(v)) { setFilterInput(""); return; }
+    const next = [...filterList, v];
+    setFilterList(next);
+    setFilterInput("");
+    filterUpdate.mutate({ mode: filterMode, list: next });
+  };
+  const removeFilterEntry = (entry: string) => {
+    const next = filterList.filter((e) => e !== entry);
+    setFilterList(next);
+    filterUpdate.mutate({ mode: filterMode, list: next });
+  };
+  const changeMode = (mode: "blacklist" | "whitelist") => {
+    setFilterMode(mode);
+    filterUpdate.mutate({ mode, list: filterList });
+  };
 
   if (!status?.connected) {
     return (
@@ -175,6 +212,82 @@ export default function SettingsGmail() {
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Drafts today</div>
                 <div className="text-xs text-foreground mt-0.5">{draftsToday} / 100</div>
               </div>
+            </div>
+          )}
+
+          {autoDraftEnabled && (
+            <div className="pt-3 border-t border-border space-y-3">
+              <div>
+                <div className="text-xs font-medium text-foreground">Sender filter</div>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                  {filterMode === "blacklist"
+                    ? "Duncan will skip emails from these senders. Use a full email (jane@acme.com) or a domain (@acme.com)."
+                    : "Duncan will only draft replies for emails from these senders. Empty list = no one."}
+                </p>
+              </div>
+
+              <div className="inline-flex rounded-lg border border-border bg-secondary/40 p-0.5 text-[11px]">
+                <button
+                  onClick={() => changeMode("blacklist")}
+                  className={`px-3 py-1 rounded-md font-medium transition-colors ${
+                    filterMode === "blacklist" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                  }`}
+                >
+                  Blacklist
+                </button>
+                <button
+                  onClick={() => changeMode("whitelist")}
+                  className={`px-3 py-1 rounded-md font-medium transition-colors ${
+                    filterMode === "whitelist" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                  }`}
+                >
+                  Whitelist
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <Input
+                  value={filterInput}
+                  onChange={(e) => setFilterInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addFilterEntry(); } }}
+                  placeholder="email@example.com or @example.com"
+                  className="h-8 text-xs"
+                />
+                <button
+                  onClick={addFilterEntry}
+                  disabled={!filterInput.trim() || filterUpdate.isPending}
+                  className="flex items-center gap-1 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  <Plus className="h-3 w-3" />
+                  Add
+                </button>
+              </div>
+
+              {filterList.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {filterList.map((entry) => (
+                    <span
+                      key={entry}
+                      className="inline-flex items-center gap-1 rounded-md bg-secondary/60 px-2 py-1 text-[11px] text-foreground"
+                    >
+                      {entry}
+                      <button
+                        onClick={() => removeFilterEntry(entry)}
+                        className="text-muted-foreground hover:text-destructive"
+                        aria-label={`Remove ${entry}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground/70 italic">
+                  {filterMode === "whitelist"
+                    ? "No senders added — auto-draft is effectively off until you add some."
+                    : "No senders blocked yet."}
+                </p>
+              )}
             </div>
           )}
         </div>

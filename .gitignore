@@ -26,3 +26,5 @@ fastapi-backend/.env
 fastapi-backend/duncan/
 __pycache__/
 *.pyc
+supabase
+supabase/config.toml

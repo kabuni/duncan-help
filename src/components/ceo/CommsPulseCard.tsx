@@ -99,6 +99,11 @@ interface Props {
       updated_at?: string | null;
       error?: string | null;
     }>;
+    form_metrics?: {
+      newsletter?: { form_name?: string | null; total?: number; last_30d?: number; found?: boolean };
+      scout?: { form_name?: string | null; total?: number; last_30d?: number; found?: boolean };
+      location_breakdown?: Array<{ location: string; newsletter_count: number; scout_count: number }>;
+    } | null;
   } | null;
   azureReposSignal?: {
     status?: string;
@@ -117,6 +122,38 @@ interface Props {
     release_risks?: number;
     summary?: string | null;
     degraded_reason?: string | null;
+    commits_7d?: number;
+    files_added_7d?: number;
+    files_removed_7d?: number;
+    active_contributors_7d?: number;
+    contributors_7d?: Array<{
+      author: string;
+      email?: string;
+      commits: number;
+      files_added: number;
+      files_edited: number;
+      files_removed: number;
+      lines_changed: number;
+      repos?: string[];
+      commits_prev_7d: number;
+      trend: "up" | "down" | "flat";
+    }>;
+    top_contributor?: { author: string; commits: number; lines_changed: number } | null;
+    prev_window?: {
+      commits_7d?: number;
+      files_added_7d?: number;
+      files_removed_7d?: number;
+      active_contributors_7d?: number;
+      since?: string;
+      until?: string;
+    } | null;
+    wow?: {
+      commits_delta?: number; commits_pct?: number;
+      files_added_delta?: number; files_added_pct?: number;
+      files_removed_delta?: number; files_removed_pct?: number;
+      contributors_delta?: number;
+      trend?: "up" | "down" | "flat";
+    } | null;
   } | null;
 }
 
@@ -221,6 +258,60 @@ function ExternalSignalColumn({
 
       {hubspotSignal ? (
         <div className="space-y-3 border-t border-border/70 pt-3">
+          {hubspotSignal.form_metrics ? (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                {(["newsletter", "scout"] as const).map((key) => {
+                  const fm = hubspotSignal.form_metrics?.[key];
+                  const label = key === "newsletter" ? "Newsletter signups" : "Scout submissions";
+                  return (
+                    <div key={key} className="rounded border border-border bg-background/60 p-2.5">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+                      {fm?.found ? (
+                        <>
+                          <div className="mt-0.5 flex items-baseline gap-1.5">
+                            <span className="text-base font-semibold tabular-nums text-foreground">{(fm.total ?? 0).toLocaleString()}</span>
+                            <span className="text-[10px] text-muted-foreground">total</span>
+                            <span className="text-[10px] text-muted-foreground">·</span>
+                            <span className="text-xs font-medium tabular-nums text-foreground">{(fm.last_30d ?? 0).toLocaleString()}</span>
+                            <span className="text-[10px] text-muted-foreground">last 30d</span>
+                          </div>
+                          {fm.form_name ? <div className="text-[10px] text-muted-foreground truncate mt-0.5">{fm.form_name}</div> : null}
+                        </>
+                      ) : (
+                        <div className="text-[10px] text-muted-foreground mt-1">Form not found in connected portal</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {(hubspotSignal.form_metrics.location_breakdown?.length ?? 0) > 0 ? (
+                <div className="rounded border border-border bg-background/60 overflow-hidden">
+                  <div className="px-2.5 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border">
+                    Location breakdown (last 30d)
+                  </div>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border text-[10px] uppercase tracking-wider text-muted-foreground">
+                        <th className="text-left font-normal px-2.5 py-1.5">Location</th>
+                        <th className="text-right font-normal px-2.5 py-1.5">Newsletter</th>
+                        <th className="text-right font-normal px-2.5 py-1.5">Scout</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {hubspotSignal.form_metrics.location_breakdown!.map((row, idx) => (
+                        <tr key={`${row.location}-${idx}`} className="border-b border-border last:border-0">
+                          <td className="px-2.5 py-1.5 text-foreground">{row.location}</td>
+                          <td className="px-2.5 py-1.5 text-right tabular-nums text-foreground">{row.newsletter_count.toLocaleString()}</td>
+                          <td className="px-2.5 py-1.5 text-right tabular-nums text-foreground">{row.scout_count.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -755,6 +846,122 @@ function SlackColumn({ pulse }: { pulse: SlackPulseSummary | null | undefined })
   );
 }
 
+type AzureSignal = NonNullable<Props["azureReposSignal"]>;
+
+function TrendChip({ trend, pct, delta }: { trend?: "up" | "down" | "flat"; pct?: number; delta?: number }) {
+  const t = trend || "flat";
+  const sym = t === "up" ? "▲" : t === "down" ? "▼" : "=";
+  const cls = t === "up"
+    ? "text-emerald-600 dark:text-emerald-400"
+    : t === "down"
+    ? "text-rose-600 dark:text-rose-400"
+    : "text-muted-foreground";
+  const label = pct !== undefined && Number.isFinite(pct)
+    ? `${pct > 0 ? "+" : ""}${pct}%`
+    : delta !== undefined
+    ? `${delta > 0 ? "+" : ""}${delta}`
+    : "";
+  return (
+    <span className={`text-[10px] font-mono tabular-nums ${cls}`}>
+      {sym} {label}
+    </span>
+  );
+}
+
+function AzureReposSection({ signal }: { signal: AzureSignal }) {
+  const [showAll, setShowAll] = useState(false);
+  const wow = signal?.wow || {};
+  const contributors = signal?.contributors_7d || [];
+  const top = signal?.top_contributor;
+  const visible = showAll ? contributors : contributors.slice(0, 8);
+
+  const tiles: Array<{ label: string; value: number; trend?: "up" | "down" | "flat"; pct?: number; delta?: number }> = [
+    { label: "Commits 7d", value: Number(signal?.commits_7d || 0), trend: wow.trend, pct: wow.commits_pct, delta: wow.commits_delta },
+    { label: "Files added 7d", value: Number(signal?.files_added_7d || 0), pct: wow.files_added_pct, delta: wow.files_added_delta, trend: (wow.files_added_delta || 0) > 0 ? "up" : (wow.files_added_delta || 0) < 0 ? "down" : "flat" },
+    { label: "Files removed 7d", value: Number(signal?.files_removed_7d || 0), pct: wow.files_removed_pct, delta: wow.files_removed_delta, trend: (wow.files_removed_delta || 0) > 0 ? "up" : (wow.files_removed_delta || 0) < 0 ? "down" : "flat" },
+    { label: "Contributors 7d", value: Number(signal?.active_contributors_7d || 0), delta: wow.contributors_delta, trend: (wow.contributors_delta || 0) > 0 ? "up" : (wow.contributors_delta || 0) < 0 ? "down" : "flat" },
+  ];
+
+  const trendSentence = wow.trend === "up"
+    ? `Activity is increasing (commits ${(wow.commits_pct ?? 0) > 0 ? "+" : ""}${wow.commits_pct ?? 0}% WoW).`
+    : wow.trend === "down"
+    ? `Activity is slowing (commits ${wow.commits_pct ?? 0}% WoW).`
+    : "Activity is steady week over week.";
+
+  return (
+    <div className="space-y-3">
+      <ExternalSignalColumn
+        title="Azure Repos"
+        icon={GitBranch}
+        signal={signal}
+        primaryMetric={{ label: "Repos", value: Number(signal?.repos_scanned || 0) }}
+        secondaryMetric={{ label: "Open / Blocked", value: `${Number(signal?.open_prs || 0)} / ${Number(signal?.blocked_prs || 0)}` }}
+      />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        {tiles.map((m) => (
+          <div key={m.label} className="rounded border border-border bg-background/60 p-2">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{m.label}</div>
+            <div className="mt-0.5 flex items-baseline justify-between gap-2">
+              <div className="text-sm font-semibold tabular-nums text-foreground">{m.value.toLocaleString()}</div>
+              {signal?.prev_window && <TrendChip trend={m.trend} pct={m.pct} delta={m.delta} />}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {top && (
+        <div className="rounded border border-border bg-background/60 px-3 py-2 text-xs">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-2">Top contributor</span>
+          <span className="font-semibold text-foreground">{top.author}</span>
+          <span className="text-muted-foreground"> — {top.commits} commits · {top.lines_changed} changes</span>
+        </div>
+      )}
+
+      {contributors.length > 0 && (
+        <div className="rounded border border-border bg-background/60">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Contributors (last 7d)</div>
+            {contributors.length > 8 && (
+              <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setShowAll((v) => !v)}>
+                {showAll ? "Show top 8" : `Show all (${contributors.length})`}
+              </Button>
+            )}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="px-3 py-1.5 font-normal">Author</th>
+                  <th className="px-3 py-1.5 font-normal text-right">Commits</th>
+                  <th className="px-3 py-1.5 font-normal text-right">Changes</th>
+                  <th className="px-3 py-1.5 font-normal text-right">vs prev week</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((c) => (
+                  <tr key={c.email || c.author} className="border-t border-border/60">
+                    <td className="px-3 py-1.5 text-foreground">{c.author}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-foreground">{c.commits}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-foreground">{c.lines_changed}</td>
+                    <td className="px-3 py-1.5 text-right">
+                      <TrendChip trend={c.trend} delta={c.commits - c.commits_prev_7d} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {signal?.prev_window && (
+        <div className="text-[11px] text-muted-foreground italic">{trendSentence}</div>
+      )}
+    </div>
+  );
+}
+
 export default function CommsPulseCard({ emailPulse, slackPulse, hubspotSignal, azureReposSignal }: Props) {
   const [expanded, setExpanded] = useState(false);
 
@@ -814,13 +1021,7 @@ export default function CommsPulseCard({ emailPulse, slackPulse, hubspotSignal, 
             />
           )}
           {azureReposSignal && (
-            <ExternalSignalColumn
-              title="Azure Repos"
-              icon={GitBranch}
-              signal={azureReposSignal}
-              primaryMetric={{ label: "Repos", value: Number(azureReposSignal?.repos_scanned || 0) }}
-              secondaryMetric={{ label: "Open / Blocked", value: `${Number(azureReposSignal?.open_prs || 0)} / ${Number(azureReposSignal?.blocked_prs || 0)}` }}
-            />
+            <AzureReposSection signal={azureReposSignal} />
           )}
         </div>
 

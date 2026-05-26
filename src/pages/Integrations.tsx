@@ -12,8 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { invokeEdge } from "@/lib/edgeApi";
-import { fastApi, withFastApi } from "@/lib/fastApiClient";
+import { fastApi } from "@/lib/fastApiClient";
+import { getAuthUser } from "@/lib/authStorage";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { useSlackConnection } from "@/hooks/useSlackConnection";
 import { useAzureBlobStorage } from "@/hooks/useAzureBlobStorage";
@@ -223,7 +223,7 @@ const integrations: Integration[] = [
   },
 ];
 
-const hiddenIntegrationIds = new Set(["azure-blob", "basecamp", "azure-devops", "github", "hubspot"]);
+const hiddenIntegrationIds = new Set(["azure-blob", "basecamp", "github", "hubspot"]);
 const baseVisibleIntegrations = integrations.filter((integration) => !hiddenIntegrationIds.has(integration.id));
 
 const statusConfig: Record<IntegrationStatus, { label: string; color: string; dot: string; bg: string }> = {
@@ -302,9 +302,9 @@ const Integrations = () => {
 
   const checkGmailConnection = async () => {
     try {
-      const { supabase } = await import("@/integrations/supabase/client");
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = getAuthUser();
       if (!user) { setIsGmailConnected(false); return; }
+      const { supabase } = await import("@/integrations/supabase/client");
       const { data } = await supabase.from("gmail_tokens").select("id").eq("connected_by", user.id).limit(1);
       setIsGmailConnected(data && data.length > 0);
     } catch {
@@ -314,10 +314,8 @@ const Integrations = () => {
 
   const checkAzureDevOpsConnection = async () => {
     try {
-      const { supabase } = await import("@/integrations/supabase/client");
-      const { data } = await supabase.rpc("get_company_integrations_status");
-      const row = (data ?? []).find((r: any) => r.integration_id === "azure-devops");
-      setIsAzureDevOpsConnected(row?.status === "connected");
+      const data = await fastApi("POST", "/azure-devops/api", { action: "list_projects" });
+      setIsAzureDevOpsConnected(!(data as any)?.error);
     } catch {
       setIsAzureDevOpsConnected(false);
     }
@@ -326,13 +324,9 @@ const Integrations = () => {
 
   const checkGoogleDriveConnection = async () => {
     try {
-      const { supabase } = await import("@/integrations/supabase/client");
-      const { data, error } = await supabase.functions.invoke("google-drive-api", {
-        body: { action: "status" },
-      });
-      if (error) throw error;
+      const data = await fastApi("POST", "/drive/api", { action: "status" });
       setGoogleDriveStatus(data as GoogleDriveStatusDetail);
-      setIsGoogleDriveConnected(data?.status === "connected" || data?.connected === true);
+      setIsGoogleDriveConnected((data as any)?.status === "connected" || (data as any)?.connected === true);
     } catch (error) {
       setGoogleDriveStatus({
         status: "degraded",
@@ -685,9 +679,9 @@ const IntegrationDetail = ({
       return;
     }
 
-    const fn = isHubSpot ? "hubspot-api" : "github-api";
+    const endpoint = isHubSpot ? "/hubspot/api" : "/github/api";
     try {
-      const data = await invokeEdge<any>(fn, { body: { action: "status" } });
+      const data = await fastApi("POST", endpoint, { action: "status" });
       setStatusDetail(data);
     } catch (error) {
       setStatusDetail({
@@ -764,17 +758,7 @@ const IntegrationDetail = ({
 
       if (isGmail) {
         setGmailLoading(true);
-        const { supabase } = await import("@/integrations/supabase/client");
-        await withFastApi(
-          async () => {
-            const { error } = await supabase.functions.invoke("gmail-api", {
-              body: { action: "disconnect" },
-            });
-            if (error) throw error;
-            return null;
-          },
-          () => fastApi("POST", "/gmail/api", { action: "disconnect" }),
-        );
+        await fastApi("POST", "/gmail/api", { action: "disconnect" });
         toast.success("Gmail disconnected");
         onClose();
         return;
@@ -782,18 +766,21 @@ const IntegrationDetail = ({
 
       if (isGoogleDrive) {
         setGoogleDriveLoading(true);
-        const { supabase } = await import("@/integrations/supabase/client");
-        await withFastApi(
-          async () => {
-            const { error } = await supabase.functions.invoke("google-drive-api", {
-              body: { action: "disconnect" },
-            });
-            if (error) throw error;
-            return null;
-          },
-          () => fastApi("POST", "/drive/api", { action: "disconnect" }),
-        );
+        await fastApi("POST", "/drive/api", { action: "disconnect" });
         toast.success("Google Drive disconnected");
+        onClose();
+        return;
+      }
+
+      if (isAzureDevOps) {
+        const { supabase } = await import("@/integrations/supabase/client");
+        const { error } = await supabase
+          .from("azure_devops_tokens")
+          .delete()
+          .neq("id", "00000000-0000-0000-0000-000000000000");
+        if (error) throw error;
+        await fetchRuntimeStatus();
+        toast.success("Azure DevOps disconnected");
         onClose();
         return;
       }
@@ -820,29 +807,13 @@ const IntegrationDetail = ({
         await initiateCalendarOAuth();
       } else if (isBasecamp) {
         setBasecampLoading(true);
-        const { supabase } = await import("@/integrations/supabase/client");
-        const data = await withFastApi<{ url?: string }>(
-          async () => {
-            const { data, error } = await supabase.functions.invoke("basecamp-auth");
-            if (error) throw error;
-            return data;
-          },
-          () => fastApi("GET", "/basecamp/auth"),
-        );
+        const data = await fastApi<{ url?: string }>("GET", "/basecamp/auth");
         if (data?.url) window.location.href = data.url;
         else throw new Error("No auth URL returned");
         setBasecampLoading(false);
       } else if (isGmail) {
         setGmailLoading(true);
-        const { supabase } = await import("@/integrations/supabase/client");
-        const data = await withFastApi<{ url?: string }>(
-          async () => {
-            const { data, error } = await supabase.functions.invoke("gmail-auth");
-            if (error) throw error;
-            return data;
-          },
-          () => fastApi("GET", "/gmail/auth"),
-        );
+        const data = await fastApi<{ url?: string }>("GET", "/gmail/auth");
         if (data?.url) window.location.href = data.url;
         else throw new Error("No auth URL returned");
         setGmailLoading(false);
@@ -850,29 +821,13 @@ const IntegrationDetail = ({
         await slackOAuth.connect();
       } else if (isAzureDevOps) {
         setAzureDevOpsLoading(true);
-        const { supabase } = await import("@/integrations/supabase/client");
-        const data = await withFastApi<{ url?: string }>(
-          async () => {
-            const { data, error } = await supabase.functions.invoke("azure-devops-auth");
-            if (error) throw error;
-            return data;
-          },
-          () => fastApi("GET", "/azure-devops/auth"),
-        );
+        const data = await fastApi<{ url?: string }>("GET", "/azure-devops/auth");
         if (data?.url) window.location.href = data.url;
         else throw new Error("No auth URL returned");
         setAzureDevOpsLoading(false);
       } else if (isGoogleDrive) {
         setGoogleDriveLoading(true);
-        const { supabase } = await import("@/integrations/supabase/client");
-        const data = await withFastApi<{ url?: string }>(
-          async () => {
-            const { data, error } = await supabase.functions.invoke("google-drive-auth");
-            if (error) throw error;
-            return data;
-          },
-          () => fastApi("GET", "/drive/auth"),
-        );
+        const data = await fastApi<{ url?: string }>("GET", "/drive/auth");
         if (data?.url) window.location.href = data.url;
         else throw new Error("No auth URL returned");
         setGoogleDriveLoading(false);
@@ -890,16 +845,13 @@ const IntegrationDetail = ({
   const handleGoogleDriveTest = async () => {
     try {
       setGoogleDriveTesting(true);
-      const { supabase } = await import("@/integrations/supabase/client");
-      const { data, error } = await supabase.functions.invoke("google-drive-api", {
-        body: { action: "test" },
-      });
-      if (error) throw error;
+      const data = await fastApi("POST", "/drive/api", { action: "test" });
       setLocalGoogleDriveStatus(data as GoogleDriveStatusDetail);
-      if (data?.status === "connected") {
-        toast.success(`Google Drive verified${typeof data.visible_file_count === "number" ? ` · ${data.visible_file_count} files visible in test` : ""}`);
+      if ((data as any)?.status === "connected") {
+        const count = (data as any)?.visible_file_count;
+        toast.success(`Google Drive verified${typeof count === "number" ? ` · ${count} files visible in test` : ""}`);
       } else {
-        toast.error(data?.degraded_reason || data?.error || "Google Drive verification failed");
+        toast.error((data as any)?.degraded_reason || (data as any)?.error || "Google Drive verification failed");
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to test Google Drive");
@@ -918,11 +870,7 @@ const IntegrationDetail = ({
 
     try {
       setSlackSending(true);
-      const { supabase } = await import("@/integrations/supabase/client");
-      const { data, error } = await supabase.functions.invoke("slack-send-message", {
-        body: { channel_id: channelId, text },
-      });
-      if (error) throw error;
+      const data = await fastApi("POST", "/slack/send-message", { channel_id: channelId, text });
       if ((data as any)?.error) throw new Error((data as any).error);
       toast.success(`Message posted as you in ${channelId}`);
       setSlackMessage("");

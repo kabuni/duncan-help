@@ -51,6 +51,12 @@ class ProjectChatRequest(BaseModel):
     attachments: Optional[list[dict]] = None
 
 
+class SimpleProjectChatRequest(BaseModel):
+    chat_id: str
+    message: str
+    attachments: Optional[list[dict]] = None
+
+
 class GenerateTitleRequest(BaseModel):
     messages: list[ChatMessage]
 
@@ -554,20 +560,45 @@ async def norman_chat(
 
 @router.post("/chat-with-project-context")
 async def chat_with_project_context(
-    body: ProjectChatRequest,
+    body: SimpleProjectChatRequest,
     current_user: dict = Depends(get_current_user),
     conn: asyncpg.Connection = Depends(get_connection),
 ):
+    # Resolve project_id from chat
+    chat_row = await conn.fetchrow("SELECT project_id FROM chats WHERE id = $1", body.chat_id)
+    if not chat_row or not chat_row["project_id"]:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    project_id = str(chat_row["project_id"])
+
     project = await conn.fetchrow(
         """SELECT p.* FROM projects p
            WHERE p.id = $1 AND (
                EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = $1 AND pm.user_id = $2)
                OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = $2 AND ur.role::text IN ('admin','moderator'))
            )""",
-        body.project_id, current_user["id"],
+        project_id, current_user["id"],
     )
     if not project:
         raise HTTPException(status_code=403, detail="Project not found or access denied")
+
+    # Save user message to DB
+    user_msg_id = str(uuid.uuid4())
+    await conn.execute(
+        """INSERT INTO chat_messages (id, chat_id, sender_type, sender_user_id, content, created_at)
+           VALUES ($1, $2, 'user', $3, $4, NOW())""",
+        user_msg_id, body.chat_id, current_user["id"], body.message,
+    )
+    await conn.execute(
+        "UPDATE chats SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1", body.chat_id
+    )
+
+    # Load last N messages as context
+    history_rows = await conn.fetch(
+        """SELECT sender_type AS role, content FROM chat_messages
+           WHERE chat_id = $1 ORDER BY created_at DESC LIMIT $2""",
+        body.chat_id, CONTEXT_MESSAGES,
+    )
+    history = [{"role": r["role"], "content": r["content"]} for r in reversed(history_rows)]
 
     # File manifest via project_sources → files
     files = await conn.fetch(
@@ -576,56 +607,83 @@ async def chat_with_project_context(
            JOIN project_sources ps ON ps.id = f.project_source_id
            WHERE ps.project_id = $1
            ORDER BY f.created_at DESC LIMIT 20""",
-        body.project_id,
+        project_id,
     )
     file_manifest = "\n".join([f"- {f['original_filename']} (id:{f['id']})" for f in files]) or "No files uploaded yet."
 
-    # RAG: semantic search for the latest user message
+    # RAG: semantic search on the user's message
     rag_context = ""
-    user_messages = [m for m in body.messages if m.role == "user"]
-    if user_messages:
-        try:
-            embedding = await embed_text(user_messages[-1].content)
-            emb_str = "[" + ",".join(str(x) for x in embedding) + "]"
-            chunks = await conn.fetch(
-                """SELECT fc.content, f.original_filename as filename,
-                          1 - (fe.embedding <=> $1::vector) as similarity
-                   FROM file_embeddings fe
-                   JOIN file_chunks fc ON fc.id = fe.file_chunk_id
-                   JOIN files f ON f.id = fc.file_id
-                   JOIN project_sources ps ON ps.id = f.project_source_id
-                   WHERE ps.project_id = $2
-                   ORDER BY fe.embedding <=> $1::vector
-                   LIMIT 5""",
-                emb_str, body.project_id,
+    try:
+        embedding = await embed_text(body.message)
+        emb_str = "[" + ",".join(str(x) for x in embedding) + "]"
+        chunks = await conn.fetch(
+            """SELECT fc.content, f.original_filename AS filename
+               FROM file_embeddings fe
+               JOIN file_chunks fc ON fc.id = fe.file_chunk_id
+               JOIN files f ON f.id = fc.file_id
+               JOIN project_sources ps ON ps.id = f.project_source_id
+               WHERE ps.project_id = $2
+               ORDER BY fe.embedding <=> $1::vector
+               LIMIT 5""",
+            emb_str, project_id,
+        )
+        if chunks:
+            rag_context = "\n\nRelevant file content:\n" + "\n---\n".join(
+                [f"[{c['filename']}]\n{c['content']}" for c in chunks]
             )
-            if chunks:
-                rag_context = "\n\nRelevant file content:\n" + "\n---\n".join(
-                    [f"[{c['filename']}]\n{c['content']}" for c in chunks]
-                )
-        except Exception as e:
-            logger.warning(f"RAG search failed: {e}")
+    except Exception as e:
+        logger.warning(f"RAG search failed: {e}")
+
+    # Handle attachment text (inline context)
+    attachment_context = ""
+    for att in (body.attachments or []):
+        if att.get("extractedText"):
+            attachment_context += f"\n\n[Attached file: {att.get('name', 'file')}]\n{att['extractedText']}"
 
     system_prompt = f"""{_build_system_prompt(current_user)}
 
 You are working within project: {dict(project)['name']}
-Project ID: {body.project_id}
+Project ID: {project_id}
 
 Project files available:
 {file_manifest}
-{rag_context}"""
+{rag_context}{attachment_context}"""
 
-    messages = [{"role": "system", "content": system_prompt}]
-    for m in body.messages[-CONTEXT_MESSAGES:]:
-        messages.append({"role": m.role, "content": m.content})
+    messages = [{"role": "system", "content": system_prompt}] + history
+
+    # Collect and persist assistant reply
+    assistant_chunks: list[str] = []
 
     async def generate():
         try:
             async for line in _run_tool_loop(messages, current_user, conn):
+                if line.startswith("data: ") and not line.strip().endswith("[DONE]"):
+                    try:
+                        parsed = json.loads(line[6:])
+                        chunk = parsed.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                        if chunk:
+                            assistant_chunks.append(chunk)
+                    except Exception:
+                        pass
                 yield line
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
             yield "data: [DONE]\n\n"
+        finally:
+            if assistant_chunks:
+                reply = "".join(assistant_chunks)
+                try:
+                    await conn.execute(
+                        """INSERT INTO chat_messages (id, chat_id, sender_type, content, created_at)
+                           VALUES ($1, $2, 'assistant', $3, NOW())""",
+                        str(uuid.uuid4()), body.chat_id, reply,
+                    )
+                    await conn.execute(
+                        "UPDATE chats SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1",
+                        body.chat_id,
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to save assistant message: {e}")
 
     return StreamingResponse(generate(), media_type="text/event-stream", headers=SSE_HEADERS)
 

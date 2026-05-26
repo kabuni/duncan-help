@@ -18,6 +18,8 @@ _VAULT_SECRET_MAP = {
     "gmail-client-secret": "GMAIL_CLIENT_SECRET",
     "google-calendar-client-id": "GOOGLE_CALENDAR_CLIENT_ID",
     "google-calendar-client-secret": "GOOGLE_CALENDAR_CLIENT_SECRET",
+    "google-analytics-client-id": "GOOGLE_ANALYTICS_CLIENT_ID",
+    "google-analytics-client-secret": "GOOGLE_ANALYTICS_CLIENT_SECRET",
     "basecamp-client-id": "BASECAMP_CLIENT_ID",
     "basecamp-client-secret": "BASECAMP_CLIENT_SECRET",
     "azure-devops-client-id": "AZURE_DEVOPS_CLIENT_ID",
@@ -73,7 +75,7 @@ def _load_from_vault() -> dict:
 
 class Settings(BaseSettings):
     # App
-    APP_URL: str = "https://duncan.help"
+    APP_URL: str = "http://localhost:8080"
     ALLOWED_EMAIL_DOMAINS: str = "kabuni.com"
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"
@@ -117,6 +119,8 @@ class Settings(BaseSettings):
     GMAIL_CLIENT_SECRET: str = ""
     GOOGLE_CALENDAR_CLIENT_ID: str = ""
     GOOGLE_CALENDAR_CLIENT_SECRET: str = ""
+    GOOGLE_ANALYTICS_CLIENT_ID: str = ""
+    GOOGLE_ANALYTICS_CLIENT_SECRET: str = ""
 
     # Integrations
     SLACK_BOT_TOKEN: str = ""
@@ -145,11 +149,21 @@ class Settings(BaseSettings):
     # HubSpot
     HUBSPOT_API_KEY: str = ""
 
+    # Bootstrap — used once to promote the first admin; clear after use
+    BOOTSTRAP_SECRET: str = ""
+
     # Redis (for Celery background jobs)
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000", "https://duncan.help"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "http://localhost:8081",
+        "http://localhost:8000",
+        "https://duncan.help",
+    ]
 
     class Config:
         env_file = ".env"

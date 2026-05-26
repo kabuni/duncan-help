@@ -49,6 +49,10 @@ const ProtectedRoute = ({ children }: { children: ReactNode }) => {
     );
   }
 
+  if (profile && profile.approval_status === "approved" && !profile.onboarding_completed_at) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
   return <>{children}</>;
 };
 

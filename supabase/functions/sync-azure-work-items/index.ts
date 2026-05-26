@@ -23,67 +23,147 @@ Deno.serve(async (req) => {
     .single();
 
   try {
-    // Get token
-    const { data: tokenRow } = await supabaseAdmin
-      .from("azure_devops_tokens")
-      .select("*")
-      .limit(1)
-      .maybeSingle();
+    let authHeader: string;
+    let orgUrl: string;
+    const pat = Deno.env.get("AZURE_DEVOPS_PAT");
 
-    if (!tokenRow) {
-      throw new Error("Azure DevOps not connected");
-    }
-
-    // Refresh token if needed
-    let accessToken = tokenRow.access_token;
-    const expiry = new Date(tokenRow.token_expiry);
-    if (expiry <= new Date(Date.now() + 5 * 60 * 1000)) {
-      const clientId = Deno.env.get("AZURE_DEVOPS_CLIENT_ID")!;
-      const clientSecret = Deno.env.get("AZURE_DEVOPS_CLIENT_SECRET")!;
-      const tenantId = Deno.env.get("AZURE_TENANT_ID") || "53e795b0-6f86-4e93-b619-32b5f5850f07";
-      const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          refresh_token: tokenRow.refresh_token,
-          grant_type: "refresh_token",
-          scope: "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation offline_access",
-        }),
-      });
-      if (!response.ok) throw new Error("Token refresh failed");
-      const tokens = await response.json();
-      accessToken = tokens.access_token;
-      await supabaseAdmin
+    if (pat) {
+      authHeader = `Basic ${btoa(":" + pat)}`;
+      orgUrl = (Deno.env.get("AZURE_DEVOPS_ORG_URL") || "").replace(/\/+$/, "");
+      if (!orgUrl) throw new Error("AZURE_DEVOPS_ORG_URL not configured");
+    } else {
+      // Get token
+      const { data: tokenRow } = await supabaseAdmin
         .from("azure_devops_tokens")
-        .update({
-          access_token: tokens.access_token,
-          refresh_token: tokens.refresh_token || tokenRow.refresh_token,
-          token_expiry: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-        })
-        .eq("id", tokenRow.id);
-    }
+        .select("*")
+        .limit(1)
+        .maybeSingle();
 
-    const orgUrl = tokenRow.org_url || Deno.env.get("AZURE_DEVOPS_ORG_URL") || "";
+      if (!tokenRow) {
+        throw new Error("Azure DevOps not connected");
+      }
+
+      // Refresh token if needed
+      let accessToken = tokenRow.access_token;
+      const expiry = new Date(tokenRow.token_expiry);
+      if (expiry <= new Date(Date.now() + 5 * 60 * 1000)) {
+        const clientId = Deno.env.get("AZURE_DEVOPS_CLIENT_ID")!;
+        const clientSecret = Deno.env.get("AZURE_DEVOPS_CLIENT_SECRET")!;
+        const tenantId = Deno.env.get("AZURE_TENANT_ID") || "53e795b0-6f86-4e93-b619-32b5f5850f07";
+        const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: tokenRow.refresh_token,
+            grant_type: "refresh_token",
+            scope: "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation offline_access",
+          }),
+        });
+        if (!response.ok) throw new Error("Token refresh failed");
+        const tokens = await response.json();
+        accessToken = tokens.access_token;
+        await supabaseAdmin
+          .from("azure_devops_tokens")
+          .update({
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token || tokenRow.refresh_token,
+            token_expiry: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+          })
+          .eq("id", tokenRow.id);
+      }
+      authHeader = `Bearer ${accessToken}`;
+      orgUrl = tokenRow.org_url || Deno.env.get("AZURE_DEVOPS_ORG_URL") || "";
+    }
 
     // List projects
     const projectsRes = await fetch(`${orgUrl}/_apis/projects?api-version=7.1`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: authHeader },
     });
     if (!projectsRes.ok) throw new Error(`Failed to list projects: ${projectsRes.status}`);
     const projectsData = await projectsRes.json();
 
     let totalSynced = 0;
+    let totalDeleted = 0;
+
+    const reconcileDeletedWorkItems = async (projectName: string, liveIds: number[] | null) => {
+      if (liveIds === null) return;
+
+      const liveSet = new Set(liveIds);
+      const stale: number[] = [];
+      let from = 0;
+      const pageSize = 1000;
+
+      while (true) {
+        const { data: existing, error: existingErr } = await supabaseAdmin
+          .from("azure_work_items")
+          .select("external_id")
+          .eq("project_name", projectName)
+          .range(from, from + pageSize - 1);
+
+        if (existingErr) {
+          console.warn(`Failed to read existing work items for ${projectName}:`, existingErr);
+          return;
+        }
+
+        for (const row of existing || []) {
+          const id = Number((row as any).external_id);
+          if (Number.isFinite(id) && !liveSet.has(id)) stale.push(id);
+        }
+
+        if (!existing || existing.length < pageSize) break;
+        from += pageSize;
+      }
+
+      for (let i = 0; i < stale.length; i += 500) {
+        const chunk = stale.slice(i, i + 500);
+        const { error: delErr, count } = await supabaseAdmin
+          .from("azure_work_items")
+          .delete({ count: "exact" })
+          .eq("project_name", projectName)
+          .in("external_id", chunk);
+
+        if (!delErr) totalDeleted += count ?? chunk.length;
+        else console.warn(`Delete failed for ${projectName}:`, delErr);
+      }
+    };
 
     for (const project of projectsData.value || []) {
       const scopedProjectName = String(project.name || "").replace(/'/g, "''");
+
+      // ---- Reconciliation: fetch ALL live work item IDs for this project ----
+      // We use this to delete rows from azure_work_items that no longer exist in Azure DevOps.
+      let liveIds: number[] | null = null;
+      try {
+        const allRes = await fetch(`${orgUrl}/${project.name}/_apis/wit/wiql?api-version=7.1`, {
+          method: "POST",
+          headers: { Authorization: authHeader, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `SELECT [System.Id] FROM workitems WHERE [System.TeamProject] = '${scopedProjectName}'`,
+          }),
+        });
+        if (allRes.ok) {
+          const allData = await allRes.json();
+          const items = allData.workItems || [];
+          // Azure WIQL caps at ~20,000 results — only reconcile if we are clearly under the cap
+          if (items.length < 19500) {
+            liveIds = items.map((w: any) => Number(w.id)).filter((n: number) => Number.isFinite(n));
+          } else {
+            console.warn(`Skipping reconciliation for ${project.name}: result set too large (${items.length})`);
+          }
+        } else {
+          console.warn(`Reconciliation WIQL failed for ${project.name}: ${allRes.status}`);
+        }
+      } catch (e) {
+        console.warn(`Reconciliation WIQL error for ${project.name}:`, e);
+      }
 
       // Query recent work items (changed in last 30 days)
       const wiqlRes = await fetch(`${orgUrl}/${project.name}/_apis/wit/wiql?api-version=7.1`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: authHeader,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -98,15 +178,21 @@ Deno.serve(async (req) => {
 
       const wiqlData = await wiqlRes.json();
       const ids = (wiqlData.workItems || []).map((w: any) => w.id).slice(0, 200);
-      if (ids.length === 0) continue;
+      if (ids.length === 0) {
+        await reconcileDeletedWorkItems(project.name, liveIds);
+        continue;
+      }
 
       // Batch get work items (max 200 per call)
       const batchRes = await fetch(
         `${orgUrl}/_apis/wit/workitems?ids=${ids.join(",")}&$expand=all&api-version=7.1`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+        { headers: { Authorization: authHeader } }
       );
 
-      if (!batchRes.ok) continue;
+      if (!batchRes.ok) {
+        await reconcileDeletedWorkItems(project.name, liveIds);
+        continue;
+      }
       const batchData = await batchRes.json();
 
       for (const item of batchData.value || []) {
@@ -123,6 +209,7 @@ Deno.serve(async (req) => {
               assigned_to: fields["System.AssignedTo"]?.displayName || null,
               area_path: fields["System.AreaPath"],
               iteration_path: fields["System.IterationPath"],
+              release: fields["Custom.MVPRelease"] || fields["Custom.Release"] || null,
               priority: fields["Microsoft.VSTS.Common.Priority"],
               tags: fields["System.Tags"],
               description: (fields["System.Description"] || "").substring(0, 5000),
@@ -136,6 +223,13 @@ Deno.serve(async (req) => {
           );
 
         if (!upsertError) totalSynced++;
+      }
+
+      // ---- Apply reconciliation deletes for this project ----
+      try {
+        await reconcileDeletedWorkItems(project.name, liveIds);
+      } catch (e) {
+        console.warn(`Reconciliation delete error for ${project.name}:`, e);
       }
     }
 
@@ -151,7 +245,7 @@ Deno.serve(async (req) => {
       { onConflict: "integration_id" }
     );
 
-    return new Response(JSON.stringify({ success: true, records_synced: totalSynced }), {
+    return new Response(JSON.stringify({ success: true, records_synced: totalSynced, records_deleted: totalDeleted }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {

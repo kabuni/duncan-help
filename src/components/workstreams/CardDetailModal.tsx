@@ -26,14 +26,16 @@ import {
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { StatusBadge, priorityConfig } from "./StatusBadge";
 import MultiAssigneeSelect from "./MultiAssigneeSelect";
+import { TaskAttachments } from "./TaskAttachments";
 import { useAuth } from "@/hooks/useAuth";
 
 interface CardDetailModalProps {
   cardId: string | null;
   onClose: () => void;
+  assigneeFilter?: string;
 }
 
-export default function CardDetailModal({ cardId, onClose }: CardDetailModalProps) {
+export default function CardDetailModal({ cardId, onClose, assigneeFilter }: CardDetailModalProps) {
   const { user } = useAuth();
   const { data, isLoading } = useWorkstreamCard(cardId);
   const { data: users } = useUserProfiles();
@@ -67,9 +69,27 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
     return (card.assignees || []).find(a => a.user_id === user.id) || null;
   }, [card, user]);
 
-  if (!cardId) return null;
+  const rawTasks = data?.tasks || [];
+  const tasks = useMemo(() => {
+    if (!assigneeFilter) return rawTasks;
+    const matches = (t: WorkstreamTask) =>
+      t?.assignee_id === assigneeFilter ||
+      (t?.assignees || []).some(a => a?.user_id === assigneeFilter);
+    const out: WorkstreamTask[] = [];
+    for (const t of (rawTasks || [])) {
+      if (!t) continue;
+      const taskMatch = matches(t);
+      const matchingSubs = (t.subtasks || []).filter(matches);
+      if (taskMatch) {
+        out.push(t);
+      } else if (matchingSubs.length > 0) {
+        out.push({ ...t, subtasks: matchingSubs });
+      }
+    }
+    return out;
+  }, [rawTasks, assigneeFilter]);
 
-  const tasks = data?.tasks || [];
+  if (!cardId) return null;
   const comments = data?.comments || [];
   const activity = data?.activity || [];
 
@@ -81,6 +101,16 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
       sort_order: tasks.length,
     });
     setNewTaskTitle("");
+  };
+
+  const handleAddSubtask = (parentTaskId: string, title: string, currentSubtaskCount: number) => {
+    if (!title.trim() || !cardId) return;
+    createTask.mutate({
+      card_id: cardId,
+      title: title.trim(),
+      parent_task_id: parentTaskId,
+      sort_order: currentSubtaskCount,
+    });
   };
 
   const handleToggleTask = (task: WorkstreamTask) => {
@@ -476,6 +506,11 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                         onUpdateAssignees={(ids) => updateTaskAssignees.mutate({ taskId: task.id, cardId: task.card_id, userIds: ids })}
                         onUpdateDueDate={(d) => updateTask.mutate({ id: task.id, card_id: task.card_id, due_date: d })}
                         onSetStatus={(s) => handleSetTaskStatus(task, s)}
+                        onAddSubtask={(title) => handleAddSubtask(task.id, title, (task.subtasks || []).length)}
+                        onToggleSubtask={(sub) => handleToggleTask(sub)}
+                        onDeleteSubtask={(sub) => deleteTask.mutate({ id: sub.id, card_id: sub.card_id })}
+                        onUpdateSubtaskDueDate={(sub, d) => updateTask.mutate({ id: sub.id, card_id: sub.card_id, due_date: d })}
+                        onUpdateSubtaskAssignees={(sub, ids) => updateTaskAssignees.mutate({ taskId: sub.id, cardId: sub.card_id, userIds: ids })}
                       />
                     ))}
 
@@ -516,6 +551,11 @@ export default function CardDetailModal({ cardId, onClose }: CardDetailModalProp
                               onUpdateAssignees={(ids) => updateTaskAssignees.mutate({ taskId: task.id, cardId: task.card_id, userIds: ids })}
                               onUpdateDueDate={(d) => updateTask.mutate({ id: task.id, card_id: task.card_id, due_date: d })}
                               onSetStatus={(s) => handleSetTaskStatus(task, s)}
+                              onAddSubtask={(title) => handleAddSubtask(task.id, title, (task.subtasks || []).length)}
+                              onToggleSubtask={(sub) => handleToggleTask(sub)}
+                              onDeleteSubtask={(sub) => deleteTask.mutate({ id: sub.id, card_id: sub.card_id })}
+                              onUpdateSubtaskDueDate={(sub, d) => updateTask.mutate({ id: sub.id, card_id: sub.card_id, due_date: d })}
+                              onUpdateSubtaskAssignees={(sub, ids) => updateTaskAssignees.mutate({ taskId: sub.id, cardId: sub.card_id, userIds: ids })}
                             />
                           ))}
                         </div>
@@ -616,6 +656,7 @@ function MetaField({ icon, label, value, children }: {
 
 function TaskRow({
   task, users, currentUserId, onToggle, onDelete, onUpdateAssignees, onUpdateDueDate, onSetStatus,
+  onAddSubtask, onToggleSubtask, onDeleteSubtask, onUpdateSubtaskDueDate, onUpdateSubtaskAssignees,
 }: {
   task: WorkstreamTask;
   users: UserProfile[];
@@ -625,7 +666,16 @@ function TaskRow({
   onUpdateAssignees: (ids: string[]) => void;
   onUpdateDueDate: (date: string | null) => void;
   onSetStatus: (status: CardStatus) => void;
+  onAddSubtask?: (title: string) => void;
+  onToggleSubtask?: (sub: WorkstreamTask) => void;
+  onDeleteSubtask?: (sub: WorkstreamTask) => void;
+  onUpdateSubtaskDueDate?: (sub: WorkstreamTask, date: string | null) => void;
+  onUpdateSubtaskAssignees?: (sub: WorkstreamTask, ids: string[]) => void;
 }) {
+  const subtasks = task.subtasks || [];
+  const isSubtask = !!task.parent_task_id;
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [showSubtaskInput, setShowSubtaskInput] = useState(false);
   const initialExpanded = (task.comments_count || 0) > 0;
   const [expanded, setExpanded] = useState(initialExpanded);
   const [newComment, setNewComment] = useState("");
@@ -722,7 +772,10 @@ function TaskRow({
             )}
           </div>
 
-          {/* Comments list */}
+          {/* Attachments */}
+          <TaskAttachments taskId={task.id} />
+
+
           <div className="space-y-2">
             {taskComments.length === 0 ? (
               <p className="text-[10px] text-muted-foreground italic">No comments yet</p>
@@ -762,6 +815,57 @@ function TaskRow({
               <Send className="h-3 w-3" />
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* Subtasks (one level) */}
+      {!isSubtask && (subtasks.length > 0 || onAddSubtask) && (
+        <div className="mt-2 ml-6 pl-3 border-l border-border/60 space-y-1.5">
+          {subtasks.map(sub => (
+            <SubtaskRow
+              key={sub.id}
+              sub={sub}
+              users={users}
+              onToggle={() => onToggleSubtask?.(sub)}
+              onDelete={() => onDeleteSubtask?.(sub)}
+              onUpdateDueDate={(d) => onUpdateSubtaskDueDate?.(sub, d)}
+              onUpdateAssignees={(ids) => onUpdateSubtaskAssignees?.(sub, ids)}
+            />
+          ))}
+
+          {onAddSubtask && (
+            showSubtaskInput ? (
+              <div className="flex items-center gap-1.5 pt-1">
+                <Input
+                  autoFocus
+                  value={newSubtaskTitle}
+                  onChange={e => setNewSubtaskTitle(e.target.value)}
+                  placeholder="Subtask title…"
+                  className="h-7 text-xs"
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && newSubtaskTitle.trim()) {
+                      onAddSubtask(newSubtaskTitle.trim());
+                      setNewSubtaskTitle("");
+                      setShowSubtaskInput(false);
+                    } else if (e.key === "Escape") {
+                      setShowSubtaskInput(false);
+                      setNewSubtaskTitle("");
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!newSubtaskTitle.trim()) setShowSubtaskInput(false);
+                  }}
+                />
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowSubtaskInput(true)}
+                className="text-[10px] text-muted-foreground hover:text-primary inline-flex items-center gap-1 transition-colors pt-0.5"
+              >
+                <Plus className="h-2.5 w-2.5" /> Add subtask
+              </button>
+            )
+          )}
         </div>
       )}
     </div>
@@ -948,6 +1052,96 @@ function TaskCommentRow({
         </div>
       ) : (
         <p className="text-xs text-foreground/80 whitespace-pre-wrap">{comment.content}</p>
+      )}
+    </div>
+  );
+}
+
+function SubtaskRow({
+  sub, users, onToggle, onDelete, onUpdateDueDate, onUpdateAssignees,
+}: {
+  sub: WorkstreamTask;
+  users: UserProfile[];
+  onToggle: () => void;
+  onDelete: () => void;
+  onUpdateDueDate: (date: string | null) => void;
+  onUpdateAssignees: (ids: string[]) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="group/sub rounded-md py-0.5">
+      <div className="flex items-center gap-2">
+        <button onClick={onToggle} className="shrink-0">
+          {sub.completed ? (
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+          ) : (
+            <Circle className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+          )}
+        </button>
+        <span className={`flex-1 text-xs ${sub.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
+          {sub.title}
+        </span>
+        {(sub.assignees || []).slice(0, 2).map(a => (
+          <Badge key={a.user_id} variant="secondary" className="text-[10px] py-0 px-1.5">
+            {(a.display_name || "?").split(" ")[0]}
+          </Badge>
+        ))}
+        {sub.due_date && (
+          <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+            <CalendarDays className="h-2.5 w-2.5" /> {format(new Date(sub.due_date), "MMM d")}
+          </span>
+        )}
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="text-[10px] text-muted-foreground hover:text-primary transition-colors"
+        >
+          {expanded ? "Hide" : "Edit"}
+        </button>
+        <button
+          onClick={onDelete}
+          className="opacity-0 group-hover/sub:opacity-100 h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-destructive transition"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="mt-2 ml-6 pl-3 border-l border-border/40 space-y-2 pb-2">
+          <div className="flex items-center gap-2">
+            <Label className="text-[10px] text-muted-foreground flex items-center gap-1 shrink-0 w-20">
+              <Users className="h-3 w-3" /> Assignees
+            </Label>
+            <div className="flex-1 max-w-[240px]">
+              <MultiAssigneeSelect
+                users={users}
+                selectedIds={(sub.assignees || []).map(a => a.user_id)}
+                onChange={onUpdateAssignees}
+                compact
+                placeholder="Assign people…"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label className="text-[10px] text-muted-foreground flex items-center gap-1 shrink-0 w-20">
+              <CalendarDays className="h-3 w-3" /> Due date
+            </Label>
+            <Input
+              type="date"
+              value={sub.due_date ? sub.due_date.slice(0, 10) : ""}
+              onChange={e => onUpdateDueDate(e.target.value || null)}
+              className="h-7 text-xs w-40"
+            />
+            {sub.due_date && (
+              <button
+                onClick={() => onUpdateDueDate(null)}
+                className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <TaskAttachments taskId={sub.id} compact />
+        </div>
       )}
     </div>
   );

@@ -103,6 +103,7 @@ export interface AssigneeInfo {
 export interface WorkstreamTask {
   id: string;
   card_id: string;
+  parent_task_id: string | null;
   title: string;
   description: string;
   assignee_id: string | null;
@@ -115,6 +116,7 @@ export interface WorkstreamTask {
   assignee_name?: string;
   assignees?: AssigneeInfo[];
   comments_count?: number;
+  subtasks?: WorkstreamTask[];
 }
 
 export interface WorkstreamComment {
@@ -183,7 +185,29 @@ export function useWorkstreamCards(filters?: {
       if (filters?.status) query = query.eq("status", filters.status);
       if (filters?.priority) query = query.eq("priority", filters.priority);
       if (filters?.project_tag) query = query.eq("project_tag", filters.project_tag);
-      if (filters?.search) query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+      if (filters?.search) {
+        const term = filters.search.replace(/[%,()]/g, " ").trim();
+        if (term) {
+          const like = `%${term}%`;
+          // Cards whose own title/description match
+          const [cardMatch, taskMatch] = await Promise.all([
+            supabase
+              .from("workstream_cards")
+              .select("id")
+              .is("archived_at", null)
+              .or(`title.ilike.${like},description.ilike.${like}`),
+            supabase
+              .from("workstream_tasks")
+              .select("card_id")
+              .or(`title.ilike.${like},description.ilike.${like}`),
+          ]);
+          const ids = new Set<string>();
+          (cardMatch.data || []).forEach((c: any) => c.id && ids.add(c.id));
+          (taskMatch.data || []).forEach((t: any) => t.card_id && ids.add(t.card_id));
+          if (ids.size === 0) return [];
+          query = query.in("id", Array.from(ids));
+        }
+      }
 
       const { data: cards, error } = await query;
       if (error) throw error;
@@ -193,9 +217,20 @@ export function useWorkstreamCards(filters?: {
 
       // Fetch task counts, card assignees, and owner profiles in parallel
       const [tasksRes, cardAssigneesRes] = await Promise.all([
-        supabase.from("workstream_tasks").select("card_id, completed, status").in("card_id", cardIds),
+        supabase.from("workstream_tasks").select("id, card_id, completed, status, parent_task_id, assignee_id").in("card_id", cardIds),
         supabase.from("workstream_card_assignees").select("card_id, user_id, assignment_status, responded_at, decline_reason").in("card_id", cardIds),
       ]);
+
+      // Fetch task-level multi-assignees so the assignee filter can match cards by task/subtask.
+      const allTaskIds = (tasksRes.data || []).map((t: any) => t.id).filter(Boolean);
+      let taskAssigneesRows: Array<{ task_id: string; user_id: string }> = [];
+      if (allTaskIds.length > 0) {
+        const { data } = await supabase
+          .from("workstream_task_assignees")
+          .select("task_id, user_id")
+          .in("task_id", allTaskIds);
+        taskAssigneesRows = data || [];
+      }
 
       // Collect all user IDs for profile resolution
       const allUserIds = new Set<string>();
@@ -214,12 +249,26 @@ export function useWorkstreamCards(filters?: {
       // Aggregate task counts + group raw tasks per card for overall-status computation
       const taskCounts: Record<string, { total: number; completed: number }> = {};
       const tasksByCard: Record<string, Array<{ status?: string | null; completed?: boolean }>> = {};
+      // Build cardId -> Set<userId> from task.assignee_id (covers tasks + subtasks via parent linkage on card_id)
+      const taskAssigneeUsersByCard: Record<string, Set<string>> = {};
+      const taskIdToCardId: Record<string, string> = {};
       (tasksRes.data || []).forEach((t: any) => {
+        taskIdToCardId[t.id] = t.card_id;
+        if (t.assignee_id) {
+          (taskAssigneeUsersByCard[t.card_id] ||= new Set()).add(t.assignee_id);
+        }
+        if (t.parent_task_id) return; // only count top-level tasks for card rollup
         if (!taskCounts[t.card_id]) taskCounts[t.card_id] = { total: 0, completed: 0 };
         taskCounts[t.card_id].total++;
         if (t.completed) taskCounts[t.card_id].completed++;
         if (!tasksByCard[t.card_id]) tasksByCard[t.card_id] = [];
         tasksByCard[t.card_id].push({ status: t.status, completed: t.completed });
+      });
+      // Fold workstream_task_assignees rows into the same map
+      taskAssigneesRows.forEach(ta => {
+        const cardId = taskIdToCardId[ta.task_id];
+        if (!cardId) return;
+        (taskAssigneeUsersByCard[cardId] ||= new Set()).add(ta.user_id);
       });
 
       // Aggregate card assignees
@@ -229,12 +278,14 @@ export function useWorkstreamCards(filters?: {
         cardAssigneeMap[a.card_id].push({ user_id: a.user_id, display_name: profileMap[a.user_id] || "Unknown", assignment_status: a.assignment_status, responded_at: a.responded_at, decline_reason: a.decline_reason });
       });
 
-      // Filter by assignee if needed (check both owner_id and card_assignees)
+      // Filter by assignee if needed — check card owner, card assignees, and any task/subtask assignee
       let filteredCards = cards;
       if (filters?.assignee) {
+        const target = filters.assignee;
         filteredCards = cards.filter(c =>
-          c.owner_id === filters.assignee ||
-          (cardAssigneeMap[c.id] || []).some(a => a.user_id === filters.assignee)
+          c.owner_id === target ||
+          (cardAssigneeMap[c.id] || []).some(a => a.user_id === target) ||
+          (taskAssigneeUsersByCard[c.id]?.has(target) ?? false)
         );
       }
 
@@ -334,6 +385,19 @@ export function useWorkstreamCard(cardId: string | null) {
           comments_count: taskCommentCountMap[t.id] || 0,
         })) as WorkstreamTask[];
 
+        // Nest subtasks under their parents
+        const topLevel = mappedTasks.filter(t => !t.parent_task_id);
+        const childrenByParent: Record<string, WorkstreamTask[]> = {};
+        mappedTasks.forEach(t => {
+          if (t.parent_task_id) {
+            (childrenByParent[t.parent_task_id] ||= []).push(t);
+          }
+        });
+        const nestedTasks = topLevel.map(t => ({
+          ...t,
+          subtasks: (childrenByParent[t.id] || []).sort((a, b) => a.sort_order - b.sort_order),
+        }));
+
         return {
           card: {
             ...card,
@@ -341,10 +405,10 @@ export function useWorkstreamCard(cardId: string | null) {
             priority: card.priority as CardPriority,
             owner_name: card.owner_id ? profileMap[card.owner_id] : undefined,
             assignees: cardAssignees.map((a: any) => ({ user_id: a.user_id, display_name: profileMap[a.user_id] || "Unknown", assignment_status: a.assignment_status, responded_at: a.responded_at, decline_reason: a.decline_reason })),
-            overall_status: getOverallStatus(mappedTasks),
-            task_breakdown: getTaskBreakdown(mappedTasks),
+            overall_status: getOverallStatus(topLevel),
+            task_breakdown: getTaskBreakdown(topLevel),
           } as WorkstreamCard,
-          tasks: mappedTasks,
+          tasks: nestedTasks,
           comments: comments.map(c => ({ ...c, user_name: profileMap[c.user_id] })) as WorkstreamComment[],
           activity: activity.map(a => ({ ...a, user_name: profileMap[a.user_id] })) as WorkstreamActivity[],
         };
@@ -494,7 +558,7 @@ export function useCreateTask() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async (input: { card_id: string; title: string; description?: string; assignee_id?: string; due_date?: string; sort_order?: number; assignee_ids?: string[] }) => {
+    mutationFn: async (input: { card_id: string; title: string; description?: string; assignee_id?: string; due_date?: string; sort_order?: number; assignee_ids?: string[]; parent_task_id?: string | null }) => {
       const { assignee_ids, ...taskInput } = input;
       const { data, error } = await supabase
         .from("workstream_tasks")
@@ -774,6 +838,75 @@ export function useRespondToAssignment() {
       toast.success(vars.response === "accepted" ? "Assignment accepted" : "Assignment declined");
     },
     onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+// Tasks assigned to a specific user (across every card). Includes subtasks.
+export interface AssignedTask extends WorkstreamTask {
+  card_title: string;
+  card_status: CardStatus;
+  card_project_tag: string | null;
+}
+
+export function useTasksByAssignee(
+  assigneeId: string | null,
+  opts?: { includeCompleted?: boolean; search?: string },
+) {
+  const includeCompleted = opts?.includeCompleted ?? false;
+  const search = opts?.search?.trim() || "";
+  return useQuery({
+    queryKey: ["tasks-by-assignee", assigneeId, includeCompleted, search],
+    enabled: !!assigneeId,
+    queryFn: async () => {
+      if (!assigneeId) return [] as AssignedTask[];
+
+      // Task IDs from the multi-assignee join table
+      const { data: joinRows } = await supabase
+        .from("workstream_task_assignees")
+        .select("task_id")
+        .eq("user_id", assigneeId);
+      const joinTaskIds = (joinRows || []).map((r: any) => r.task_id);
+
+      // Tasks that match either the legacy single assignee_id OR the join table
+      let tq = supabase
+        .from("workstream_tasks")
+        .select("*")
+        .order("due_date", { ascending: true, nullsFirst: false });
+      const orParts = [`assignee_id.eq.${assigneeId}`];
+      if (joinTaskIds.length > 0) {
+        orParts.push(`id.in.(${joinTaskIds.join(",")})`);
+      }
+      tq = tq.or(orParts.join(","));
+      if (!includeCompleted) tq = tq.eq("completed", false);
+      if (search) {
+        const like = `%${search.replace(/[%,()]/g, " ").trim()}%`;
+        tq = tq.or(`title.ilike.${like},description.ilike.${like}`);
+      }
+      const { data: tasks, error } = await tq;
+      if (error) throw error;
+      const rows = tasks || [];
+      if (rows.length === 0) return [] as AssignedTask[];
+
+      const cardIds = [...new Set(rows.map((t: any) => t.card_id))];
+      const { data: cards } = await supabase
+        .from("workstream_cards")
+        .select("id, title, status, project_tag")
+        .in("id", cardIds);
+      const cardMap: Record<string, any> = (cards || []).reduce(
+        (acc, c: any) => ({ ...acc, [c.id]: c }),
+        {},
+      );
+
+      return rows
+        .filter((t: any) => cardMap[t.card_id]) // skip orphaned/archived
+        .map((t: any) => ({
+          ...t,
+          status: (t.status || (t.completed ? "done" : "not_started")) as CardStatus,
+          card_title: cardMap[t.card_id]?.title || "",
+          card_status: cardMap[t.card_id]?.status as CardStatus,
+          card_project_tag: cardMap[t.card_id]?.project_tag ?? null,
+        })) as AssignedTask[];
+    },
   });
 }
 

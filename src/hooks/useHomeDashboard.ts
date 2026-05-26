@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -23,6 +24,16 @@ export type HiresStats = {
   openRoles: number;
   totalCandidates: number;
   interviewsThisWeek: number;
+};
+
+export type MyTask = {
+  id: string;
+  title: string;
+  status: string;
+  completed: boolean;
+  due_date: string | null;
+  card_id: string;
+  card_title: string;
 };
 
 export type WorkstreamsStats = {
@@ -204,6 +215,127 @@ export function useProjectsStats() {
         filesIndexed: filesRes.count ?? 0,
         updatedToday: updatedRes.count ?? 0,
       };
+    },
+  });
+}
+
+export type RsvpStats = {
+  total: number;
+  confirmed: number;
+  maybe: number;
+  declined: number;
+  missingInfo: number;
+};
+
+const RSVP_FIELDS = ["first_name", "last_name", "phone", "email", "organisation_type", "organisation_name", "state"] as const;
+
+export function useRsvpStats(eventId: string) {
+  const [data, setData] = useState<RsvpStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const compute = useCallback((rows: any[]): RsvpStats => {
+    const total = rows.length;
+    const confirmed = rows.filter((r) => r.status === "yes").length;
+    const maybe = rows.filter((r) => r.status === "maybe").length;
+    const declined = rows.filter((r) => r.status === "no").length;
+    const missingInfo = rows.filter((r) =>
+      RSVP_FIELDS.some((f) => !r[f] || String(r[f]).trim().length === 0)
+    ).length;
+    return { total, confirmed, maybe, declined, missingInfo };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      setLoading(true);
+      const { data: rows } = await supabase
+        .from("event_rsvps" as any)
+        .select("*")
+        .eq("event_id", eventId);
+      if (mounted) {
+        setData(compute((rows as any[]) || []));
+        setLoading(false);
+      }
+    };
+    load();
+
+    const channel = supabase
+      .channel(`home-rsvps-${eventId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "event_rsvps", filter: `event_id=eq.${eventId}` },
+        async () => {
+          const { data: rows } = await supabase
+            .from("event_rsvps" as any)
+            .select("*")
+            .eq("event_id", eventId);
+          if (mounted) setData(compute((rows as any[]) || []));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [eventId, compute]);
+
+  return { data, loading };
+}
+
+export function useMyPendingTasks() {
+  const { user } = useAuth();
+  return useQuery<MyTask[]>({
+    queryKey: ["home-dashboard", "my-pending-tasks", user?.id],
+    enabled: !!user,
+    staleTime: FIVE_MIN,
+    queryFn: async () => {
+      const uid = user!.id;
+      const [directRes, multiRes] = await Promise.all([
+        supabase
+          .from("workstream_tasks")
+          .select("id, title, status, completed, due_date, card_id")
+          .eq("assignee_id", uid)
+          .eq("completed", false),
+        (supabase as any)
+          .from("workstream_task_assignees")
+          .select("task_id, workstream_tasks!inner(id, title, status, completed, due_date, card_id)")
+          .eq("user_id", uid),
+      ]);
+
+      const byId = new Map<string, any>();
+      (directRes.data || []).forEach((t: any) => byId.set(t.id, t));
+      (multiRes.data || []).forEach((row: any) => {
+        const t = row.workstream_tasks;
+        if (t && !t.completed) byId.set(t.id, t);
+      });
+      const tasks = Array.from(byId.values());
+      if (tasks.length === 0) return [];
+
+      const cardIds = Array.from(new Set(tasks.map((t) => t.card_id).filter(Boolean)));
+      const { data: cards } = await supabase
+        .from("workstream_cards")
+        .select("id, title")
+        .in("id", cardIds);
+      const cardMap: Record<string, string> = {};
+      (cards || []).forEach((c: any) => { cardMap[c.id] = c.title; });
+
+      return tasks
+        .map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          completed: t.completed,
+          due_date: t.due_date,
+          card_id: t.card_id,
+          card_title: cardMap[t.card_id] || "Workstream",
+        }))
+        .sort((a, b) => {
+          if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date);
+          if (a.due_date) return -1;
+          if (b.due_date) return 1;
+          return 0;
+        });
     },
   });
 }

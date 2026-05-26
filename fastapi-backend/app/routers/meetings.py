@@ -162,11 +162,11 @@ async def generate_daily_briefing(
     current_user: dict = Depends(get_current_user),
     conn: asyncpg.Connection = Depends(get_connection),
 ):
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(timezone.utc).date()
 
     try:
         existing = await conn.fetchrow(
-            "SELECT * FROM ceo_briefings WHERE user_id = $1 AND date = $2::date",
+            "SELECT * FROM ceo_briefings WHERE user_id = $1 AND date = $2",
             current_user["id"], today,
         )
         if existing and existing.get("shown"):
@@ -236,15 +236,14 @@ Recent activity:
 
 @router.post("/mark-briefing-shown")
 async def mark_briefing_shown(
-    body: dict,
     current_user: dict = Depends(get_current_user),
     conn: asyncpg.Connection = Depends(get_connection),
 ):
-    briefing_id = body.get("briefing_id")
+    today = datetime.now(timezone.utc).date()
     try:
         await conn.execute(
-            "UPDATE ceo_briefings SET shown = TRUE WHERE id = $1 AND user_id = $2",
-            briefing_id, current_user["id"],
+            "UPDATE ceo_briefings SET shown = TRUE WHERE user_id = $1 AND date = $2",
+            current_user["id"], today,
         )
     except Exception:
         pass
@@ -256,10 +255,10 @@ async def ceo_briefing_status(
     current_user: dict = Depends(get_current_user),
     conn: asyncpg.Connection = Depends(get_connection),
 ):
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(timezone.utc).date()
     try:
         row = await conn.fetchrow(
-            "SELECT id, shown FROM ceo_briefings WHERE user_id = $1 AND date = $2::date",
+            "SELECT id, shown FROM ceo_briefings WHERE user_id = $1 AND date = $2",
             current_user["id"], today,
         )
     except Exception:

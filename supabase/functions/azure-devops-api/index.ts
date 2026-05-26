@@ -6,46 +6,56 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function refreshTokenIfNeeded(supabaseAdmin: any, tokenRow: any): Promise<string> {
-  const expiry = new Date(tokenRow.token_expiry);
-  if (expiry > new Date(Date.now() + 5 * 60 * 1000)) {
-    return tokenRow.access_token;
+async function getAuthAndOrg(supabaseAdmin: any): Promise<{ authHeader: string; orgUrl: string } | { error: string; status: number }> {
+  const pat = Deno.env.get("AZURE_DEVOPS_PAT");
+  if (pat) {
+    const orgUrl = (Deno.env.get("AZURE_DEVOPS_ORG_URL") || "").replace(/\/+$/, "");
+    if (!orgUrl) return { error: "AZURE_DEVOPS_ORG_URL not configured", status: 500 };
+    return { authHeader: `Basic ${btoa(":" + pat)}`, orgUrl };
   }
 
-  const clientId = Deno.env.get("AZURE_DEVOPS_CLIENT_ID")!;
-  const clientSecret = Deno.env.get("AZURE_DEVOPS_CLIENT_SECRET")!;
-
-  const tenantId = Deno.env.get("AZURE_TENANT_ID") || "53e795b0-6f86-4e93-b619-32b5f5850f07";
-  const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: tokenRow.refresh_token,
-      grant_type: "refresh_token",
-      scope: "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation offline_access",
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Token refresh failed: ${err}`);
-  }
-
-  const tokens = await response.json();
-  const newExpiry = new Date(Date.now() + tokens.expires_in * 1000);
-
-  await supabaseAdmin
+  const { data: tokenRow } = await supabaseAdmin
     .from("azure_devops_tokens")
-    .update({
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token || tokenRow.refresh_token,
-      token_expiry: newExpiry.toISOString(),
-    })
-    .eq("id", tokenRow.id);
+    .select("*")
+    .limit(1)
+    .maybeSingle();
+  if (!tokenRow) return { error: "Azure DevOps not connected", status: 400 };
 
-  return tokens.access_token;
+  // Refresh OAuth token if needed
+  let accessToken = tokenRow.access_token;
+  const expiry = new Date(tokenRow.token_expiry);
+  if (expiry <= new Date(Date.now() + 5 * 60 * 1000)) {
+    const clientId = Deno.env.get("AZURE_DEVOPS_CLIENT_ID")!;
+    const clientSecret = Deno.env.get("AZURE_DEVOPS_CLIENT_SECRET")!;
+    const tenantId = Deno.env.get("AZURE_TENANT_ID") || "53e795b0-6f86-4e93-b619-32b5f5850f07";
+    const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: tokenRow.refresh_token,
+        grant_type: "refresh_token",
+        scope: "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation offline_access",
+      }),
+    });
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Token refresh failed: ${err}`);
+    }
+    const tokens = await response.json();
+    accessToken = tokens.access_token;
+    await supabaseAdmin
+      .from("azure_devops_tokens")
+      .update({
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token || tokenRow.refresh_token,
+        token_expiry: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+      })
+      .eq("id", tokenRow.id);
+  }
+  const orgUrl = tokenRow.org_url || Deno.env.get("AZURE_DEVOPS_ORG_URL") || "";
+  return { authHeader: `Bearer ${accessToken}`, orgUrl };
 }
 
 Deno.serve(async (req) => {
@@ -78,22 +88,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get token
-    const { data: tokenRow, error: tokenError } = await supabaseAdmin
-      .from("azure_devops_tokens")
-      .select("*")
-      .limit(1)
-      .maybeSingle();
-
-    if (tokenError || !tokenRow) {
-      return new Response(JSON.stringify({ error: "Azure DevOps not connected" }), {
-        status: 400,
+    const authResult = await getAuthAndOrg(supabaseAdmin);
+    if ("error" in authResult) {
+      return new Response(JSON.stringify({ error: authResult.error }), {
+        status: authResult.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const accessToken = await refreshTokenIfNeeded(supabaseAdmin, tokenRow);
-    const orgUrl = tokenRow.org_url || Deno.env.get("AZURE_DEVOPS_ORG_URL") || "";
+    const { authHeader: adoAuthHeader, orgUrl } = authResult;
 
     const { action, project, wiql, workItemId } = await req.json();
 
@@ -123,6 +125,35 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case "get_release_options": {
+        // Aggregate Custom.MVPRelease (and Custom.Release) allowed values across all projects.
+        // Returns: { defaultValue, allowedValues: string[] }
+        const projectsRes = await fetch(`${orgUrl}/_apis/projects?api-version=7.1`, {
+          headers: { Authorization: adoAuthHeader },
+        });
+        const projectsData = await projectsRes.json();
+        const allowed = new Set<string>();
+        let defaultValue: string | null = null;
+        for (const p of projectsData.value || []) {
+          for (const fieldRef of ["Custom.MVPRelease", "Custom.Release"]) {
+            try {
+              const r = await fetch(
+                `${orgUrl}/${p.name}/_apis/wit/workitemtypes/User%20Story/fields/${fieldRef}?$expand=allowedValues&api-version=7.1`,
+                { headers: { Authorization: adoAuthHeader } }
+              );
+              if (!r.ok) continue;
+              const j = await r.json();
+              (j.allowedValues || []).forEach((v: string) => v && allowed.add(v));
+              if (!defaultValue && j.defaultValue) defaultValue = j.defaultValue;
+            } catch {/* ignore per-project errors */}
+          }
+        }
+        return new Response(
+          JSON.stringify({ defaultValue, allowedValues: Array.from(allowed).sort() }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400,
@@ -133,7 +164,7 @@ Deno.serve(async (req) => {
     const apiResponse = await fetch(apiUrl, {
       method,
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: adoAuthHeader,
         "Content-Type": "application/json",
       },
       ...(body ? { body } : {}),

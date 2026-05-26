@@ -2,12 +2,14 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Plus, MessageSquare, Send, Loader2, Settings2, Users,
-  Upload, FileText, Sparkles, Trash2, RefreshCw, PanelRightOpen, X, Menu, ListChecks, Pencil, Check,
+  Upload, FileText, Sparkles, Trash2, RefreshCw, PanelRightOpen, X, Menu, ListChecks, Pencil, Check, StickyNote,
 } from "lucide-react";
+import { ProjectNotesDrawer } from "@/components/projects/ProjectNotesDrawer";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Sidebar, { MobileMenuButton } from "@/components/Sidebar";
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthUser } from "@/lib/authStorage";
 import { useProjects, useProjectChats, useProjectChat, useProjectFiles, useProjectMembers } from "@/hooks/useProjects";
 import { useUserProfiles } from "@/hooks/useWorkstreams";
 import { useProfile } from "@/hooks/useProfile";
@@ -35,7 +37,7 @@ function hasChecklist(text: string): boolean {
 }
 
 async function captureChecklistToPlan(text: string, chatId: string, projectId: string) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = getAuthUser();
   if (!user) {
     toast.error("Not signed in");
     return;
@@ -106,9 +108,11 @@ export default function ProjectWorkspace() {
   const [showFiles, setShowFiles] = useState(false);
   const [showCollaborate, setShowCollaborate] = useState(false);
   const [showTasks, setShowTasks] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
   const [openTaskCount, setOpenTaskCount] = useState(0);
   const [editName, setEditName] = useState("");
   const [editPrompt, setEditPrompt] = useState("");
+  const [editTemplate, setEditTemplate] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [manualDeselect, setManualDeselect] = useState(false);
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
@@ -283,12 +287,17 @@ export default function ProjectWorkspace() {
   const openSettings = () => {
     setEditName(project?.name || "");
     setEditPrompt(project?.system_prompt || "");
+    setEditTemplate((project as any)?.note_template || "");
     setShowSettings(true);
   };
 
   const saveSettings = async () => {
     if (!projectId) return;
-    await updateProject(projectId, { name: editName.trim(), system_prompt: editPrompt.trim() || null });
+    await updateProject(projectId, {
+      name: editName.trim(),
+      system_prompt: editPrompt.trim() || null,
+      note_template: editTemplate.trim() || null,
+    });
     setShowSettings(false);
   };
 
@@ -375,6 +384,10 @@ export default function ProjectWorkspace() {
           <Button variant="ghost" size="sm" onClick={() => setShowFiles(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Files">
             <FileText className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Files{files.length > 0 && ` (${files.length})`}</span>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setShowNotes(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Notes">
+            <StickyNote className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Notes</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setShowTasks(true)} className="gap-1.5 text-xs px-2 sm:px-3 relative" aria-label="Tasks">
             <ListChecks className="h-3.5 w-3.5" />
@@ -818,6 +831,21 @@ export default function ProjectWorkspace() {
                 rows={6}
               />
             </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                Note Template <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <Textarea
+                value={editTemplate}
+                onChange={(e) => setEditTemplate(e.target.value)}
+                placeholder={"# Topic\n\n## Context\n- \n\n## Decisions\n- \n\n## Action items\n- [ ] \n"}
+                rows={8}
+                className="font-mono text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Used as the starting content when you create a new note in this project. Leave blank to use the default.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSettings(false)}>Cancel</Button>
@@ -902,6 +930,15 @@ export default function ProjectWorkspace() {
           members={members}
           chats={chats.map((c) => ({ id: c.id, title: c.title }))}
           onJumpToChat={(id) => setActiveChatId(id)}
+        />
+      )}
+
+      {projectId && (
+        <ProjectNotesDrawer
+          projectId={projectId}
+          template={(project as any)?.note_template || null}
+          open={showNotes}
+          onClose={() => setShowNotes(false)}
         />
       )}
     </div>

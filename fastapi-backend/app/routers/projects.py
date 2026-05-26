@@ -25,6 +25,14 @@ router = APIRouter(tags=["projects"])
 class CreateProjectRequest(BaseModel):
     name: str
     description: Optional[str] = None
+    system_prompt: Optional[str] = None  # alias for description
+
+
+class UpdateProjectRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    system_prompt: Optional[str] = None  # alias for description
+    note_template: Optional[str] = None
 
 
 class CreateProjectChatRequest(BaseModel):
@@ -332,3 +340,184 @@ async def project_member_added_email(
         f"added to {project['name'] if project else project_id}"
     )
     return {"sent": True}
+
+
+@router.put("/update-project/{project_id}")
+async def update_project(
+    project_id: str,
+    body: UpdateProjectRequest,
+    current_user: dict = Depends(get_current_user),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    await _assert_project_access(conn, project_id, current_user)
+    effective_description = body.description or body.system_prompt
+    fields, values = [], [project_id]
+    if body.name is not None:
+        fields.append(f"name = ${len(values) + 1}")
+        values.append(body.name)
+    if effective_description is not None:
+        fields.append(f"description = ${len(values) + 1}")
+        values.append(effective_description)
+    if fields:
+        await conn.execute(
+            f"UPDATE projects SET {', '.join(fields)}, updated_at = NOW() WHERE id = $1",
+            *values,
+        )
+    row = await conn.fetchrow("SELECT * FROM projects WHERE id = $1", project_id)
+    return dict(row)
+
+
+@router.delete("/delete-project/{project_id}")
+async def delete_project(
+    project_id: str,
+    current_user: dict = Depends(get_current_user),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    row = await conn.fetchrow("SELECT owner_user_id FROM projects WHERE id = $1", project_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if str(row["owner_user_id"]) != str(current_user["id"]) and not _is_admin_or_moderator(current_user):
+        raise HTTPException(status_code=403, detail="Only the project owner can delete this project")
+    await conn.execute("DELETE FROM projects WHERE id = $1", project_id)
+    return {"deleted": True}
+
+
+@router.get("/get-project-files/{project_id}")
+async def get_project_files(
+    project_id: str,
+    current_user: dict = Depends(get_current_user),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    await _assert_project_access(conn, project_id, current_user)
+    rows = await conn.fetch(
+        """SELECT f.id, f.original_filename AS file_name, f.storage_key AS storage_path,
+                  f.file_size_bytes AS size, f.mime_type, f.upload_status, f.created_at,
+                  ps.project_id
+           FROM files f
+           JOIN project_sources ps ON ps.id = f.project_source_id
+           WHERE ps.project_id = $1
+           ORDER BY f.created_at DESC""",
+        project_id,
+    )
+    return [dict(r) for r in rows]
+
+
+@router.get("/get-project-members/{project_id}")
+async def get_project_members(
+    project_id: str,
+    current_user: dict = Depends(get_current_user),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    await _assert_project_access(conn, project_id, current_user)
+    project = await conn.fetchrow("SELECT owner_user_id FROM projects WHERE id = $1", project_id)
+    owner_id = str(project["owner_user_id"]) if project else None
+    rows = await conn.fetch(
+        """SELECT pm.user_id, pm.role,
+                  u.full_name, u.avatar_url,
+                  ac.role_title
+           FROM project_members pm
+           JOIN users u ON u.id = pm.user_id
+           LEFT JOIN auth_credentials ac ON ac.user_id = pm.user_id
+           WHERE pm.project_id = $1
+           ORDER BY pm.created_at ASC""",
+        project_id,
+    )
+    return [
+        {
+            "user_id": str(r["user_id"]),
+            "display_name": r["full_name"],
+            "role_title": r["role_title"],
+            "avatar_url": r["avatar_url"],
+            "role": str(r["role"]),
+            "isOwner": str(r["user_id"]) == owner_id,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/add-project-member")
+async def add_project_member(
+    project_id: str,
+    body: ProjectMemberRequest,
+    current_user: dict = Depends(get_current_user),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    await _assert_project_access(conn, project_id, current_user)
+    existing = await conn.fetchrow(
+        "SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2",
+        project_id, body.user_id,
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="User is already a member")
+    await conn.execute(
+        """INSERT INTO project_members (id, project_id, user_id, role, invited_by_user_id, created_at)
+           VALUES ($1, $2, $3, $4, $5, NOW())""",
+        str(uuid.uuid4()), project_id, body.user_id, body.role, current_user["id"],
+    )
+    return {"added": True}
+
+
+@router.delete("/remove-project-member/{project_id}/{user_id}")
+async def remove_project_member(
+    project_id: str,
+    user_id: str,
+    current_user: dict = Depends(get_current_user),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    await _assert_project_access(conn, project_id, current_user)
+    await conn.execute(
+        "DELETE FROM project_members WHERE project_id = $1 AND user_id = $2",
+        project_id, user_id,
+    )
+    return {"removed": True}
+
+
+@router.get("/get-chat-messages")
+async def get_chat_messages(
+    chat_id: str,
+    current_user: dict = Depends(get_current_user),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    chat = await conn.fetchrow("SELECT project_id FROM chats WHERE id = $1", chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    if chat["project_id"]:
+        await _assert_project_access(conn, str(chat["project_id"]), current_user)
+    rows = await conn.fetch(
+        """SELECT cm.id, cm.chat_id, cm.content, cm.created_at,
+                  cm.sender_type AS role,
+                  cm.sender_user_id AS user_id,
+                  u.full_name AS sender_name,
+                  u.avatar_url AS sender_avatar_url
+           FROM chat_messages cm
+           LEFT JOIN users u ON u.id = cm.sender_user_id
+           WHERE cm.chat_id = $1
+           ORDER BY cm.created_at ASC""",
+        chat_id,
+    )
+    return [dict(r) for r in rows]
+
+
+@router.put("/update-chat/{chat_id}")
+async def update_chat_title(
+    chat_id: str,
+    body: dict,
+    current_user: dict = Depends(get_current_user),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    title = body.get("title", "")
+    await conn.execute(
+        "UPDATE chats SET title = $1, updated_at = NOW() WHERE id = $2",
+        title, chat_id,
+    )
+    return {"updated": True}
+
+
+@router.delete("/delete-chat/{chat_id}")
+async def delete_chat(
+    chat_id: str,
+    current_user: dict = Depends(get_current_user),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    await conn.execute("DELETE FROM chats WHERE id = $1", chat_id)
+    return {"deleted": True}

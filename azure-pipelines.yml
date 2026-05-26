@@ -1,0 +1,27 @@
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: none
+
+  - script: |
+      # Clone the GitHub repo using the PAT
+      git clone --mirror https://$(GITHUB_PAT)@github.com/kabuni/duncan-help.git mirror-repo
+      cd mirror-repo
+
+      # Configure git
+      git config user.email "azure-pipeline@kabuni.com"
+      git config user.name "Azure Pipeline Mirror"
+
+      # Push everything to Azure Repos
+      git remote add azure-target https://$(AZURE_PAT)@dev.azure.com/$(AZURE_ORG)/$(AZURE_PROJECT)/_git/$(AZURE_REPO)
+
+      git push azure-target --mirror --force
+
+      echo "✅ Successfully mirrored to Azure Repos"
+    displayName: 'Mirror GitHub to Azure Repos'
+    env:
+      GITHUB_PAT: $(GitHubPAT)
+      AZURE_PAT: $(AzureRepoPAT)

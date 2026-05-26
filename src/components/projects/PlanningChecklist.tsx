@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, forwardRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthUser } from "@/lib/authStorage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -114,7 +115,7 @@ export function PlanningChecklist({
     const title = newTitle.trim();
     if (!title) return;
     setAdding(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = getAuthUser();
     if (!user) {
       toast.error("Not signed in");
       setAdding(false);
@@ -263,7 +264,8 @@ export function PlanningChecklist({
       </div>
 
       {open && (
-        <div className="px-3 pb-3 space-y-2">
+        <div>
+        <div className="px-3 pt-2 pb-2 space-y-2 max-h-[40vh] overflow-y-auto overscroll-contain">
           {loading ? (
             <p className="text-xs text-muted-foreground italic">Loading…</p>
           ) : open_items.length === 0 ? (
@@ -318,9 +320,10 @@ export function PlanningChecklist({
               ))}
             </>
           )}
+        </div>
 
           {/* Quick-add */}
-          <div className="flex flex-wrap gap-1.5 pt-1">
+          <div className="flex flex-wrap gap-1.5 px-3 pb-3 pt-2 border-t border-border/50">
             <Input
               value={newGroup}
               onChange={(e) => setNewGroup(e.target.value)}

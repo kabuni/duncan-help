@@ -14,6 +14,90 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
+      approvals: {
+        Row: {
+          amount: number | null
+          approver_profile_id: string | null
+          approver_user_id: string | null
+          created_at: string
+          currency: string | null
+          decided_at: string | null
+          decision_note: string | null
+          due_at: string | null
+          id: string
+          kind: Database["public"]["Enums"]["approval_kind"]
+          link_path: string | null
+          requested_by: string | null
+          source_id: string
+          source_table: string
+          status: Database["public"]["Enums"]["approval_status"]
+          summary: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number | null
+          approver_profile_id?: string | null
+          approver_user_id?: string | null
+          created_at?: string
+          currency?: string | null
+          decided_at?: string | null
+          decision_note?: string | null
+          due_at?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["approval_kind"]
+          link_path?: string | null
+          requested_by?: string | null
+          source_id: string
+          source_table: string
+          status?: Database["public"]["Enums"]["approval_status"]
+          summary?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number | null
+          approver_profile_id?: string | null
+          approver_user_id?: string | null
+          created_at?: string
+          currency?: string | null
+          decided_at?: string | null
+          decision_note?: string | null
+          due_at?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["approval_kind"]
+          link_path?: string | null
+          requested_by?: string | null
+          source_id?: string
+          source_table?: string
+          status?: Database["public"]["Enums"]["approval_status"]
+          summary?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       azure_devops_tokens: {
         Row: {
           access_token: string
@@ -61,6 +145,7 @@ export type Database = {
           priority: number | null
           project_name: string | null
           raw_data: Json | null
+          release: string | null
           state: string | null
           synced_at: string
           tags: string | null
@@ -81,6 +166,7 @@ export type Database = {
           priority?: number | null
           project_name?: string | null
           raw_data?: Json | null
+          release?: string | null
           state?: string | null
           synced_at?: string
           tags?: string | null
@@ -101,6 +187,7 @@ export type Database = {
           priority?: number | null
           project_name?: string | null
           raw_data?: Json | null
+          release?: string | null
           state?: string | null
           synced_at?: string
           tags?: string | null
@@ -532,6 +619,104 @@ export type Database = {
         }
         Relationships: []
       }
+      document_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string
+          document_id: string
+          embedding: string | null
+          id: string
+          metadata: Json
+          token_count: number | null
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string
+          document_id: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          token_count?: number | null
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          document_id?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          token_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_chunks_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          blob_path: string
+          blob_url: string
+          category: string | null
+          chunk_count: number
+          created_at: string
+          error_message: string | null
+          file_name: string
+          file_type: string
+          id: string
+          owner_id: string
+          scope: string
+          status: string
+          subcategory: string | null
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          blob_path?: string
+          blob_url?: string
+          category?: string | null
+          chunk_count?: number
+          created_at?: string
+          error_message?: string | null
+          file_name: string
+          file_type: string
+          id?: string
+          owner_id: string
+          scope: string
+          status?: string
+          subcategory?: string | null
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          blob_path?: string
+          blob_url?: string
+          category?: string | null
+          chunk_count?: number
+          created_at?: string
+          error_message?: string | null
+          file_name?: string
+          file_type?: string
+          id?: string
+          owner_id?: string
+          scope?: string
+          status?: string
+          subcategory?: string | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       duncan_calendar_tokens: {
         Row: {
           access_token: string
@@ -570,6 +755,187 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      event_rsvp_messages: {
+        Row: {
+          created_at: string
+          gmail_message_id: string
+          gmail_thread_id: string | null
+          id: string
+          outcome: string | null
+          processed_at: string
+          rsvp_id: string | null
+          sender_email: string | null
+          subject: string | null
+        }
+        Insert: {
+          created_at?: string
+          gmail_message_id: string
+          gmail_thread_id?: string | null
+          id?: string
+          outcome?: string | null
+          processed_at?: string
+          rsvp_id?: string | null
+          sender_email?: string | null
+          subject?: string | null
+        }
+        Update: {
+          created_at?: string
+          gmail_message_id?: string
+          gmail_thread_id?: string | null
+          id?: string
+          outcome?: string | null
+          processed_at?: string
+          rsvp_id?: string | null
+          sender_email?: string | null
+          subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_rsvp_messages_rsvp_id_fkey"
+            columns: ["rsvp_id"]
+            isOneToOne: false
+            referencedRelation: "event_rsvps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_rsvps: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string
+          event_id: string
+          first_name: string | null
+          follow_up_count: number
+          gmail_message_id: string | null
+          gmail_thread_id: string | null
+          id: string
+          last_inbound_message_id: string | null
+          last_name: string | null
+          notes: string | null
+          organisation_name: string | null
+          organisation_type: string | null
+          phone: string | null
+          profile_id: string | null
+          reply_error: string | null
+          reply_message_id: string | null
+          reply_sent_at: string | null
+          responded_at: string
+          source: string
+          state: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email: string
+          event_id: string
+          first_name?: string | null
+          follow_up_count?: number
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
+          id?: string
+          last_inbound_message_id?: string | null
+          last_name?: string | null
+          notes?: string | null
+          organisation_name?: string | null
+          organisation_type?: string | null
+          phone?: string | null
+          profile_id?: string | null
+          reply_error?: string | null
+          reply_message_id?: string | null
+          reply_sent_at?: string | null
+          responded_at?: string
+          source?: string
+          state?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string
+          event_id?: string
+          first_name?: string | null
+          follow_up_count?: number
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
+          id?: string
+          last_inbound_message_id?: string | null
+          last_name?: string | null
+          notes?: string | null
+          organisation_name?: string | null
+          organisation_type?: string | null
+          phone?: string | null
+          profile_id?: string | null
+          reply_error?: string | null
+          reply_message_id?: string | null
+          reply_sent_at?: string | null
+          responded_at?: string
+          source?: string
+          state?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_rsvps_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "key_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_rsvps_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feature_request_attachments: {
+        Row: {
+          created_at: string
+          feature_request_id: string
+          file_name: string
+          id: string
+          mime_type: string | null
+          size_bytes: number | null
+          storage_path: string
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string
+          feature_request_id: string
+          file_name: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path: string
+          uploaded_by: string
+        }
+        Update: {
+          created_at?: string
+          feature_request_id?: string
+          file_name?: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_request_attachments_feature_request_id_fkey"
+            columns: ["feature_request_id"]
+            isOneToOne: false
+            referencedRelation: "feature_requests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       feature_requests: {
         Row: {
@@ -729,6 +1095,8 @@ export type Database = {
       gmail_writing_profiles: {
         Row: {
           auto_draft_enabled: boolean
+          auto_draft_filter_list: string[]
+          auto_draft_filter_mode: string
           auto_draft_last_run_at: string | null
           auto_drafts_counter_date: string
           auto_drafts_created_today: number
@@ -746,6 +1114,8 @@ export type Database = {
         }
         Insert: {
           auto_draft_enabled?: boolean
+          auto_draft_filter_list?: string[]
+          auto_draft_filter_mode?: string
           auto_draft_last_run_at?: string | null
           auto_drafts_counter_date?: string
           auto_drafts_created_today?: number
@@ -763,6 +1133,8 @@ export type Database = {
         }
         Update: {
           auto_draft_enabled?: boolean
+          auto_draft_filter_list?: string[]
+          auto_draft_filter_mode?: string
           auto_draft_last_run_at?: string | null
           auto_drafts_counter_date?: string
           auto_drafts_created_today?: number
@@ -1083,6 +1455,104 @@ export type Database = {
         }
         Relationships: []
       }
+      kb_document_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string
+          document_id: string
+          embedding: string | null
+          id: string
+          metadata: Json
+          token_count: number | null
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string
+          document_id: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          token_count?: number | null
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          document_id?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          token_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kb_document_chunks_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "kb_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kb_documents: {
+        Row: {
+          blob_path: string | null
+          blob_url: string | null
+          category: string | null
+          chunk_count: number
+          created_at: string
+          error_message: string | null
+          file_name: string
+          file_type: string
+          id: string
+          owner_id: string
+          scope: string
+          status: string
+          subcategory: string | null
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          blob_path?: string | null
+          blob_url?: string | null
+          category?: string | null
+          chunk_count?: number
+          created_at?: string
+          error_message?: string | null
+          file_name: string
+          file_type: string
+          id?: string
+          owner_id: string
+          scope: string
+          status?: string
+          subcategory?: string | null
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          blob_path?: string | null
+          blob_url?: string | null
+          category?: string | null
+          chunk_count?: number
+          created_at?: string
+          error_message?: string | null
+          file_name?: string
+          file_type?: string
+          id?: string
+          owner_id?: string
+          scope?: string
+          status?: string
+          subcategory?: string | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       key_event_approvals: {
         Row: {
           approval_type: string
@@ -1260,6 +1730,7 @@ export type Database = {
           calendar_id: string
           category: string | null
           classification_confidence: number | null
+          collaborators: Json
           created_at: string
           created_by: string | null
           decision_needed: string | null
@@ -1297,6 +1768,7 @@ export type Database = {
           calendar_id: string
           category?: string | null
           classification_confidence?: number | null
+          collaborators?: Json
           created_at?: string
           created_by?: string | null
           decision_needed?: string | null
@@ -1334,6 +1806,7 @@ export type Database = {
           calendar_id?: string
           category?: string | null
           classification_confidence?: number | null
+          collaborators?: Json
           created_at?: string
           created_by?: string | null
           decision_needed?: string | null
@@ -1631,6 +2104,8 @@ export type Database = {
           display_name: string | null
           id: string
           norman_context: string | null
+          onboarding_completed_at: string | null
+          onboarding_step: string
           preferences: Json | null
           requested_role_title: string | null
           role_title: string | null
@@ -1646,6 +2121,8 @@ export type Database = {
           display_name?: string | null
           id?: string
           norman_context?: string | null
+          onboarding_completed_at?: string | null
+          onboarding_step?: string
           preferences?: Json | null
           requested_role_title?: string | null
           role_title?: string | null
@@ -1661,6 +2138,8 @@ export type Database = {
           display_name?: string | null
           id?: string
           norman_context?: string | null
+          onboarding_completed_at?: string | null
+          onboarding_step?: string
           preferences?: Json | null
           requested_role_title?: string | null
           role_title?: string | null
@@ -1872,11 +2351,159 @@ export type Database = {
           },
         ]
       }
+      project_note_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          id: string
+          mime_type: string | null
+          note_id: string
+          project_id: string
+          size_bytes: number | null
+          storage_path: string
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          id?: string
+          mime_type?: string | null
+          note_id: string
+          project_id: string
+          size_bytes?: number | null
+          storage_path: string
+          uploaded_by: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          id?: string
+          mime_type?: string | null
+          note_id?: string
+          project_id?: string
+          size_bytes?: number | null
+          storage_path?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_note_attachments_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "project_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_note_attachments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_note_folders: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          parent_folder_id: string | null
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+          parent_folder_id?: string | null
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          parent_folder_id?: string | null
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_note_folders_parent_folder_id_fkey"
+            columns: ["parent_folder_id"]
+            isOneToOne: false
+            referencedRelation: "project_note_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_note_folders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_notes: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string
+          folder_id: string | null
+          id: string
+          pinned: boolean
+          project_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          created_by: string
+          folder_id?: string | null
+          id?: string
+          pinned?: boolean
+          project_id: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string
+          folder_id?: string | null
+          id?: string
+          pinned?: boolean
+          project_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_notes_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "project_note_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_notes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           created_at: string
           id: string
           name: string
+          note_template: string | null
           system_prompt: string | null
           user_id: string
         }
@@ -1884,6 +2511,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          note_template?: string | null
           system_prompt?: string | null
           user_id: string
         }
@@ -1891,6 +2519,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          note_template?: string | null
           system_prompt?: string | null
           user_id?: string
         }
@@ -1901,6 +2530,7 @@ export type Database = {
           approval_tier: string | null
           approved_at: string | null
           approved_by: string | null
+          approver_user_id: string | null
           attachment_path: string | null
           category: Database["public"]["Enums"]["po_category"]
           created_at: string
@@ -1913,6 +2543,9 @@ export type Database = {
           quantity: number
           rejection_reason: string | null
           requester_id: string
+          secondary_approved_at: string | null
+          secondary_approved_by: string | null
+          secondary_approver_user_id: string | null
           status: Database["public"]["Enums"]["po_status"]
           total_amount: number
           unit_price: number
@@ -1923,6 +2556,7 @@ export type Database = {
           approval_tier?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          approver_user_id?: string | null
           attachment_path?: string | null
           category?: Database["public"]["Enums"]["po_category"]
           created_at?: string
@@ -1935,6 +2569,9 @@ export type Database = {
           quantity?: number
           rejection_reason?: string | null
           requester_id: string
+          secondary_approved_at?: string | null
+          secondary_approved_by?: string | null
+          secondary_approver_user_id?: string | null
           status?: Database["public"]["Enums"]["po_status"]
           total_amount: number
           unit_price: number
@@ -1945,6 +2582,7 @@ export type Database = {
           approval_tier?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          approver_user_id?: string | null
           attachment_path?: string | null
           category?: Database["public"]["Enums"]["po_category"]
           created_at?: string
@@ -1957,6 +2595,9 @@ export type Database = {
           quantity?: number
           rejection_reason?: string | null
           requester_id?: string
+          secondary_approved_at?: string | null
+          secondary_approved_by?: string | null
+          secondary_approver_user_id?: string | null
           status?: Database["public"]["Enums"]["po_status"]
           total_amount?: number
           unit_price?: number
@@ -2419,6 +3060,87 @@ export type Database = {
         }
         Relationships: []
       }
+      travel_requests: {
+        Row: {
+          accommodation_needed: boolean
+          accommodation_type: string | null
+          approved_at: string | null
+          approved_by: string | null
+          approver_user_id: string | null
+          attachment_path: string | null
+          created_at: string
+          currency: string
+          depart_date: string
+          destination_city: string
+          destination_country: string
+          estimated_cost: number
+          id: string
+          notes: string | null
+          purpose: string
+          reference: string
+          rejection_reason: string | null
+          requester_id: string
+          return_date: string
+          status: Database["public"]["Enums"]["travel_status"]
+          transport_mode: Database["public"]["Enums"]["travel_transport"]
+          traveller_name: string
+          traveller_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          accommodation_needed?: boolean
+          accommodation_type?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          approver_user_id?: string | null
+          attachment_path?: string | null
+          created_at?: string
+          currency?: string
+          depart_date: string
+          destination_city: string
+          destination_country: string
+          estimated_cost?: number
+          id?: string
+          notes?: string | null
+          purpose: string
+          reference: string
+          rejection_reason?: string | null
+          requester_id: string
+          return_date: string
+          status?: Database["public"]["Enums"]["travel_status"]
+          transport_mode?: Database["public"]["Enums"]["travel_transport"]
+          traveller_name: string
+          traveller_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accommodation_needed?: boolean
+          accommodation_type?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          approver_user_id?: string | null
+          attachment_path?: string | null
+          created_at?: string
+          currency?: string
+          depart_date?: string
+          destination_city?: string
+          destination_country?: string
+          estimated_cost?: number
+          id?: string
+          notes?: string | null
+          purpose?: string
+          reference?: string
+          rejection_reason?: string | null
+          requester_id?: string
+          return_date?: string
+          status?: Database["public"]["Enums"]["travel_status"]
+          transport_mode?: Database["public"]["Enums"]["travel_transport"]
+          traveller_name?: string
+          traveller_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       unmapped_users_log: {
         Row: {
           basecamp_name: string
@@ -2809,6 +3531,47 @@ export type Database = {
           },
         ]
       }
+      workstream_task_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          id: string
+          mime_type: string | null
+          size_bytes: number | null
+          storage_path: string
+          task_id: string
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path: string
+          task_id: string
+          uploaded_by: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path?: string
+          task_id?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workstream_task_attachments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "workstream_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workstream_task_comments: {
         Row: {
           content: string
@@ -2853,6 +3616,7 @@ export type Database = {
           description: string
           due_date: string | null
           id: string
+          parent_task_id: string | null
           sort_order: number
           status: string
           title: string
@@ -2866,6 +3630,7 @@ export type Database = {
           description?: string
           due_date?: string | null
           id?: string
+          parent_task_id?: string | null
           sort_order?: number
           status?: string
           title: string
@@ -2879,6 +3644,7 @@ export type Database = {
           description?: string
           due_date?: string | null
           id?: string
+          parent_task_id?: string | null
           sort_order?: number
           status?: string
           title?: string
@@ -2890,6 +3656,13 @@ export type Database = {
             columns: ["card_id"]
             isOneToOne: false
             referencedRelation: "workstream_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workstream_tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "workstream_tasks"
             referencedColumns: ["id"]
           },
         ]
@@ -3124,6 +3897,23 @@ export type Database = {
         }
         Returns: boolean
       }
+      match_documents: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          p_user_id?: string
+          query_embedding: string
+        }
+        Returns: {
+          chunk_index: number
+          content: string
+          document_id: string
+          document_title: string
+          id: string
+          metadata: Json
+          similarity: number
+        }[]
+      }
       match_project_chunks: {
         Args: {
           file_ids: string[]
@@ -3145,6 +3935,19 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
+      approval_kind:
+        | "cost"
+        | "event_date"
+        | "release"
+        | "hire"
+        | "contract"
+        | "other"
+      approval_status:
+        | "pending"
+        | "approved"
+        | "rejected"
+        | "changes_requested"
+        | "cancelled"
       event_approval_status: "pending" | "approved" | "rejected" | "proposed"
       po_category:
         | "software"
@@ -3154,12 +3957,18 @@ export type Database = {
         | "travel"
         | "office_supplies"
         | "other"
+        | "creative"
+        | "events"
+        | "social"
+        | "manufacturing"
       po_status:
         | "draft"
         | "pending_approval"
         | "approved"
         | "rejected"
         | "cancelled"
+      travel_status: "pending_approval" | "approved" | "rejected" | "cancelled"
+      travel_transport: "flight" | "train" | "car" | "other"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3288,6 +4097,21 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
+      approval_kind: [
+        "cost",
+        "event_date",
+        "release",
+        "hire",
+        "contract",
+        "other",
+      ],
+      approval_status: [
+        "pending",
+        "approved",
+        "rejected",
+        "changes_requested",
+        "cancelled",
+      ],
       event_approval_status: ["pending", "approved", "rejected", "proposed"],
       po_category: [
         "software",
@@ -3297,6 +4121,10 @@ export const Constants = {
         "travel",
         "office_supplies",
         "other",
+        "creative",
+        "events",
+        "social",
+        "manufacturing",
       ],
       po_status: [
         "draft",
@@ -3305,6 +4133,8 @@ export const Constants = {
         "rejected",
         "cancelled",
       ],
+      travel_status: ["pending_approval", "approved", "rejected", "cancelled"],
+      travel_transport: ["flight", "train", "car", "other"],
     },
   },
 } as const

@@ -29,7 +29,13 @@ from app.routers.integrations.azure_devops import router as devops_router
 from app.routers.integrations.slack import router as slack_router
 from app.routers.integrations.elevenlabs import router as elevenlabs_router
 from app.routers.integrations.hubspot import router as hubspot_router
+from app.routers.integrations.xero import router as xero_router
+from app.routers.integrations.google_analytics import router as ganalytics_router
+from app.routers.integrations.github import router as github_router
 from app.routers.nda import router as nda_router
+from app.routers.events import router as events_router
+from app.routers.purchase_orders import router as po_router
+from app.routers.forms import router as forms_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,10 +64,12 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
-# CORS — preserve headers the existing React frontend sends
+# CORS
+# allow_credentials=True is incompatible with allow_origins=["*"].
+# Use the explicit origins list only; add any new dev origins to CORS_ORIGINS in .env.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS + ["*"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=[
@@ -69,6 +77,7 @@ app.add_middleware(
         "content-type",
         "x-client-info",
         "apikey",
+        "ngrok-skip-browser-warning",
         "x-supabase-client-platform",
         "x-supabase-client-platform-version",
         "x-supabase-client-runtime",
@@ -129,6 +138,14 @@ app.include_router(devops_router)
 app.include_router(slack_router)
 app.include_router(elevenlabs_router)
 app.include_router(hubspot_router)
+app.include_router(xero_router)
+app.include_router(ganalytics_router)
+app.include_router(github_router)
 
 # NDA agentic flow
 app.include_router(nda_router)
+
+# Business logic
+app.include_router(events_router)
+app.include_router(po_router)
+app.include_router(forms_router)

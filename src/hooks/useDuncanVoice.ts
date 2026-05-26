@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useScribe, CommitStrategy } from "@elevenlabs/react";
-import { supabase } from "@/integrations/supabase/client";
+import { getAuthToken } from "@/lib/authStorage";
 import { toast } from "sonner";
-import { extractSentences, sanitizeForSpeech } from "@/lib/ttsTextSanitizer";
+import { extractSpeakable, sanitizeForSpeech } from "@/lib/ttsTextSanitizer";
 
 type VoiceState = "idle" | "listening" | "thinking" | "speaking";
 
@@ -25,7 +25,7 @@ function isLikelyNoise(raw: string): boolean {
 interface ChatLike {
   messages: { role: "user" | "assistant"; content: string }[];
   isLoading: boolean;
-  send: (input: string, mode?: any, attachments?: any[]) => void;
+  send: (input: string, mode?: any, attachments?: any[], opts?: { voiceMode?: boolean }) => void;
 }
 
 interface Options {
@@ -35,8 +35,9 @@ interface Options {
   enabled: boolean; // overlay open
 }
 
-const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`;
-const TOKEN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-scribe-token`;
+const API_BASE = import.meta.env.VITE_API_BASE_URL as string;
+const TTS_URL = `${API_BASE}/elevenlabs-tts`;
+const TOKEN_URL = `${API_BASE}/elevenlabs-scribe-token`;
 
 export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
   const [state, setState] = useState<VoiceState>("idle");
@@ -50,6 +51,20 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
   const mutedRef = useRef(muted);
   useEffect(() => { mutedRef.current = muted; }, [muted]);
   const lastCommitRef = useRef<{ text: string; at: number }>({ text: "", at: 0 });
+  const tokenRef = useRef<string | null>(null);
+  const hasWarmedRef = useRef(false);
+
+  // Keep cached access token in sync — just reads from authStorage
+  useEffect(() => {
+    tokenRef.current = getAuthToken();
+  }, []);
+
+  const getToken = useCallback((): string => {
+    if (tokenRef.current) return tokenRef.current;
+    tokenRef.current = getAuthToken();
+    return tokenRef.current ?? "";
+  }, []);
+
 
   const stopAudio = useCallback(() => {
     queueRef.current = [];
@@ -74,16 +89,25 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
     playingRef.current = true;
     setState("speaking");
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const resp = await fetch(TTS_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token ?? ""}`,
-        },
-        body: JSON.stringify({ text: next, voiceId, speed }),
-      });
+      let token = getToken();
+      const doFetch = (t: string) =>
+        fetch(TTS_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${t}`,
+            "ngrok-skip-browser-warning": "1",
+          },
+          body: JSON.stringify({ text: next, voice_id: voiceId }),
+        });
+      let resp = await doFetch(token);
+      if (resp.status === 401) {
+        tokenRef.current = null;
+        token = getToken();
+        resp = await doFetch(token);
+      }
       if (!resp.ok) throw new Error(`TTS ${resp.status}`);
+
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
@@ -133,7 +157,10 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
     }
 
     const fresh = last.content.slice(lastSpokenIndexRef.current);
-    const { sentences, remainder } = extractSentences(fresh);
+    const { sentences, remainder } = extractSpeakable(fresh, {
+      eager: chat.isLoading,
+      minSoftLen: 60,
+    });
     if (sentences.length > 0) {
       sentences.forEach(enqueueSentence);
       lastSpokenIndexRef.current = last.content.length - remainder.length;
@@ -160,6 +187,11 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     commitStrategy: CommitStrategy.VAD,
+    vadThreshold: 0.6,
+    minSpeechDurationMs: 200,
+    minSilenceDurationMs: 350,
+    noVerbatim: true,
+    languageCode: "eng",
     onPartialTranscript: (data: any) => {
       const text = (data?.text || "").trim();
       if (!text || isLikelyNoise(text)) return;
@@ -187,7 +219,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
       setState("thinking");
       try {
         const safeAttachments: any[] = [];
-        chat.send(text, "general", safeAttachments);
+        chat.send(text, "general", safeAttachments, { voiceMode: true });
       } catch (e) {
         console.error("[Duncan voice] send failed", e);
         toast.error("Couldn't send your message to Duncan.");
@@ -212,20 +244,24 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
       // release immediately — scribe.connect grabs its own
       stream.getTracks().forEach((t) => t.stop());
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not signed in");
+      const authToken = getAuthToken();
+      if (!authToken) throw new Error("Not signed in");
+      tokenRef.current = authToken;
       const resp = await fetch(TOKEN_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${authToken}`,
+          "ngrok-skip-browser-warning": "1",
         },
       });
       if (!resp.ok) {
         const errText = await resp.text();
         throw new Error(`Voice token failed: ${errText || resp.status}`);
       }
-      const { token } = await resp.json();
+      const respData = await resp.json();
+      // FastAPI returns { signed_url }, Supabase edge returned { token }
+      const token = respData.signed_url || respData.token;
       if (!token) throw new Error("No voice token returned");
 
       await scribe.connect({
@@ -233,10 +269,26 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
         microphone: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: false,
+          autoGainControl: true,
+          channelCount: 1,
         },
       });
       setState("listening");
+
+      if (!hasWarmedRef.current) {
+        hasWarmedRef.current = true;
+        fetch(TTS_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+            "ngrok-skip-browser-warning": "1",
+          },
+          body: JSON.stringify({ text: ".", voice_id: voiceId }),
+        })
+          .then((r) => r.body?.cancel().catch(() => {}))
+          .catch(() => {});
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[Duncan voice] start failed", e);
@@ -244,7 +296,7 @@ export function useDuncanVoice({ chat, voiceId, speed, enabled }: Options) {
       toast.error(msg);
       throw e;
     }
-  }, [scribe]);
+  }, [scribe, voiceId, speed]);
 
   const stop = useCallback(async () => {
     stopAudio();

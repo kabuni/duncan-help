@@ -6,53 +6,11 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function refreshTokenIfNeeded(supabaseAdmin: any, tokenRow: any): Promise<string> {
-  const expiry = new Date(tokenRow.token_expiry);
-  if (expiry > new Date(Date.now() + 5 * 60 * 1000)) {
-    return tokenRow.access_token;
-  }
-
-  const clientId = Deno.env.get("AZURE_DEVOPS_CLIENT_ID")!;
-  const clientSecret = Deno.env.get("AZURE_DEVOPS_CLIENT_SECRET")!;
-  const tenantId = Deno.env.get("AZURE_TENANT_ID") || "53e795b0-6f86-4e93-b619-32b5f5850f07";
-
-  const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: tokenRow.refresh_token,
-      grant_type: "refresh_token",
-      scope: "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation offline_access",
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Token refresh failed: ${err}`);
-  }
-
-  const tokens = await response.json();
-  const newExpiry = new Date(Date.now() + tokens.expires_in * 1000);
-
-  await supabaseAdmin
-    .from("azure_devops_tokens")
-    .update({
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token || tokenRow.refresh_token,
-      token_expiry: newExpiry.toISOString(),
-    })
-    .eq("id", tokenRow.id);
-
-  return tokens.access_token;
-}
-
-async function adoFetch(url: string, accessToken: string, init?: RequestInit) {
+async function adoFetch(url: string, authHeader: string, init?: RequestInit) {
   const res = await fetch(url, {
     ...(init || {}),
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: authHeader,
       "Content-Type": "application/json",
       ...((init?.headers as Record<string, string>) || {}),
     },
@@ -85,8 +43,26 @@ Deno.serve(async (req) => {
     }
 
     // Trusted internal calls (e.g. ceo-briefing) authenticate with the service role key.
+    // Accept either an exact match against SUPABASE_SERVICE_ROLE_KEY (legacy) OR a JWT
+    // whose role claim is "service_role" (new signing-keys system, where the env var
+    // value may not exactly match the JWT used by other functions).
     const bearerToken = authHeader.replace(/^Bearer\s+/i, "");
-    const isTrustedInternalCall = !!bearerToken && bearerToken === supabaseServiceKey;
+    let isTrustedInternalCall = !!bearerToken && bearerToken === supabaseServiceKey;
+    if (!isTrustedInternalCall && bearerToken) {
+      try {
+        const parts = bearerToken.split(".");
+        if (parts.length === 3) {
+          const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+          const padding = padded.length % 4 ? "=".repeat(4 - (padded.length % 4)) : "";
+          const claims = JSON.parse(atob(padded + padding));
+          if (claims?.role === "service_role") {
+            isTrustedInternalCall = true;
+          }
+        }
+      } catch (_e) {
+        // ignore — fall through to user-JWT validation
+      }
+    }
 
     if (!isTrustedInternalCall) {
       const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
@@ -101,21 +77,36 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { data: tokenRow, error: tokenError } = await supabaseAdmin
-      .from("azure_devops_tokens")
-      .select("*")
-      .limit(1)
-      .maybeSingle();
+    // Prefer PAT if configured; otherwise fall back to stored OAuth token
+    const pat = Deno.env.get("AZURE_DEVOPS_PAT");
+    let accessToken: string;
+    let orgUrl: string;
 
-    if (tokenError || !tokenRow) {
-      return new Response(JSON.stringify({ error: "Azure DevOps not connected" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (pat) {
+      accessToken = `Basic ${btoa(":" + pat)}`;
+      orgUrl = (Deno.env.get("AZURE_DEVOPS_ORG_URL") || "").replace(/\/+$/, "");
+      if (!orgUrl) {
+        return new Response(JSON.stringify({ error: "AZURE_DEVOPS_ORG_URL not configured" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else {
+      const { data: tokenRow, error: tokenError } = await supabaseAdmin
+        .from("azure_devops_tokens")
+        .select("*")
+        .limit(1)
+        .maybeSingle();
+
+      if (tokenError || !tokenRow) {
+        return new Response(JSON.stringify({ error: "Azure DevOps not connected" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      accessToken = `Bearer ${tokenRow.access_token}`;
+      orgUrl = (tokenRow.org_url || Deno.env.get("AZURE_DEVOPS_ORG_URL") || "").replace(/\/+$/, "");
     }
-
-    const accessToken = await refreshTokenIfNeeded(supabaseAdmin, tokenRow);
-    const orgUrl = (tokenRow.org_url || Deno.env.get("AZURE_DEVOPS_ORG_URL") || "").replace(/\/+$/, "");
 
     const body = await req.json().catch(() => ({}));
     const { action } = body;
@@ -429,6 +420,169 @@ Deno.serve(async (req) => {
           }
         }
 
+        // ---- Commit metrics for current (last 7d) and previous (8-14d) windows ----
+        const nowMs = Date.now();
+        const sevenDaysAgoIso = new Date(nowMs - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const fourteenDaysAgoIso = new Date(nowMs - 14 * 24 * 60 * 60 * 1000).toISOString();
+        let commitMetricsPartial = false;
+
+        type AuthorAgg = {
+          author: string;
+          email?: string;
+          commits: number;
+          files_added: number;
+          files_edited: number;
+          files_removed: number;
+          repos: Set<string>;
+        };
+        const mkAgg = (author: string, email?: string): AuthorAgg => ({
+          author, email,
+          commits: 0, files_added: 0, files_edited: 0, files_removed: 0,
+          repos: new Set<string>(),
+        });
+
+        const curByAuthor = new Map<string, AuthorAgg>();
+        const prevByAuthor = new Map<string, number>(); // key -> commits
+
+        let commits7d = 0, filesAdded7d = 0, filesRemoved7d = 0, filesEdited7d = 0;
+        let commitsPrev7d = 0, filesAddedPrev7d = 0, filesRemovedPrev7d = 0;
+        const contributors7d = new Set<string>();
+        const contributorsPrev7d = new Set<string>();
+
+        const fetchCommits = async (r: { project: string; id: string; name: string }, fromIso: string, toIso?: string) => {
+          let url =
+            `${orgUrl}/${encodeURIComponent(r.project)}/_apis/git/repositories/${r.id}/commits` +
+            `?searchCriteria.fromDate=${encodeURIComponent(fromIso)}` +
+            `&searchCriteria.includeLinks=false` +
+            `&searchCriteria.$top=1000` +
+            `&api-version=7.1`;
+          if (toIso) url += `&searchCriteria.toDate=${encodeURIComponent(toIso)}`;
+          const cRes = await adoFetch(url, accessToken);
+          return cRes.value || [];
+        };
+
+        // Limit concurrency to avoid hammering ADO and reduce overall latency.
+        const runWithConcurrency = async <T,>(items: T[], limit: number, fn: (item: T) => Promise<void>) => {
+          let i = 0;
+          const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+            while (i < items.length) {
+              const idx = i++;
+              try { await fn(items[idx]); } catch (_) { /* per-item handlers already guard */ }
+            }
+          });
+          await Promise.all(workers);
+        };
+
+        await runWithConcurrency(repoList, 8, async (r) => {
+          const repoLabel = `${r.project}/${r.name}`;
+
+          // Current window first; only scan previous window if this repo had recent activity.
+          let curCommits: any[] = [];
+          try {
+            curCommits = await fetchCommits(r, sevenDaysAgoIso);
+          } catch (e) {
+            commitMetricsPartial = true;
+            console.warn(`briefing_summary: current commits scan failed for ${repoLabel}`, e);
+            return;
+          }
+
+          for (const c of curCommits) {
+            commits7d += 1;
+            const email = c.author?.email ? String(c.author.email).toLowerCase() : undefined;
+            const name = c.author?.name || c.author?.email || "unknown";
+            const key = email || name.toLowerCase();
+            if (email || name) contributors7d.add(key);
+            const cc = c.changeCounts || {};
+            const add = Number(cc.Add || 0), edit = Number(cc.Edit || 0), del = Number(cc.Delete || 0);
+            filesAdded7d += add;
+            filesRemoved7d += del;
+            filesEdited7d += edit;
+            let agg = curByAuthor.get(key);
+            if (!agg) { agg = mkAgg(name, email); curByAuthor.set(key, agg); }
+            agg.commits += 1;
+            agg.files_added += add;
+            agg.files_edited += edit;
+            agg.files_removed += del;
+            agg.repos.add(repoLabel);
+          }
+
+          // Skip previous-window scan entirely for repos with no current activity —
+          // they cannot affect WoW deltas in a meaningful way and add a lot of latency.
+          if (curCommits.length === 0) return;
+
+          try {
+            const prevCommits = await fetchCommits(r, fourteenDaysAgoIso, sevenDaysAgoIso);
+            for (const c of prevCommits) {
+              commitsPrev7d += 1;
+              const email = c.author?.email ? String(c.author.email).toLowerCase() : undefined;
+              const name = c.author?.name || c.author?.email || "unknown";
+              const key = email || name.toLowerCase();
+              if (email || name) contributorsPrev7d.add(key);
+              const cc = c.changeCounts || {};
+              filesAddedPrev7d += Number(cc.Add || 0);
+              filesRemovedPrev7d += Number(cc.Delete || 0);
+              prevByAuthor.set(key, (prevByAuthor.get(key) || 0) + 1);
+            }
+          } catch (e) {
+            commitMetricsPartial = true;
+            console.warn(`briefing_summary: previous commits scan failed for ${repoLabel}`, e);
+          }
+        });
+
+        // Build contributor list with WoW deltas + per-author trend.
+        const trendOf = (cur: number, prev: number): "up" | "down" | "flat" => {
+          if (cur === prev) return "flat";
+          if (prev === 0) return cur > 0 ? "up" : "flat";
+          const pct = ((cur - prev) / prev) * 100;
+          if (pct >= 5) return "up";
+          if (pct <= -5) return "down";
+          return "flat";
+        };
+
+        const contributors_7d = Array.from(curByAuthor.entries()).map(([key, a]) => {
+          const prevCommits = prevByAuthor.get(key) || 0;
+          const lines_changed = a.files_added + a.files_edited + a.files_removed;
+          return {
+            author: a.author,
+            email: a.email,
+            commits: a.commits,
+            files_added: a.files_added,
+            files_edited: a.files_edited,
+            files_removed: a.files_removed,
+            lines_changed,
+            repos: Array.from(a.repos).sort(),
+            commits_prev_7d: prevCommits,
+            trend: trendOf(a.commits, prevCommits),
+          };
+        }).sort((x, y) => y.commits - x.commits || y.lines_changed - x.lines_changed);
+
+        const top_contributor = contributors_7d.length > 0
+          ? { author: contributors_7d[0].author, commits: contributors_7d[0].commits, lines_changed: contributors_7d[0].lines_changed }
+          : null;
+
+        const pct = (cur: number, prev: number) =>
+          prev === 0 ? (cur > 0 ? 100 : 0) : Math.round(((cur - prev) / prev) * 1000) / 10;
+
+        const wow = {
+          commits_delta: commits7d - commitsPrev7d,
+          commits_pct: pct(commits7d, commitsPrev7d),
+          files_added_delta: filesAdded7d - filesAddedPrev7d,
+          files_added_pct: pct(filesAdded7d, filesAddedPrev7d),
+          files_removed_delta: filesRemoved7d - filesRemovedPrev7d,
+          files_removed_pct: pct(filesRemoved7d, filesRemovedPrev7d),
+          contributors_delta: contributors7d.size - contributorsPrev7d.size,
+          trend: trendOf(commits7d, commitsPrev7d),
+        };
+
+        const prev_window = {
+          commits_7d: commitsPrev7d,
+          files_added_7d: filesAddedPrev7d,
+          files_removed_7d: filesRemovedPrev7d,
+          active_contributors_7d: contributorsPrev7d.size,
+          since: fourteenDaysAgoIso,
+          until: sevenDaysAgoIso,
+        };
+
         // Org-wide active PRs (single call instead of per-repo).
         let openPrs = 0;
         let blockedPrs = 0;
@@ -464,27 +618,52 @@ Deno.serve(async (req) => {
         }
 
         const reposScanned = repoList.length;
+        const projectNames = Array.from(new Set(repoList.map((r) => r.project))).sort();
+        const repoFullNames = repoList.map((r) => `${r.project}/${r.name}`).sort();
+        console.log(
+          `briefing_summary: scanned ${projectNames.length} projects, ${reposScanned} repos`,
+          { projects: projectNames, repos: repoFullNames },
+        );
+
         const summary = reposScanned === 0
           ? "Azure Repos connected but no repositories were available to scan."
           : `${openPrs} open PRs, ${blockedPrs} blocked drafts, and ${stalePrs} stale PRs across ${reposScanned} repositories.`;
 
         result = {
           connected: true,
-          status: partialFailure ? "degraded" : "connected",
+          status: (partialFailure || commitMetricsPartial) ? "degraded" : "connected",
           credential_source: "stored_token",
           verification_path: "/_apis/git/pullrequests",
           last_verified_at: verifiedAt,
           last_sync_at: verifiedAt,
-          error_code: partialFailure ? "pr_scan_partial_failure" : null,
-          error_message: partialFailure ? "Some pull requests could not be scanned fully" : null,
+          error_code: partialFailure
+            ? "pr_scan_partial_failure"
+            : commitMetricsPartial
+            ? "commit_scan_partial_failure"
+            : null,
+          error_message: partialFailure
+            ? "Some pull requests could not be scanned fully"
+            : commitMetricsPartial
+            ? "Some repository commit history could not be scanned fully"
+            : null,
           repos_scanned: reposScanned,
           open_prs: openPrs,
           blocked_prs: blockedPrs,
           stale_prs: stalePrs,
           release_risks: blockedPrs + stalePrs,
+          commits_7d: commits7d,
+          files_added_7d: filesAdded7d,
+          files_removed_7d: filesRemoved7d,
+          active_contributors_7d: contributors7d.size,
+          scanned_projects: projectNames,
+          scanned_repos: repoFullNames,
           signals,
           summary,
           metrics_summary: summary,
+          contributors_7d,
+          top_contributor,
+          prev_window,
+          wow,
         };
         break;
       }

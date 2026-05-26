@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -109,6 +109,23 @@ const Operations = () => {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
+  const [releaseFilter, setReleaseFilter] = useState<string>("all");
+
+  // Reset release filter when project changes (releases are project-scoped)
+  useEffect(() => {
+    setReleaseFilter("all");
+  }, [projectFilter]);
+
+  // Release comes from the Azure DevOps "Release" field on User Stories
+  // (Custom.MVPRelease, e.g. "Future"), populated by the sync.
+  // Unset User Stories fall back to "Future" to match Azure's UI default.
+  const defaultRelease = "Future";
+  const getRelease = (w: any): string | null => {
+    const r = (w?.release || "").toString().trim();
+    if (r) return r;
+    if (w?.work_item_type === "User Story") return defaultRelease;
+    return null;
+  };
 
   // Unique filter options
   const filterOptions = useMemo(() => {
@@ -116,22 +133,30 @@ const Operations = () => {
     const types = new Set<string>();
     const assignees = new Set<string>();
     const projects = new Set<string>();
+    const releases = new Set<string>();
+    const pf = projectFilter.toString().trim().toLowerCase();
     workItems.forEach((w: any) => {
       if (w.state) states.add(w.state);
       if (w.work_item_type) types.add(w.work_item_type);
       if (w.assigned_to) assignees.add(w.assigned_to);
       if (w.project_name) projects.add(w.project_name);
+      // Scope releases to currently selected project
+      if (projectFilter === "all" || (w.project_name || "").toString().trim().toLowerCase() === pf) {
+        const r = getRelease(w);
+        if (r) releases.add(r);
+      }
     });
     return {
       states: Array.from(states).sort(),
       types: Array.from(types).sort(),
       assignees: Array.from(assignees).sort(),
       projects: Array.from(projects).sort(),
+      releases: Array.from(releases).sort(),
     };
-  }, [workItems]);
+  }, [workItems, projectFilter]);
 
   const filteredItems = useMemo(() => {
-    return workItems.filter((w: any) => {
+    const list = workItems.filter((w: any) => {
       if (stateFilter !== "all" && w.state !== stateFilter) return false;
       if (typeFilter !== "all" && w.work_item_type !== typeFilter) return false;
       if (assigneeFilter === "__unassigned__") {
@@ -144,17 +169,27 @@ const Operations = () => {
         const pf = projectFilter.toString().trim().toLowerCase();
         if (wp !== pf) return false;
       }
+      if (releaseFilter !== "all") {
+        const r = getRelease(w);
+        if (releaseFilter === "__none__") {
+          if (r) return false;
+        } else if (r !== releaseFilter) {
+          return false;
+        }
+      }
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         if (!w.title?.toLowerCase().includes(q) && !String(w.external_id).includes(q)) return false;
       }
       return true;
     });
-  }, [workItems, stateFilter, typeFilter, assigneeFilter, projectFilter, searchQuery]);
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+    return [...list].sort((a, b) => collator.compare(a.title || "", b.title || ""));
+  }, [workItems, stateFilter, typeFilter, assigneeFilter, projectFilter, releaseFilter, searchQuery, defaultRelease]);
 
-  const hasActiveFilters = stateFilter !== "all" || typeFilter !== "all" || assigneeFilter !== "all" || projectFilter !== "all" || searchQuery !== "";
+  const hasActiveFilters = stateFilter !== "all" || typeFilter !== "all" || assigneeFilter !== "all" || projectFilter !== "all" || releaseFilter !== "all" || searchQuery !== "";
   const clearFilters = () => {
-    setStateFilter("all"); setTypeFilter("all"); setAssigneeFilter("all"); setProjectFilter("all"); setSearchQuery("");
+    setStateFilter("all"); setTypeFilter("all"); setAssigneeFilter("all"); setProjectFilter("all"); setReleaseFilter("all"); setSearchQuery("");
   };
 
   const handleSync = async (type: "azure") => {
@@ -205,6 +240,13 @@ const Operations = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
+                <a
+                  href="/recruitment"
+                  className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Recruitment
+                </a>
                 <button
                   onClick={() => handleSync("azure")}
                   disabled={syncing === "azure"}
@@ -308,6 +350,14 @@ const Operations = () => {
                         </SelectContent>
                       </Select>
                     )}
+                    <Select value={releaseFilter} onValueChange={setReleaseFilter}>
+                      <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue placeholder="All releases" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All releases</SelectItem>
+                        <SelectItem value="__none__">No release</SelectItem>
+                        {filterOptions.releases.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                     {hasActiveFilters && (
                       <button
                         onClick={clearFilters}

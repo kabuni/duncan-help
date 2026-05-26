@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const TARGET_CALENDAR_NAME = "Duncan | Key Events";
+const TARGET_CALENDAR_NAME = "Duncan | Planner";
 const MANDATORY = ["owner", "objective", "success_metric", "decision_needed", "linked_docs", "risks", "next_action"];
 
 interface ParsedEvent {

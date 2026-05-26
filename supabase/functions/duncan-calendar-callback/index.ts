@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const APP_URL = Deno.env.get("APP_URL") || "https://duncan.help";
-const TARGET_CALENDAR_NAME = "Duncan | Key Events";
+const TARGET_CALENDAR_NAME = "Duncan | Planner";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -69,7 +69,7 @@ serve(async (req) => {
       }
     } catch (_e) { /* ignore */ }
 
-    // Find the "Duncan | Key Events" calendar
+    // Find the "Duncan | Planner" calendar
     let calendarId: string | null = null;
     const listRes = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=250", {
       headers: { Authorization: `Bearer ${accessToken}` },

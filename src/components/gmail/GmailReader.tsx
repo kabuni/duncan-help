@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import DOMPurify from "dompurify";
 import { ArrowLeft, Loader2, User, Clock, Sparkles } from "lucide-react";
 import { useGmailReadEmail, useGmailCreateDraft, type GmailFullEmail } from "@/hooks/useGmailIntegration";
 import { format } from "date-fns";
@@ -112,7 +113,7 @@ const GmailReader = ({ messageId, onBack }: GmailReaderProps) => {
         {email.htmlBody ? (
           <div
             className="prose prose-sm dark:prose-invert max-w-none text-foreground/90"
-            dangerouslySetInnerHTML={{ __html: email.htmlBody }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(email.htmlBody, { FORBID_TAGS: ["script", "style", "iframe", "object", "embed"], FORBID_ATTR: ["onerror", "onload", "onclick"] }) }}
           />
         ) : (
           <pre className="whitespace-pre-wrap text-sm text-foreground/90 font-sans leading-relaxed">

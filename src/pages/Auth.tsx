@@ -112,6 +112,10 @@ const Auth = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLogin && isLockedOut) {
+      toast.error(`Too many failed attempts. Try again in ${lockoutMinutes}:${String(lockoutSeconds).padStart(2, "0")}.`);
+      return;
+    }
     setSubmitting(true);
 
     try {
@@ -135,6 +139,10 @@ const Auth = () => {
       if (error) throw error;
 
       if (isLogin) {
+        setFailedAttempts(0);
+        setLockoutUntil(0);
+        localStorage.removeItem("auth_failed_attempts");
+        localStorage.removeItem("auth_lockout_until");
         toast.success("Welcome back to Duncan");
       } else {
         setShowSignupSuccess(true);
@@ -143,11 +151,27 @@ const Auth = () => {
       }
     } catch (error: unknown) {
       console.error("Auth submit failed", { error, online: navigator.onLine, origin: window.location.origin });
-      toast.error(getAuthErrorMessage(error));
+      if (isLogin) {
+        const next = failedAttempts + 1;
+        setFailedAttempts(next);
+        localStorage.setItem("auth_failed_attempts", String(next));
+        if (next >= MAX_ATTEMPTS) {
+          const until = Date.now() + LOCKOUT_MS;
+          setLockoutUntil(until);
+          localStorage.setItem("auth_lockout_until", String(until));
+          setNowTs(Date.now());
+          toast.error("Too many failed attempts. Sign-in disabled for 15 minutes.");
+        } else {
+          toast.error(`${getAuthErrorMessage(error)} (${MAX_ATTEMPTS - next} attempts left)`);
+        }
+      } else {
+        toast.error(getAuthErrorMessage(error));
+      }
     } finally {
       setSubmitting(false);
     }
   };
+
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();

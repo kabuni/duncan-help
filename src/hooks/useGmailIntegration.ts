@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { fastApi, withFastApi } from "@/lib/fastApiClient";
+
 import { toast } from "sonner";
 
 export interface GmailEmail {
@@ -31,17 +31,11 @@ export interface GmailStatus {
 }
 
 async function gmailApi(action: string, body: Record<string, any> = {}) {
-  const data = await withFastApi(
-    async () => {
-      const { data, error } = await supabase.functions.invoke("gmail-api", {
-        body: { action, ...body },
-      });
-      if (error) throw new Error(error.message || "Gmail API error");
-      if (data?.error) throw new Error(data.error);
-      return data;
-    },
-    () => fastApi("POST", "/gmail/api", { action, ...body }),
-  );
+  const { data, error } = await supabase.functions.invoke("gmail-api", {
+    body: { action, ...body },
+  });
+  if (error) throw new Error(error.message || "Gmail API error");
+  if (data?.error) throw new Error(data.error);
   return data;
 }
 
@@ -59,14 +53,8 @@ export function useGmailConnect() {
   const connect = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await withFastApi<{ url?: string }>(
-        async () => {
-          const { data, error } = await supabase.functions.invoke("gmail-auth");
-          if (error) throw error;
-          return data;
-        },
-        () => fastApi("GET", "/gmail/auth"),
-      );
+      const { data, error } = await supabase.functions.invoke("gmail-auth");
+      if (error) throw error;
       if (data?.url) window.location.href = data.url;
       else throw new Error("No auth URL returned");
     } catch (err: any) {

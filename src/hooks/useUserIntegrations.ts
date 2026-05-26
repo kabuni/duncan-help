@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { fastApi, withFastApi } from "@/lib/fastApiClient";
+
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
@@ -44,19 +44,11 @@ export function useConnectIntegration() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
-      return await withFastApi(
-        async () => {
-          const res = await supabase.functions.invoke("connect-integration", {
-            body: { integration_id: integrationId, api_key: apiKey },
-          });
-          if (res.error) throw res.error;
-          return res.data;
-        },
-        () => fastApi("POST", "/integrations/connect", {
-          integration_id: integrationId,
-          api_key: apiKey,
-        }),
-      );
+      const res = await supabase.functions.invoke("connect-integration", {
+        body: { integration_id: integrationId, api_key: apiKey },
+      });
+      if (res.error) throw res.error;
+      return res.data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["user-integrations"] });
@@ -69,19 +61,11 @@ export function useDisconnectIntegration() {
 
   return useMutation({
     mutationFn: async (integrationId: string) => {
-      return await withFastApi(
-        async () => {
-          const res = await supabase.functions.invoke("connect-integration", {
-            body: { integration_id: integrationId, action: "disconnect" },
-          });
-          if (res.error) throw res.error;
-          return res.data;
-        },
-        () => fastApi("POST", "/integrations/connect", {
-          integration_id: integrationId,
-          action: "disconnect",
-        }),
-      );
+      const res = await supabase.functions.invoke("connect-integration", {
+        body: { integration_id: integrationId, action: "disconnect" },
+      });
+      if (res.error) throw res.error;
+      return res.data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["user-integrations"] });

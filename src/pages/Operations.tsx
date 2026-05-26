@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { fastApi, withFastApi } from "@/lib/fastApiClient";
+
 import { useGoogleAnalytics } from "@/hooks/useGoogleAnalytics";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { azureReposApi, type TeamActivitySummary, type AzureRepo, type AzurePullRequest } from "@/lib/api/azureRepos";
@@ -194,14 +194,8 @@ const Operations = () => {
   const handleSync = async (type: "azure") => {
     setSyncing(type);
     try {
-      await withFastApi(
-        async () => {
-          const { error } = await supabase.functions.invoke("sync-azure-work-items");
-          if (error) throw error;
-          return null;
-        },
-        () => fastApi("POST", "/sync/azure-work-items", {}),
-      );
+      const { error } = await supabase.functions.invoke("sync-azure-work-items");
+      if (error) throw error;
       toast.success("Azure DevOps sync started");
     } catch (err: any) {
       toast.error(err.message || "Sync failed");

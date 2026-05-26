@@ -313,16 +313,10 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
       // Delete the corresponding Hireflix position
       if (hireflixPositionId) {
         try {
-          await withFastApi(
-            async () => {
-              const res = await supabase.functions.invoke("delete-hireflix-position", {
-                body: { hireflix_position_id: hireflixPositionId },
-              });
-              if (res.error) throw res.error;
-              return res.data;
-            },
-            () => fastApi("DELETE", `/hireflix/position/${hireflixPositionId}`),
-          );
+          const res = await supabase.functions.invoke("delete-hireflix-position", {
+            body: { hireflix_position_id: hireflixPositionId },
+          });
+          if (res.error) throw res.error;
         } catch (err: any) {
           // Queue for retry silently
           try {

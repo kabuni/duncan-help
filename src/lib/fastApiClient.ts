@@ -1,10 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
-const BASE = API_BASE;
-const hasExternalApiBase = typeof BASE === "string" && BASE.trim().length > 0;
-
-const USE_FASTAPI = import.meta.env.VITE_USE_FASTAPI === "true";
+// External FastAPI shadow backend disabled. See src/lib/apiConfig.ts.
+const BASE = "";
+const hasExternalApiBase = false;
+const USE_FASTAPI = false;
 
 async function getAuthHeader(): Promise<string> {
   const { data } = await supabase.auth.getSession();

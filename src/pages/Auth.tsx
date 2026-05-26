@@ -370,11 +370,13 @@ const Auth = () => {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || (isLogin && isLockedOut)}
               className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-all"
             >
               {submitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
+              ) : isLogin && isLockedOut ? (
+                <>Locked — {lockoutMinutes}:{String(lockoutSeconds).padStart(2, "0")}</>
               ) : (
                 <>
                   {isLogin ? "Sign in" : "Create account"}
@@ -382,6 +384,11 @@ const Auth = () => {
                 </>
               )}
             </button>
+            {isLogin && isLockedOut && (
+              <p className="text-xs text-destructive text-center">
+                Too many failed attempts. Sign-in disabled for {lockoutMinutes}:{String(lockoutSeconds).padStart(2, "0")}.
+              </p>
+            )}
           </form>
 
           {!isLogin && (

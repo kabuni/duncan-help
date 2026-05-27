@@ -27,10 +27,6 @@ const AppLayout = ({ children }: { children?: React.ReactNode }) => {
           </div>
           <NotificationsBell />
         </div>
-        {/* Desktop floating bell */}
-        <div className="hidden md:flex fixed top-3 right-4 z-40">
-          <NotificationsBell />
-        </div>
         <div
           className="flex-1 flex flex-col overflow-hidden"
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}

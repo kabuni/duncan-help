@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useApprovalCount } from "@/hooks/useApprovals";
+import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 
 const integrationMeta: Record<string, { label: string; icon: React.ElementType }> = {
   "slack": { label: "Slack", icon: MessageSquare },
@@ -343,13 +344,16 @@ const Sidebar = ({
             </div>
           </div>
         )}
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-all duration-150 w-full"
-        >
-          <Settings className="h-3.5 w-3.5" />
-          Settings
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-all duration-150"
+          >
+            <Settings className="h-3.5 w-3.5" />
+            Settings
+          </button>
+          <NotificationsBell />
+        </div>
       </div>
     </aside>
   );

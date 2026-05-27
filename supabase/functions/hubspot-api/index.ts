@@ -1237,8 +1237,8 @@ Deno.serve(async (req) => {
       const posts = postsRaw
         .map((b: any) => {
           const ch = b.channel ? channelLookup.get(String(b.channel)) : null;
-          const type = Number(b.channelType ?? b.type);
-          const platform = ch?.platform || PLATFORM[type] || "Other";
+          const rawType = b.channelType ?? b.type ?? b.channelKey;
+          const platform = ch?.platform || resolvePlatform(rawType);
           const triggerAt = b.triggerAt || b.finishedAt || b.createdAt;
           const publishedAt = typeof triggerAt === "number"
             ? new Date(triggerAt).toISOString()

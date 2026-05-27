@@ -996,7 +996,8 @@ function buildTeamBriefingSummary(companiesPayload: any, dealsPayload: any, cont
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const { action } = await req.json().catch(() => ({ action: "status" }));
+  const reqBody = await req.json().catch(() => ({} as any));
+  const action = reqBody?.action ?? "status";
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   const HUBSPOT_API_KEY = Deno.env.get("HUBSPOT_API_KEY");
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");

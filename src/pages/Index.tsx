@@ -469,6 +469,26 @@ const Index = () => {
           </div>
         </div>
 
+        {/* Segmented tabs: Chat / Projects */}
+        <div className="relative z-10 px-4 sm:px-8 pt-4">
+          <div className="inline-flex items-center rounded-lg border border-border bg-card p-1">
+            <button
+              onClick={handleClearChat}
+              className="rounded-md px-4 py-1.5 text-xs font-medium bg-primary/10 text-primary glow-primary-sm transition-colors"
+            >
+              Chat
+            </button>
+            <button
+              onClick={() => navigate("/projects")}
+              className="rounded-md px-4 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+            >
+              Projects
+            </button>
+          </div>
+        </div>
+
+
+
 
 
         {/* Briefing status banners */}

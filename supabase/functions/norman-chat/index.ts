@@ -5735,6 +5735,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
     tools.push(...AZURE_REPOS_TOOLS);
     // Xero tools always available (data is synced locally)
     tools.push(...XERO_TOOLS);
+    // HubSpot tools always available (connection checked at execution time)
+    tools.push(...HUBSPOT_TOOLS);
     // Gmail tools always available (connection checked at execution time)
     tools.push(...GMAIL_TOOLS);
     // Google Drive tools always available (connection checked at execution time)

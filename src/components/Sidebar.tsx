@@ -100,7 +100,11 @@ const Sidebar = ({
     )}>
       {/* Brand */}
       <div className="flex items-center justify-between px-6 py-6">
-        <div className="flex items-center gap-3">
+        <button
+          onClick={() => { navigate("/"); onMobileClose?.(); }}
+          className="flex items-center gap-3 text-left rounded-md hover:opacity-90 transition-opacity"
+          aria-label="Go to Home"
+        >
           <div className="relative flex h-9 w-9 items-center justify-center rounded-lg overflow-hidden glow-primary-sm">
             <img src={duncanAvatar} alt="Duncan" className="h-full w-full object-cover object-[50%_30%] scale-150" />
             <div className="absolute inset-0 rounded-lg border border-primary/20" />
@@ -109,7 +113,7 @@ const Sidebar = ({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <h1 className="text-lg font-bold tracking-tight text-foreground cursor-default">Duncan</h1>
+                  <h1 className="text-lg font-bold tracking-tight text-foreground cursor-pointer">Duncan</h1>
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-[200px]">
                   <p className="text-xs">A tribute to Nimesh's dog Duncan — the inspiration behind the system.</p>
@@ -118,7 +122,8 @@ const Sidebar = ({
             </TooltipProvider>
             <p className="text-[10px] font-mono tracking-widest text-muted-foreground">KabuniOS</p>
           </div>
-        </div>
+        </button>
+
         {/* Close button on mobile */}
         <button
           onClick={onMobileClose}

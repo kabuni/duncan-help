@@ -180,18 +180,6 @@ const Sidebar = ({
           Home
         </RouterNavLink>
 
-        <RouterNavLink
-          to="/projects"
-          onClick={() => onMobileClose?.()}
-          className={({ isActive }) =>
-            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
-              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )
-          }
-        >
-          <Layers className="h-4 w-4" />
-          Projects
-        </RouterNavLink>
 
         <RouterNavLink
           to="/workstreams"

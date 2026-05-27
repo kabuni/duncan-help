@@ -155,6 +155,9 @@ function HubSpotSocialFeedTile() {
   const channels = data?.channels ?? [];
   const posts = data?.posts ?? [];
 
+  const errorText = data?.errors ? Object.values(data.errors).join(" · ") : null;
+  const missingScope = errorText?.includes("social-access");
+
   return (
     <TileShell delay={0.115}>
       <TileHeader icon={Share2} label="HubSpot · Social" />
@@ -162,6 +165,17 @@ function HubSpotSocialFeedTile() {
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
       ) : data?.status === "not_configured" ? (
         <p className="text-xs text-muted-foreground">HubSpot is not connected.</p>
+      ) : missingScope ? (
+        <div className="space-y-2 text-xs">
+          <p className="text-muted-foreground">
+            HubSpot social feed is unavailable because the connected token is missing the{" "}
+            <code className="px-1 py-0.5 rounded bg-muted text-foreground">social-access</code> scope.
+          </p>
+          <p className="text-[11px] text-muted-foreground/80">
+            Add the <span className="font-medium">Social</span> permission to the HubSpot Private App
+            (Settings → Integrations → Private Apps), then reconnect.
+          </p>
+        </div>
       ) : (
         <div className="space-y-3">
           {channels.length > 0 && (

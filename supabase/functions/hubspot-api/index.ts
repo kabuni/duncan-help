@@ -1023,7 +1023,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  if (!(action === "team_briefing_summary" && isTrustedInternalCall)) {
+  if (!isTrustedInternalCall) {
     const user = await getUser(req);
     if (!user) return json({ error: "Unauthorized" }, 401);
   } else {

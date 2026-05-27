@@ -1,70 +1,53 @@
-## Goal
+# Fix HubSpot data on Team Briefing
 
-Give admins the ability to operate Duncan's own Google account (duncan@kabuni.com) — calendar CRUD and mailbox read + send — directly from the Duncan chat, alongside (not replacing) their personal Gmail/Calendar.
+## What's actually wrong
 
-## Current state
+I called `hubspot-api` with `action: team_briefing_summary` and inspected the response. HubSpot **is connected** (token valid, verification call passes), but the card shows mostly empty data:
 
-- `duncan_calendar_tokens` already exists as a singleton, admin-managed table, but scopes are **read-only** (`calendar.readonly`, `calendar.events.readonly`) and only used by the `reschedule_event` tool.
-- No equivalent table or OAuth flow for Duncan's Gmail.
-- All other `CALENDAR_TOOLS` and `GMAIL_TOOLS` in `norman-chat` operate on the **caller's personal** Google account via `google_calendar_tokens` / `gmail_tokens`.
-- Admin status is already determined via `has_role(uid, 'admin')`.
+| Section | Value | Why |
+|---|---|---|
+| Newsletter / Scout form metrics | `found: false`, 0 submissions | **Code bug** — see below |
+| Active deals | 0 | HubSpot CRM truly has 0 deals (confirmed via search) |
+| At-risk accounts | 0 | HubSpot CRM truly has 0 companies (confirmed via search) |
+| Key contacts | 6 rows showing | Working correctly |
 
-## Design
+So only one thing on the page is genuinely broken in code: **the marketing form metrics**. The "0 deals / 0 companies" numbers are accurate — there is nothing in the HubSpot CRM yet, and that's a data/setup question, not something the Team Briefing page can fix.
 
-Add a `mailbox: "self" | "duncan"` argument to the existing Gmail and Calendar tools (default `"self"` to preserve current behavior). When `"duncan"` is passed, `norman-chat` resolves the singleton Duncan tokens; if the caller isn't admin or Duncan isn't connected, the tool returns a clean error and Duncan tells the user. No new tools, no model retraining on new names.
+## Root cause for empty form metrics
 
-System prompt is updated so the model knows: "If the caller is an admin and asks about Duncan's inbox/calendar/'as Duncan', pass `mailbox: 'duncan'`. Otherwise default to the caller's own account."
+`supabase/functions/hubspot-api/index.ts` fetches forms from `/marketing/v3/forms?limit=100` (lines 493 and 707). By default this endpoint returns **only native HubSpot-built forms** (`formType: "hubspot"`) and silently drops the other types — `captured` (Webflow / custom HTML / landing-page captures), `flow`, `blog_comment`, and legacy v2 forms.
 
-## Changes
+In this account the only `hubspot`-type form is the placeholder `"New blank form (March 27, 2026 …)"`. The real Newsletter and Scout forms exist but are non-native types, so they never enter the list that `pickForm()` searches, and Newsletter / Scout are reported as `found: false`.
 
-### 1. Database (singleton tokens for Duncan's Gmail)
+## Fix
 
-```text
-duncan_gmail_tokens (singleton, mirrors duncan_calendar_tokens)
-  id, google_account_email, access_token, refresh_token,
-  token_expiry, scopes, created_at, updated_at
-+ RLS: service-role only; admin-readable status via get_duncan_gmail_status()
+Update both call sites to ask HubSpot for all form types:
+
+```
+/marketing/v3/forms?limit=100&formTypes=hubspot,captured,flow,blog_comment
 ```
 
-Plus a one-time scope upgrade for the existing Duncan **calendar** OAuth so we can write events:
-- Add `https://www.googleapis.com/auth/calendar` and `calendar.events` to `duncan-calendar-auth` SCOPES.
-- Admin will need to "Reconnect Duncan calendar" once from Settings to grant the new scopes.
+Files / locations:
+- `supabase/functions/hubspot-api/index.ts` line 493 — `fetchHubspotForms`
+- `supabase/functions/hubspot-api/index.ts` line 707 — `buildHubspotFormMetrics`
 
-### 2. Edge functions
+No schema changes, no UI changes, no new env vars. Same response shape, just a wider set of forms feeding the matcher.
 
-New:
-- `duncan-gmail-auth` + `duncan-gmail-callback` — same pattern as `duncan-calendar-auth/callback`, admin-only, scopes: `gmail.readonly`, `gmail.send`, `gmail.modify` (needed for thread reads + sending; no compose-only required).
+## What you'll see after the fix
 
-Updated:
-- `duncan-calendar-auth` — broaden SCOPES to writable calendar.
-- `norman-chat/index.ts`:
-  - Add `getDuncanGmailContext()` helper (mirrors `getDuncanCalendarContext`) with refresh-token flow.
-  - Add `mailbox` enum to: `list_calendar_events`, `create_calendar_event`, `update_calendar_event`, `delete_calendar_event`, `list_gmail_emails`, `search_gmail`, `read_gmail_email`, `read_gmail_thread`, `send_gmail_email`. (`draft_gmail_reply` stays self-only — Duncan's drafts folder isn't useful.)
-  - In each tool executor: if `mailbox === "duncan"`, check admin role → resolve Duncan token → call Google with that token instead of the caller's. Non-admins get `{ error: "Duncan mailbox is admin-only" }`.
-  - System prompt: add a paragraph telling the model how/when to set `mailbox: 'duncan'`, plus the existing send-email confirmation rule applies (and we'll make it extra explicit: "When sending from Duncan, the From address is duncan@kabuni.com — confirm with the user before sending.").
+- If a form with "newsletter" / "subscribe" / "signup" in its name exists (any form type), Newsletter card populates with total + last-30-day count + location breakdown.
+- Same for any form whose name contains "scout".
+- If no matching name exists in HubSpot, the card will still show `not found`, and the fix in that case is to **rename the form in HubSpot** so the matcher can pick it up (e.g. "Scout Registration", "Newsletter Signup").
+- The Active Deals / At-risk Accounts sections will keep showing 0 until real companies and deals are added in HubSpot — that's data, not code.
 
-### 3. Frontend (admin-only connection UI)
+## Out of scope (deliberately)
 
-In `src/components/settings/` — add a new admin-only `SettingsDuncanMailbox.tsx` panel (or extend the existing admin section), surfaced inside `Settings` for `isAdmin === true`:
-- Card 1: **Duncan Calendar** — shows current connection (uses existing `get_duncan_calendar_status`), "Reconnect with write access" button → invokes `duncan-calendar-auth`.
-- Card 2: **Duncan Mailbox** — same pattern using new `get_duncan_gmail_status` RPC, "Connect duncan@kabuni.com" / "Disconnect" buttons → invokes `duncan-gmail-auth`.
+- Not touching auth, RLS, or stored-token logic — token resolution works.
+- Not changing the CEO/Team Briefing UI (`CommsPulseCard`) — its empty states are already correct for this data.
+- Not creating fallback "guess" matchers across HubSpot lists — keeping the existing name-based matcher.
 
-Both cards explain: "Admins can ask Duncan in chat to read or send mail from this inbox, or change events on Duncan's calendar."
+## Verification after build
 
-No changes to the chat UI itself — the model picks `mailbox: 'duncan'` based on the user's wording ("as Duncan", "Duncan's inbox", "Duncan's calendar", "from duncan@kabuni.com").
-
-### 4. Memory
-
-Add a new memory entry `mem://integrations/duncan-mailbox-shared-identity` describing the singleton + admin-only access model, and update the index to reference it.
-
-## Out of scope
-
-- Draft replies as Duncan (drafts live in Duncan's Gmail UI, not useful here).
-- Per-user audit log for Duncan-mailbox actions (existing `calendar_mutation_audit` already covers calendar writes; we'll extend it to log Gmail sends in a follow-up if you want).
-- Non-admin access to Duncan's mailbox.
-
-## Technical notes
-
-- Reuses `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` and `GOOGLE_CALENDAR_CLIENT_ID/SECRET` already in vault — no new secrets.
-- The OAuth callback URL pattern is `${SUPABASE_URL}/functions/v1/duncan-gmail-callback` — admin must add this redirect URI to the existing Google OAuth client.
-- Admin check enforced **twice**: once in the auth edge function (matches current `duncan-calendar-auth` pattern), once inside each tool executor in norman-chat before resolving Duncan tokens.
+1. Redeploy `hubspot-api`.
+2. `curl` the function with `{ action: "team_briefing_summary" }` and confirm `form_metrics.newsletter.found` / `form_metrics.scout.found` reflect what exists in HubSpot.
+3. Open `/ceo-briefing` (Team Briefing) and confirm the HubSpot card shows form numbers when the names match, or a clear "not found" otherwise.

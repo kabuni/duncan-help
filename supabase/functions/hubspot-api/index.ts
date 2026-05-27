@@ -1143,13 +1143,31 @@ Deno.serve(async (req) => {
         return json({ status: "not_configured", channels: [], posts: [], error: "HubSpot is not connected" }, 200);
       }
 
-      // HubSpot Broadcast API channel type → platform label
-      const PLATFORM: Record<number, string> = {
+      // HubSpot Broadcast API channelType is a STRING (e.g. "FacebookPage",
+      // "InstagramBusinessAccount", "LinkedInCompany"). Older docs reference
+      // numeric codes — we keep those as a fallback.
+      const NUMERIC_PLATFORM: Record<number, string> = {
         1: "Twitter",
         2: "LinkedIn",
         3: "Facebook",
         4: "LinkedIn",
         6: "Instagram",
+      };
+
+      const resolvePlatform = (raw: unknown): string => {
+        if (raw == null) return "Other";
+        if (typeof raw === "number" && NUMERIC_PLATFORM[raw]) return NUMERIC_PLATFORM[raw];
+        const s = String(raw).toLowerCase();
+        if (!s) return "Other";
+        if (s.includes("instagram")) return "Instagram";
+        if (s.includes("linkedin")) return "LinkedIn";
+        if (s.includes("facebook") || s === "fb" || s.includes("fbpage")) return "Facebook";
+        if (s.includes("twitter") || s === "x" || s.includes("tweet")) return "Twitter";
+        if (s.includes("youtube")) return "YouTube";
+        if (s.includes("tiktok")) return "TikTok";
+        const asNum = Number(s);
+        if (!Number.isNaN(asNum) && NUMERIC_PLATFORM[asNum]) return NUMERIC_PLATFORM[asNum];
+        return "Other";
       };
 
       let channelsRaw: any[] = [];
@@ -1180,13 +1198,34 @@ Deno.serve(async (req) => {
         errors.posts = e?.message || String(e);
       }
 
+      // Diagnostic log: dump key fields per channel + a sample broadcast so we
+      // can verify what HubSpot actually returns for this portal.
+      logHubspot("social channels raw", {
+        count: channelsRaw.length,
+        channels: channelsRaw.map((c: any) => ({
+          name: c?.name,
+          channelType: c?.channelType,
+          type: c?.type,
+          channelKey: c?.channelKey,
+          accountType: c?.accountType,
+          channelId: c?.channelId,
+          channelGuid: c?.channelGuid,
+          accountGuid: c?.accountGuid,
+          all_keys: c && typeof c === "object" ? Object.keys(c) : [],
+        })),
+      });
+      logHubspot("social broadcasts raw sample", {
+        count: postsRaw.length,
+        sample: postsRaw[0] ?? null,
+      });
+
       const channels = channelsRaw.map((c: any) => {
-        const type = Number(c.channelType ?? c.type);
+        const rawType = c.channelType ?? c.type ?? c.channelKey ?? c.accountType;
         return {
-          guid: c.channelGuid ?? c.channel ?? c.id,
+          guid: c.channelGuid ?? c.accountGuid ?? c.channelId ?? c.channel ?? c.id,
           name: c.name || c.channelName || c.settingName || "Channel",
-          platform: PLATFORM[type] || "Other",
-          type,
+          platform: resolvePlatform(rawType),
+          type: rawType ?? null,
         };
       });
 

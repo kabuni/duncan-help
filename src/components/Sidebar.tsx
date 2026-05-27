@@ -337,8 +337,6 @@ const Sidebar = ({
         </div>
 
         {/* Chat History */}
-        <div className="mt-8">
-          <div className="mx-auto mb-6 h-px w-3/4 bg-border/60" />
         <ChatHistory
           chats={chatOps.chats}
           activeChatId={chatOps.activeChatId}
@@ -358,7 +356,6 @@ const Sidebar = ({
           onRenameChat={chatOps.updateTitle}
           onMobileClose={onMobileClose}
         />
-        </div>
       </nav>
 
       {/* User */}

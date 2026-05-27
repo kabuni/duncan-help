@@ -337,7 +337,8 @@ const Sidebar = ({
         </div>
 
         {/* Chat History */}
-        <div className="mt-8 pt-6 border-t border-border">
+        <div className="mt-8">
+          <div className="mx-auto mb-6 h-px w-3/4 bg-border/60" />
         <ChatHistory
           chats={chatOps.chats}
           activeChatId={chatOps.activeChatId}

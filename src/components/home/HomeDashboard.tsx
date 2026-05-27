@@ -288,6 +288,10 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
         </TileShell>
       </div>
 
+      {/* HUBSPOT SOCIAL FEED */}
+      <HubSpotSocialFeedTile />
+
+
       {/* RSVP SUMMARY — Kabuni Showcase Mumbai */}
       <TileShell delay={0.125}>
         <TileHeader

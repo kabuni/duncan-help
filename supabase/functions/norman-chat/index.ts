@@ -6533,6 +6533,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = await withToolTimeout(tc.function.name, executeAzureReposTool(tc.function.name, args, supabaseUrl, authHeader || ""));
           } else if (xeroToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeXeroTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || "", userId || ""));
+          } else if (hubspotToolNames.includes(tc.function.name)) {
+              result = await withToolTimeout(tc.function.name, executeHubspotTool(tc.function.name, args, supabaseUrl, authHeader || ""));
            } else if (gmailToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeGmailTool(tc.function.name, args, supabaseUrl, authHeader || "", resolvedIdentity));
           } else if (driveToolNames.includes(tc.function.name)) {

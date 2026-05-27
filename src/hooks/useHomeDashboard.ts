@@ -103,6 +103,37 @@ export function useSocialStats() {
   });
 }
 
+export type HubSpotSocialFeed = {
+  status: string;
+  channels: Array<{ guid: string; name: string; platform: string; type: number }>;
+  posts: Array<{
+    id: string;
+    channel: string;
+    platform: string;
+    publishedAt: string | null;
+    body: string;
+    url: string | null;
+    status: string | null;
+  }>;
+  errors?: Record<string, string>;
+};
+
+export function useHubSpotSocialFeed() {
+  return useQuery<HubSpotSocialFeed>({
+    queryKey: ["home-dashboard", "hubspot-social"],
+    staleTime: FIVE_MIN,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("hubspot-api", {
+        body: { action: "social_feed" },
+      });
+      if (error) throw error;
+      return data as HubSpotSocialFeed;
+    },
+  });
+}
+
+
+
 export type ProjectsStats = {
   active: number;
   filesIndexed: number;

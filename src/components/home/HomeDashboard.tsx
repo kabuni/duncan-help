@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import {
   useGAHomeSummary, useHiresStats, useWorkstreamsStats, useProjectsStats, useSocialStats, useRsvpStats, useMyPendingTasks,
+  useHubSpotSocialFeed,
 } from "@/hooks/useHomeDashboard";
 
 const formatNumber = (n: number) => new Intl.NumberFormat("en-US").format(Math.round(n));
@@ -149,6 +150,99 @@ function MyPendingTasksTile() {
   );
 }
 
+function HubSpotSocialFeedTile() {
+  const { data, isLoading } = useHubSpotSocialFeed();
+  const channels = data?.channels ?? [];
+  const posts = data?.posts ?? [];
+
+  const errorText = data?.errors ? Object.values(data.errors).join(" · ") : null;
+  const missingScope = errorText?.includes("social-access");
+
+  return (
+    <TileShell delay={0.115}>
+      <TileHeader icon={Share2} label="HubSpot · Social" />
+      {isLoading ? (
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      ) : data?.status === "not_configured" ? (
+        <p className="text-xs text-muted-foreground">HubSpot is not connected.</p>
+      ) : missingScope ? (
+        <div className="space-y-2 text-xs">
+          <p className="text-muted-foreground">
+            HubSpot social feed is unavailable because the connected token is missing the{" "}
+            <code className="px-1 py-0.5 rounded bg-muted text-foreground">social-access</code> scope.
+          </p>
+          <p className="text-[11px] text-muted-foreground/80">
+            Add the <span className="font-medium">Social</span> permission to the HubSpot Private App
+            (Settings → Integrations → Private Apps), then reconnect.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {channels.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {channels.map((c) => (
+                <span
+                  key={c.guid}
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-foreground"
+                >
+                  <span className="font-medium">{c.platform}</span>
+                  <span className="text-muted-foreground">· {c.name}</span>
+                </span>
+              ))}
+            </div>
+          )}
+          {posts.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {channels.length === 0
+                ? "No connected channels found in HubSpot."
+                : "No posts published via HubSpot yet."}
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+              {posts.map((p) => (
+                <div
+                  key={p.id}
+                  className="border-b border-border/40 pb-2 last:border-0 last:pb-0"
+                >
+                  <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                    <span className="font-medium text-foreground/80">
+                      {p.platform}
+                      {p.channel && p.channel !== "—" ? ` · ${p.channel}` : ""}
+                    </span>
+                    <span>
+                      {p.publishedAt ? new Date(p.publishedAt).toLocaleDateString() : "—"}
+                    </span>
+                  </div>
+                  {p.body && (
+                    <div className="mt-1 text-xs text-foreground leading-snug line-clamp-3">
+                      {p.body}
+                    </div>
+                  )}
+                  {p.url && (
+                    <a
+                      href={p.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="mt-1 inline-flex items-center gap-0.5 text-[10px] text-primary hover:underline"
+                    >
+                      View post <ExternalLink className="h-2.5 w-2.5" />
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground/70">
+            Engagement metrics (followers, likes, shares) are not exposed by HubSpot's API.
+          </p>
+        </div>
+      )}
+    </TileShell>
+  );
+}
+
+
+
 export const HomeDashboard = ({ userName }: { userName: string }) => {
   const navigate = useNavigate();
   const ga = useGAHomeSummary();
@@ -286,6 +380,10 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
           )}
         </TileShell>
       </div>
+
+      {/* HUBSPOT SOCIAL FEED */}
+      <HubSpotSocialFeedTile />
+
 
       {/* RSVP SUMMARY — Kabuni Showcase Mumbai */}
       <TileShell delay={0.125}>

@@ -834,6 +834,39 @@ const AZURE_REPOS_TOOLS = [
   },
 ];
 
+const HUBSPOT_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "get_hubspot_pipeline_summary",
+      description: "Get the full HubSpot CRM commercial snapshot: active deals (with stages, amounts, owners), at-risk / stale accounts, key contacts, lifecycle stages, lists, and marketing form metrics (newsletter & scout signups with 30-day windows and location breakdown). Use for any question about the sales pipeline, deal health, active accounts, CRM activity, or marketing signups. This is the single source of truth for HubSpot data — call it once and reason over the result.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_hubspot",
+      description: "Search HubSpot for a specific contact, company, or deal by name, email, or domain. Use when the user names a specific person, organisation, or deal (e.g. 'do we have Acme in HubSpot?', 'find John Smith', 'what's the status of the Globex deal?'). Returns up to 25 matches per object type.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search term: name, email, domain, or deal name" },
+          objects: {
+            type: "array",
+            items: { type: "string", enum: ["contacts", "companies", "deals"] },
+            description: "Which HubSpot object types to search. Defaults to all three if omitted.",
+          },
+          limit: { type: "number", description: "Max results per object type (1-25, default 10)" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+];
+
+
+
 const XERO_TOOLS = [
   {
     type: "function",
@@ -3300,6 +3333,61 @@ async function executeExecSummaryTool(
   return result;
 }
 
+async function executeHubspotTool(
+  toolName: string,
+  args: any,
+  supabaseUrl: string,
+  authHeader: string,
+): Promise<any> {
+  const call = async (body: Record<string, unknown>) => {
+    const res = await fetch(`${supabaseUrl}/functions/v1/hubspot-api`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: authHeader },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || `hubspot-api ${res.status}`);
+    return data;
+  };
+
+  switch (toolName) {
+    case "get_hubspot_pipeline_summary": {
+      const data = await call({ action: "team_briefing_summary" });
+      if (data?.status && data.status !== "connected") {
+        return {
+          status: data.status,
+          message: data.error_message || "HubSpot is not connected or returned a degraded response.",
+          error_code: data.error_code || null,
+        };
+      }
+      // Trim payload — drop verbose diagnostics, raw signals, and credential metadata.
+      const {
+        credential_diagnostics, signals, ok, verification_path, credential_source, last_verified_at, last_sync_at,
+        ...trimmed
+      } = data || {};
+      return trimmed;
+    }
+
+    case "search_hubspot": {
+      if (!args?.query || typeof args.query !== "string") {
+        return { error: "query is required" };
+      }
+      const data = await call({
+        action: "search",
+        query: args.query,
+        objects: Array.isArray(args.objects) ? args.objects : undefined,
+        limit: typeof args.limit === "number" ? args.limit : undefined,
+      });
+      return data;
+    }
+
+    default:
+      return { error: `Unknown HubSpot tool: ${toolName}` };
+  }
+}
+
+
+
 async function executeAzureDevOpsTool(
   toolName: string,
   args: any,
@@ -5702,6 +5790,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
     tools.push(...AZURE_REPOS_TOOLS);
     // Xero tools always available (data is synced locally)
     tools.push(...XERO_TOOLS);
+    // HubSpot tools always available (connection checked at execution time)
+    tools.push(...HUBSPOT_TOOLS);
     // Gmail tools always available (connection checked at execution time)
     tools.push(...GMAIL_TOOLS);
     // Google Drive tools always available (connection checked at execution time)
@@ -6301,6 +6391,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const azureDevOpsToolNames = ["list_azure_devops_projects", "query_azure_work_items", "get_azure_work_item", "search_synced_work_items"];
       const azureReposToolNames = ["list_azure_repos", "get_recent_commits", "list_pull_requests", "get_pr_reviews", "get_repos_team_summary"];
       const xeroToolNames = ["list_xero_invoices", "get_xero_invoice", "approve_xero_invoice_payment", "search_xero_contacts", "create_xero_invoice", "list_xero_bank_accounts", "create_xero_expense"];
+      const hubspotToolNames = ["get_hubspot_pipeline_summary", "search_hubspot"];
       const gmailToolNames = ["list_gmail_emails", "search_gmail", "read_gmail_email", "send_gmail_email", "read_gmail_thread", "draft_gmail_reply", "draft_gmail_email"];
       const driveToolNames = ["drive_list_files", "drive_search", "drive_get_content"];
       const slackToolNames = ["list_slack_channels", "read_slack_channel_messages", "send_slack_message"];
@@ -6497,6 +6588,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = await withToolTimeout(tc.function.name, executeAzureReposTool(tc.function.name, args, supabaseUrl, authHeader || ""));
           } else if (xeroToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeXeroTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || "", userId || ""));
+          } else if (hubspotToolNames.includes(tc.function.name)) {
+              result = await withToolTimeout(tc.function.name, executeHubspotTool(tc.function.name, args, supabaseUrl, authHeader || ""));
            } else if (gmailToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeGmailTool(tc.function.name, args, supabaseUrl, authHeader || "", resolvedIdentity));
           } else if (driveToolNames.includes(tc.function.name)) {

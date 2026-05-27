@@ -996,7 +996,8 @@ function buildTeamBriefingSummary(companiesPayload: any, dealsPayload: any, cont
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const { action } = await req.json().catch(() => ({ action: "status" }));
+  const reqBody = await req.json().catch(() => ({} as any));
+  const action = reqBody?.action ?? "status";
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   const HUBSPOT_API_KEY = Deno.env.get("HUBSPOT_API_KEY");
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -1023,7 +1024,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  if (!(action === "team_briefing_summary" && isTrustedInternalCall)) {
+  if (!isTrustedInternalCall) {
     const user = await getUser(req);
     if (!user) return json({ error: "Unauthorized" }, 401);
   } else {
@@ -1084,6 +1085,58 @@ Deno.serve(async (req) => {
         credential_diagnostics: resolved.diagnostics,
       });
     }
+
+    if (action === "search") {
+      const query = String(reqBody?.query || "").trim();
+      const objects: string[] = Array.isArray(reqBody?.objects) && reqBody.objects.length
+        ? reqBody.objects.filter((o: any) => ["contacts", "companies", "deals"].includes(o))
+        : ["contacts", "companies", "deals"];
+      const limit = Math.min(Math.max(Number(reqBody?.limit) || 10, 1), 25);
+      if (!query) return json({ error: "query is required" }, 400);
+
+      const resolved = await resolveTeamBriefingToken(HUBSPOT_API_KEY);
+      if (!resolved.token) {
+        return json({ status: "not_configured", error: "HubSpot is not connected", results: {} }, 200);
+      }
+
+      const searchObject = async (objectType: string, props: string[], filters: any[]) => {
+        try {
+          const data = await hubspotApiPost(
+            `/crm/v3/objects/${objectType}/search`,
+            { filterGroups: filters.map((f) => ({ filters: [f] })), properties: props, limit },
+            resolved.token!,
+            "summary",
+            resolved.source,
+          );
+          return (data?.results || []).map((r: any) => ({ id: r.id, ...r.properties }));
+        } catch (e: any) {
+          return { error: e?.message || String(e) };
+        }
+      };
+
+      const results: Record<string, unknown> = {};
+      if (objects.includes("contacts")) {
+        results.contacts = await searchObject("contacts", ["firstname", "lastname", "email", "company", "lifecyclestage"], [
+          { propertyName: "email", operator: "CONTAINS_TOKEN", value: query },
+          { propertyName: "firstname", operator: "CONTAINS_TOKEN", value: query },
+          { propertyName: "lastname", operator: "CONTAINS_TOKEN", value: query },
+        ]);
+      }
+      if (objects.includes("companies")) {
+        results.companies = await searchObject("companies", ["name", "domain", "industry", "hubspotscore", "country"], [
+          { propertyName: "name", operator: "CONTAINS_TOKEN", value: query },
+          { propertyName: "domain", operator: "CONTAINS_TOKEN", value: query },
+        ]);
+      }
+      if (objects.includes("deals")) {
+        results.deals = await searchObject("deals", ["dealname", "dealstage", "amount", "closedate", "pipeline"], [
+          { propertyName: "dealname", operator: "CONTAINS_TOKEN", value: query },
+        ]);
+      }
+
+      return json({ status: "connected", query, results, credential_source: resolved.source });
+    }
+
 
     if (LOVABLE_API_KEY && HUBSPOT_API_KEY) {
       logHubspot("credential source", { source: "connector_gateway" });

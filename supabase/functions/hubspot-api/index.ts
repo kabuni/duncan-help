@@ -490,7 +490,7 @@ async function fetchHubspotForms(token: string, source: CredentialSource) {
 
   let formsPayload: any;
   try {
-    formsPayload = await hubspotApi("/marketing/v3/forms?limit=100", token, "summary", source);
+    formsPayload = await hubspotApi("/marketing/v3/forms?limit=100&formTypes=all", token, "summary", source);
   } catch (err) {
     const detail = err instanceof ProviderRequestError ? {
       status: err.status,
@@ -704,7 +704,7 @@ function aggregateLocationBreakdown(
 
 async function buildHubspotFormMetrics(token: string, source: CredentialSource) {
   try {
-    const formsPayload = await hubspotApi("/marketing/v3/forms?limit=100", token, "summary", source);
+    const formsPayload = await hubspotApi("/marketing/v3/forms?limit=100&formTypes=all", token, "summary", source);
     const forms: any[] = Array.isArray(formsPayload?.results) ? formsPayload.results : [];
     const newsletterForm = pickForm(forms, ["newsletter", "subscribe", "signup", "sign up"]);
     const scoutForm = pickForm(forms, ["scout"]);

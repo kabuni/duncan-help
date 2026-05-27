@@ -14,8 +14,8 @@ export function NotificationsBell() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-9 w-9" aria-label="Notifications">
-          <Bell className="h-5 w-5" />
+        <Button variant="ghost" size="icon" className="relative h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent" aria-label="Notifications">
+          <Bell className="h-3.5 w-3.5" />
           {unreadCount > 0 && (
             <span className="absolute top-1 right-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
               {unreadCount > 9 ? "9+" : unreadCount}

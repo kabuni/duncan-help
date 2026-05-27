@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import {
   useGAHomeSummary, useHiresStats, useWorkstreamsStats, useProjectsStats, useSocialStats, useRsvpStats, useMyPendingTasks,
+  useHubSpotSocialFeed,
 } from "@/hooks/useHomeDashboard";
 
 const formatNumber = (n: number) => new Intl.NumberFormat("en-US").format(Math.round(n));

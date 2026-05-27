@@ -704,7 +704,7 @@ function aggregateLocationBreakdown(
 
 async function buildHubspotFormMetrics(token: string, source: CredentialSource) {
   try {
-    const formsPayload = await hubspotApi("/marketing/v3/forms?limit=100", token, "summary", source);
+    const formsPayload = await hubspotApi("/marketing/v3/forms?limit=100&formTypes=hubspot,captured,flow,blog_comment", token, "summary", source);
     const forms: any[] = Array.isArray(formsPayload?.results) ? formsPayload.results : [];
     const newsletterForm = pickForm(forms, ["newsletter", "subscribe", "signup", "sign up"]);
     const scoutForm = pickForm(forms, ["scout"]);

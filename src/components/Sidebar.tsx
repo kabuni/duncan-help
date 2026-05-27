@@ -128,7 +128,36 @@ const Sidebar = ({
         </button>
       </div>
 
+      {/* Segmented tabs: Chat / Projects */}
+      <div className="px-3 pb-2">
+        <div className="flex items-center rounded-lg border border-border bg-card p-1">
+          <button
+            onClick={() => {
+              chatOps.startNewChat();
+              onNewChat?.();
+              navigate("/", { state: { newChat: true } });
+              onMobileClose?.();
+            }}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary glow-primary-sm transition-colors"
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            Chat
+          </button>
+          <button
+            onClick={() => {
+              navigate("/projects");
+              onMobileClose?.();
+            }}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+          >
+            <Layers className="h-3.5 w-3.5" />
+            Projects
+          </button>
+        </div>
+      </div>
+
       {/* Nav */}
+
       <nav className="flex-1 min-h-0 overflow-y-auto space-y-1 px-3 py-4">
         <RouterNavLink
           to="/"

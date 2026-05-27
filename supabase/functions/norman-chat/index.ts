@@ -3333,6 +3333,61 @@ async function executeExecSummaryTool(
   return result;
 }
 
+async function executeHubspotTool(
+  toolName: string,
+  args: any,
+  supabaseUrl: string,
+  authHeader: string,
+): Promise<any> {
+  const call = async (body: Record<string, unknown>) => {
+    const res = await fetch(`${supabaseUrl}/functions/v1/hubspot-api`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: authHeader },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || `hubspot-api ${res.status}`);
+    return data;
+  };
+
+  switch (toolName) {
+    case "get_hubspot_pipeline_summary": {
+      const data = await call({ action: "team_briefing_summary" });
+      if (data?.status && data.status !== "connected") {
+        return {
+          status: data.status,
+          message: data.error_message || "HubSpot is not connected or returned a degraded response.",
+          error_code: data.error_code || null,
+        };
+      }
+      // Trim payload — drop verbose diagnostics, raw signals, and credential metadata.
+      const {
+        credential_diagnostics, signals, ok, verification_path, credential_source, last_verified_at, last_sync_at,
+        ...trimmed
+      } = data || {};
+      return trimmed;
+    }
+
+    case "search_hubspot": {
+      if (!args?.query || typeof args.query !== "string") {
+        return { error: "query is required" };
+      }
+      const data = await call({
+        action: "search",
+        query: args.query,
+        objects: Array.isArray(args.objects) ? args.objects : undefined,
+        limit: typeof args.limit === "number" ? args.limit : undefined,
+      });
+      return data;
+    }
+
+    default:
+      return { error: `Unknown HubSpot tool: ${toolName}` };
+  }
+}
+
+
+
 async function executeAzureDevOpsTool(
   toolName: string,
   args: any,

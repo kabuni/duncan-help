@@ -1137,6 +1137,104 @@ Deno.serve(async (req) => {
       return json({ status: "connected", query, results, credential_source: resolved.source });
     }
 
+    if (action === "social_feed") {
+      const resolved = await resolveTeamBriefingToken(HUBSPOT_API_KEY);
+      if (!resolved.token) {
+        return json({ status: "not_configured", channels: [], posts: [], error: "HubSpot is not connected" }, 200);
+      }
+
+      // HubSpot Broadcast API channel type → platform label
+      const PLATFORM: Record<number, string> = {
+        1: "Twitter",
+        2: "LinkedIn",
+        3: "Facebook",
+        4: "LinkedIn",
+        6: "Instagram",
+      };
+
+      let channelsRaw: any[] = [];
+      let postsRaw: any[] = [];
+      const errors: Record<string, string> = {};
+
+      try {
+        const data = await hubspotApi(
+          "/broadcast/v1/channels/setting/publish/current",
+          resolved.token,
+          "summary",
+          resolved.source,
+        );
+        channelsRaw = Array.isArray(data) ? data : (data?.results ?? []);
+      } catch (e: any) {
+        errors.channels = e?.message || String(e);
+      }
+
+      try {
+        const data = await hubspotApi(
+          "/broadcast/v1/broadcasts?limit=10",
+          resolved.token,
+          "summary",
+          resolved.source,
+        );
+        postsRaw = Array.isArray(data) ? data : (data?.results ?? []);
+      } catch (e: any) {
+        errors.posts = e?.message || String(e);
+      }
+
+      const channels = channelsRaw.map((c: any) => {
+        const type = Number(c.channelType ?? c.type);
+        return {
+          guid: c.channelGuid ?? c.channel ?? c.id,
+          name: c.name || c.channelName || c.settingName || "Channel",
+          platform: PLATFORM[type] || "Other",
+          type,
+        };
+      });
+
+      const channelLookup = new Map<string, { name: string; platform: string }>();
+      channels.forEach((c) => {
+        if (c.guid) channelLookup.set(String(c.guid), { name: c.name, platform: c.platform });
+      });
+
+      const posts = postsRaw
+        .map((b: any) => {
+          const ch = b.channel ? channelLookup.get(String(b.channel)) : null;
+          const type = Number(b.channelType ?? b.type);
+          const platform = ch?.platform || PLATFORM[type] || "Other";
+          const triggerAt = b.triggerAt || b.finishedAt || b.createdAt;
+          const publishedAt = typeof triggerAt === "number"
+            ? new Date(triggerAt).toISOString()
+            : (typeof triggerAt === "string" ? triggerAt : null);
+          const body = (b.content?.body || b.message || "").toString();
+          const url = b.content?.link || b.contentDetails?.link || b.permalink || null;
+          return {
+            id: b.broadcastGuid || b.id || crypto.randomUUID(),
+            channel: ch?.name || "—",
+            platform,
+            publishedAt,
+            body,
+            url,
+            status: b.status || null,
+          };
+        })
+        .sort((a, b) => {
+          const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+          const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+          return tb - ta;
+        })
+        .slice(0, 10);
+
+      return json({
+        status: "connected",
+        credential_source: resolved.source,
+        channels,
+        posts,
+        errors: Object.keys(errors).length ? errors : undefined,
+      });
+    }
+
+
+
+
 
     if (LOVABLE_API_KEY && HUBSPOT_API_KEY) {
       logHubspot("credential source", { source: "connector_gateway" });

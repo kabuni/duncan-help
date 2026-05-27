@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Plus, FileText, CheckCircle, Clock, XCircle, Upload, TrendingUp, Plane, Wallet, Megaphone } from "lucide-react";
-import AppLayout from "@/components/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,8 +24,7 @@ const PurchaseOrders = () => {
   const initialTab = searchParams.get("tab") === "travel" ? "travel" : "orders";
 
   return (
-    <AppLayout>
-      <main className="flex-1 overflow-y-auto">
+    <main className="flex-1 overflow-y-auto">
         <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />
 
         <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-6xl">
@@ -102,8 +100,7 @@ const PurchaseOrders = () => {
           {showForm && <POForm kind={showForm} onClose={() => setShowForm(null)} />}
           {showTravelForm && <TravelForm onClose={() => setShowTravelForm(false)} />}
         </div>
-      </main>
-    </AppLayout>
+  </main>
   );
 };
 

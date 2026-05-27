@@ -21,6 +21,11 @@ const ProtectedRoute = ({ children }: { children: ReactNode }) => {
     return <Navigate to="/auth" replace />;
   }
 
+  // Reject an expired access token that somehow made it past the auth provider
+  if (session.expires_at && session.expires_at * 1000 < Date.now()) {
+    return <Navigate to="/auth" replace />;
+  }
+
   if (profile && profile.approval_status !== "approved") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">

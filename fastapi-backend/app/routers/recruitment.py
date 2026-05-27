@@ -6,6 +6,8 @@ delete-hireflix-position, hireflix-send-invite, hireflix-sync-interviews,
 hireflix-retry-processor
 """
 import uuid
+import base64
+import json as _json
 import logging
 from typing import Optional
 from io import BytesIO
@@ -21,7 +23,7 @@ from app.services.llm import CallLLMOptions, call_llm_with_fallback
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["recruitment"])
+router = APIRouter(prefix="/recruitment", tags=["recruitment"])
 
 HIREFLIX_API_URL = "https://api.hireflix.com/me"
 
@@ -66,6 +68,12 @@ class CreateHireflixPositionRequest(BaseModel):
 class HireflixInviteRequest(BaseModel):
     candidate_id: str
     position_id: str
+
+
+class FetchGmailCVsRequest(BaseModel):
+    role_id: Optional[str] = None
+    max_results: int = 10
+    query: Optional[str] = None
 
 
 @router.get("/job-roles")
@@ -205,7 +213,7 @@ async def parse_cv(
     return {"parsed": parsed, "candidate_id": candidate_id}
 
 
-@router.post("/score-cv-values")
+@router.post("/score-values")
 async def score_cv_values(
     body: ScoreCVRequest,
     current_user: dict = Depends(get_current_user),
@@ -241,7 +249,7 @@ async def score_cv_values(
     return scored
 
 
-@router.post("/score-cv-competencies")
+@router.post("/score-competencies")
 async def score_cv_competencies(
     body: ScoreCVRequest,
     current_user: dict = Depends(get_current_user),
@@ -318,7 +326,7 @@ Required Skills:
     return {"job_description": jd}
 
 
-@router.post("/parse-jd-competencies")
+@router.post("/parse-jd")
 async def parse_jd_competencies(
     body: dict,
     current_user: dict = Depends(get_current_user),
@@ -523,3 +531,207 @@ async def hireflix_retry_processor(
                 next_attempt, str(e), row["id"],
             )
     return {"processed": processed, "remaining": len(retry_rows) - processed}
+
+
+# ---------------------------------------------------------------------------
+# Gmail CV ingestion helpers
+# ---------------------------------------------------------------------------
+
+def _scan_parts_for_inline_text(parts: list) -> str:
+    for part in parts:
+        filename = (part.get("filename") or "").lower()
+        mime = part.get("mimeType", "")
+        body_data = part.get("body", {}).get("data", "")
+        if body_data and (filename.endswith((".pdf", ".doc", ".docx")) or "cv" in filename or "resume" in filename):
+            raw = base64.urlsafe_b64decode(body_data + "==")
+            return _bytes_to_text(raw, mime)
+        sub = part.get("parts", [])
+        if sub:
+            text = _scan_parts_for_inline_text(sub)
+            if text:
+                return text
+    return ""
+
+
+def _collect_attachment_ids(parts: list) -> list[tuple[str, str, str]]:
+    result: list[tuple[str, str, str]] = []
+    for part in parts:
+        att_id = part.get("body", {}).get("attachmentId", "")
+        filename = (part.get("filename") or "").lower()
+        mime = part.get("mimeType", "")
+        if att_id and (filename.endswith((".pdf", ".doc", ".docx")) or "cv" in filename or "resume" in filename):
+            result.append((att_id, mime, filename))
+        sub = part.get("parts", [])
+        if sub:
+            result.extend(_collect_attachment_ids(sub))
+    return result
+
+
+async def _download_gmail_attachments(msg_id: str, payload: dict, access_token: str) -> str:
+    pairs = _collect_attachment_ids(payload.get("parts", []))
+    for att_id, mime, _ in pairs:
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(
+                    f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}/attachments/{att_id}",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+            if not resp.is_success:
+                continue
+            att_data = resp.json().get("data", "")
+            if not att_data:
+                continue
+            raw = base64.urlsafe_b64decode(att_data + "==")
+            text = _bytes_to_text(raw, mime)
+            if text:
+                return text
+        except Exception as exc:
+            logger.warning(f"Attachment {att_id} download failed: {exc}")
+    return ""
+
+
+def _bytes_to_text(data: bytes, mime_type: str) -> str:
+    try:
+        if "pdf" in mime_type or data[:4] == b"%PDF":
+            return _extract_pdf_text(data)
+        if "word" in mime_type or "docx" in mime_type or data[:2] == b"PK":
+            return _extract_docx_text(data)
+        return data.decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+
+def _extract_pdf_text(data: bytes) -> str:
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(BytesIO(data))
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
+    except ImportError:
+        pass
+    try:
+        import PyPDF2
+        reader = PyPDF2.PdfReader(BytesIO(data))
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
+    except ImportError:
+        pass
+    return ""
+
+
+def _extract_docx_text(data: bytes) -> str:
+    try:
+        from docx import Document
+        doc = Document(BytesIO(data))
+        return "\n".join(p.text for p in doc.paragraphs)
+    except ImportError:
+        pass
+    return ""
+
+
+@router.post("/fetch-gmail-cvs")
+async def fetch_gmail_cvs(
+    body: FetchGmailCVsRequest,
+    current_user: dict = Depends(get_current_user),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    token_row = await conn.fetchrow(
+        "SELECT * FROM gmail_tokens WHERE user_id = $1", current_user["id"]
+    )
+    if not token_row:
+        raise HTTPException(status_code=400, detail="Gmail not connected. Please connect Gmail first.")
+
+    access_token = token_row["access_token"]
+    max_results = min(body.max_results, 20)
+    gmail_query = body.query or "has:attachment (cv OR resume OR curriculum) filename:(pdf OR doc OR docx)"
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        list_resp = await client.get(
+            "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+            headers={"Authorization": f"Bearer {access_token}"},
+            params={"q": gmail_query, "maxResults": max_results + 1},
+        )
+    if not list_resp.is_success:
+        raise HTTPException(status_code=400, detail=f"Gmail API error: {list_resp.text[:200]}")
+
+    messages = list_resp.json().get("messages", [])
+    has_more = len(messages) > max_results
+    messages = messages[:max_results]
+
+    ingested = 0
+    skipped = 0
+
+    import json as _json2
+    for msg_ref in messages:
+        msg_id = msg_ref["id"]
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                msg_resp = await client.get(
+                    f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    params={"format": "full"},
+                )
+            if not msg_resp.is_success:
+                skipped += 1
+                continue
+
+            payload = msg_resp.json().get("payload", {})
+            cv_text = _scan_parts_for_inline_text(payload.get("parts", []))
+            if not cv_text:
+                cv_text = await _download_gmail_attachments(msg_id, payload, access_token)
+            if not cv_text:
+                skipped += 1
+                continue
+
+            opts = CallLLMOptions(
+                workflow="parse-cv",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": '{"name": string, "email": string, "phone": string, "location": string} — extract from the CV. Return only JSON.',
+                    },
+                    {"role": "user", "content": cv_text[:30_000]},
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=300,
+            )
+            res = await call_llm_with_fallback(opts)
+            try:
+                parsed = _json2.loads(res["choices"][0]["message"]["content"] or "{}")
+            except Exception:
+                skipped += 1
+                continue
+
+            candidate_email = (parsed.get("email") or "").strip().lower()
+            candidate_name = (parsed.get("name") or "").strip()
+            if not candidate_email or not candidate_name:
+                skipped += 1
+                continue
+
+            if body.role_id:
+                existing = await conn.fetchrow(
+                    "SELECT id FROM candidates WHERE LOWER(email) = $1 AND job_role_id = $2",
+                    candidate_email, body.role_id,
+                )
+            else:
+                existing = await conn.fetchrow(
+                    "SELECT id FROM candidates WHERE LOWER(email) = $1", candidate_email
+                )
+            if existing:
+                skipped += 1
+                continue
+
+            await conn.execute(
+                """INSERT INTO candidates
+                       (id, job_role_id, name, email, phone, location, cv_text, status, created_by, created_at, updated_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, 'new', $8, NOW(), NOW())""",
+                str(uuid.uuid4()), body.role_id,
+                candidate_name, candidate_email,
+                parsed.get("phone"), parsed.get("location"),
+                cv_text[:50_000], current_user["id"],
+            )
+            ingested += 1
+
+        except Exception as exc:
+            logger.error(f"fetch-gmail-cvs: message {msg_id} failed: {exc}")
+            skipped += 1
+
+    return {"ingested": ingested, "skipped": skipped, "has_more": has_more}

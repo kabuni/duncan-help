@@ -22,9 +22,9 @@ export function useUserRoles() {
 }
 
 export function useIsAdmin() {
-  const { data: roles = [], isLoading } = useUserRoles();
+  const { user, loading } = useAuth();
   return {
-    isAdmin: roles.includes("admin"),
-    isLoading,
+    isAdmin: (user?.roles ?? []).includes("admin"),
+    isLoading: loading,
   };
 }

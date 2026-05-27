@@ -1,6 +1,5 @@
 import { motion } from "framer-motion";
 import { Settings as SettingsIcon, User, UserCheck, Users } from "lucide-react";
-import AppLayout from "@/components/AppLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useIsAdmin } from "@/hooks/useUserRoles";
@@ -16,8 +15,7 @@ const Settings = () => {
   const { isAdmin } = useIsAdmin();
 
   return (
-    <AppLayout>
-      <main className="flex-1 overflow-y-auto">
+    <main className="flex-1 overflow-y-auto">
         <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />
 
         <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-3xl">
@@ -107,8 +105,7 @@ const Settings = () => {
             Duncan · KabuniOS v0.1
           </p>
         </div>
-      </main>
-    </AppLayout>
+  </main>
   );
 };
 

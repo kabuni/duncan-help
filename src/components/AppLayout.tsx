@@ -27,7 +27,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           </div>
           <NotificationsBell />
         </div>
-        {/* Desktop floating bell */}
+        {/* Desktop floating bell — sits in the content area top-right, clear of sidebar */}
         <div className="hidden md:flex fixed top-3 right-4 z-40">
           <NotificationsBell />
         </div>

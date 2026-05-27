@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { fastApi, withFastApi } from "@/lib/fastApiClient";
 import { hasExternalApiBase } from "@/lib/apiConfig";
 import { useQuery } from "@tanstack/react-query";
-import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -145,8 +144,7 @@ const Recruitment = () => {
     if (isCompleted) {
       setLoadingPlaybackId(candidate.id);
       try {
-        const syncRes = await supabase.functions.invoke("hireflix-sync-interviews");
-        if (syncRes.error) throw syncRes.error;
+        await fastApi("POST", "/recruitment/hireflix-sync-interviews", {});
 
         const { data } = await supabase
           .from("candidates")
@@ -241,24 +239,7 @@ const Recruitment = () => {
     }
     setFetching(true);
     try {
-      const res = await supabase.functions.invoke("fetch-gmail-cvs", {
-        body: { role_id: selectedRoleId },
-      });
-
-      // Detect "already running" lock conflict (HTTP 409 returned via FunctionsHttpError)
-      const errCtx: any = (res as any).error?.context;
-      if (errCtx) {
-        try {
-          const body = typeof errCtx.json === "function" ? await errCtx.json() : null;
-          if (body?.already_running || errCtx.status === 409) {
-            toast.message("Fetch already running for this role");
-            return;
-          }
-        } catch { /* ignore */ }
-      }
-      if (res.error) throw res.error;
-
-      const data: any = res.data || {};
+      const data: any = await fastApi("POST", "/recruitment/fetch-gmail-cvs", { role_id: selectedRoleId });
       toast.success(`Fetched ${data.ingested ?? 0} new CV(s), ${data.skipped ?? 0} skipped.`);
       if (data.has_more) {
         toast.message("More CVs remaining — run Fetch CVs again to continue.");
@@ -411,7 +392,7 @@ const Recruitment = () => {
           if (res.error) throw res.error;
           return res.data;
         },
-        () => fastApi("POST", "/hireflix/send-invite", { candidate_ids: Array.from(selectedCandidates) }),
+        () => fastApi("POST", "/recruitment/hireflix-send-invite", { candidate_ids: Array.from(selectedCandidates) }),
       );
       const d = data;
       if (d.invited > 0) {
@@ -495,8 +476,7 @@ const Recruitment = () => {
     .slice(0, 3);
 
   return (
-    <AppLayout>
-      <main className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6">
+    <main className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
@@ -978,8 +958,7 @@ const Recruitment = () => {
             )}
           </DialogContent>
         </Dialog>
-      </main>
-    </AppLayout>
+  </main>
   );
 };
 

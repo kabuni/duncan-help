@@ -351,6 +351,21 @@ async def approve_user(
     return {"message": "User approved"}
 
 
+@router.post("/admin/reject/{user_id}")
+async def reject_user(
+    user_id: str,
+    conn: asyncpg.Connection = Depends(get_connection),
+    current_user: dict = Depends(get_current_user),
+):
+    if "admin" not in current_user.get("roles", []):
+        raise HTTPException(status_code=403, detail="Admin only")
+    await conn.execute(
+        "UPDATE auth_credentials SET approval_status = 'rejected', updated_at = NOW() WHERE user_id = $1",
+        user_id,
+    )
+    return {"message": "User rejected"}
+
+
 @router.post("/admin/roles/{user_id}")
 async def set_user_roles(
     user_id: str,

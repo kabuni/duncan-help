@@ -19,7 +19,7 @@ from app.db_pool import get_connection
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["azure-devops"])
+router = APIRouter(prefix="/azure-devops", tags=["azure-devops"])
 
 # Single-tenant auth endpoint (not common/)
 AZURE_DEVOPS_AUTH_URL = "https://app.vssps.visualstudio.com/oauth2/authorize"
@@ -62,12 +62,12 @@ async def _devops_request(method: str, url: str, access_token: str, **kwargs) ->
     return resp.json()
 
 
-@router.get("/azure-devops-auth")
+@router.get("/auth")
 async def azure_devops_auth(current_user: dict = Depends(get_current_user)):
     state = f"{current_user['id']}:{secrets.token_urlsafe(16)}"
     params = {
         "client_id": settings.AZURE_DEVOPS_CLIENT_ID,
-        "redirect_uri": f"{settings.APP_URL}/azure-devops-callback",
+        "redirect_uri": f"{settings.APP_URL}/azure-devops/callback",
         "response_type": "Assertion",
         "scope": DEVOPS_SCOPES,
         "state": state,
@@ -76,7 +76,7 @@ async def azure_devops_auth(current_user: dict = Depends(get_current_user)):
     return {"url": url}
 
 
-@router.get("/azure-devops-callback")
+@router.get("/callback")
 async def azure_devops_callback(
     code: str,
     state: Optional[str] = Query(None),
@@ -95,7 +95,7 @@ async def azure_devops_callback(
                 "client_assertion": settings.AZURE_DEVOPS_CLIENT_SECRET,
                 "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
                 "assertion": code,
-                "redirect_uri": f"{settings.APP_URL}/azure-devops-callback",
+                "redirect_uri": f"{settings.APP_URL}/azure-devops/callback",
             },
         )
     if not resp.is_success:
@@ -115,7 +115,7 @@ async def azure_devops_callback(
     return RedirectResponse(f"{settings.APP_URL}?devops=connected")
 
 
-@router.post("/azure-devops-api")
+@router.post("/api")
 async def azure_devops_api(
     body: DevOpsActionRequest,
     current_user: dict = Depends(get_current_user),
@@ -222,7 +222,7 @@ async def azure_devops_api(
     raise HTTPException(status_code=400, detail=f"Unknown action: {body.action}")
 
 
-@router.post("/azure-devops-webhook")
+@router.post("/webhook")
 async def azure_devops_webhook(
     request: Request,
     conn: asyncpg.Connection = Depends(get_connection),
@@ -251,7 +251,7 @@ async def azure_devops_webhook(
     return {"status": "ok"}
 
 
-@router.post("/sync-azure-work-items")
+@router.post("/sync-work-items")
 async def sync_azure_work_items(
     current_user: dict = Depends(get_current_user),
     conn: asyncpg.Connection = Depends(get_connection),
@@ -284,7 +284,7 @@ async def sync_azure_work_items(
         return {"error": str(e), "synced": 0}
 
 
-@router.post("/azure-repos-api")
+@router.post("/repos-api")
 async def azure_repos_api(
     body: DevOpsActionRequest,
     current_user: dict = Depends(get_current_user),

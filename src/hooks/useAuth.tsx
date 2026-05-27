@@ -26,16 +26,24 @@ const AuthContext = createContext<AuthContextType>({
 export const useAuth = () => useContext(AuthContext);
 
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
+// Sign out after 8 hours of no mouse/keyboard/touch activity
+const IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
 
 const FASTAPI_HEADERS = {
   "Content-Type": "application/json",
   "ngrok-skip-browser-warning": "1",
 };
 
+function isTokenExpired(sess: DuncanSession): boolean {
+  if (!sess.expires_at) return false;
+  return sess.expires_at * 1000 < Date.now();
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<DuncanSession | null>(null);
   const [loading, setLoading] = useState(true);
   const refreshTimer = useRef<number | null>(null);
+  const idleTimer = useRef<number | null>(null);
   const refreshing = useRef(false);
 
   const clearTimer = useCallback(() => {
@@ -47,6 +55,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const doSignOut = useCallback(async () => {
     clearTimer();
+    if (idleTimer.current !== null) {
+      window.clearTimeout(idleTimer.current);
+      idleTimer.current = null;
+    }
     const sess = getAuthSession();
     if (sess?.access_token) {
       try {
@@ -63,6 +75,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setSession(null);
     notifyAuthChange(false);
   }, [clearTimer]);
+
+  const resetIdleTimer = useCallback(() => {
+    if (idleTimer.current !== null) window.clearTimeout(idleTimer.current);
+    idleTimer.current = window.setTimeout(() => {
+      doSignOut();
+    }, IDLE_TIMEOUT_MS);
+  }, [doSignOut]);
 
   const doRefresh = useCallback(
     async (refreshToken: string) => {
@@ -116,10 +135,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const existing = getAuthSession();
     if (existing) {
-      setSession(existing);
-      scheduleRefresh(existing);
+      if (isTokenExpired(existing)) {
+        // Token is already expired — attempt refresh before exposing the session.
+        // Keep loading=true until refresh completes so ProtectedRoute blocks rendering.
+        doRefresh(existing.refresh_token).finally(() => setLoading(false));
+      } else {
+        setSession(existing);
+        scheduleRefresh(existing);
+        setLoading(false);
+      }
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
 
     const onAuthChange = (e: Event) => {
       const { loggedIn } = (e as CustomEvent<{ loggedIn: boolean }>).detail;
@@ -130,7 +157,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       window.removeEventListener("duncan-auth-change", onAuthChange);
       clearTimer();
     };
-  }, [scheduleRefresh, clearTimer]);
+  }, [scheduleRefresh, clearTimer, doRefresh]);
+
+  // Idle timeout — reset on any user activity
+  useEffect(() => {
+    if (!session) return;
+    const events = ["mousedown", "keydown", "touchstart", "scroll"] as const;
+    const handler = () => resetIdleTimer();
+    events.forEach((e) => window.addEventListener(e, handler, { passive: true }));
+    resetIdleTimer();
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, handler));
+      if (idleTimer.current !== null) window.clearTimeout(idleTimer.current);
+    };
+  }, [session, resetIdleTimer]);
 
   return (
     <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signOut: doSignOut }}>

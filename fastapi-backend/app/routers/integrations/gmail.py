@@ -103,12 +103,12 @@ async def _gmail_request(method: str, url: str, access_token: str, **kwargs) -> 
     return resp.json()
 
 
-@router.get("/gmail-auth")
+@router.get("/auth")
 async def gmail_auth(current_user: dict = Depends(get_current_user)):
     state = f"{current_user['id']}:{secrets.token_urlsafe(16)}"
     params = {
         "client_id": settings.GMAIL_CLIENT_ID,
-        "redirect_uri": f"{settings.APP_URL}/gmail-callback",
+        "redirect_uri": f"{settings.APP_URL}/gmail/callback",
         "response_type": "code",
         "scope": GMAIL_SCOPES,
         "access_type": "offline",
@@ -119,7 +119,7 @@ async def gmail_auth(current_user: dict = Depends(get_current_user)):
     return {"url": url}
 
 
-@router.get("/gmail-callback")
+@router.get("/callback")
 async def gmail_callback(
     code: str,
     state: Optional[str] = Query(None),
@@ -137,7 +137,7 @@ async def gmail_callback(
                 "client_secret": settings.GMAIL_CLIENT_SECRET,
                 "code": code,
                 "grant_type": "authorization_code",
-                "redirect_uri": f"{settings.APP_URL}/gmail-callback",
+                "redirect_uri": f"{settings.APP_URL}/gmail/callback",
             },
         )
     if not resp.is_success:
@@ -166,7 +166,7 @@ async def gmail_callback(
     return RedirectResponse(f"{settings.APP_URL}?gmail=connected")
 
 
-@router.post("/gmail-api")
+@router.post("/api")
 async def gmail_api(
     body: GmailActionRequest,
     current_user: dict = Depends(get_current_user),
@@ -292,7 +292,7 @@ def _build_email_raw(to: str, subject: str, body: str, from_email: str) -> str:
     return base64.urlsafe_b64encode(msg.as_bytes()).decode()
 
 
-@router.post("/gmail-auto-draft")
+@router.post("/auto-draft")
 async def gmail_auto_draft(
     body: AutoDraftRequest,
     current_user: dict = Depends(get_current_user),
@@ -327,7 +327,7 @@ Tone: {body.tone or 'professional'}""",
     return {"draft": draft}
 
 
-@router.post("/gmail-train-style")
+@router.post("/train-style")
 async def gmail_train_style(
     body: TrainStyleRequest,
     current_user: dict = Depends(get_current_user),

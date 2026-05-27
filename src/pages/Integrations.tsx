@@ -7,7 +7,6 @@ import {
   GitBranch, HardDrive
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
-import AppLayout from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -443,11 +442,10 @@ const Integrations = () => {
   const companyDocs = companyIntegrations.reduce((sum, c) => sum + (c.documents_ingested ?? 0), 0);
   const totalDocs = userDocs + companyDocs;
   return (
-    <AppLayout>
-      <main className="flex-1 overflow-y-auto">
-        <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />
+    <main className="flex-1 overflow-y-auto">
+      <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />
 
-        <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-6xl">
+      <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-6xl">
           {/* Header */}
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Integrations</h2>
@@ -575,8 +573,7 @@ const Integrations = () => {
             />
           )}
         </AnimatePresence>
-      </main>
-    </AppLayout>
+    </main>
   );
 };
 
@@ -808,13 +805,13 @@ const IntegrationDetail = ({
       } else if (isBasecamp) {
         setBasecampLoading(true);
         const data = await fastApi<{ url?: string }>("GET", "/basecamp/auth");
-        if (data?.url) window.location.href = data.url;
+        if (data?.url) window.open(data.url, "_blank", "noopener,noreferrer");
         else throw new Error("No auth URL returned");
         setBasecampLoading(false);
       } else if (isGmail) {
         setGmailLoading(true);
         const data = await fastApi<{ url?: string }>("GET", "/gmail/auth");
-        if (data?.url) window.location.href = data.url;
+        if (data?.url) window.open(data.url, "_blank", "noopener,noreferrer");
         else throw new Error("No auth URL returned");
         setGmailLoading(false);
       } else if (isSlack) {
@@ -822,13 +819,13 @@ const IntegrationDetail = ({
       } else if (isAzureDevOps) {
         setAzureDevOpsLoading(true);
         const data = await fastApi<{ url?: string }>("GET", "/azure-devops/auth");
-        if (data?.url) window.location.href = data.url;
+        if (data?.url) window.open(data.url, "_blank", "noopener,noreferrer");
         else throw new Error("No auth URL returned");
         setAzureDevOpsLoading(false);
       } else if (isGoogleDrive) {
         setGoogleDriveLoading(true);
         const data = await fastApi<{ url?: string }>("GET", "/drive/auth");
-        if (data?.url) window.location.href = data.url;
+        if (data?.url) window.open(data.url, "_blank", "noopener,noreferrer");
         else throw new Error("No auth URL returned");
         setGoogleDriveLoading(false);
       }

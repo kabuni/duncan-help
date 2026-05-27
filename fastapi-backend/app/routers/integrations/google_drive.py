@@ -17,7 +17,7 @@ from app.db_pool import get_connection
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["google-drive"])
+router = APIRouter(prefix="/drive", tags=["google-drive"])
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -32,12 +32,12 @@ class DriveActionRequest(BaseModel):
     limit: int = 20
 
 
-@router.get("/google-drive-auth")
+@router.get("/auth")
 async def google_drive_auth(current_user: dict = Depends(get_current_user)):
     state = f"{current_user['id']}:{secrets.token_urlsafe(16)}"
     params = {
         "client_id": settings.GMAIL_CLIENT_ID,
-        "redirect_uri": f"{settings.APP_URL}/google-drive-callback",
+        "redirect_uri": f"{settings.APP_URL}/drive/callback",
         "response_type": "code",
         "scope": DRIVE_SCOPES,
         "access_type": "offline",
@@ -48,7 +48,7 @@ async def google_drive_auth(current_user: dict = Depends(get_current_user)):
     return {"url": url}
 
 
-@router.get("/google-drive-callback")
+@router.get("/callback")
 async def google_drive_callback(
     code: str,
     state: Optional[str] = Query(None),
@@ -66,7 +66,7 @@ async def google_drive_callback(
                 "client_secret": settings.GMAIL_CLIENT_SECRET,
                 "code": code,
                 "grant_type": "authorization_code",
-                "redirect_uri": f"{settings.APP_URL}/google-drive-callback",
+                "redirect_uri": f"{settings.APP_URL}/drive/callback",
             },
         )
     if not resp.is_success:
@@ -85,7 +85,7 @@ async def google_drive_callback(
     return RedirectResponse(f"{settings.APP_URL}?drive=connected")
 
 
-@router.post("/google-drive-api")
+@router.post("/api")
 async def google_drive_api(
     body: DriveActionRequest,
     current_user: dict = Depends(get_current_user),

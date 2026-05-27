@@ -13,6 +13,28 @@ export interface ChatAttachment {
   previewUrl?: string;
   /** Populated after server-side extraction for non-image files */
   extractedText?: string;
+  /** For PDFs: storage path in `docusign-staging` bucket, used by send_pdf_for_signature */
+  stagingPath?: string;
+}
+
+/** Phase 2b: pending write action surfaced for explicit user confirmation. */
+export interface PendingWriteAction {
+  pendingId: string;
+  toolName: string;
+  summary: string;
+  args: any;
+  state: "awaiting" | "confirming" | "executed" | "cancelled" | "failed";
+  result?: any;
+  error?: string;
+  createdAt: number;
+}
+
+/** Phase 2b: live tool execution status, rendered as pills in the UI. */
+export interface ToolStatus {
+  id: string;
+  name: string;
+  state: "running" | "success" | "no_data" | "partial" | "error" | "timeout" | "pending_confirmation" | "circuit_open";
+  error?: string;
 }
 
 const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -25,22 +47,30 @@ const FUNCTION_BASE_URL = normalizedSupabaseUrl
   : `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/norman-chat`;
 const EXTRACT_URL = `${FUNCTION_BASE_URL}/extract-chat-file`;
+const CONFIRM_WRITE_URL = `${FUNCTION_BASE_URL}/confirm-chat-write`;
 const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 const FASTAPI_CHAT_URL = rawApiBaseUrl && rawApiBaseUrl !== "undefined" && rawApiBaseUrl !== "null"
   ? `${rawApiBaseUrl}/norman-chat`
   : null;
+const HISTORY_WINDOW = 15;
+const LONG_WORKFLOW_HISTORY_WINDOW = 50;
+const LONG_WORKFLOW_PATTERN = /nda|agreement|contract|\bform\b|onboarding/i;
+
+function getHistoryWindowForConversation(latestUserInput: string, priorMessages: Message[]): number {
+  if (LONG_WORKFLOW_PATTERN.test(latestUserInput || "")) return LONG_WORKFLOW_HISTORY_WINDOW;
+  const recent = priorMessages.slice(-6).map((m) => m.content).join(" ");
+  if (LONG_WORKFLOW_PATTERN.test(recent)) return LONG_WORKFLOW_HISTORY_WINDOW;
+  return HISTORY_WINDOW;
+}
+
 const NORMAL_TIMEOUT_MS = 180_000;
 const HEAVY_TIMEOUT_MS = 300_000;
 const HEAVY_MODES: Mode[] = ["reason", "analyze", "automate", "briefing"];
-const HEAVY_KEYWORDS = /\b(meeting|meetings|calendar|diary|availability|schedule|brief|briefing|summary|summari[sz]e|recap|workstream|kanban|overdue|tasks?|report|analy[sz]e|compare|cv|candidate|recruit|email|gmail|inbox|draft|devops|ado|basecamp)\b/i;
+const HEAVY_KEYWORDS = /\b(meeting|meetings|calendar|diary|availability|schedule|brief|briefing|summary|summari[sz]e|recap|workstream|kanban|overdue|tasks?|report|analy[sz]e|compare|cv|candidate|recruit|email|gmail|inbox|draft|devops|ado)\b/i;
 
 type TaggedController = AbortController & { wasTimeout?: boolean };
 
-function isHeavyChatRequest(
-  mode: Mode,
-  input: string,
-  attachments: ChatAttachment[]
-): boolean {
+function isHeavyChatRequest(mode: Mode, input: string, attachments: ChatAttachment[]): boolean {
   return (
     HEAVY_MODES.includes(mode) ||
     (input?.length ?? 0) > 300 ||
@@ -53,26 +83,18 @@ function getChatErrorMessage(error: unknown) {
   if (error instanceof DOMException && error.name === "AbortError") {
     return "That request took longer than expected. Duncan may still be working — try again or rephrase.";
   }
-
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
 }
 
 /** Extract text from non-image attachments via the server-side function */
-async function extractFileText(
-  att: ChatAttachment,
-  token: string
-): Promise<string> {
+async function extractFileText(att: ChatAttachment, token: string): Promise<string> {
   const resp = await fetch(EXTRACT_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      file_name: att.name,
-      file_type: att.type,
-      base64: att.base64,
-    }),
+    body: JSON.stringify({ file_name: att.name, file_type: att.type, base64: att.base64 }),
   });
 
   if (!resp.ok) {
@@ -83,9 +105,7 @@ async function extractFileText(
 
   const data = await resp.json();
   let result = data.text || "";
-  if (data.truncated) {
-    result += "\n\n[Note: File was truncated due to size. First ~50,000 characters shown.]";
-  }
+  if (data.truncated) result += "\n\n[Note: File was truncated due to size. First ~50,000 characters shown.]";
   return result;
 }
 
@@ -96,25 +116,25 @@ function buildUserContent(input: string, attachments: ChatAttachment[]) {
 
   for (const att of attachments) {
     if (att.type.startsWith("image/")) {
-      // Images go as vision content directly
       parts.push({
         type: "image_url",
-        image_url: {
-          url: `data:${att.type};base64,${att.base64}`,
-          detail: "auto",
-        },
+        image_url: { url: `data:${att.type};base64,${att.base64}`, detail: "auto" },
       });
     } else if (att.extractedText) {
-      // Server-extracted text — clean, readable content
+      const stagingNote = att.stagingPath
+        ? `\n[E-SIGN READY] This PDF is staged for DocuSign. To send for signature, call send_pdf_for_signature with staging_path="${att.stagingPath}" and file_name="${att.name}" (collect recipient name + email from the user first).`
+        : "";
       parts.push({
         type: "text",
-        text: `\n\n--- Attached file: ${att.name} ---\n${att.extractedText}\n--- End of file ---`,
+        text: `\n\n--- Attached file: ${att.name} ---\n${att.extractedText}\n--- End of file ---${stagingNote}`,
       });
     } else {
-      // Fallback: should not happen after extraction, but safety net
+      const stagingNote = att.stagingPath
+        ? `\n[E-SIGN READY] PDF staged for DocuSign — staging_path="${att.stagingPath}" file_name="${att.name}". Use send_pdf_for_signature once you have recipient name + email.`
+        : "";
       parts.push({
         type: "text",
-        text: `\n\n[Attached file: ${att.name} (could not be processed)]`,
+        text: `\n\n[Attached file: ${att.name} (could not be processed)]${stagingNote}`,
       });
     }
   }
@@ -122,11 +142,12 @@ function buildUserContent(input: string, attachments: ChatAttachment[]) {
   return parts;
 }
 
-async function streamAssistantResponse(
-  response: Response,
-  upsertAssistant: (chunk: string) => void,
-  logLabel: string,
-) {
+interface StreamHandlers {
+  onContent: (chunk: string) => void;
+  onDuncanEvent?: (evt: any) => void;
+}
+
+async function streamAssistantResponse(response: Response, handlers: StreamHandlers, logLabel: string) {
   if (!response.body) throw new Error("No response body");
 
   const reader = response.body.getReader();
@@ -137,6 +158,31 @@ async function streamAssistantResponse(
 
   console.info(`[Duncan] ${logLabel}: stream opened`);
 
+  const handleLine = (line: string) => {
+    if (!line) return;
+    if (line.endsWith("\r")) line = line.slice(0, -1);
+    if (line.startsWith(":") || line.trim() === "") return;
+    if (!line.startsWith("data: ")) return;
+    const jsonStr = line.slice(6).trim();
+    if (jsonStr === "[DONE]") { streamDone = true; return; }
+    try {
+      const parsed = JSON.parse(jsonStr);
+      // Phase 2b: custom Duncan SSE events for tool lifecycle + pending writes
+      if (parsed && typeof parsed === "object" && typeof parsed.duncan_event === "string") {
+        handlers.onDuncanEvent?.(parsed);
+        return;
+      }
+      const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+      if (content) {
+        if (!sawContent) console.info(`[Duncan] ${logLabel}: first token received`);
+        sawContent = true;
+        handlers.onContent(content);
+      }
+    } catch {
+      // Unparsable line — swallow.
+    }
+  };
+
   while (!streamDone) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -144,63 +190,18 @@ async function streamAssistantResponse(
 
     let newlineIndex: number;
     while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
-      let line = buffer.slice(0, newlineIndex);
+      const line = buffer.slice(0, newlineIndex);
       buffer = buffer.slice(newlineIndex + 1);
-
-      if (line.endsWith("\r")) line = line.slice(0, -1);
-      if (line.startsWith(":") || line.trim() === "") continue;
-      if (!line.startsWith("data: ")) continue;
-
-      const jsonStr = line.slice(6).trim();
-      if (jsonStr === "[DONE]") {
-        streamDone = true;
-        break;
-      }
-
-      try {
-        const parsed = JSON.parse(jsonStr);
-        const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-        if (content) {
-          if (!sawContent) {
-            console.info(`[Duncan] ${logLabel}: first token received`);
-          }
-          sawContent = true;
-          upsertAssistant(content);
-        }
-      } catch {
-        buffer = line + "\n" + buffer;
-        break;
-      }
+      handleLine(line);
+      if (streamDone) break;
     }
   }
 
   if (buffer.trim()) {
-    for (let raw of buffer.split("\n")) {
-      if (!raw) continue;
-      if (raw.endsWith("\r")) raw = raw.slice(0, -1);
-      if (raw.startsWith(":") || raw.trim() === "") continue;
-      if (!raw.startsWith("data: ")) continue;
-      const jsonStr = raw.slice(6).trim();
-      if (jsonStr === "[DONE]") continue;
-      try {
-        const parsed = JSON.parse(jsonStr);
-        const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-        if (content) {
-          if (!sawContent) {
-            console.info(`[Duncan] ${logLabel}: first token received`);
-          }
-          sawContent = true;
-          upsertAssistant(content);
-        }
-      } catch {
-        console.warn(`[Duncan] ${logLabel}: skipped unparsable stream chunk`);
-      }
-    }
+    for (const raw of buffer.split("\n")) handleLine(raw);
   }
 
-  if (!sawContent) {
-    throw new Error("Duncan returned an empty response. Please try again.");
-  }
+  if (!sawContent) throw new Error("Duncan returned an empty response. Please try again.");
 
   console.info(`[Duncan] ${logLabel}: stream completed`);
 }
@@ -209,23 +210,61 @@ export function useNormanChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState<string | null>(null);
+  const [pendingWrites, setPendingWrites] = useState<PendingWriteAction[]>([]);
+  const [toolStatuses, setToolStatuses] = useState<ToolStatus[]>([]);
+  const [lastError, setLastError] = useState<string | null>(null);
   const { profile } = useProfile();
   const mountedRef = useRef(true);
   const inflightControllerRef = useRef<AbortController | null>(null);
+  const lastSendRef = useRef<{ input: string; mode: Mode; attachments: ChatAttachment[]; voiceMode?: boolean } | null>(null);
 
   useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-    };
+    return () => { mountedRef.current = false; };
   }, []);
 
-  const send = useCallback(
-    async (input: string, mode: Mode = "general", attachments: ChatAttachment[] = [], opts: { voiceMode?: boolean } = {}) => {
-      // Abort any previous in-flight request to avoid stacked long-running calls
+  const handleDuncanEvent = useCallback((evt: any) => {
+    if (!evt || typeof evt !== "object") return;
+    switch (evt.duncan_event) {
+      case "tool_start":
+        setToolStatuses((prev) => {
+          if (prev.some((p) => p.id === evt.id)) return prev;
+          return [...prev, { id: evt.id, name: evt.name, state: "running" }];
+        });
+        break;
+      case "tool_end":
+        setToolStatuses((prev) =>
+          prev.map((p) => p.id === evt.id
+            ? { ...p, state: (evt.status as ToolStatus["state"]) || "success", error: evt.error }
+            : p
+          )
+        );
+        break;
+      case "tool_pending":
+        setPendingWrites((prev) => {
+          if (prev.some((p) => p.pendingId === evt.pendingId)) return prev;
+          return [...prev, {
+            pendingId: evt.pendingId,
+            toolName: evt.name,
+            summary: evt.summary,
+            args: evt.args,
+            state: "awaiting",
+            createdAt: Date.now(),
+          }];
+        });
+        break;
+    }
+  }, []);
+
+  const runChat = useCallback(
+    async (input: string, mode: Mode, attachments: ChatAttachment[], opts: { voiceMode?: boolean }) => {
       if (inflightControllerRef.current) {
         inflightControllerRef.current.abort();
         inflightControllerRef.current = null;
       }
+
+      lastSendRef.current = { input, mode, attachments, voiceMode: opts.voiceMode };
+      setLastError(null);
+      setToolStatuses([]);
 
       const userMsg: Message = { role: "user", content: input };
       setMessages((prev) => [...prev, userMsg]);
@@ -241,15 +280,12 @@ export function useNormanChat() {
       }
 
       let assistantSoFar = "";
-
       const upsertAssistant = (chunk: string) => {
         assistantSoFar += chunk;
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last?.role === "assistant") {
-            return prev.map((m, i) =>
-              i === prev.length - 1 ? { ...m, content: assistantSoFar } : m
-            );
+            return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantSoFar } : m);
           }
           return [...prev, { role: "assistant", content: assistantSoFar }];
         });
@@ -265,22 +301,19 @@ export function useNormanChat() {
           controller!.abort();
         }, timeoutMs);
 
-        // --- Extract text from non-image attachments server-side ---
         const nonImageAtts = safeAttachments.filter((a) => !a.type.startsWith("image/"));
         if (nonImageAtts.length > 0) {
           setExtractionProgress(`Extracting text from ${nonImageAtts.length} file(s)…`);
-          await Promise.all(
-            nonImageAtts.map(async (att) => {
-              att.extractedText = await extractFileText(att, token);
-            })
-          );
+          await Promise.all(nonImageAtts.map(async (att) => {
+            att.extractedText = await extractFileText(att, token);
+          }));
           setExtractionProgress(null);
         }
 
-        // Build the messages array for the API
         const userContent = buildUserContent(input, safeAttachments);
+        const historyWindow = getHistoryWindowForConversation(input, messages);
         const apiMessages = [
-          ...messages.map((m) => ({ role: m.role, content: m.content })),
+          ...messages.slice(-historyWindow).map((m) => ({ role: m.role, content: m.content })),
           { role: "user", content: userContent },
         ];
 
@@ -303,9 +336,7 @@ export function useNormanChat() {
           let resp = await fetchChat();
           if (resp.status === 429) {
             await new Promise((r) => setTimeout(r, 1500));
-            if (controller!.signal.aborted) {
-              throw new DOMException("Timed out", "AbortError");
-            }
+            if (controller!.signal.aborted) throw new DOMException("Timed out", "AbortError");
             resp = await fetchChat();
           }
 
@@ -319,30 +350,103 @@ export function useNormanChat() {
             );
           }
 
-          await streamAssistantResponse(resp, upsertAssistant, `chat mode=${mode}`);
+          await streamAssistantResponse(resp, { onContent: upsertAssistant, onDuncanEvent: handleDuncanEvent }, `chat mode=${mode}`);
         } finally {
           window.clearTimeout(timeoutId);
         }
       } catch (e) {
-        // Silently swallow superseded-request aborts (newer send() cancelled this one)
         if (e instanceof DOMException && e.name === "AbortError" && !controller?.wasTimeout) {
           console.info("[Duncan] chat request superseded — silent");
           return;
         }
         console.error("Duncan chat error:", e);
+        const msg = getChatErrorMessage(e);
         if (mountedRef.current) {
-          toast.error(getChatErrorMessage(e));
+          toast.error(msg);
+          setLastError(msg);
         }
-        upsertAssistant(
-          `\n\n⚠️ Error: ${getChatErrorMessage(e)}`
-        );
+        upsertAssistant(`\n\n⚠️ Error: ${msg}`);
       } finally {
         setIsLoading(false);
         setExtractionProgress(null);
       }
     },
-    [messages]
+    [messages, profile, handleDuncanEvent]
   );
+
+  const send = useCallback(
+    (input: string, mode: Mode = "general", attachments: ChatAttachment[] = [], opts: { voiceMode?: boolean } = {}) =>
+      runChat(input, mode, attachments, opts),
+    [runChat]
+  );
+
+  const retryLastTurn = useCallback(async () => {
+    const last = lastSendRef.current;
+    if (!last) return;
+    // Drop trailing assistant error bubble + the last user message we will re-send
+    setMessages((prev) => {
+      const next = [...prev];
+      if (next.length && next[next.length - 1].role === "assistant") next.pop();
+      if (next.length && next[next.length - 1].role === "user" && next[next.length - 1].content === last.input) next.pop();
+      return next;
+    });
+    await runChat(last.input, last.mode, last.attachments, { voiceMode: last.voiceMode });
+  }, [runChat]);
+
+  const callConfirmEndpoint = useCallback(async (pendingId: string, action: "confirm" | "cancel") => {
+    const token = getAuthToken() || "";
+    const resp = await fetch(CONFIRM_WRITE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ pendingId, action }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    // For confirm, do NOT throw on 502 — the response body carries the canonical
+    // envelope (ok/verified/error) and we want to surface it honestly to the user.
+    if (!resp.ok && action !== "confirm") {
+      throw new Error(data?.error || `Confirmation failed (${resp.status})`);
+    }
+    return data;
+  }, []);
+
+  const confirmWrite = useCallback(async (pendingId: string) => {
+    setPendingWrites((prev) => prev.map((p) => (p.pendingId === pendingId ? { ...p, state: "confirming" } : p)));
+    try {
+      const data = await callConfirmEndpoint(pendingId, "confirm");
+      const verifiedOk = data?.ok === true && data?.verified === true;
+      if (verifiedOk) {
+        setPendingWrites((prev) =>
+          prev.map((p) => (p.pendingId === pendingId ? { ...p, state: "executed", result: data?.result ?? data } : p))
+        );
+        const where = data?.source === "google" ? "Google Calendar" : data?.source === "planner" ? "Planner" : null;
+        toast.success(where ? `Verified — change applied in ${where}.` : "Verified — change applied.");
+      } else {
+        const errMsg = data?.error || "The write did not verify. Nothing was persisted.";
+        setPendingWrites((prev) =>
+          prev.map((p) => (p.pendingId === pendingId ? { ...p, state: "failed", error: errMsg, result: data?.result ?? data } : p))
+        );
+        toast.error(errMsg);
+      }
+    } catch (e: any) {
+      const msg = e?.message || "Confirmation failed";
+      setPendingWrites((prev) =>
+        prev.map((p) => (p.pendingId === pendingId ? { ...p, state: "failed", error: msg } : p))
+      );
+      toast.error(msg);
+    }
+  }, [callConfirmEndpoint]);
+
+  const cancelWrite = useCallback(async (pendingId: string) => {
+    try {
+      await callConfirmEndpoint(pendingId, "cancel");
+      setPendingWrites((prev) =>
+        prev.map((p) => (p.pendingId === pendingId ? { ...p, state: "cancelled" } : p))
+      );
+      toast("Action cancelled.");
+    } catch (e: any) {
+      toast.error(e?.message || "Cancel failed");
+    }
+  }, [callConfirmEndpoint]);
 
   const sendBriefing = useCallback(
     async (briefingData: Record<string, any>): Promise<boolean> => {
@@ -355,9 +459,7 @@ export function useNormanChat() {
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last?.role === "assistant") {
-            return prev.map((m, i) =>
-              i === prev.length - 1 ? { ...m, content: assistantSoFar } : m
-            );
+            return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantSoFar } : m);
           }
           return [...prev, { role: "assistant", content: assistantSoFar }];
         });
@@ -390,7 +492,7 @@ export function useNormanChat() {
             throw new Error(err.error || `Request failed (${resp.status})`);
           }
 
-          await streamAssistantResponse(resp, upsertAssistant, "briefing");
+          await streamAssistantResponse(resp, { onContent: upsertAssistant, onDuncanEvent: handleDuncanEvent }, "briefing");
           success = true;
           console.info("[Duncan] briefing: completed successfully");
         } finally {
@@ -398,9 +500,7 @@ export function useNormanChat() {
         }
       } catch (e) {
         console.error("[Duncan] briefing: failure reason →", e);
-        if (mountedRef.current) {
-          toast.error("Daily briefing could not be completed right now.");
-        }
+        if (mountedRef.current) toast.error("Daily briefing could not be completed right now.");
         // Do NOT inject a fake assistant message on failure — leave the chat
         // empty so the page-level retry UI can drive the recovery flow.
       } finally {
@@ -409,10 +509,29 @@ export function useNormanChat() {
 
       return success;
     },
-    [profile]
+    [profile, handleDuncanEvent]
   );
 
-  const clearMessages = useCallback(() => setMessages([]), []);
+  const clearMessages = useCallback(() => {
+    setMessages([]);
+    setPendingWrites([]);
+    setToolStatuses([]);
+    setLastError(null);
+  }, []);
 
-  return { messages, isLoading, extractionProgress, send, sendBriefing, clearMessages, setMessages };
+  return {
+    messages,
+    isLoading,
+    extractionProgress,
+    pendingWrites,
+    toolStatuses,
+    lastError,
+    send,
+    sendBriefing,
+    clearMessages,
+    setMessages,
+    confirmWrite,
+    cancelWrite,
+    retryLastTurn,
+  };
 }

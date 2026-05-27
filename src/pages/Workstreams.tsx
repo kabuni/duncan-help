@@ -6,7 +6,6 @@ import {
   AlertTriangle, Clock, User, CheckCircle2, Target,
   CalendarDays, ArrowUpDown, ListChecks,
 } from "lucide-react";
-import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -95,8 +94,7 @@ const Workstreams = () => {
   const displayCards = cards || [];
 
   return (
-    <AppLayout>
-      <main className="flex-1 overflow-y-auto">
+    <main className="flex-1 overflow-y-auto">
         <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />
 
         <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-[1400px]">
@@ -235,8 +233,7 @@ const Workstreams = () => {
           onClose={() => setSelectedCardId(null)}
           assigneeFilter={filterAssignee !== "all" ? filterAssignee : undefined}
         />
-      </main>
-    </AppLayout>
+  </main>
   );
 };
 

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
@@ -100,8 +99,7 @@ export default function KnowledgeBase() {
   };
 
   return (
-    <AppLayout>
-      <div className="mx-auto max-w-5xl px-6 py-8 space-y-8">
+    <div className="mx-auto max-w-5xl px-6 py-8 space-y-8 overflow-y-auto flex-1">
         <header>
           <h1 className="text-2xl font-semibold">Duncan Knowledge Base</h1>
           <p className="text-sm text-muted-foreground mt-1">Upload documents to train Duncan.</p>
@@ -147,7 +145,6 @@ export default function KnowledgeBase() {
         </div>
 
         <KBRecentUploads refreshKey={refreshKey} />
-      </div>
-    </AppLayout>
+    </div>
   );
 }

@@ -97,7 +97,7 @@ const ChatHistory = ({
       </button>
 
       {expanded && (
-        <div className="ml-4 mt-1 border-l border-border pl-2 max-h-[40vh] overflow-y-auto scrollbar-thin">
+        <div className="ml-4 mt-1 border-l border-border pl-2 max-h-[40vh] overflow-y-auto overscroll-contain scrollbar-thin">
           {/* New Chat button */}
           <button
             onClick={() => {
@@ -128,7 +128,7 @@ const ChatHistory = ({
                       <div
                         key={chat.id}
                         className={cn(
-                          "group flex items-center gap-1 rounded-md px-2 py-1.5 text-xs transition-colors",
+                          "group flex items-center gap-1 rounded-md px-2 py-1.5 text-xs transition-colors min-w-0 overflow-hidden",
                           activeChatId === chat.id && !isEditing
                             ? "bg-primary/10 text-primary font-medium"
                             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",

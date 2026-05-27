@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Mail, PenSquare, Inbox, Loader2, ExternalLink, AlertTriangle, CheckCircle2, Unplug } from "lucide-react";
-import AppLayout from "@/components/AppLayout";
 import GmailInbox from "@/components/gmail/GmailInbox";
 import GmailReader from "@/components/gmail/GmailReader";
 import GmailCompose from "@/components/gmail/GmailCompose";
@@ -19,23 +18,20 @@ const Gmail = () => {
   // Not connected state
   if (statusLoading) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-full">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
     );
   }
 
   if (!status?.connected) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-full">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="max-w-md text-center px-8"
-          >
+      <div className="flex items-center justify-center h-full">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md text-center px-8"
+        >
             <div className="h-16 w-16 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-6">
               <Mail className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -64,22 +60,20 @@ const Gmail = () => {
             <p className="text-[10px] text-muted-foreground/60 mt-4">
               Only read and send permissions are requested. Duncan never stores email content.
             </p>
-          </motion.div>
-        </div>
-      </AppLayout>
+        </motion.div>
+      </div>
     );
   }
 
   // Token expired state
   if (status.expired) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-full">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="max-w-md text-center px-8"
-          >
+      <div className="flex items-center justify-center h-full">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="max-w-md text-center px-8"
+        >
             <div className="h-16 w-16 rounded-2xl bg-norman-warning/10 flex items-center justify-center mx-auto mb-6">
               <AlertTriangle className="h-8 w-8 text-norman-warning" />
             </div>
@@ -94,15 +88,13 @@ const Gmail = () => {
             >
               Reconnect Gmail
             </button>
-          </motion.div>
-        </div>
-      </AppLayout>
+        </motion.div>
+      </div>
     );
   }
 
   return (
-    <AppLayout>
-      <main className="flex flex-col h-full overflow-hidden">
+    <main className="flex flex-col h-full overflow-hidden">
         {/* Top bar */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-6 py-3 border-b border-border bg-card/50 backdrop-blur-sm shrink-0">
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
@@ -182,8 +174,7 @@ const Gmail = () => {
             </>
           )}
         </div>
-      </main>
-    </AppLayout>
+  </main>
   );
 };
 

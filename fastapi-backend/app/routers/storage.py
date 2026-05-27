@@ -109,9 +109,14 @@ async def _check_blob_access(blob_path: str, user: dict, conn: asyncpg.Connectio
         )
         return member is not None
 
-    # CV files: cvs/{candidate_id}/... — recruitment team can access
     parts = blob_path.split("/")
+
+    # CV files: cvs/{candidate_id}/... — recruitment team can access
     if parts and parts[0] == "cvs":
+        return True
+
+    # NDA files: ndas/{party}/... — any authenticated user of the org can download
+    if parts and parts[0] == "ndas":
         return True
 
     return False

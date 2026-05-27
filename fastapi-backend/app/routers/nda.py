@@ -15,7 +15,9 @@ from datetime import datetime
 from typing import Optional
 
 import asyncpg
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from app.auth.dependencies import get_current_user
@@ -301,12 +303,16 @@ async def generate_nda(
             "success": True,
             "submission_id": submission_id,
             "document_url": doc_url,
-            "download_url": f"{settings.APP_URL}/azure-blob-api/download?path={stored_key}",
+            "download_url": f"/nda/download/{submission_id}",
             "blob_path": stored_key,
             "notion_page_id": notion_page_id,
             "notion_page_url": notion_page_url,
             "status": "generated",
-            "message": f"NDA for {body.receiving_party_name} generated successfully as Word document.",
+            "message": (
+                f"NDA for {body.receiving_party_name} generated successfully. "
+                f"Submission ID: {submission_id}. "
+                f"Download it from the NDA Submissions page or via /nda/download/{submission_id}."
+            ),
         }
 
     except HTTPException:
@@ -510,6 +516,46 @@ async def vectorize_nda(
         "chunks_created": len(chunks),
         "total_tokens": sum(c["token_count"] for c in chunks),
     }
+
+
+@router.get("/download/{submission_id}")
+async def download_nda(
+    submission_id: str,
+    current_user: dict = Depends(get_current_user),
+    conn: asyncpg.Connection = Depends(get_connection),
+):
+    """Download a generated NDA Word document. Accessible by the submitter or admins."""
+    row = await conn.fetchrow(
+        "SELECT submitter_id, google_doc_id, receiving_party_name, date_of_agreement FROM nda_submissions WHERE id = $1",
+        submission_id,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="NDA submission not found")
+
+    is_admin = "admin" in current_user.get("roles", [])
+    is_submitter = str(row["submitter_id"]) == str(current_user["id"])
+    if not is_admin and not is_submitter:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    blob_path = row["google_doc_id"]
+    if not blob_path:
+        raise HTTPException(status_code=400, detail="NDA document has not been generated yet")
+
+    try:
+        data, content_type = await download_blob(blob_path)
+    except Exception as e:
+        logger.error(f"NDA download failed for submission {submission_id}: {e}")
+        raise HTTPException(status_code=404, detail="Document not found in storage")
+
+    party = re.sub(r'[^a-zA-Z0-9_\- ]', '_', row["receiving_party_name"])
+    date_str = str(row["date_of_agreement"]).replace("-", "_")
+    filename = f"NDA_{party}_{date_str}.docx"
+
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ── DocuSign webhook ───────────────────────────────────────────────────────────

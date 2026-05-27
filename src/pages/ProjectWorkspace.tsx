@@ -7,7 +7,6 @@ import {
 import { ProjectNotesDrawer } from "@/components/projects/ProjectNotesDrawer";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import Sidebar, { MobileMenuButton } from "@/components/Sidebar";
 import { supabase } from "@/integrations/supabase/client";
 import { getAuthUser } from "@/lib/authStorage";
 import { useProjects, useProjectChats, useProjectChat, useProjectFiles, useProjectMembers } from "@/hooks/useProjects";
@@ -101,7 +100,6 @@ export default function ProjectWorkspace() {
   const myDisplayName = currentProfile?.display_name || "You";
   const myAvatarUrl = currentProfile?.avatar_url || null;
 
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [chatListOpen, setChatListOpen] = useState(false);
   const [input, setInput] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -328,9 +326,8 @@ export default function ProjectWorkspace() {
   // Show loading while projects are being fetched
   if (projectsLoading) {
     return (
-      <div className="flex h-screen overflow-hidden bg-background">
-        <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-        <main className="flex-1 lg:ml-64 flex items-center justify-center">
+      <div className="flex h-full overflow-hidden bg-background">
+        <main className="flex-1 flex items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </main>
       </div>
@@ -340,9 +337,8 @@ export default function ProjectWorkspace() {
   // Show not-found if project doesn't exist after loading
   if (!project) {
     return (
-      <div className="flex h-screen overflow-hidden bg-background">
-        <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-        <main className="flex-1 lg:ml-64 flex flex-col items-center justify-center gap-3">
+      <div className="flex h-full overflow-hidden bg-background">
+        <main className="flex-1 flex flex-col items-center justify-center gap-3">
           <p className="text-sm text-muted-foreground">Project not found</p>
           <Button variant="outline" size="sm" onClick={() => navigate("/projects")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -357,12 +353,10 @@ export default function ProjectWorkspace() {
   const extractedCount = files.filter(f => f.extracted_text).length;
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-background">
-      <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-      <main className="flex-1 lg:ml-64 flex flex-col min-h-0 overflow-hidden">
+    <div className="fixed inset-0 md:left-64 flex overflow-hidden bg-background">
+      <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Header */}
-        <header className="flex items-center gap-1.5 sm:gap-3 border-b border-border px-2 sm:px-4 py-3 shrink-0">
-          <MobileMenuButton onClick={() => setMobileOpen(true)} />
+        <header className="flex items-center gap-1.5 sm:gap-3 border-b border-border px-2 sm:pl-4 sm:pr-14 py-3 shrink-0">
           <button onClick={() => navigate("/projects")} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">
             <ArrowLeft className="h-4 w-4" />
           </button>
@@ -411,14 +405,14 @@ export default function ProjectWorkspace() {
         {/* Workspace */}
         <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* LEFT: Chat list (desktop) */}
-          <div className="w-56 shrink-0 border-r border-border flex-col bg-sidebar/50 hidden md:flex">
+          <div className="w-56 shrink-0 border-r border-border flex-col bg-sidebar/50 hidden md:flex overflow-hidden">
             <div className="p-3 border-b border-border">
               <Button variant="outline" size="sm" onClick={handleNewChat} className="w-full gap-2 text-xs">
                 <Plus className="h-3.5 w-3.5" />
                 New Chat
               </Button>
             </div>
-            <ScrollArea className="flex-1">
+            <div className="flex-1 overflow-y-auto min-h-0">
               <div className="p-2 space-y-0.5">
                 {chats.map(chat => {
                   const isEditing = editingChatId === chat.id;
@@ -462,7 +456,7 @@ export default function ProjectWorkspace() {
                           title={`${chat.title} (double-click to rename)`}
                         >
                           <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-                          <span className="min-w-0 truncate">{chat.title}</span>
+                          <span className="flex-1 min-w-0 truncate">{chat.title}</span>
                         </button>
                         <button
                           type="button"
@@ -498,7 +492,7 @@ export default function ProjectWorkspace() {
                   </p>
                 )}
               </div>
-            </ScrollArea>
+            </div>
           </div>
 
           {/* LEFT: Chat list (mobile drawer) */}
@@ -630,7 +624,7 @@ export default function ProjectWorkspace() {
                   />
                 )}
                 {/* Messages */}
-                <div ref={messagesScrollerRef} className="flex-1 overflow-y-auto p-4 overscroll-contain">
+                <div ref={messagesScrollerRef} className="flex-1 min-h-0 overflow-y-auto p-4 overscroll-contain">
                   <div className="max-w-3xl mx-auto space-y-4">
                     {msgsLoading && (
                       <div className="flex justify-center py-8">

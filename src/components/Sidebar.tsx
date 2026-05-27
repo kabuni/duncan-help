@@ -357,6 +357,7 @@ const Sidebar = ({
           onRenameChat={chatOps.updateTitle}
           onMobileClose={onMobileClose}
         />
+        </div>
       </nav>
 
       {/* User */}

@@ -87,7 +87,7 @@ const ChatHistory = ({
         className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-150"
       >
         <MessageSquare className="h-4 w-4" />
-        <span className="flex-1 text-left">Chat History</span>
+        <span className="flex-1 text-left">Recents</span>
         <ChevronDown
           className={cn(
             "h-3.5 w-3.5 text-muted-foreground transition-transform duration-200",

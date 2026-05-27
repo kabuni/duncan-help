@@ -130,6 +130,9 @@ export function useHubSpotSocialFeed() {
       return data as HubSpotSocialFeed;
     },
   });
+}
+
+
 
 export type ProjectsStats = {
   active: number;

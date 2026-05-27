@@ -834,6 +834,39 @@ const AZURE_REPOS_TOOLS = [
   },
 ];
 
+const HUBSPOT_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "get_hubspot_pipeline_summary",
+      description: "Get the full HubSpot CRM commercial snapshot: active deals (with stages, amounts, owners), at-risk / stale accounts, key contacts, lifecycle stages, lists, and marketing form metrics (newsletter & scout signups with 30-day windows and location breakdown). Use for any question about the sales pipeline, deal health, active accounts, CRM activity, or marketing signups. This is the single source of truth for HubSpot data — call it once and reason over the result.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_hubspot",
+      description: "Search HubSpot for a specific contact, company, or deal by name, email, or domain. Use when the user names a specific person, organisation, or deal (e.g. 'do we have Acme in HubSpot?', 'find John Smith', 'what's the status of the Globex deal?'). Returns up to 25 matches per object type.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search term: name, email, domain, or deal name" },
+          objects: {
+            type: "array",
+            items: { type: "string", enum: ["contacts", "companies", "deals"] },
+            description: "Which HubSpot object types to search. Defaults to all three if omitted.",
+          },
+          limit: { type: "number", description: "Max results per object type (1-25, default 10)" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+];
+
+
+
 const XERO_TOOLS = [
   {
     type: "function",

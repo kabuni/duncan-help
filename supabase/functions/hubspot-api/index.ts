@@ -1087,12 +1087,11 @@ Deno.serve(async (req) => {
     }
 
     if (action === "search") {
-      const body = await req.clone().json().catch(() => ({}));
-      const query = String(body.query || "").trim();
-      const objects: string[] = Array.isArray(body.objects) && body.objects.length
-        ? body.objects.filter((o: any) => ["contacts", "companies", "deals"].includes(o))
+      const query = String(reqBody?.query || "").trim();
+      const objects: string[] = Array.isArray(reqBody?.objects) && reqBody.objects.length
+        ? reqBody.objects.filter((o: any) => ["contacts", "companies", "deals"].includes(o))
         : ["contacts", "companies", "deals"];
-      const limit = Math.min(Math.max(Number(body.limit) || 10, 1), 25);
+      const limit = Math.min(Math.max(Number(reqBody?.limit) || 10, 1), 25);
       if (!query) return json({ error: "query is required" }, 400);
 
       const resolved = await resolveTeamBriefingToken(HUBSPOT_API_KEY);

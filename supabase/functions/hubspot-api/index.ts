@@ -490,7 +490,7 @@ async function fetchHubspotForms(token: string, source: CredentialSource) {
 
   let formsPayload: any;
   try {
-    formsPayload = await hubspotApi("/marketing/v3/forms?limit=100&formTypes=hubspot,captured,flow,blog_comment", token, "summary", source);
+    formsPayload = await hubspotApi("/marketing/v3/forms?limit=100&formTypes=all", token, "summary", source);
   } catch (err) {
     const detail = err instanceof ProviderRequestError ? {
       status: err.status,

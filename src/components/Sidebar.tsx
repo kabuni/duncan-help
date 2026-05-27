@@ -347,30 +347,30 @@ const Sidebar = ({
       </nav>
 
       {/* User */}
-      <div className="border-t border-border px-4 py-4 space-y-2">
+      <div className="border-t border-border px-3 py-3 space-y-2">
         {user && (
-          <div className="flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-foreground truncate">{user.email}</p>
-            </div>
-            <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <p className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">{user.email}</p>
+            <div className="flex items-center gap-0.5 shrink-0">
+              <NotificationsBell />
               <ThemeToggle />
-              <button onClick={() => { signOut(); onMobileClose?.(); }} className="shrink-0 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors" title="Sign out">
+              <button
+                onClick={() => { signOut(); onMobileClose?.(); }}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+                title="Sign out"
+              >
                 <LogOut className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
         )}
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-all duration-150"
-          >
-            <Settings className="h-3.5 w-3.5" />
-            Settings
-          </button>
-          <NotificationsBell />
-        </div>
+        <button
+          onClick={() => setShowModal(true)}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+        >
+          <Settings className="h-3.5 w-3.5" />
+          Settings
+        </button>
       </div>
     </aside>
   );

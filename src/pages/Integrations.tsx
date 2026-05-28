@@ -263,6 +263,38 @@ const Integrations = () => {
   const [isAzureDevOpsConnected, setIsAzureDevOpsConnected] = useState<boolean | null>(null);
   const [isGoogleDriveConnected, setIsGoogleDriveConnected] = useState<boolean | null>(null);
   const [googleDriveStatus, setGoogleDriveStatus] = useState<GoogleDriveStatusDetail | null>(null);
+  const [duncanGmail, setDuncanGmail] = useState<{ connected: boolean; email?: string | null }>({ connected: false });
+  const [connectingDuncanGmail, setConnectingDuncanGmail] = useState(false);
+
+  const checkDuncanGmail = async () => {
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data } = await supabase
+        .from("duncan_gmail_tokens")
+        .select("google_account_email")
+        .limit(1)
+        .maybeSingle();
+      setDuncanGmail({ connected: !!data, email: data?.google_account_email ?? null });
+    } catch {
+      setDuncanGmail({ connected: false });
+    }
+  };
+
+  const connectDuncanGmail = async () => {
+    setConnectingDuncanGmail(true);
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data, error } = await supabase.functions.invoke("duncan-gmail-auth");
+      if (error) throw error;
+      const url = (data as any)?.url;
+      if (!url) throw new Error("No authorization URL returned");
+      window.location.href = url;
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to start Duncan Gmail connection");
+      setConnectingDuncanGmail(false);
+    }
+  };
+
   const checkAzureBlobConnection = async () => {
     try {
       const { supabase } = await import("@/integrations/supabase/client");
@@ -371,6 +403,13 @@ const Integrations = () => {
     } else if (searchParams.get("slack_error")) {
       toast.error("Slack connection failed");
       setSearchParams({});
+    } else if (searchParams.get("duncan_gmail") === "connected") {
+      toast.success("Duncan mailbox connected");
+      checkDuncanGmail();
+      setSearchParams({});
+    } else if (searchParams.get("duncan_gmail") === "error") {
+      toast.error(`Duncan mailbox connection failed: ${searchParams.get("reason") || "unknown"}`);
+      setSearchParams({});
     } else if (error) {
       const errorMessages: Record<string, string> = {
         missing_params: "OAuth flow was incomplete",
@@ -395,6 +434,7 @@ const Integrations = () => {
     checkGmailConnection();
     checkAzureDevOpsConnection();
     checkGoogleDriveConnection();
+    checkDuncanGmail();
   }, [checkCalendarConnection]);
 
   const isLoading = userLoading || companyLoading || slackConnection.isLoading;
@@ -438,6 +478,41 @@ const Integrations = () => {
               Connect your tools so Duncan can ingest, reason, and automate across your stack.
             </p>
           </motion.div>
+
+          {/* Duncan Mailbox — admin only */}
+          {isAdmin && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-5 rounded-xl border border-primary/20 bg-primary/5 p-4 flex items-center justify-between gap-4"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                  <Mail className="h-5 w-5 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Duncan Mailbox (duncan@kabuni.com)</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {duncanGmail.connected
+                      ? `Connected as ${duncanGmail.email || "duncan@kabuni.com"} — admins can read and send mail as Duncan.`
+                      : "Admin-only shared mailbox. Connect to let admins read and send mail as duncan@kabuni.com."}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className={`h-1.5 w-1.5 rounded-full ${duncanGmail.connected ? "bg-norman-success" : "bg-muted-foreground"}`} />
+                <button
+                  onClick={connectDuncanGmail}
+                  disabled={connectingDuncanGmail}
+                  className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition"
+                >
+                  {connectingDuncanGmail ? "Redirecting…" : duncanGmail.connected ? "Reconnect" : "Connect"}
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+
 
 
           {/* Filters */}

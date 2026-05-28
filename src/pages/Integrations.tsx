@@ -479,6 +479,41 @@ const Integrations = () => {
             </p>
           </motion.div>
 
+          {/* Duncan Mailbox — admin only */}
+          {isAdmin && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-5 rounded-xl border border-primary/20 bg-primary/5 p-4 flex items-center justify-between gap-4"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                  <Mail className="h-5 w-5 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Duncan Mailbox (duncan@kabuni.com)</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {duncanGmail.connected
+                      ? `Connected as ${duncanGmail.email || "duncan@kabuni.com"} — admins can read and send mail as Duncan.`
+                      : "Admin-only shared mailbox. Connect to let admins read and send mail as duncan@kabuni.com."}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className={`h-1.5 w-1.5 rounded-full ${duncanGmail.connected ? "bg-norman-success" : "bg-muted-foreground"}`} />
+                <button
+                  onClick={connectDuncanGmail}
+                  disabled={connectingDuncanGmail}
+                  className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition"
+                >
+                  {connectingDuncanGmail ? "Redirecting…" : duncanGmail.connected ? "Reconnect" : "Connect"}
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+
+
 
           {/* Filters */}
           <div className="flex items-center gap-2 mb-6 mt-4 overflow-x-auto scrollbar-thin -mx-1 px-1">

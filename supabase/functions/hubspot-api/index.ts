@@ -515,18 +515,33 @@ async function fetchHubspotForms(token: string, source: CredentialSource) {
       const formId = form?.id ?? form?.guid ?? null;
       if (!formId) return { form, submission_count: null, error: null };
       try {
-        const resp = await hubspotApi(
-          `/form-integrations/v1/submissions/forms/${formId}?limit=1`,
-          token,
-          "summary",
-          source,
-        );
-        const total = typeof resp?.total === "number"
-          ? resp.total
-          : typeof resp?.totalCount === "number"
-          ? resp.totalCount
-          : null;
-        return { form, submission_count: total, error: null };
+        // The v1 submissions endpoint does not reliably return a `total` field,
+        // so paginate and count results to get an accurate submission count.
+        let after: string | null = null;
+        let count = 0;
+        let totalFromApi: number | null = null;
+        let pages = 0;
+        const MAX_PAGES = 40; // safety cap (40 * 50 = 2000 submissions)
+        while (pages < MAX_PAGES) {
+          pages++;
+          const path = `/form-integrations/v1/submissions/forms/${formId}?limit=50${after ? `&after=${encodeURIComponent(after)}` : ""}`;
+          const resp: any = await hubspotApi(path, token, "summary", source);
+          if (totalFromApi === null) {
+            const t = typeof resp?.total === "number"
+              ? resp.total
+              : typeof resp?.totalCount === "number"
+              ? resp.totalCount
+              : null;
+            if (t !== null) totalFromApi = t;
+          }
+          const results: any[] = Array.isArray(resp?.results) ? resp.results : [];
+          count += results.length;
+          const next = resp?.paging?.next?.after ?? null;
+          if (!next) break;
+          after = next;
+        }
+        const submission_count = totalFromApi !== null ? totalFromApi : count;
+        return { form, submission_count, error: null };
       } catch (err) {
         return {
           form,

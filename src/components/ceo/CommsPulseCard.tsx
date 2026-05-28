@@ -440,7 +440,7 @@ function ExternalSignalColumn({
                             ) : isFound ? (
                               <div className="flex items-baseline gap-1.5">
                                 <span className="text-base font-semibold tabular-nums text-foreground">
-                                  {typeof list?.member_count === "number" ? list.member_count.toLocaleString() : "—"}
+                                  {typeof list?.member_count === "number" ? list.member_count.toLocaleString() : "0"}
                                 </span>
                                 <span className="text-[10px] text-muted-foreground">submissions</span>
                               </div>

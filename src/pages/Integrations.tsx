@@ -263,6 +263,38 @@ const Integrations = () => {
   const [isAzureDevOpsConnected, setIsAzureDevOpsConnected] = useState<boolean | null>(null);
   const [isGoogleDriveConnected, setIsGoogleDriveConnected] = useState<boolean | null>(null);
   const [googleDriveStatus, setGoogleDriveStatus] = useState<GoogleDriveStatusDetail | null>(null);
+  const [duncanGmail, setDuncanGmail] = useState<{ connected: boolean; email?: string | null }>({ connected: false });
+  const [connectingDuncanGmail, setConnectingDuncanGmail] = useState(false);
+
+  const checkDuncanGmail = async () => {
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data } = await supabase
+        .from("duncan_gmail_tokens")
+        .select("google_account_email")
+        .limit(1)
+        .maybeSingle();
+      setDuncanGmail({ connected: !!data, email: data?.google_account_email ?? null });
+    } catch {
+      setDuncanGmail({ connected: false });
+    }
+  };
+
+  const connectDuncanGmail = async () => {
+    setConnectingDuncanGmail(true);
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data, error } = await supabase.functions.invoke("duncan-gmail-auth");
+      if (error) throw error;
+      const url = (data as any)?.url;
+      if (!url) throw new Error("No authorization URL returned");
+      window.location.href = url;
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to start Duncan Gmail connection");
+      setConnectingDuncanGmail(false);
+    }
+  };
+
   const checkAzureBlobConnection = async () => {
     try {
       const { supabase } = await import("@/integrations/supabase/client");

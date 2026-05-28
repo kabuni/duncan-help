@@ -21,7 +21,7 @@ serve(async (req) => {
   const redirectBack = (status: string, reason?: string) => {
     const qs = new URLSearchParams({ duncan_gmail: status });
     if (reason) qs.set("reason", reason);
-    return Response.redirect(`${APP_URL}/settings?${qs.toString()}`, 302);
+    return Response.redirect(`${APP_URL}/integrations?${qs.toString()}`, 302);
   };
 
   if (errorParam) return redirectBack("error", errorParam);

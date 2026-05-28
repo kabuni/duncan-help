@@ -5276,17 +5276,24 @@ serve(async (req) => {
       slackResult,
       notionResult,
       formsResult,
+      duncanCalendarResult,
     ] = await Promise.all([
       getCalendarAccessToken(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] calendar:", e); return null; }),
       getSlackConnection(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] slack:", e); return null; }),
       getNotionToken(supabaseAdmin).catch((e) => { console.warn("[warmup] notion:", e); return null; }),
       supabaseAdmin.from("google_forms").select("id, name, description, fields"),
+      // Admins write calendar invites through the shared duncan@kabuni.com mailbox.
+      resolvedIdentity.is_admin
+        ? getDuncanCalendarContext(supabaseAdmin).catch((e) => { console.warn("[warmup] duncan-cal:", e); return null; })
+        : Promise.resolve(null),
     ]);
     calendarAccessToken = calendarTokenResult;
     slackConnection = slackResult;
     notionToken = notionResult;
     azureStorageAvailable = !!getAzureStorageConfig();
     const googleForms = formsResult?.data;
+    const duncanCalendar = duncanCalendarResult;
+
 
     // Adjust system prompt based on mode and integration availability
     // Phase 9.4 — inject canonical identity block (incl. local "now" in caller TZ).

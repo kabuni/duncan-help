@@ -6584,11 +6584,16 @@ Format as a natural, readable summary with clear sections. If a section has no d
           if (tc.function.name === "reschedule_event") {
             result = await withToolTimeout(tc.function.name, executeRescheduleTool(args, supabaseAdmin, userId || null));
           } else if (calendarToolNames.includes(tc.function.name)) {
-            if (!calendarAccessToken) {
+            const writeTools = new Set(["create_calendar_event", "update_calendar_event", "delete_calendar_event"]);
+            const isWrite = writeTools.has(tc.function.name);
+            // Admins can write via Duncan even without a personal calendar connection.
+            // Reads still require the user's personal token.
+            if (!calendarAccessToken && !(isWrite && duncanCalendar)) {
               result = { error: "Google Calendar is not connected. Please connect it via the Integrations page." };
             } else {
-              result = await withToolTimeout(tc.function.name, executeCalendarTool(tc.function.name, args, calendarAccessToken, resolvedIdentity));
+              result = await withToolTimeout(tc.function.name, executeCalendarTool(tc.function.name, args, calendarAccessToken || "", resolvedIdentity, duncanCalendar));
             }
+
           } else if (documentToolNames.includes(tc.function.name)) {
             if (!azureStorageAvailable) {
               result = { error: "Document storage is not configured. Please contact an admin." };

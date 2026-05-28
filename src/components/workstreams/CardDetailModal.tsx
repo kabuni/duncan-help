@@ -463,7 +463,7 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                       </Select>
                     )}
                   </MetaField>
-                </div>
+                  )}
 
                 {/* Description */}
                 <div className="mb-6">

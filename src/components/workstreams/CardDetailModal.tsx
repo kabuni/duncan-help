@@ -380,7 +380,17 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                     />
                   </MetaField>
 
-                  <MetaField alwaysEdit={isAdmin} icon={<Tag className="h-3.5 w-3.5" />} label="Project" value={card.project_tag || "None"}>
+                  {!isAdmin ? (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-medium">
+                        <Tag className="h-3.5 w-3.5" /> Project
+                      </div>
+                      <div className="text-xs text-foreground truncate" title="Admins can change the project">
+                        {card.project_tag || "None"}
+                      </div>
+                    </div>
+                  ) : (
+                  <MetaField alwaysEdit icon={<Tag className="h-3.5 w-3.5" />} label="Project" value={card.project_tag || "None"}>
                     {!isAdmin ? null : addingTag ? (
                       <div className="flex items-center gap-1">
                         <Input

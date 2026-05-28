@@ -403,6 +403,13 @@ const Integrations = () => {
     } else if (searchParams.get("slack_error")) {
       toast.error("Slack connection failed");
       setSearchParams({});
+    } else if (searchParams.get("duncan_gmail") === "connected") {
+      toast.success("Duncan mailbox connected");
+      checkDuncanGmail();
+      setSearchParams({});
+    } else if (searchParams.get("duncan_gmail") === "error") {
+      toast.error(`Duncan mailbox connection failed: ${searchParams.get("reason") || "unknown"}`);
+      setSearchParams({});
     } else if (error) {
       const errorMessages: Record<string, string> = {
         missing_params: "OAuth flow was incomplete",

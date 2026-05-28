@@ -4935,11 +4935,20 @@ async function executeCalendarTool(
   args: any,
   accessToken: string,
   identity?: ResolvedIdentity,
+  duncan?: { accessToken: string; calendarId: string } | null,
 ): Promise<any> {
   const headers = {
     Authorization: `Bearer ${accessToken}`,
     "Content-Type": "application/json",
   };
+
+  // For admins with Duncan calendar connected, route WRITE operations through
+  // the shared duncan@kabuni.com mailbox so invites are organised by Duncan and
+  // existing Duncan-organised events can be edited.
+  const writeHeaders = duncan
+    ? { Authorization: `Bearer ${duncan.accessToken}`, "Content-Type": "application/json" }
+    : headers;
+  const writeCalendarId = duncan ? encodeURIComponent(duncan.calendarId) : "primary";
 
   switch (toolName) {
     case "list_calendar_events": {
@@ -4973,8 +4982,6 @@ async function executeCalendarTool(
 
       const response = await fetch(url.toString(), { headers });
       if (!response.ok) {
-        // Phase 9: tag upstream failure as a typed empty rather than throwing
-        // so the model can hedge instead of fabricating events.
         return createReadResult({
           data: [],
           source: "google_calendar",
@@ -5011,9 +5018,10 @@ async function executeCalendarTool(
         attendees: args.attendees?.map((email: string) => ({ email })),
       };
 
-      const response = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events`, {
+      const url = `${GOOGLE_CALENDAR_API}/calendars/${writeCalendarId}/events?sendUpdates=all`;
+      const response = await fetch(url, {
         method: "POST",
-        headers,
+        headers: writeHeaders,
         body: JSON.stringify(event),
       });
 
@@ -5021,7 +5029,8 @@ async function executeCalendarTool(
         const error = await response.text();
         throw new Error(`Failed to create event: ${error}`);
       }
-      return await response.json();
+      const created = await response.json();
+      return { ...created, _organised_by: duncan ? "duncan@kabuni.com" : "personal" };
     }
 
     case "update_calendar_event": {
@@ -5033,14 +5042,22 @@ async function executeCalendarTool(
       if (updates.endDateTime) event.end = { dateTime: updates.endDateTime, timeZone: "UTC" };
       if (updates.location) event.location = updates.location;
 
-      const response = await fetch(
-        `${GOOGLE_CALENDAR_API}/calendars/primary/events/${eventId}`,
-        {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify(event),
-        }
+      // Try Duncan calendar first when available (most invites are Duncan-organised),
+      // fall back to personal calendar if not found there.
+      const tryPatch = async (token: string, calId: string) => fetch(
+        `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
+        { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(event) },
       );
+
+      let response: Response;
+      if (duncan) {
+        response = await tryPatch(duncan.accessToken, duncan.calendarId);
+        if (response.status === 404 || response.status === 403) {
+          response = await tryPatch(accessToken, "primary");
+        }
+      } else {
+        response = await tryPatch(accessToken, "primary");
+      }
 
       if (!response.ok) {
         const error = await response.text();
@@ -5050,12 +5067,22 @@ async function executeCalendarTool(
     }
 
     case "delete_calendar_event": {
-      const response = await fetch(
-        `${GOOGLE_CALENDAR_API}/calendars/primary/events/${args.eventId}`,
-        { method: "DELETE", headers }
+      const tryDelete = async (token: string, calId: string) => fetch(
+        `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(args.eventId)}?sendUpdates=all`,
+        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
       );
 
-      if (!response.ok) {
+      let response: Response;
+      if (duncan) {
+        response = await tryDelete(duncan.accessToken, duncan.calendarId);
+        if (response.status === 404 || response.status === 403) {
+          response = await tryDelete(accessToken, "primary");
+        }
+      } else {
+        response = await tryDelete(accessToken, "primary");
+      }
+
+      if (!response.ok && response.status !== 410) {
         const error = await response.text();
         throw new Error(`Failed to delete event: ${error}`);
       }
@@ -5249,17 +5276,24 @@ serve(async (req) => {
       slackResult,
       notionResult,
       formsResult,
+      duncanCalendarResult,
     ] = await Promise.all([
       getCalendarAccessToken(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] calendar:", e); return null; }),
       getSlackConnection(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] slack:", e); return null; }),
       getNotionToken(supabaseAdmin).catch((e) => { console.warn("[warmup] notion:", e); return null; }),
       supabaseAdmin.from("google_forms").select("id, name, description, fields"),
+      // Admins write calendar invites through the shared duncan@kabuni.com mailbox.
+      resolvedIdentity.is_admin
+        ? getDuncanCalendarContext(supabaseAdmin).catch((e) => { console.warn("[warmup] duncan-cal:", e); return null; })
+        : Promise.resolve(null),
     ]);
     calendarAccessToken = calendarTokenResult;
     slackConnection = slackResult;
     notionToken = notionResult;
     azureStorageAvailable = !!getAzureStorageConfig();
     const googleForms = formsResult?.data;
+    const duncanCalendar = duncanCalendarResult;
+
 
     // Adjust system prompt based on mode and integration availability
     // Phase 9.4 — inject canonical identity block (incl. local "now" in caller TZ).
@@ -6550,11 +6584,16 @@ Format as a natural, readable summary with clear sections. If a section has no d
           if (tc.function.name === "reschedule_event") {
             result = await withToolTimeout(tc.function.name, executeRescheduleTool(args, supabaseAdmin, userId || null));
           } else if (calendarToolNames.includes(tc.function.name)) {
-            if (!calendarAccessToken) {
+            const writeTools = new Set(["create_calendar_event", "update_calendar_event", "delete_calendar_event"]);
+            const isWrite = writeTools.has(tc.function.name);
+            // Admins can write via Duncan even without a personal calendar connection.
+            // Reads still require the user's personal token.
+            if (!calendarAccessToken && !(isWrite && duncanCalendar)) {
               result = { error: "Google Calendar is not connected. Please connect it via the Integrations page." };
             } else {
-              result = await withToolTimeout(tc.function.name, executeCalendarTool(tc.function.name, args, calendarAccessToken, resolvedIdentity));
+              result = await withToolTimeout(tc.function.name, executeCalendarTool(tc.function.name, args, calendarAccessToken || "", resolvedIdentity, duncanCalendar));
             }
+
           } else if (documentToolNames.includes(tc.function.name)) {
             if (!azureStorageAvailable) {
               result = { error: "Document storage is not configured. Please contact an admin." };

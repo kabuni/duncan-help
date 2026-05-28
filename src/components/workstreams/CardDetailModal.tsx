@@ -464,6 +464,7 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                     )}
                   </MetaField>
                   )}
+                </div>
 
                 {/* Description */}
                 <div className="mb-6">

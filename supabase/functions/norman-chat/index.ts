@@ -4935,11 +4935,20 @@ async function executeCalendarTool(
   args: any,
   accessToken: string,
   identity?: ResolvedIdentity,
+  duncan?: { accessToken: string; calendarId: string } | null,
 ): Promise<any> {
   const headers = {
     Authorization: `Bearer ${accessToken}`,
     "Content-Type": "application/json",
   };
+
+  // For admins with Duncan calendar connected, route WRITE operations through
+  // the shared duncan@kabuni.com mailbox so invites are organised by Duncan and
+  // existing Duncan-organised events can be edited.
+  const writeHeaders = duncan
+    ? { Authorization: `Bearer ${duncan.accessToken}`, "Content-Type": "application/json" }
+    : headers;
+  const writeCalendarId = duncan ? encodeURIComponent(duncan.calendarId) : "primary";
 
   switch (toolName) {
     case "list_calendar_events": {
@@ -4973,8 +4982,6 @@ async function executeCalendarTool(
 
       const response = await fetch(url.toString(), { headers });
       if (!response.ok) {
-        // Phase 9: tag upstream failure as a typed empty rather than throwing
-        // so the model can hedge instead of fabricating events.
         return createReadResult({
           data: [],
           source: "google_calendar",
@@ -5011,9 +5018,10 @@ async function executeCalendarTool(
         attendees: args.attendees?.map((email: string) => ({ email })),
       };
 
-      const response = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events`, {
+      const url = `${GOOGLE_CALENDAR_API}/calendars/${writeCalendarId}/events?sendUpdates=all`;
+      const response = await fetch(url, {
         method: "POST",
-        headers,
+        headers: writeHeaders,
         body: JSON.stringify(event),
       });
 
@@ -5021,7 +5029,8 @@ async function executeCalendarTool(
         const error = await response.text();
         throw new Error(`Failed to create event: ${error}`);
       }
-      return await response.json();
+      const created = await response.json();
+      return { ...created, _organised_by: duncan ? "duncan@kabuni.com" : "personal" };
     }
 
     case "update_calendar_event": {
@@ -5033,14 +5042,22 @@ async function executeCalendarTool(
       if (updates.endDateTime) event.end = { dateTime: updates.endDateTime, timeZone: "UTC" };
       if (updates.location) event.location = updates.location;
 
-      const response = await fetch(
-        `${GOOGLE_CALENDAR_API}/calendars/primary/events/${eventId}`,
-        {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify(event),
-        }
+      // Try Duncan calendar first when available (most invites are Duncan-organised),
+      // fall back to personal calendar if not found there.
+      const tryPatch = async (token: string, calId: string) => fetch(
+        `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
+        { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(event) },
       );
+
+      let response: Response;
+      if (duncan) {
+        response = await tryPatch(duncan.accessToken, duncan.calendarId);
+        if (response.status === 404 || response.status === 403) {
+          response = await tryPatch(accessToken, "primary");
+        }
+      } else {
+        response = await tryPatch(accessToken, "primary");
+      }
 
       if (!response.ok) {
         const error = await response.text();
@@ -5050,12 +5067,22 @@ async function executeCalendarTool(
     }
 
     case "delete_calendar_event": {
-      const response = await fetch(
-        `${GOOGLE_CALENDAR_API}/calendars/primary/events/${args.eventId}`,
-        { method: "DELETE", headers }
+      const tryDelete = async (token: string, calId: string) => fetch(
+        `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(args.eventId)}?sendUpdates=all`,
+        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
       );
 
-      if (!response.ok) {
+      let response: Response;
+      if (duncan) {
+        response = await tryDelete(duncan.accessToken, duncan.calendarId);
+        if (response.status === 404 || response.status === 403) {
+          response = await tryDelete(accessToken, "primary");
+        }
+      } else {
+        response = await tryDelete(accessToken, "primary");
+      }
+
+      if (!response.ok && response.status !== 410) {
         const error = await response.text();
         throw new Error(`Failed to delete event: ${error}`);
       }

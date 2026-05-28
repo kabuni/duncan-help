@@ -434,6 +434,7 @@ const Integrations = () => {
     checkGmailConnection();
     checkAzureDevOpsConnection();
     checkGoogleDriveConnection();
+    checkDuncanGmail();
   }, [checkCalendarConnection]);
 
   const isLoading = userLoading || companyLoading || slackConnection.isLoading;

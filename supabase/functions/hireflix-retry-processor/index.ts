@@ -27,11 +27,35 @@ const NON_RETRYABLE_GRAPHQL_PATTERNS = [
   /interviewalreadyexistsinpositionerror/i,
   /interviewexternalidalreadyexistsinpositionerror/i,
   /exceededinvitesthisperioderror/i,
+  // Hireflix's opaque 500 — retries with the same payload will just keep failing.
+  // Treat as non-retryable so the queue stops looping; the job can be retried manually.
+  /^unexpected error\.?$/i,
 ];
 
 function isNonRetryableGraphQLError(message: string) {
   return NON_RETRYABLE_GRAPHQL_PATTERNS.some((pattern) => pattern.test(message || ""));
 }
+
+/** Look up an existing Hireflix position by exact name. Returns null if none. */
+async function findHireflixPositionByName(apiKey: string, name: string): Promise<{ id: string; name: string } | null> {
+  try {
+    const query = `query { me { positions { id name } } }`;
+    const res = await fetch("https://api.hireflix.com/me", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-KEY": apiKey },
+      body: JSON.stringify({ query }),
+    });
+    const data = await res.json();
+    const positions: Array<{ id: string; name: string }> = data?.data?.me?.positions || [];
+    const target = name.trim().toLowerCase();
+    const match = positions.find((p) => (p.name || "").trim().toLowerCase() === target);
+    return match || null;
+  } catch (err) {
+    console.error("findHireflixPositionByName failed:", err);
+    return null;
+  }
+}
+
 
 function splitCandidateName(fullName: string) {
   const cleaned = (fullName || "").trim().replace(/\s+/g, " ");
@@ -154,7 +178,34 @@ serve(async (req) => {
         if (retry.operation === "create_position") {
           const { job_role_id, title, competencies } = retry.payload as any;
 
-          const position = await createHireflixPosition(HIREFLIX_API_KEY, title, competencies || []);
+          // Idempotency check 1: job_role already linked to a Hireflix position
+          const { data: existingRole } = await supabaseAdmin
+            .from("job_roles")
+            .select("hireflix_position_id")
+            .eq("id", job_role_id)
+            .maybeSingle();
+
+          if (existingRole?.hireflix_position_id) {
+            await supabaseAdmin
+              .from("hireflix_retry_queue")
+              .update({ status: "completed", completed_at: new Date().toISOString() })
+              .eq("id", retry.id);
+            console.log(`Retry skipped (role ${job_role_id} already linked to Hireflix position ${existingRole.hireflix_position_id})`);
+            succeeded++;
+            processed++;
+            continue;
+          }
+
+          // Idempotency check 2: a position with this exact name already exists on Hireflix
+          // (the earlier create call likely succeeded server-side even though Hireflix returned 500)
+          const existingPosition = await findHireflixPositionByName(HIREFLIX_API_KEY, title);
+          let position: { id: string; name: string };
+          if (existingPosition) {
+            console.log(`Reusing existing Hireflix position '${title}' → ${existingPosition.id}`);
+            position = existingPosition;
+          } else {
+            position = await createHireflixPosition(HIREFLIX_API_KEY, title, competencies || []);
+          }
 
           await supabaseAdmin
             .from("job_roles")
@@ -166,8 +217,10 @@ serve(async (req) => {
             .update({ status: "completed", completed_at: new Date().toISOString() })
             .eq("id", retry.id);
 
-          console.log(`Retry succeeded: created position for role ${job_role_id}`);
+          console.log(`Retry succeeded: position ${position.id} for role ${job_role_id}`);
           succeeded++;
+
+
 
         } else if (retry.operation === "delete_position") {
           const { hireflix_position_id } = retry.payload as any;

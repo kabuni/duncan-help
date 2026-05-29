@@ -27,11 +27,35 @@ const NON_RETRYABLE_GRAPHQL_PATTERNS = [
   /interviewalreadyexistsinpositionerror/i,
   /interviewexternalidalreadyexistsinpositionerror/i,
   /exceededinvitesthisperioderror/i,
+  // Hireflix's opaque 500 — retries with the same payload will just keep failing.
+  // Treat as non-retryable so the queue stops looping; the job can be retried manually.
+  /^unexpected error\.?$/i,
 ];
 
 function isNonRetryableGraphQLError(message: string) {
   return NON_RETRYABLE_GRAPHQL_PATTERNS.some((pattern) => pattern.test(message || ""));
 }
+
+/** Look up an existing Hireflix position by exact name. Returns null if none. */
+async function findHireflixPositionByName(apiKey: string, name: string): Promise<{ id: string; name: string } | null> {
+  try {
+    const query = `query { me { positions { id name } } }`;
+    const res = await fetch("https://api.hireflix.com/me", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-KEY": apiKey },
+      body: JSON.stringify({ query }),
+    });
+    const data = await res.json();
+    const positions: Array<{ id: string; name: string }> = data?.data?.me?.positions || [];
+    const target = name.trim().toLowerCase();
+    const match = positions.find((p) => (p.name || "").trim().toLowerCase() === target);
+    return match || null;
+  } catch (err) {
+    console.error("findHireflixPositionByName failed:", err);
+    return null;
+  }
+}
+
 
 function splitCandidateName(fullName: string) {
   const cleaned = (fullName || "").trim().replace(/\s+/g, " ");

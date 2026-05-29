@@ -440,13 +440,14 @@ function ExternalSignalColumn({
                             ) : isFound ? (
                               <div className="flex items-baseline gap-1.5">
                                 <span className="text-base font-semibold tabular-nums text-foreground">
-                                  {typeof list?.member_count === "number" ? list.member_count.toLocaleString() : "0"}
+                                  {(typeof list?.member_count === "number" ? list.member_count : 0).toLocaleString()}
                                 </span>
                                 <span className="text-[10px] text-muted-foreground">submissions</span>
                               </div>
                             ) : (
                               <div className="text-[10px] text-muted-foreground">Not found in connected portal</div>
                             )}
+
                           </div>
                         );
                       })}

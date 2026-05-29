@@ -1,31 +1,43 @@
-## Goal
+## Problem
 
-The HubSpot Social Feed tile shows platform as "Other" for all 3 connected channels (Kabuni, kabuniplay, Kabuni). The current mapping assumes a numeric `channelType`/`type` field, but HubSpot is clearly returning something else. We need to (1) log what HubSpot actually returns, then (2) update the mapping to use the real field/values.
+On `/team-briefing`, the HubSpot card's "Marketing forms" section renders each form's name (e.g. `#scout-signup .scout-modal_form-wrap`) but the submission count slot stays empty (no number, no "submissions" label).
 
-## Step 1 — Log raw channel payload
+Inspecting the latest snapshot in `ceo_briefings.payload.hubspot_signal.lists` confirms it: every entry has `member_count: null` and no `error` field. The frontend (`CommsPulseCard.tsx` ~L440) only renders the count block when `typeof list.member_count === "number"`, so a `null` collapses the row to just the form name — matching what the user sees.
 
-In `supabase/functions/hubspot-api/index.ts`, inside the `social_feed` action (around line 1166), add a `logHubspot("social channels raw", ...)` call that dumps the entire `channelsRaw` array (full object per channel, not just type) so we can see every available field HubSpot returns — `channelKey`, `channelType`, `accountType`, `type`, `name`, etc. Also log one sample broadcast object for the same reason.
+The count is produced by `fetchHubspotForms` in `supabase/functions/hubspot-api/index.ts` (L480–569), which calls `/form-integrations/v1/submissions/forms/{formId}` and paginates `paging.next.after`. Today's payload shows the call effectively returned no `total` and no `results` (count stayed 0, but ended up stored as `null` — meaning the count path is either silently bailing or being clobbered downstream in `ceo-briefing` normalization).
 
-Deploy the function, call `social_feed` via curl (preview user session), then read edge function logs to capture the real shape.
+## Plan
 
-## Step 2 — Update platform mapping based on real values
+### 1. Instrument and reproduce
+- Add focused logs inside `fetchHubspotForms`: for each form log `{ formId, name, pages, totalFromApi, count, status, sampleKeys }` and log the raw first-page response keys when `totalFromApi` is null and `results` is empty. Also log the final `submission_count` per form before push.
+- Deploy `hubspot-api` and trigger a fresh fetch (via `ceo-briefing` re-run or by curling the `hubspot-api` action used by Team Briefing).
+- Read the logs to confirm which case we are in:
+  a. HubSpot returns 401/403 (scope) — caught path, `error` should be present (so normalization is stripping it).
+  b. HubSpot returns `{ results: [], paging: null }` — count stays 0; then somewhere `0` is being turned into `null`.
+  c. Endpoint path/version is wrong for this portal.
 
-Based on what the logs show, replace the numeric `PLATFORM` map with a resolver that handles the actual field. Likely candidates HubSpot uses on this endpoint:
+### 2. Fix the count source
+Based on what the logs show, apply one of:
 
-- `channelKey` string like `"FACEBOOK"`, `"INSTAGRAM_BUSINESS"`, `"LINKEDIN_COMPANY"`, `"LINKEDIN_USER"`, `"TWITTER"`
-- or `accountType` / `type` string
+- **If the v1 endpoint is unauthorized for this portal/token** (most likely cause given silent null): switch to the supported endpoint
+  `/marketing/v3/forms/{formId}/submissions?limit=50` and paginate via `paging.next.after`. Keep the v1 path as a fallback for older portals.
+- **If the response is empty but valid**: store `0` (not `null`) so the UI shows `0 submissions` instead of hiding the row, and surface that explicitly.
+- **If we got an error**: ensure the `error` field propagates all the way through `ceo-briefing`'s `lists` passthrough (currently at `supabase/functions/ceo-briefing/index.ts` ~L3781) so the UI's amber "Lookup failed" branch renders instead of a blank count.
 
-Implementation: build a string-based resolver that normalizes the value (uppercase, substring match) and maps to `"Instagram" | "LinkedIn" | "Facebook" | "Twitter"`. Keep the numeric fallback for safety. Apply the same resolver to both channels and posts.
+### 3. Frontend safety net
+In `CommsPulseCard.tsx` (~L440), render `member_count ?? 0` with the "submissions" label whenever the form was matched and there is no error, so a future null never silently hides the metric again. Keep the existing error branch for the failure case.
 
-## Step 3 — Verify
-
-- Re-call `social_feed`; confirm `channels[].platform` is correct for Kabuni / kabuniplay / Kabuni.
-- Confirm the tile in the dashboard now shows the correct platform names.
-
-## Out of scope
-
-No UI changes — frontend already renders whatever `platform` string the API returns. No new metrics.
+### 4. Verify
+- Re-trigger a briefing snapshot, query `ceo_briefings.payload->'hubspot_signal'->'lists'` and confirm each form has a numeric `member_count` (or a populated `error`).
+- Reload `/team-briefing` and confirm every Marketing form row shows `<count> submissions`.
 
 ## Files touched
 
-- `supabase/functions/hubspot-api/index.ts` (logging + mapping fix only)
+- `supabase/functions/hubspot-api/index.ts` — logging + submission-count endpoint fix, ensure `0` vs `null` semantics
+- `supabase/functions/ceo-briefing/index.ts` — only if `lists` passthrough is dropping the `error`/`member_count` fields
+- `src/components/ceo/CommsPulseCard.tsx` — render `member_count ?? 0` for matched forms without errors
+
+## Out of scope
+
+- The newsletter/scout `form_metrics` tiles at the top of the HubSpot block (those already display totals).
+- Any change to which forms are fetched or how they are filtered.

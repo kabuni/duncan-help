@@ -513,19 +513,40 @@ async function fetchHubspotForms(token: string, source: CredentialSource) {
     const batch = forms.slice(i, i + concurrency);
     const settled = await Promise.all(batch.map(async (form) => {
       const formId = form?.id ?? form?.guid ?? null;
-      if (!formId) return { form, submission_count: null, error: null };
+      if (!formId) {
+        logHubspot("form_count_skip_no_id", { name: form?.name ?? null });
+        return { form, submission_count: null, error: "missing form id" };
+      }
       try {
-        // The v1 submissions endpoint does not reliably return a `total` field,
-        // so paginate and count results to get an accurate submission count.
+        // Try v3 submissions endpoint first (more reliable; honors current scopes)
+        // Falls back to legacy v1 endpoint on 404/410.
         let after: string | null = null;
         let count = 0;
         let totalFromApi: number | null = null;
         let pages = 0;
+        let usedFallback = false;
         const MAX_PAGES = 40; // safety cap (40 * 50 = 2000 submissions)
+        let firstPageKeys: string[] = [];
         while (pages < MAX_PAGES) {
           pages++;
-          const path = `/form-integrations/v1/submissions/forms/${formId}?limit=50${after ? `&after=${encodeURIComponent(after)}` : ""}`;
-          const resp: any = await hubspotApi(path, token, "summary", source);
+          // Prefer v3 endpoint; if it 404s on first page, switch to v1.
+          const v3Path = `/marketing/v3/forms/${formId}/submissions?limit=50${after ? `&after=${encodeURIComponent(after)}` : ""}`;
+          const v1Path = `/form-integrations/v1/submissions/forms/${formId}?limit=50${after ? `&after=${encodeURIComponent(after)}` : ""}`;
+          const path = usedFallback ? v1Path : v3Path;
+          let resp: any;
+          try {
+            resp = await hubspotApi(path, token, "summary", source);
+          } catch (innerErr) {
+            const status = innerErr instanceof ProviderRequestError ? innerErr.status : 0;
+            if (!usedFallback && pages === 1 && (status === 404 || status === 410 || status === 400)) {
+              usedFallback = true;
+              pages = 0;
+              after = null;
+              continue;
+            }
+            throw innerErr;
+          }
+          if (pages === 1) firstPageKeys = resp && typeof resp === "object" ? Object.keys(resp) : [];
           if (totalFromApi === null) {
             const t = typeof resp?.total === "number"
               ? resp.total
@@ -541,17 +562,39 @@ async function fetchHubspotForms(token: string, source: CredentialSource) {
           after = next;
         }
         const submission_count = totalFromApi !== null ? totalFromApi : count;
+        logHubspot("form_count_ok", {
+          formId,
+          name: form?.name ?? null,
+          pages,
+          totalFromApi,
+          count,
+          submission_count,
+          endpoint: usedFallback ? "v1" : "v3",
+          firstPageKeys,
+        });
         return { form, submission_count, error: null };
       } catch (err) {
+        const status = err instanceof ProviderRequestError ? err.status : null;
+        const body = err instanceof ProviderRequestError
+          ? (typeof err.body === "string" ? err.body.slice(0, 500) : JSON.stringify(err.body ?? {}).slice(0, 500))
+          : null;
+        logHubspot("form_count_failed", {
+          formId,
+          name: form?.name ?? null,
+          status,
+          body,
+          message: err instanceof Error ? err.message : String(err),
+        });
         return {
           form,
           submission_count: null,
-          error: err instanceof Error ? err.message : String(err),
+          error: status ? `HTTP ${status}: ${err instanceof Error ? err.message : String(err)}` : (err instanceof Error ? err.message : String(err)),
         };
       }
     }));
     withCounts.push(...settled);
   }
+
 
   for (const { form, submission_count, error } of withCounts) {
     const name = form?.name ?? "Unnamed form";

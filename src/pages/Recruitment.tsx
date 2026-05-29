@@ -289,10 +289,20 @@ const Recruitment = () => {
   const scoreValues = async () => {
     setScoring(true);
     try {
-      const res = await supabase.functions.invoke("score-cv-values");
+      const res = await supabase.functions.invoke("score-cv-values", {
+        body: selectedRoleId ? { role_id: selectedRoleId } : {},
+      });
       if (res.error) throw res.error;
-      const data = res.data as { scored: number; failed?: number };
-      toast.success(`Scored ${data.scored} candidate(s) on values.${data.failed ? ` ${data.failed} failed.` : ""}`);
+      const data = (res.data ?? {}) as { scored?: number; failed?: number; queued?: number; message?: string };
+      if (typeof data.queued === "number") {
+        toast.success(`Started scoring ${data.queued} candidate(s) on values. Results will appear shortly.`);
+        // Poll for updates while background job runs
+        setTimeout(() => refetchCandidates(), 8000);
+        setTimeout(() => refetchCandidates(), 20000);
+        setTimeout(() => refetchCandidates(), 40000);
+      } else {
+        toast.success(`Scored ${data.scored ?? 0} candidate(s) on values.${data.failed ? ` ${data.failed} failed.` : ""}`);
+      }
       refetchCandidates();
     } catch (err: any) {
       toast.error("Failed to score candidates: " + err.message);
@@ -300,6 +310,7 @@ const Recruitment = () => {
       setScoring(false);
     }
   };
+
 
   const scoreCompetencies = async () => {
     if (!selectedRoleId) {

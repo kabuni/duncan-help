@@ -446,6 +446,8 @@ async function getAccessToken(supabaseAdmin: any): Promise<{ token: string; emai
   const { data: tokenData, error } = await supabaseAdmin
     .from("gmail_tokens")
     .select("*")
+    .eq("email_address", "duncan@kabuni.com")
+    .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 

@@ -7,7 +7,7 @@ import type { useGeneralChats } from "@/hooks/useGeneralChats";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
 import SettingsPanel from "@/components/SettingsPanel";
 import ThemeToggle from "@/components/ThemeToggle";
-import { NavLink as RouterNavLink, useNavigate } from "react-router-dom";
+import { NavLink as RouterNavLink, useNavigate, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";

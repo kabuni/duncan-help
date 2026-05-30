@@ -313,7 +313,7 @@ export default function ChatInput({ onSubmit, isLoading, extractionProgress, pla
             onKeyDown={handleKeyDown}
             disabled={isLoading}
             rows={1}
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none disabled:opacity-50 resize-none overflow-y-auto"
+            className="min-h-8 flex-1 bg-transparent py-1 text-sm leading-6 text-foreground placeholder:text-muted-foreground/50 focus:outline-none disabled:opacity-50 resize-none overflow-y-auto"
             style={{ maxHeight: 160 }}
           />
 

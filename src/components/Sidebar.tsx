@@ -147,9 +147,9 @@ const Sidebar = ({
               onMobileClose?.();
             }}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold tracking-wide transition-all",
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
               isChatRoute
-                ? "bg-primary text-primary-foreground shadow-sm glow-primary-sm"
+                ? "bg-primary/10 text-primary glow-primary-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
             )}
           >
@@ -162,9 +162,9 @@ const Sidebar = ({
               onMobileClose?.();
             }}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold tracking-wide transition-all",
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
               isProjectsRoute
-                ? "bg-primary text-primary-foreground shadow-sm glow-primary-sm"
+                ? "bg-primary/10 text-primary glow-primary-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
             )}
           >

@@ -146,7 +146,12 @@ const Sidebar = ({
               navigate("/", { state: { newChat: true } });
               onMobileClose?.();
             }}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary glow-primary-sm transition-colors"
+            className={cn(
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              isChatRoute
+                ? "bg-primary/10 text-primary glow-primary-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+            )}
           >
             <MessageSquare className="h-3.5 w-3.5" />
             Chat
@@ -156,7 +161,12 @@ const Sidebar = ({
               navigate("/projects");
               onMobileClose?.();
             }}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+            className={cn(
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              isProjectsRoute
+                ? "bg-primary/10 text-primary glow-primary-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+            )}
           >
             <Layers className="h-3.5 w-3.5" />
             Projects

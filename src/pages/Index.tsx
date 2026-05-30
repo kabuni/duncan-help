@@ -79,44 +79,44 @@ const MessageBubble = forwardRef<HTMLDivElement, {
   const senderLabel = isUser ? userName : "Duncan";
 
   return (
-    <motion.div ref={ref} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className={`group flex gap-2 sm:gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
+    <motion.div ref={ref} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className={`flex gap-2 sm:gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
         <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg overflow-hidden border border-primary/20">
           <img src={duncanAvatar} alt="Duncan" className="h-full w-full object-cover object-[50%_30%] scale-150" />
         </div>
       )}
-      <div className={`flex flex-col min-w-0 ${isUser ? "items-end max-w-[85%] sm:max-w-[80%]" : "items-start flex-1 max-w-[calc(100%-3rem)]"}`}>
+      <div className={`flex flex-col min-w-0 max-w-[85%] sm:max-w-[80%] ${isUser ? "items-end" : "items-start"}`}>
         <p className={`mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground ${isUser ? "text-right" : "text-left"}`}>
           {senderLabel}
         </p>
-        {!isUser ? (
-          <div className="w-full text-sm">
-            <div ref={contentRef} className="max-w-none leading-7 text-[13px] sm:text-[14px] overflow-x-auto break-words [&_h1]:text-base [&_h1]:sm:text-lg [&_h1]:font-bold [&_h1]:mt-5 [&_h1]:sm:mt-8 [&_h1]:mb-3 [&_h1]:sm:mb-4 [&_h1]:pb-2 [&_h1]:border-b [&_h1]:border-border/60 [&_h1]:text-foreground [&_h2]:text-sm [&_h2]:sm:text-base [&_h2]:font-bold [&_h2]:mt-5 [&_h2]:sm:mt-8 [&_h2]:mb-3 [&_h2]:sm:mb-4 [&_h2]:pb-2 [&_h2]:border-b [&_h2]:border-border/60 [&_h2]:text-foreground [&_h3]:text-[13px] [&_h3]:sm:text-sm [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:sm:mt-6 [&_h3]:mb-2 [&_h3]:sm:mb-3 [&_h3]:text-foreground [&_p]:text-foreground/90 [&_p]:mb-3 [&_p]:sm:mb-4 [&_p]:leading-7 [&_strong]:text-foreground [&_strong]:font-semibold [&_code]:text-primary [&_code]:bg-secondary [&_code]:px-1 [&_code]:sm:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md [&_code]:text-xs [&_pre]:bg-secondary [&_pre]:border [&_pre]:border-border [&_pre]:rounded-lg [&_pre]:my-3 [&_pre]:sm:my-5 [&_pre]:p-3 [&_pre]:sm:p-4 [&_pre]:overflow-x-auto [&_li]:text-foreground/90 [&_li]:mb-1.5 [&_li]:sm:mb-2 [&_li]:leading-7 [&_ul]:my-3 [&_ul]:sm:my-4 [&_ul]:pl-4 [&_ul]:sm:pl-5 [&_ul]:list-disc [&_ol]:my-3 [&_ol]:sm:my-4 [&_ol]:pl-4 [&_ol]:sm:pl-5 [&_ol]:list-decimal [&_hr]:my-5 [&_hr]:sm:my-8 [&_hr]:border-border/60 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:sm:pl-4 [&_blockquote]:my-3 [&_blockquote]:sm:my-5 [&_blockquote]:bg-primary/5 [&_blockquote]:py-2 [&_blockquote]:pr-3 [&_blockquote]:sm:pr-4 [&_blockquote]:rounded-r-lg [&_table]:my-3 [&_table]:sm:my-5 [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-border [&_table]:rounded-lg [&_table]:overflow-hidden [&_table]:text-xs [&_table]:block [&_table]:sm:table [&_table]:overflow-x-auto [&_thead]:bg-secondary/60 [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:sm:px-3 [&_th]:py-1.5 [&_th]:sm:py-2 [&_th]:text-[11px] [&_th]:sm:text-xs [&_th]:font-semibold [&_th]:text-foreground [&_th]:text-left [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:sm:px-3 [&_td]:py-1.5 [&_td]:sm:py-2 [&_td]:text-[11px] [&_td]:sm:text-xs [&_td]:text-foreground/90 [&_tr]:border-b [&_tr]:border-border/30">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                a: ({ href, children }) => {
-                  const isDownloadLink = href?.includes("azure-blob-api") && (href?.includes("blob_path") || href?.includes("path="));
-                  if (isDownloadLink && href) {
-                    const isDownloading = downloadingUrl === href;
-                    return (
-                      <button onClick={() => handleAuthenticatedDownload(href)} disabled={isDownloading} className="inline-flex items-center gap-1.5 text-primary hover:text-primary/80 underline underline-offset-2 font-medium disabled:opacity-50">
-                        {isDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                        {children}
-                      </button>
-                    );
-                  }
-                  return <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80 underline underline-offset-2">{children}</a>;
-                },
-              }}>{msg.content}</ReactMarkdown>
-            </div>
-            <div className="mt-2 flex justify-start opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-              <CopyButton content={msg.content} messageRef={contentRef} />
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-xl px-3 sm:px-5 py-3 sm:py-4 text-sm overflow-hidden bg-primary text-primary-foreground">
+        <div className={`rounded-xl px-3 sm:px-5 py-3 sm:py-4 text-sm overflow-hidden ${isUser ? "bg-primary text-primary-foreground" : "bg-card border border-border text-foreground"}`}>
+          {!isUser ? (
+            <>
+              <div ref={contentRef} className="max-w-none leading-6 sm:leading-7 text-[13px] sm:text-sm overflow-x-auto break-words [&_h1]:text-base [&_h1]:sm:text-lg [&_h1]:font-bold [&_h1]:mt-5 [&_h1]:sm:mt-8 [&_h1]:mb-3 [&_h1]:sm:mb-4 [&_h1]:pb-2 [&_h1]:border-b [&_h1]:border-border/60 [&_h1]:text-foreground [&_h2]:text-sm [&_h2]:sm:text-base [&_h2]:font-bold [&_h2]:mt-5 [&_h2]:sm:mt-8 [&_h2]:mb-3 [&_h2]:sm:mb-4 [&_h2]:pb-2 [&_h2]:border-b [&_h2]:border-border/60 [&_h2]:text-foreground [&_h3]:text-[13px] [&_h3]:sm:text-sm [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:sm:mt-6 [&_h3]:mb-2 [&_h3]:sm:mb-3 [&_h3]:text-foreground [&_p]:text-foreground/90 [&_p]:mb-3 [&_p]:sm:mb-4 [&_p]:leading-6 [&_p]:sm:leading-7 [&_strong]:text-foreground [&_strong]:font-semibold [&_code]:text-primary [&_code]:bg-secondary [&_code]:px-1 [&_code]:sm:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md [&_code]:text-xs [&_pre]:bg-secondary [&_pre]:border [&_pre]:border-border [&_pre]:rounded-lg [&_pre]:my-3 [&_pre]:sm:my-5 [&_pre]:p-3 [&_pre]:sm:p-4 [&_pre]:overflow-x-auto [&_li]:text-foreground/90 [&_li]:mb-1.5 [&_li]:sm:mb-2 [&_li]:leading-6 [&_li]:sm:leading-7 [&_ul]:my-3 [&_ul]:sm:my-4 [&_ul]:pl-4 [&_ul]:sm:pl-5 [&_ul]:list-disc [&_ol]:my-3 [&_ol]:sm:my-4 [&_ol]:pl-4 [&_ol]:sm:pl-5 [&_ol]:list-decimal [&_hr]:my-5 [&_hr]:sm:my-8 [&_hr]:border-border/60 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:sm:pl-4 [&_blockquote]:my-3 [&_blockquote]:sm:my-5 [&_blockquote]:bg-primary/5 [&_blockquote]:py-2 [&_blockquote]:pr-3 [&_blockquote]:sm:pr-4 [&_blockquote]:rounded-r-lg [&_table]:my-3 [&_table]:sm:my-5 [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-border [&_table]:rounded-lg [&_table]:overflow-hidden [&_table]:text-xs [&_table]:block [&_table]:sm:table [&_table]:overflow-x-auto [&_thead]:bg-secondary/60 [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:sm:px-3 [&_th]:py-1.5 [&_th]:sm:py-2 [&_th]:text-[11px] [&_th]:sm:text-xs [&_th]:font-semibold [&_th]:text-foreground [&_th]:text-left [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:sm:px-3 [&_td]:py-1.5 [&_td]:sm:py-2 [&_td]:text-[11px] [&_td]:sm:text-xs [&_td]:text-foreground/90 [&_tr]:border-b [&_tr]:border-border/30">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                  a: ({ href, children }) => {
+                    const isDownloadLink = href?.includes("azure-blob-api") && (href?.includes("blob_path") || href?.includes("path="));
+                    if (isDownloadLink && href) {
+                      const isDownloading = downloadingUrl === href;
+                      return (
+                        <button onClick={() => handleAuthenticatedDownload(href)} disabled={isDownloading} className="inline-flex items-center gap-1.5 text-primary hover:text-primary/80 underline underline-offset-2 font-medium disabled:opacity-50">
+                          {isDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                          {children}
+                        </button>
+                      );
+                    }
+                    return <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80 underline underline-offset-2">{children}</a>;
+                  },
+                }}>{msg.content}</ReactMarkdown>
+              </div>
+              <div className="mt-2 flex justify-end border-t border-border/30 pt-2">
+                <CopyButton content={msg.content} messageRef={contentRef} />
+              </div>
+            </>
+          ) : (
             <span className="whitespace-pre-wrap break-words">{msg.content}</span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
       {isUser && (
         <Avatar className="mt-1 h-7 w-7 shrink-0 border border-primary/20">

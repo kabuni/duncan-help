@@ -87,8 +87,23 @@ async function createHireflixPosition(apiKey: string, title: string, competencie
   }
 
   const allQuestions = [...DEFAULT_QUESTIONS, competencyQuestion];
-  const escapedTitle = title.replace(/"/g, '\\"');
-  const questionsGql = allQuestions.map((q) => `{ title: "${q.replace(/"/g, '\\"')}" }`).join(", ");
+
+  // Hireflix's `title` field has a ~30 char limit and returns "Unexpected error" 500
+  // for longer values. Full question text must live in `description`.
+  const escapeGql = (s: string) =>
+    s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "");
+  const shortTitle = (full: string) => {
+    const cleaned = full.replace(/\s+/g, " ").trim();
+    if (cleaned.length <= 30) return cleaned;
+    const slice = cleaned.slice(0, 30);
+    const lastSpace = slice.lastIndexOf(" ");
+    return (lastSpace > 10 ? slice.slice(0, lastSpace) : slice).trim();
+  };
+
+  const escapedTitle = escapeGql(title);
+  const questionsGql = allQuestions
+    .map((q) => `{ title: "${escapeGql(shortTitle(q))}", description: "${escapeGql(q)}" }`)
+    .join(", ");
 
   const mutation = `mutation { Position { save(position: { name: "${escapedTitle}", questions: [${questionsGql}] }) { id name } } }`;
 

@@ -27,8 +27,8 @@ serve(async (req) => {
     const escapedId = hireflix_position_id.replace(/"/g, '\\"');
     const mutation = `
       mutation {
-        deletePosition(id: "${escapedId}") {
-          id
+        deletePosition(input: { positionId: "${escapedId}" }) {
+          __typename
         }
       }
     `;

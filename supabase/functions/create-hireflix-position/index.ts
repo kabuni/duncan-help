@@ -88,11 +88,31 @@ serve(async (req) => {
 
     const allQuestions = [...DEFAULT_QUESTIONS, competencyQuestion];
 
-    // Create position on Hireflix via GraphQL
-    // Escape strings for GraphQL
-    const escapedTitle = title.replace(/"/g, '\\"');
+    // Create position on Hireflix via GraphQL.
+    // Hireflix's `title` field has a tight length limit (~30 chars) and rejects
+    // long values with a generic "Unexpected error" 500. The full question text
+    // must live in `description`; `title` is a short label.
+    const escapeGql = (s: string) =>
+      s
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, "\\n")
+        .replace(/\r/g, "");
+
+    const shortTitle = (full: string) => {
+      const cleaned = full.replace(/\s+/g, " ").trim();
+      if (cleaned.length <= 30) return cleaned;
+      const slice = cleaned.slice(0, 30);
+      const lastSpace = slice.lastIndexOf(" ");
+      return (lastSpace > 10 ? slice.slice(0, lastSpace) : slice).trim();
+    };
+
+    const escapedTitle = escapeGql(title);
     const questionsGql = allQuestions
-      .map((q) => `{ title: "${q.replace(/"/g, '\\"')}" }`)
+      .map(
+        (q) =>
+          `{ title: "${escapeGql(shortTitle(q))}", description: "${escapeGql(q)}" }`,
+      )
       .join(", ");
 
     const mutation = `

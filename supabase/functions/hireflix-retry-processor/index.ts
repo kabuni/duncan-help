@@ -126,7 +126,7 @@ async function createHireflixPosition(apiKey: string, title: string, competencie
 
 async function deleteHireflixPosition(apiKey: string, positionId: string): Promise<void> {
   const escapedId = positionId.replace(/"/g, '\\"');
-  const mutation = `mutation { deletePosition(id: "${escapedId}") { id } }`;
+  const mutation = `mutation { deletePosition(input: { positionId: "${escapedId}" }) { __typename } }`;
 
   const hfRes = await fetch("https://api.hireflix.com/me", {
     method: "POST",

@@ -299,7 +299,7 @@ const Operations = () => {
           </div>
 
           {/* Summary Cards — Overview only */}
-          {section === "overview" && (
+          {activeTab === "work-items" && (
             <div className="grid grid-cols-2 gap-4 mb-6">
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center gap-2 mb-2">

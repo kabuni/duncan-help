@@ -271,13 +271,12 @@ const Operations = () => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
               <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Operations Hub</h2>
+                <h2 className="flex items-center gap-2 text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+                  <GitBranch className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+                  Operations
+                </h2>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  {section === "action"
-                    ? "Approvals and authorisation requests awaiting your decision."
-                    : section === "directory"
-                    ? "Suppliers and operational directories."
-                    : "Work items, repos, website analytics and sync activity."}
+                  Work items, repos, website analytics and sync activity.
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">

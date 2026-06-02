@@ -289,6 +289,17 @@ const Operations = () => {
               <TabsTrigger value="sync-logs" className="gap-1.5 whitespace-nowrap">
                 <Clock className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Sync Logs</span><span className="sm:hidden">Logs</span>
               </TabsTrigger>
+              <TabsTrigger value="approvals" className="gap-1.5 whitespace-nowrap">
+                <Inbox className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Approvals</span><span className="sm:hidden">Appr.</span>
+                {pendingApprovals > 0 && (
+                  <span className="ml-1 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
+                    {pendingApprovals}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="authorisation" className="gap-1.5 whitespace-nowrap">
+                <Receipt className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Authorisation Requests</span><span className="sm:hidden">Auth.</span>
+              </TabsTrigger>
               <TabsTrigger value="suppliers" className="gap-1.5 whitespace-nowrap">
                 <Building2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Suppliers</span><span className="sm:hidden">Supp.</span>
               </TabsTrigger>

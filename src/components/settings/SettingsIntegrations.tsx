@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Mail, MessageSquare, Calendar, HardDrive, GitBranch, Database,
-  FolderOpen, Loader2, Lock, CheckCircle2, Shield, ExternalLink
+  FolderOpen, Loader2, Lock, CheckCircle2, Shield, ExternalLink, X
 } from "lucide-react";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { useCompanyIntegrations } from "@/hooks/useCompanyIntegrations";
@@ -9,7 +9,6 @@ import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { useSlackConnection } from "@/hooks/useSlackConnection";
 import { useGmailStatus, useGmailConnect, useGmailDisconnect } from "@/hooks/useGmailIntegration";
 import { useIsAdmin } from "@/hooks/useUserRoles";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -176,50 +175,56 @@ export default function SettingsIntegrations({ onNavigate: _onNavigate }: Props)
         </div>
       )}
 
-      <Dialog open={!!openRow} onOpenChange={(o) => !o && setOpenRow(null)}>
-        <DialogContent className="sm:max-w-md">
-          {openRow && (
-            <>
-              <DialogHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary shrink-0">
-                    <openRow.icon className="h-5 w-5 text-secondary-foreground" />
-                  </div>
-                  <div className="min-w-0">
-                    <DialogTitle className="text-base">{openRow.name}</DialogTitle>
-                    <DialogDescription className="text-[11px] font-mono uppercase tracking-wider mt-0.5">
-                      {openRow.category} · {openRow.scope === "company" ? "Company" : "Personal"}
-                    </DialogDescription>
-                  </div>
-                </div>
-              </DialogHeader>
-              <div className="space-y-4 pt-2">
-                <p className="text-sm text-muted-foreground leading-6">{openRow.description}</p>
-
-                <div
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-xs",
-                    statusFor(openRow) === "connected"
-                      ? "bg-norman-success/10 border-norman-success/20 text-norman-success"
-                      : "bg-muted/40 border-border text-muted-foreground"
-                  )}
-                >
-                  {statusFor(openRow) === "connected" ? (
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  ) : (
-                    <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
-                  )}
-                  <span className="font-medium">
-                    {statusFor(openRow) === "connected" ? "Connected" : "Not connected"}
-                  </span>
-                </div>
-
-                <div>{renderDetailActions(openRow)}</div>
+      {openRow && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+            onClick={() => setOpenRow(null)}
+          />
+          <div className="relative z-10 w-full max-w-md mx-4 rounded-2xl border border-border bg-card shadow-2xl p-6">
+            <button
+              onClick={() => setOpenRow(null)}
+              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary shrink-0">
+                <openRow.icon className="h-5 w-5 text-secondary-foreground" />
               </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+              <div className="min-w-0">
+                <h4 className="text-base font-semibold text-foreground">{openRow.name}</h4>
+                <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mt-0.5">
+                  {openRow.category} · {openRow.scope === "company" ? "Company" : "Personal"}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-4 pt-4">
+              <p className="text-sm text-muted-foreground leading-6">{openRow.description}</p>
+
+              <div
+                className={cn(
+                  "flex items-center gap-2 rounded-lg border px-3 py-2 text-xs",
+                  statusFor(openRow) === "connected"
+                    ? "bg-norman-success/10 border-norman-success/20 text-norman-success"
+                    : "bg-muted/40 border-border text-muted-foreground"
+                )}
+              >
+                {statusFor(openRow) === "connected" ? (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                ) : (
+                  <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                )}
+                <span className="font-medium">
+                  {statusFor(openRow) === "connected" ? "Connected" : "Not connected"}
+                </span>
+              </div>
+
+              <div>{renderDetailActions(openRow)}</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

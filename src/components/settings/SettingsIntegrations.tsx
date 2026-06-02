@@ -39,12 +39,12 @@ interface Props {
 export default function SettingsIntegrations({ onNavigate: _onNavigate }: Props) {
   const { data: userInts = [], isLoading: userLoading } = useUserIntegrations();
   const { data: companyInts = [], isLoading: companyLoading } = useCompanyIntegrations();
-  const { isConnected: calConnected, connect: calConnect, disconnect: calDisconnect } = useGoogleCalendar();
+  const { isConnected: calConnected, initiateOAuth: calConnect, disconnect: calDisconnect } = useGoogleCalendar();
   const slack = useSlackConnection();
   const gmailStatus = useGmailStatus();
   const gmailConnect = useGmailConnect();
   const gmailDisconnect = useGmailDisconnect();
-  const { isAdmin } = useUserRoles();
+  const { isAdmin } = useIsAdmin();
   const [openRow, setOpenRow] = useState<Row | null>(null);
 
   const isLoading = userLoading || companyLoading;

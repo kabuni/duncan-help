@@ -404,22 +404,6 @@ const Operations = () => {
 
             {/* Work Items */}
             <TabsContent value="work-items" className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-xl border border-border bg-card p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <GitBranch className="h-4 w-4 text-primary" />
-                    <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Active Items</span>
-                  </div>
-                  <p className="text-2xl font-bold text-foreground">{activeItems}</p>
-                </motion.div>
-                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="rounded-xl border border-border bg-card p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertTriangle className="h-4 w-4 text-norman-warning" />
-                    <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Blocked</span>
-                  </div>
-                  <p className="text-2xl font-bold text-foreground">{blockedItems}</p>
-                </motion.div>
-              </div>
               {wiLoading ? (
                 <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
               ) : workItems.length === 0 ? (

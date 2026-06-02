@@ -735,6 +735,18 @@ const Operations = () => {
               )}
             </TabsContent>
 
+            <TabsContent value="approvals" className="-mx-4 sm:-mx-8 -mt-2">
+              <div className="[&_main]:!overflow-visible [&_main]:!flex-none [&_.gradient-radial]:!hidden">
+                <Approvals />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="authorisation" className="-mx-4 sm:-mx-8 -mt-2">
+              <div className="[&_main]:!overflow-visible [&_main]:!flex-none [&_.gradient-radial]:!hidden">
+                <PurchaseOrders />
+              </div>
+            </TabsContent>
+
             <TabsContent value="suppliers">
               <SuppliersDirectory />
             </TabsContent>

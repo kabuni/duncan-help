@@ -5,9 +5,12 @@ import {
   GitBranch, AlertTriangle,
   Clock, RefreshCw, Loader2, Activity, Search, X,
   BarChart3, Globe2, Users, MousePointerClick, PlugZap, Send,
-  GitPullRequest, GitCommit, FolderGit2, Building2,
+  GitPullRequest, GitCommit, FolderGit2, Building2, Inbox, Receipt,
 } from "lucide-react";
 import SuppliersDirectory from "@/components/suppliers/SuppliersDirectory";
+import Approvals from "@/pages/Approvals";
+import PurchaseOrders from "@/pages/PurchaseOrders";
+import { useApprovalCount } from "@/hooks/useApprovals";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -90,6 +93,7 @@ const stateColors: Record<string, string> = {
 const Operations = () => {
   const { data: workItems = [], isLoading: wiLoading } = useWorkItems();
   const { data: syncLogs = [], isLoading: slLoading } = useSyncLogs();
+  const { data: pendingApprovals = 0 } = useApprovalCount();
   const analytics = useGoogleAnalytics();
   const { isAdmin } = useIsAdmin();
   const [syncing, setSyncing] = useState<string | null>(null);
@@ -284,6 +288,17 @@ const Operations = () => {
               </TabsTrigger>
               <TabsTrigger value="sync-logs" className="gap-1.5 whitespace-nowrap">
                 <Clock className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Sync Logs</span><span className="sm:hidden">Logs</span>
+              </TabsTrigger>
+              <TabsTrigger value="approvals" className="gap-1.5 whitespace-nowrap">
+                <Inbox className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Approvals</span><span className="sm:hidden">Appr.</span>
+                {pendingApprovals > 0 && (
+                  <span className="ml-1 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
+                    {pendingApprovals}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="authorisation" className="gap-1.5 whitespace-nowrap">
+                <Receipt className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Authorisation Requests</span><span className="sm:hidden">Auth.</span>
               </TabsTrigger>
               <TabsTrigger value="suppliers" className="gap-1.5 whitespace-nowrap">
                 <Building2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Suppliers</span><span className="sm:hidden">Supp.</span>
@@ -718,6 +733,18 @@ const Operations = () => {
                   ))}
                 </div>
               )}
+            </TabsContent>
+
+            <TabsContent value="approvals" className="-mx-4 sm:-mx-8 -mt-2">
+              <div className="[&_main]:!overflow-visible [&_main]:!flex-none [&_.gradient-radial]:!hidden">
+                <Approvals />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="authorisation" className="-mx-4 sm:-mx-8 -mt-2">
+              <div className="[&_main]:!overflow-visible [&_main]:!flex-none [&_.gradient-radial]:!hidden">
+                <PurchaseOrders />
+              </div>
             </TabsContent>
 
             <TabsContent value="suppliers">

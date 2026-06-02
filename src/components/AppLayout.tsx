@@ -8,14 +8,14 @@ const AppLayout = ({ children }: { children?: React.ReactNode }) => {
 
   return (
     <div
-      className="flex min-h-[100dvh] bg-background"
+      className="flex min-h-dvh bg-background"
       style={{
         paddingLeft: "env(safe-area-inset-left)",
         paddingRight: "env(safe-area-inset-right)",
       }}
     >
       <Sidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
-      <div className="md:ml-64 flex-1 flex flex-col min-h-[100dvh] w-full min-w-0">
+      <div className="md:ml-64 flex-1 flex flex-col min-h-dvh w-full min-w-0">
         {/* Mobile header with menu button */}
         <div
           className="md:hidden flex items-center justify-between gap-2 border-b border-border px-4 py-3"
@@ -28,7 +28,7 @@ const AppLayout = ({ children }: { children?: React.ReactNode }) => {
           <NotificationsBell />
         </div>
         <div
-          className="flex-1 flex flex-col overflow-hidden"
+          className="flex-1 flex flex-col min-h-0"
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
           {children ?? <Outlet />}

@@ -268,9 +268,9 @@ const Operations = () => {
           {/* Primary section tabs */}
           <div className="mb-4 flex items-center gap-1 rounded-xl border border-border bg-card p-1 w-full sm:w-fit">
             {([
-              { id: "overview", label: "Overview" },
+              { id: "overview", label: "Overview", badge: 0 },
               { id: "action", label: "Action", badge: pendingApprovals },
-              { id: "directory", label: "Directory" },
+              { id: "directory", label: "Directory", badge: 0 },
             ] as const).map((s) => {
               const isActive = section === s.id;
               return (

@@ -13,7 +13,7 @@ import { GeneralChatsProvider } from "@/hooks/GeneralChatsContext";
 import Index from "./pages/Index";
 import Onboarding from "./pages/Onboarding";
 
-import Integrations from "./pages/Integrations";
+
 import Auth from "./pages/Auth";
 
 import ResetPassword from "./pages/ResetPassword";
@@ -69,7 +69,7 @@ const AppContent = () => {
           {/* Shared layout for all authenticated app routes */}
           <Route element={<ProtectedShell />}>
             <Route path="/" element={<Index />} />
-            <Route path="/integrations" element={<Integrations />} />
+            
             <Route path="/profile" element={<Navigate to="/settings" replace />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/recruitment" element={<Recruitment />} />

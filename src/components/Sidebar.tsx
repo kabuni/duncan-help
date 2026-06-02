@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { LayoutDashboard, Home, Plug, Settings, LogOut, X, ChevronDown, CheckCircle2, Mail, FileText, MessageSquare, Calendar, FolderOpen, GitBranch, Zap, Menu, Layers, Megaphone, Crown, Inbox, Receipt, BookOpen } from "lucide-react";
+import { useState } from "react";
+import { LayoutDashboard, Home, Settings, LogOut, X, Mail, FileText, MessageSquare, Calendar, GitBranch, Menu, Layers, Megaphone, Crown, Inbox, Receipt, BookOpen } from "lucide-react";
 import { canViewBriefing } from "@/lib/ceoAccess";
 import ChatHistory from "@/components/ChatHistory";
 import { useGeneralChatsContext } from "@/hooks/GeneralChatsContext";
@@ -11,18 +11,9 @@ import { NavLink as RouterNavLink, useNavigate, useLocation } from "react-router
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { useApprovalCount } from "@/hooks/useApprovals";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 
-const integrationMeta: Record<string, { label: string; icon: React.ElementType }> = {
-  "slack": { label: "Slack", icon: MessageSquare },
-  "linear": { label: "Linear", icon: Zap },
-  "google-calendar": { label: "Google Calendar", icon: Calendar },
-  "azure-blob": { label: "Azure Blob", icon: FolderOpen },
-  "azure-devops": { label: "Azure DevOps", icon: GitBranch },
-  
-};
 
 
 export const MobileMenuButton = ({ onClick }: { onClick: () => void }) => (
@@ -55,42 +46,8 @@ const Sidebar = ({
   const isProjectsRoute = location.pathname.startsWith("/projects");
   const isChatRoute = !isProjectsRoute;
   const [showModal, setShowModal] = useState(false);
-  const [integrationsOpen, setIntegrationsOpen] = useState(false);
-  const [connectedApps, setConnectedApps] = useState<string[]>([]);
   const { data: pendingApprovals = 0 } = useApprovalCount();
 
-  useEffect(() => {
-    const fetchConnected = async () => {
-      try {
-        const { data: companyAll } = await supabase.rpc("get_company_integrations_status");
-        const company = (companyAll ?? []).filter((c: any) => c.status === "connected");
-        
-        const { data: userInt } = await supabase
-          .from("user_integrations")
-          .select("integration_id")
-          .eq("status", "connected");
-
-        const ids = new Set<string>();
-        company?.forEach(c => ids.add(c.integration_id));
-        userInt?.forEach(u => ids.add(u.integration_id));
-        
-        const [{ data: gcal }, { data: gmail }, { data: azureDevops }] = await Promise.all([
-          supabase.from("google_calendar_tokens").select("id").limit(1),
-          supabase.from("gmail_tokens").select("id").limit(1),
-          supabase.from("azure_devops_tokens").select("id").limit(1),
-        ]);
-        
-        if (gcal?.length) ids.add("google-calendar");
-        if (gmail?.length) ids.add("gmail");
-        if (azureDevops?.length) ids.add("azure-devops");
-        
-        setConnectedApps(Array.from(ids));
-      } catch {
-        // silent
-      }
-    };
-    if (user) fetchConnected();
-  }, [user]);
 
   const handleNavigate = (to: string) => {
     navigate(to);
@@ -298,49 +255,6 @@ const Sidebar = ({
         )}
 
 
-        <div>
-          <button
-            onClick={() => setIntegrationsOpen(!integrationsOpen)}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
-              "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )}
-          >
-            <Plug className="h-4 w-4" />
-            <span className="flex-1 text-left">Integrations</span>
-            <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform duration-200", integrationsOpen && "rotate-180")} />
-          </button>
-          {integrationsOpen && (
-            <div className="ml-4 mt-1 space-y-0.5 border-l border-border pl-3">
-              {connectedApps.length === 0 ? (
-                <p className="px-3 py-2 text-[11px] text-muted-foreground">No apps connected</p>
-              ) : (
-                connectedApps.map(id => {
-                  const meta = integrationMeta[id];
-                  if (!meta) return null;
-                  const Icon = meta.icon;
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => handleNavigate("/integrations")}
-                      className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                    >
-                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="flex-1 text-left truncate">{meta.label}</span>
-                      <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
-                    </button>
-                  );
-                })
-              )}
-              <button
-                onClick={() => handleNavigate("/integrations")}
-                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-[11px] font-medium text-primary hover:bg-primary/5 transition-colors"
-              >
-                Manage all →
-              </button>
-            </div>
-          )}
-        </div>
 
         {/* Chat History */}
         <ChatHistory

@@ -266,7 +266,7 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
             label="Hours of Play · Worldwide · Last 30d"
             action={
               !gaConnected ? (
-                <button onClick={() => navigate("/integrations")} className="text-[10px] text-primary hover:underline">
+                <button onClick={() => navigate("/settings?tab=integrations")} className="text-[10px] text-primary hover:underline">
                   Connect Analytics
                 </button>
               ) : null

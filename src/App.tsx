@@ -13,7 +13,7 @@ import { GeneralChatsProvider } from "@/hooks/GeneralChatsContext";
 import Index from "./pages/Index";
 import Onboarding from "./pages/Onboarding";
 
-import Integrations from "./pages/Integrations";
+
 import Auth from "./pages/Auth";
 
 import ResetPassword from "./pages/ResetPassword";

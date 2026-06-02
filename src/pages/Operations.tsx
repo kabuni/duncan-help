@@ -93,6 +93,7 @@ const stateColors: Record<string, string> = {
 const Operations = () => {
   const { data: workItems = [], isLoading: wiLoading } = useWorkItems();
   const { data: syncLogs = [], isLoading: slLoading } = useSyncLogs();
+  const { data: pendingApprovals = 0 } = useApprovalCount();
   const analytics = useGoogleAnalytics();
   const { isAdmin } = useIsAdmin();
   const [syncing, setSyncing] = useState<string | null>(null);

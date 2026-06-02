@@ -812,14 +812,74 @@ const Operations = () => {
               )}
             </TabsContent>
 
-            <TabsContent value="approvals" className="-mx-4 sm:-mx-8 -mt-2">
-              <div className="[&_main]:!overflow-visible [&_main]:!flex-none [&_.gradient-radial]:!hidden">
+            <TabsContent value="approvals" className="space-y-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Clock className="h-4 w-4 text-norman-warning" />
+                    <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Pending</span>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{approvalPending}</p>
+                </motion.div>
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ShieldCheck className="h-4 w-4 text-norman-success" />
+                    <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Approved</span>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{approvalApproved}</p>
+                </motion.div>
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <XCircle className="h-4 w-4 text-destructive" />
+                    <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Rejected</span>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{approvalRejected}</p>
+                </motion.div>
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CalendarClock className="h-4 w-4 text-sky-500" />
+                    <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Changes Requested</span>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{approvalChanges}</p>
+                </motion.div>
+              </div>
+              <div className="-mx-4 sm:-mx-8 -mt-2 [&_main]:!overflow-visible [&_main]:!flex-none [&_.gradient-radial]:!hidden">
                 <Approvals />
               </div>
             </TabsContent>
 
-            <TabsContent value="authorisation" className="-mx-4 sm:-mx-8 -mt-2">
-              <div className="[&_main]:!overflow-visible [&_main]:!flex-none [&_.gradient-radial]:!hidden">
+            <TabsContent value="authorisation" className="space-y-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Receipt className="h-4 w-4 text-primary" />
+                    <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Total Requests</span>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{authTotal}</p>
+                </motion.div>
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Clock className="h-4 w-4 text-norman-warning" />
+                    <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Pending</span>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{authPending}</p>
+                </motion.div>
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="h-4 w-4 text-norman-success" />
+                    <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Approved</span>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{authApproved}</p>
+                </motion.div>
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <XCircle className="h-4 w-4 text-destructive" />
+                    <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Rejected</span>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{authRejected}</p>
+                </motion.div>
+              </div>
+              <div className="-mx-4 sm:-mx-8 -mt-2 [&_main]:!overflow-visible [&_main]:!flex-none [&_.gradient-radial]:!hidden">
                 <PurchaseOrders />
               </div>
             </TabsContent>

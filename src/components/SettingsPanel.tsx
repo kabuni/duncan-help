@@ -54,11 +54,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       case "gmail":
         return <SettingsGmail />;
       case "integrations":
-        return (
-          <div className="-m-4 sm:-m-6">
-            <Integrations />
-          </div>
-        );
+        return <SettingsIntegrations onNavigate={onClose} />;
       case "bug":
         return <SettingsBugReport />;
       case "feature_requests":

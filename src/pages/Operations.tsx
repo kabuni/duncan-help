@@ -101,6 +101,22 @@ const Operations = () => {
   const [analyticsAnswer, setAnalyticsAnswer] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("work-items");
 
+  const sectionOf: Record<string, "overview" | "action" | "directory"> = {
+    "work-items": "overview",
+    "repos": "overview",
+    "analytics": "overview",
+    "sync-logs": "overview",
+    "approvals": "action",
+    "authorisation": "action",
+    "suppliers": "directory",
+  };
+  const section = sectionOf[activeTab] ?? "overview";
+  const sectionDefaults: Record<"overview" | "action" | "directory", string> = {
+    overview: "work-items",
+    action: "approvals",
+    directory: "suppliers",
+  };
+
   const reposEnabled = activeTab === "repos";
   const { data: reposSummary, isLoading: reposLoading, error: reposError, refetch: refetchRepos } = useReposSummary(reposEnabled);
   const { data: reposListResp, isLoading: reposListLoading } = useReposList(reposEnabled);

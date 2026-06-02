@@ -35,7 +35,7 @@ const PurchaseOrders = () => {
                 Approvals
               </p>
               <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
-                <span className="text-primary glow-text">Authorisation</span>
+                Authorisation
               </h2>
             </div>
             <div className="flex flex-wrap gap-2">

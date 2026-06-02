@@ -8,7 +8,7 @@ import { useCompanyIntegrations } from "@/hooks/useCompanyIntegrations";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { useSlackConnection } from "@/hooks/useSlackConnection";
 import { useGmailStatus, useGmailConnect, useGmailDisconnect } from "@/hooks/useGmailIntegration";
-import { useUserRoles } from "@/hooks/useUserRoles";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

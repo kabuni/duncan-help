@@ -101,6 +101,22 @@ const Operations = () => {
   const [analyticsAnswer, setAnalyticsAnswer] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("work-items");
 
+  const sectionOf: Record<string, "overview" | "action" | "directory"> = {
+    "work-items": "overview",
+    "repos": "overview",
+    "analytics": "overview",
+    "sync-logs": "overview",
+    "approvals": "action",
+    "authorisation": "action",
+    "suppliers": "directory",
+  };
+  const section = sectionOf[activeTab] ?? "overview";
+  const sectionDefaults: Record<"overview" | "action" | "directory", string> = {
+    overview: "work-items",
+    action: "approvals",
+    directory: "suppliers",
+  };
+
   const reposEnabled = activeTab === "repos";
   const { data: reposSummary, isLoading: reposLoading, error: reposError, refetch: refetchRepos } = useReposSummary(reposEnabled);
   const { data: reposListResp, isLoading: reposListLoading } = useReposList(reposEnabled);
@@ -237,13 +253,6 @@ const Operations = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <a
-                  href="/recruitment"
-                  className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
-                >
-                  <Users className="h-3.5 w-3.5" />
-                  Recruitment
-                </a>
                 <button
                   onClick={() => handleSync("azure")}
                   disabled={syncing === "azure"}
@@ -256,54 +265,97 @@ const Operations = () => {
             </div>
           </motion.div>
 
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 gap-4 mb-8">
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-xl border border-border bg-card p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <GitBranch className="h-4 w-4 text-primary" />
-                <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Active Items</span>
-              </div>
-              <p className="text-2xl font-bold text-foreground">{activeItems}</p>
-            </motion.div>
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="rounded-xl border border-border bg-card p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="h-4 w-4 text-norman-warning" />
-                <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Blocked</span>
-              </div>
-              <p className="text-2xl font-bold text-foreground">{blockedItems}</p>
-            </motion.div>
+          {/* Primary section tabs */}
+          <div className="mb-4 flex items-center gap-1 rounded-xl border border-border bg-card p-1 w-full sm:w-fit">
+            {([
+              { id: "overview", label: "Overview", badge: 0 },
+              { id: "action", label: "Action", badge: pendingApprovals },
+              { id: "directory", label: "Directory", badge: 0 },
+            ] as const).map((s) => {
+              const isActive = section === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setActiveTab(sectionDefaults[s.id])}
+                  className={`flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-secondary text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {s.label}
+                  {s.badge && s.badge > 0 ? (
+                    <span className="rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
+                      {s.badge}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Tabs */}
+          {/* Summary Cards — Overview only */}
+          {section === "overview" && (
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-xl border border-border bg-card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <GitBranch className="h-4 w-4 text-primary" />
+                  <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Active Items</span>
+                </div>
+                <p className="text-2xl font-bold text-foreground">{activeItems}</p>
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="rounded-xl border border-border bg-card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="h-4 w-4 text-norman-warning" />
+                  <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Blocked</span>
+                </div>
+                <p className="text-2xl font-bold text-foreground">{blockedItems}</p>
+              </motion.div>
+            </div>
+          )}
+
+          {/* Secondary sub-tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="bg-card border border-border w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
-              <TabsTrigger value="work-items" className="gap-1.5 whitespace-nowrap">
-                <GitBranch className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Work Items</span><span className="sm:hidden">Items</span>
-              </TabsTrigger>
-              <TabsTrigger value="repos" className="gap-1.5 whitespace-nowrap">
-                <FolderGit2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Repos</span><span className="sm:hidden">Repos</span>
-              </TabsTrigger>
-              <TabsTrigger value="analytics" className="gap-1.5 whitespace-nowrap">
-                <BarChart3 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Website Analytics</span><span className="sm:hidden">Analytics</span>
-              </TabsTrigger>
-              <TabsTrigger value="sync-logs" className="gap-1.5 whitespace-nowrap">
-                <Clock className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Sync Logs</span><span className="sm:hidden">Logs</span>
-              </TabsTrigger>
-              <TabsTrigger value="approvals" className="gap-1.5 whitespace-nowrap">
-                <Inbox className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Approvals</span><span className="sm:hidden">Appr.</span>
-                {pendingApprovals > 0 && (
-                  <span className="ml-1 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
-                    {pendingApprovals}
-                  </span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="authorisation" className="gap-1.5 whitespace-nowrap">
-                <Receipt className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Authorisation Requests</span><span className="sm:hidden">Auth.</span>
-              </TabsTrigger>
-              <TabsTrigger value="suppliers" className="gap-1.5 whitespace-nowrap">
-                <Building2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Suppliers</span><span className="sm:hidden">Supp.</span>
-              </TabsTrigger>
-            </TabsList>
+            {section === "overview" && (
+              <TabsList className="bg-card border border-border w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
+                <TabsTrigger value="work-items" className="gap-1.5 whitespace-nowrap">
+                  <GitBranch className="h-3.5 w-3.5" /> Work Items
+                </TabsTrigger>
+                <TabsTrigger value="repos" className="gap-1.5 whitespace-nowrap">
+                  <FolderGit2 className="h-3.5 w-3.5" /> Repos
+                </TabsTrigger>
+                <TabsTrigger value="analytics" className="gap-1.5 whitespace-nowrap">
+                  <BarChart3 className="h-3.5 w-3.5" /> Website Analytics
+                </TabsTrigger>
+                <TabsTrigger value="sync-logs" className="gap-1.5 whitespace-nowrap">
+                  <Clock className="h-3.5 w-3.5" /> Sync Logs
+                </TabsTrigger>
+              </TabsList>
+            )}
+
+            {section === "action" && (
+              <TabsList className="bg-card border border-border w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
+                <TabsTrigger value="approvals" className="gap-1.5 whitespace-nowrap">
+                  <Inbox className="h-3.5 w-3.5" /> Approvals
+                  {pendingApprovals > 0 && (
+                    <span className="ml-1 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
+                      {pendingApprovals}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="authorisation" className="gap-1.5 whitespace-nowrap">
+                  <Receipt className="h-3.5 w-3.5" /> Authorisation Requests
+                </TabsTrigger>
+              </TabsList>
+            )}
+
+            {section === "directory" && (
+              <TabsList className="bg-card border border-border w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
+                <TabsTrigger value="suppliers" className="gap-1.5 whitespace-nowrap">
+                  <Building2 className="h-3.5 w-3.5" /> Suppliers
+                </TabsTrigger>
+              </TabsList>
+            )}
 
             {/* Work Items */}
             <TabsContent value="work-items" className="space-y-3">

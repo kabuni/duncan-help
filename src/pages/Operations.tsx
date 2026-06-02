@@ -245,16 +245,10 @@ const Operations = () => {
 
         <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-7xl">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[10px] tracking-[0.18em] uppercase text-muted-foreground/70">
-                    Duncan OS&nbsp;&nbsp;//&nbsp;&nbsp;Core Services
-                  </span>
-                  <div className="h-px w-8 bg-border" />
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">Operations Hub</h2>
-                <p className="text-xs sm:text-sm text-muted-foreground max-w-md">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Operations Hub</h2>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                   {section === "action"
                     ? "Approvals and authorisation requests awaiting your decision."
                     : section === "directory"
@@ -276,33 +270,28 @@ const Operations = () => {
           </motion.div>
 
           {/* Primary section tabs */}
-          <div className="mb-6 flex items-center gap-1 rounded-xl border border-border/60 bg-card/50 backdrop-blur-sm p-1 w-full sm:w-fit shadow-sm">
+          <div className="mb-4 flex items-center gap-1 rounded-xl border border-border bg-card p-1 w-full sm:w-fit">
             {([
               { id: "overview", label: "Overview", badge: 0 },
               { id: "action", label: "Action", badge: pendingApprovals },
               { id: "directory", label: "Directory", badge: 0 },
             ] as const).map((s) => {
               const isActive = section === s.id;
-              const hasPending = s.badge && s.badge > 0;
               return (
                 <button
                   key={s.id}
                   onClick={() => setActiveTab(sectionDefaults[s.id])}
-                  className={`relative flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs font-medium transition-all ${
+                  className={`flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
                     isActive
-                      ? "bg-secondary text-foreground border border-border/60 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.04)]"
-                      : "text-muted-foreground hover:text-foreground border border-transparent"
+                      ? "bg-secondary text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {s.label}
-                  {hasPending ? (
-                    isActive ? (
-                      <span className="ml-1 px-1.5 py-0.5 rounded-md font-mono text-[10px] bg-background/80 text-foreground border border-border/60">
-                        {s.badge}
-                      </span>
-                    ) : (
-                      <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 ring-2 ring-card" />
-                    )
+                  {s.badge && s.badge > 0 ? (
+                    <span className="rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
+                      {s.badge}
+                    </span>
                   ) : null}
                 </button>
               );

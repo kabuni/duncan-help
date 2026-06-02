@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Settings, User, Bug, Palette, Mail, Lightbulb, Plug, ArrowRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { X, Settings, User, Bug, Palette, Mail, Lightbulb, Plug } from "lucide-react";
 import SettingsGeneral from "./settings/SettingsGeneral";
 import SettingsProfile from "./settings/SettingsProfile";
 import SettingsBugReport from "./settings/SettingsBugReport";
 import SettingsAppearance from "./settings/SettingsAppearance";
 import SettingsGmail from "./settings/SettingsGmail";
 import FeatureRequestsAdmin from "./settings/FeatureRequestsAdmin";
+import Integrations from "@/pages/Integrations";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { cn } from "@/lib/utils";
 

@@ -97,6 +97,9 @@ const Operations = () => {
   const { data: workItems = [], isLoading: wiLoading } = useWorkItems();
   const { data: syncLogs = [], isLoading: slLoading } = useSyncLogs();
   const { data: pendingApprovals = 0 } = useApprovalCount();
+  const { data: approvalRows = [] } = useApprovals();
+  const { data: pos = [] } = usePurchaseOrders();
+  const { data: travelReqs = [] } = useTravelRequests();
   const analytics = useGoogleAnalytics();
   const { isAdmin } = useIsAdmin();
   const [syncing, setSyncing] = useState<string | null>(null);

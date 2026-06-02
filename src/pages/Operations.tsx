@@ -249,7 +249,11 @@ const Operations = () => {
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Operations Hub</h2>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  Cross-system view of Azure DevOps work items.
+                  {section === "action"
+                    ? "Approvals and authorisation requests awaiting your decision."
+                    : section === "directory"
+                    ? "Suppliers and operational directories."
+                    : "Work items, repos, website analytics and sync activity."}
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">

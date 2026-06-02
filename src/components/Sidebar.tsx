@@ -255,49 +255,6 @@ const Sidebar = ({
         )}
 
 
-        <div>
-          <button
-            onClick={() => setIntegrationsOpen(!integrationsOpen)}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
-              "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )}
-          >
-            <Plug className="h-4 w-4" />
-            <span className="flex-1 text-left">Integrations</span>
-            <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform duration-200", integrationsOpen && "rotate-180")} />
-          </button>
-          {integrationsOpen && (
-            <div className="ml-4 mt-1 space-y-0.5 border-l border-border pl-3">
-              {connectedApps.length === 0 ? (
-                <p className="px-3 py-2 text-[11px] text-muted-foreground">No apps connected</p>
-              ) : (
-                connectedApps.map(id => {
-                  const meta = integrationMeta[id];
-                  if (!meta) return null;
-                  const Icon = meta.icon;
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => handleNavigate("/integrations")}
-                      className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                    >
-                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="flex-1 text-left truncate">{meta.label}</span>
-                      <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
-                    </button>
-                  );
-                })
-              )}
-              <button
-                onClick={() => handleNavigate("/integrations")}
-                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-[11px] font-medium text-primary hover:bg-primary/5 transition-colors"
-              >
-                Manage all →
-              </button>
-            </div>
-          )}
-        </div>
 
         {/* Chat History */}
         <ChatHistory

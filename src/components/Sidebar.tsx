@@ -46,42 +46,8 @@ const Sidebar = ({
   const isProjectsRoute = location.pathname.startsWith("/projects");
   const isChatRoute = !isProjectsRoute;
   const [showModal, setShowModal] = useState(false);
-  const [integrationsOpen, setIntegrationsOpen] = useState(false);
-  const [connectedApps, setConnectedApps] = useState<string[]>([]);
   const { data: pendingApprovals = 0 } = useApprovalCount();
 
-  useEffect(() => {
-    const fetchConnected = async () => {
-      try {
-        const { data: companyAll } = await supabase.rpc("get_company_integrations_status");
-        const company = (companyAll ?? []).filter((c: any) => c.status === "connected");
-        
-        const { data: userInt } = await supabase
-          .from("user_integrations")
-          .select("integration_id")
-          .eq("status", "connected");
-
-        const ids = new Set<string>();
-        company?.forEach(c => ids.add(c.integration_id));
-        userInt?.forEach(u => ids.add(u.integration_id));
-        
-        const [{ data: gcal }, { data: gmail }, { data: azureDevops }] = await Promise.all([
-          supabase.from("google_calendar_tokens").select("id").limit(1),
-          supabase.from("gmail_tokens").select("id").limit(1),
-          supabase.from("azure_devops_tokens").select("id").limit(1),
-        ]);
-        
-        if (gcal?.length) ids.add("google-calendar");
-        if (gmail?.length) ids.add("gmail");
-        if (azureDevops?.length) ids.add("azure-devops");
-        
-        setConnectedApps(Array.from(ids));
-      } catch {
-        // silent
-      }
-    };
-    if (user) fetchConnected();
-  }, [user]);
 
   const handleNavigate = (to: string) => {
     navigate(to);

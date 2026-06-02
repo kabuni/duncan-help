@@ -48,7 +48,7 @@ export default function KanbanBoard({ cards, onCardClick }: KanbanBoardProps) {
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-5">
       {COLUMNS.map(col => {
         const colCards = cards.filter(c => c.status === col.status);
         return (

@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Settings, User, Bug, Palette, Mail, Lightbulb, Plug, ArrowRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { X, Settings, User, Bug, Palette, Mail, Lightbulb, Plug } from "lucide-react";
 import SettingsGeneral from "./settings/SettingsGeneral";
 import SettingsProfile from "./settings/SettingsProfile";
 import SettingsBugReport from "./settings/SettingsBugReport";
 import SettingsAppearance from "./settings/SettingsAppearance";
 import SettingsGmail from "./settings/SettingsGmail";
 import FeatureRequestsAdmin from "./settings/FeatureRequestsAdmin";
+import Integrations from "@/pages/Integrations";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +32,6 @@ interface SettingsPanelProps {
 export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [active, setActive] = useState<SectionId>("profile");
   const { isAdmin } = useIsAdmin();
-  const navigate = useNavigate();
   const sections = isAdmin ? [...baseSections, adminFeatureSection] : baseSections;
 
   useEffect(() => {
@@ -55,26 +54,8 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         return <SettingsGmail />;
       case "integrations":
         return (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-sm font-semibold text-foreground mb-1">Integrations</h3>
-              <p className="text-xs text-muted-foreground">
-                Connect Duncan to your tools — Google Calendar, Slack, HubSpot, Basecamp, Azure DevOps and more.
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                onClose();
-                navigate("/integrations");
-              }}
-              className="flex w-full items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <Plug className="h-4 w-4" />
-                Manage integrations
-              </span>
-              <ArrowRight className="h-4 w-4" />
-            </button>
+          <div className="-m-4 sm:-m-6">
+            <Integrations />
           </div>
         );
       case "bug":

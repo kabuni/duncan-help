@@ -941,6 +941,34 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // ── Declined RSVPs: send one short acknowledgement, never chase missing details ──
+        if (finalStatus === "no") {
+          if (alreadySentConfirmation) {
+            console.log("[process-rsvp-emails] skipping — declined RSVP already acknowledged", { rsvp_id: rsvpId, thread_id: threadId });
+            continue;
+          }
+          const declineSubject = asciiSubject.toLowerCase().startsWith("re:") ? asciiSubject : `Re: ${asciiSubject}`;
+          const declineText = `Hi ${firstName},\n\nThanks for letting us know you can't make "${ev.title}"${whereValue ? ` at ${whereValue}` : ""}. We've marked you as not attending — no further action needed from you.\n\nHope to see you at a future event.\n\n— Duncan`;
+          const declineHtml = renderHtmlEmail({
+            greeting: `Thanks for letting us know, ${firstName}`,
+            intro: `We've recorded that you can't make "${ev.title}". No further action needed — hope to catch you at a future event.`,
+            highlights: [
+              { label: "Event", value: ev.title },
+              { label: "When", value: whenLabel },
+              ...(whereValue ? [{ label: "Where", value: whereValue }] : []),
+              { label: "Status", value: "NOT ATTENDING" },
+            ],
+            closing: "Thanks again for the heads-up.",
+          });
+          const declineSend = await sendGmailReply(token, attendeeEmail, declineSubject, declineText, declineHtml, threadId, messageIdHdr);
+          const declineUpd = declineSend.ok
+            ? { reply_sent_at: new Date().toISOString(), reply_message_id: declineSend.messageId ?? null, reply_error: null }
+            : { reply_error: (declineSend.error ?? `HTTP ${declineSend.status}`).slice(0, 2000) };
+          await admin.from("event_rsvps").update(declineUpd).eq("id", rsvpId);
+          continue;
+        }
+
+
         const completeListText = completeAttendees.map((a) => `• ${displayAttendee(a)}`).join("\n");
         const incompleteListText = incompleteAttendees
           .map(({ a, missing: ms }) => `• ${displayAttendee(a)} — ${ms.join(", ")}`).join("\n");

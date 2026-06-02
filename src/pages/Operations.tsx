@@ -6,11 +6,14 @@ import {
   Clock, RefreshCw, Loader2, Activity, Search, X,
   BarChart3, Globe2, Users, MousePointerClick, PlugZap, Send,
   GitPullRequest, GitCommit, FolderGit2, Building2, Inbox, Receipt,
+  ShieldCheck, XCircle, CalendarClock, CheckCircle, FileText, Plane,
 } from "lucide-react";
 import SuppliersDirectory from "@/components/suppliers/SuppliersDirectory";
 import Approvals from "@/pages/Approvals";
 import PurchaseOrders from "@/pages/PurchaseOrders";
-import { useApprovalCount } from "@/hooks/useApprovals";
+import { useApprovalCount, useApprovals } from "@/hooks/useApprovals";
+import { usePurchaseOrders } from "@/hooks/usePurchaseOrders";
+import { useTravelRequests } from "@/hooks/useTravelRequests";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";

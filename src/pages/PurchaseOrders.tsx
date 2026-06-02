@@ -39,7 +39,7 @@ const PurchaseOrders = () => {
               </h2>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => setShowForm("budget")} className="gap-2">
+              <Button onClick={() => setShowForm("budget")} variant="outline" className="gap-2">
                 <Wallet className="h-4 w-4" /> Budget Authorisation
               </Button>
               <Button onClick={() => setShowForm("creative")} variant="outline" className="gap-2">

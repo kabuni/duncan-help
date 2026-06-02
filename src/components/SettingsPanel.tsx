@@ -7,7 +7,7 @@ import SettingsBugReport from "./settings/SettingsBugReport";
 import SettingsAppearance from "./settings/SettingsAppearance";
 import SettingsGmail from "./settings/SettingsGmail";
 import FeatureRequestsAdmin from "./settings/FeatureRequestsAdmin";
-import Integrations from "@/pages/Integrations";
+import SettingsIntegrations from "./settings/SettingsIntegrations";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { cn } from "@/lib/utils";
 
@@ -53,11 +53,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       case "gmail":
         return <SettingsGmail />;
       case "integrations":
-        return (
-          <div className="-m-4 sm:-m-6">
-            <Integrations />
-          </div>
-        );
+        return <SettingsIntegrations onNavigate={onClose} />;
       case "bug":
         return <SettingsBugReport />;
       case "feature_requests":

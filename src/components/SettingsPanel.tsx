@@ -8,6 +8,7 @@ import SettingsAppearance from "./settings/SettingsAppearance";
 import SettingsGmail from "./settings/SettingsGmail";
 import FeatureRequestsAdmin from "./settings/FeatureRequestsAdmin";
 import Integrations from "@/pages/Integrations";
+import SettingsIntegrations from "./settings/SettingsIntegrations";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { cn } from "@/lib/utils";
 

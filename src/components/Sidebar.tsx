@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { LayoutDashboard, Home, Plug, Settings, LogOut, X, ChevronDown, CheckCircle2, Mail, FileText, MessageSquare, Calendar, FolderOpen, GitBranch, Zap, Menu, Layers, Megaphone, Crown, Inbox, Receipt, BookOpen } from "lucide-react";
+import { useState } from "react";
+import { LayoutDashboard, Home, Settings, LogOut, X, Mail, FileText, MessageSquare, Calendar, GitBranch, Menu, Layers, Megaphone, Crown, Inbox, Receipt, BookOpen } from "lucide-react";
 import { canViewBriefing } from "@/lib/ceoAccess";
 import ChatHistory from "@/components/ChatHistory";
 import { useGeneralChatsContext } from "@/hooks/GeneralChatsContext";
@@ -11,18 +11,9 @@ import { NavLink as RouterNavLink, useNavigate, useLocation } from "react-router
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { useApprovalCount } from "@/hooks/useApprovals";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 
-const integrationMeta: Record<string, { label: string; icon: React.ElementType }> = {
-  "slack": { label: "Slack", icon: MessageSquare },
-  "linear": { label: "Linear", icon: Zap },
-  "google-calendar": { label: "Google Calendar", icon: Calendar },
-  "azure-blob": { label: "Azure Blob", icon: FolderOpen },
-  "azure-devops": { label: "Azure DevOps", icon: GitBranch },
-  
-};
 
 
 export const MobileMenuButton = ({ onClick }: { onClick: () => void }) => (

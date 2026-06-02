@@ -153,6 +153,27 @@
   font-weight: 600;
 }
 
+/* "+X more" popup overlay — themed for light/dark */
+.rbc-overlay {
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 30px -10px hsl(var(--foreground) / 0.25);
+  padding: 0.5rem;
+  z-index: 50;
+}
+.rbc-overlay-header {
+  color: hsl(var(--foreground));
+  border-bottom: 1px solid hsl(var(--border));
+  background: transparent;
+  font-weight: 600;
+  margin: -0.5rem -0.5rem 0.5rem;
+  padding: 0.5rem 0.75rem;
+}
+
+
+
 .rbc-agenda-view table.rbc-agenda-table {
   background: hsl(var(--card));
   table-layout: fixed;

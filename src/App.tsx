@@ -69,7 +69,7 @@ const AppContent = () => {
           {/* Shared layout for all authenticated app routes */}
           <Route element={<ProtectedShell />}>
             <Route path="/" element={<Index />} />
-            <Route path="/integrations" element={<Integrations />} />
+            
             <Route path="/profile" element={<Navigate to="/settings" replace />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/recruitment" element={<Recruitment />} />

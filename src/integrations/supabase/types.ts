@@ -4109,6 +4109,10 @@ export type Database = {
         Args: { _project_id: string; _user_id: string }
         Returns: boolean
       }
+      get_action_items_around: {
+        Args: { _days_back?: number; _meeting_id: string }
+        Returns: Json
+      }
       get_company_integration_secret: {
         Args: { p_integration_id: string }
         Returns: string

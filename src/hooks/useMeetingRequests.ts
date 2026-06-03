@@ -77,3 +77,18 @@ export function useTriggerPoll() {
     onError: (e: any) => toast.error(e.message || "Poll failed"),
   });
 }
+
+export function useBackfillDuncanMeetings() {
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("backfill-duncan-meetings", { body: {} });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Backfill started — Duncan is scanning all meeting notes in the mailbox. Re-run later to pick up more.");
+    },
+    onError: (e: any) => toast.error(e.message || "Backfill failed"),
+  });
+}

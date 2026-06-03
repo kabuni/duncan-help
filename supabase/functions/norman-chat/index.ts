@@ -69,7 +69,7 @@ Your capabilities:
 - **Document Search**: You have access to the company's document storage. You can search for documents, read their content, list folders, and answer questions based on them. Documents are organized in folders: documents/, ndas/, and templates/.
 - **Notion Access**: You have access to the company's Notion workspace. You can search for pages, query databases, and read page content. Use these tools when users ask about information stored in Notion.
 
-- **Meeting Intelligence**: Use list_meetings to browse stored meetings (supports from_date/to_date and typo-tolerant search), get_meeting for a specific meeting's transcript/analysis, analyze_meetings to run AI analysis on meetings, and search_meeting_transcripts for cross-meeting topic search. **fetch_plaud_meetings is a SLOW sync (~20s) and must ONLY be called when the user EXPLICITLY asks to sync/refresh/import Plaud data** — i.e. the prompt contains keywords like "sync Plaud", "refresh Plaud", "pull new Plaud", "update Plaud meeting data", or "import from Plaud". **Never treat "fetch my latest meeting notes" as a sync request.** For summarization, analysis, search, or any question about existing meetings (including "today's", "yesterday's", "recent", "this week's", "summarize my meetings"): SKIP fetch_plaud_meetings. Go straight to the strict routing rules below. Note: meeting titles in the database may contain typos (e.g. "Lighting" instead of "Lightning") — the search is typo-tolerant, but always confirm the date matches what the user asked for before answering.
+- **Meeting Intelligence**: Use list_meetings to browse stored meetings (supports from_date/to_date and typo-tolerant search), get_meeting for a specific meeting's transcript/analysis, analyze_meetings to run AI analysis on meetings, and search_meeting_transcripts for cross-meeting topic search. **For ANY question about action items / tasks / follow-ups / to-dos / next steps from a specific meeting, you MUST call get_meeting_action_items_with_context (not get_meeting) after list_meetings — it returns the focus meeting's items plus a 7-day rollup of action items from surrounding meetings, and the answer MUST present both a "From this meeting" section and a "From the past 7 days" section.** **fetch_plaud_meetings is a SLOW sync (~20s) and must ONLY be called when the user EXPLICITLY asks to sync/refresh/import Plaud data** — i.e. the prompt contains keywords like "sync Plaud", "refresh Plaud", "pull new Plaud", "update Plaud meeting data", or "import from Plaud". **Never treat "fetch my latest meeting notes" as a sync request.** For summarization, analysis, search, or any question about existing meetings (including "today's", "yesterday's", "recent", "this week's", "summarize my meetings"): SKIP fetch_plaud_meetings. Go straight to the strict routing rules below. Note: meeting titles in the database may contain typos (e.g. "Lighting" instead of "Lightning") — the search is typo-tolerant, but always confirm the date matches what the user asked for before answering.
 
 **STRICT MULTI-MEETING BATCH LIMIT (HARD RULE — NOT a suggestion):** For any request involving multiple meetings (e.g. "summarize recent meetings", "this week's meetings", "what happened recently"):
 1. ALWAYS call list_meetings first.
@@ -657,6 +657,21 @@ const MEETING_TOOLS = [
         type: "object",
         properties: {
           meeting_id: { type: "string", description: "The meeting UUID" },
+        },
+        required: ["meeting_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_meeting_action_items_with_context",
+      description: "Return the action items for a specific meeting AND aggregate the action items from every other meeting in the days_back window ending at that meeting's date (default 7 days). Use this whenever the user asks for action items, tasks, follow-ups, or to-dos from a named meeting — the response includes the focus meeting plus weekly rollup so Duncan can present both sections. meeting_id MUST come from a prior list_meetings / list_meetings_by_source call in this turn.",
+      parameters: {
+        type: "object",
+        properties: {
+          meeting_id: { type: "string", description: "The meeting UUID returned by list_meetings or list_meetings_by_source." },
+          days_back: { type: "number", description: "Days before the meeting to include in the rollup (default 7, min 1, max 30)." },
         },
         required: ["meeting_id"],
       },
@@ -3983,6 +3998,60 @@ async function executeMeetingTool(
       return { ...payload, read_result: rr, meta: { readResult: true } };
     }
 
+    case "get_meeting_action_items_with_context": {
+      const daysBack = Math.min(30, Math.max(1, Number(args.days_back) || 7));
+      // Same listed-id guard as get_meeting — auto-recover if the model invents an id.
+      if (
+        meetingFlowState &&
+        meetingFlowState.listedIds.size > 0 &&
+        !meetingFlowState.listedIds.has(args.meeting_id)
+      ) {
+        const recovery = await executeMeetingTool(
+          "list_meetings",
+          { scope: "mine", limit: 5 },
+          supabaseAdmin,
+          supabaseUser,
+          supabaseUrl,
+          authHeader,
+          userId,
+          { listedIds: new Set(), userIntent: intent },
+          identity,
+        );
+        return {
+          ...recovery,
+          notice: "Pick a meeting_id from this list and call get_meeting_action_items_with_context again.",
+        };
+      }
+
+      const readClient = meetingFlowState?.sourceFallbackIds?.has(args.meeting_id)
+        ? supabaseAdmin
+        : supabaseUser;
+      const { data, error } = await readClient.rpc("get_action_items_around", {
+        _meeting_id: args.meeting_id,
+        _days_back: daysBack,
+      });
+      if (error) {
+        console.error("[get_meeting_action_items_with_context] rpc error", error);
+        return { error: error.message };
+      }
+      if (!data || (data as any).error) {
+        return { error: (data as any)?.error || "Meeting not found or no access." };
+      }
+      const rr = createReadResult({
+        data, source: "meetings_db", freshness_sla_seconds: 300, row_count: 1,
+        filters_applied: { meeting_id: args.meeting_id, days_back: daysBack },
+        query_echo: `action_items rollup meeting=${args.meeting_id} window=${daysBack}d`,
+      });
+      return {
+        ...(data as any),
+        instructions: "Present two clearly labeled sections in the answer: **From this meeting** (the focus_meeting.action_items) and **From the past " + daysBack + " days** (combined_action_items where is_focus=false, grouped by meeting_title with the meeting date). If both lists are empty, say so plainly and do not invent items.",
+        read_result: rr,
+        meta: { readResult: true },
+      };
+    }
+
+
+
     case "analyze_meetings": {
       const res = await fetch(`${supabaseUrl}/functions/v1/analyze-meeting`, {
         method: "POST",
@@ -6432,7 +6501,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const googleFormsToolNames = ["list_google_forms", "submit_google_form", "parse_google_form", "save_parsed_google_form"];
       const ndaToolNames = ["generate_nda", "list_nda_submissions", "send_nda_for_signature", "send_pdf_for_signature"];
       
-      const meetingToolNames = ["fetch_plaud_meetings", "list_meetings", "list_meetings_by_source", "get_meeting", "analyze_meetings", "search_meeting_transcripts"];
+      const meetingToolNames = ["fetch_plaud_meetings", "list_meetings", "list_meetings_by_source", "get_meeting", "get_meeting_action_items_with_context", "analyze_meetings", "search_meeting_transcripts"];
       const azureDevOpsToolNames = ["list_azure_devops_projects", "query_azure_work_items", "get_azure_work_item", "search_synced_work_items"];
       const azureReposToolNames = ["list_azure_repos", "get_recent_commits", "list_pull_requests", "get_pr_reviews", "get_repos_team_summary"];
       const xeroToolNames = ["list_xero_invoices", "get_xero_invoice", "approve_xero_invoice_payment", "search_xero_contacts", "create_xero_invoice", "list_xero_bank_accounts", "create_xero_expense"];
@@ -6900,7 +6969,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const SOURCE_LABELS: Record<string, string> = {
       search_emails: "Gmail", read_email: "Gmail", send_email: "Gmail", draft_email: "Gmail", reply_email: "Gmail", forward_email: "Gmail",
       list_calendar_events: "Google Calendar", create_calendar_event: "Google Calendar", update_calendar_event: "Google Calendar", delete_calendar_event: "Google Calendar", check_team_availability: "Google Calendar",
-      fetch_plaud_meetings: "Plaud Meetings", list_meetings: "Meetings", get_meeting: "Meetings",
+      fetch_plaud_meetings: "Plaud Meetings", list_meetings: "Meetings", get_meeting: "Meetings", get_meeting_action_items_with_context: "Meetings",
       list_workstream_cards: "Workstreams", get_workstream_card: "Workstreams", create_workstream_card: "Workstreams", update_workstream_card: "Workstreams",
       list_planner_items: "Planner", create_planner_item: "Planner", update_planner_item: "Planner",
       list_drive_files: "Google Drive", read_drive_file: "Google Drive", search_drive: "Google Drive",

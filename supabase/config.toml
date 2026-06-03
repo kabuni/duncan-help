@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.ea-confirm-meeting]
 verify_jwt = false
 
+[functions.backfill-duncan-meetings]
+verify_jwt = false
+
 
 [functions.norman-chat]
 verify_jwt = true

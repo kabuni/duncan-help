@@ -641,7 +641,7 @@ const MEETING_TOOLS = [
           search: { type: "string", description: "Keyword(s) to match in title or transcript. Words are matched independently (OR), so partial / misspelled queries still work." },
           from_date: { type: "string", description: "Only return meetings on or after this date (YYYY-MM-DD). Ignored if 'window' is set." },
           to_date: { type: "string", description: "Only return meetings on or before this date (YYYY-MM-DD). Ignored if 'window' is set." },
-          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Resolve a date window in the caller's timezone. Preferred over from_date/to_date for natural-language ranges." },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week", "last_week", "this_month", "last_month"], description: "Resolve a date window in the caller's timezone. ALWAYS prefer this over from_date/to_date for natural-language ranges like 'this week', 'last week', 'last month'. Do NOT compute dates yourself when a window value exists." },
           scope: { type: "string", enum: ["mine", "all"], description: "'mine' (default) returns only the current user's meetings. 'all' requires admin and returns the full company list — use ONLY when the user explicitly asks for everyone's meetings." },
         },
         required: [],

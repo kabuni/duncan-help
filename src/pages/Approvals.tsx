@@ -47,7 +47,7 @@ function fmtAmount(amount: number | null, currency: string | null) {
   return `${sym}${Number(amount).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export default function Approvals() {
+export default function Approvals({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: rows = [], isLoading } = useApprovals();

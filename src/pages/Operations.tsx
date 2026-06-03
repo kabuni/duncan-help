@@ -870,8 +870,8 @@ const Operations = () => {
                   <p className="text-2xl font-bold text-foreground">{approvalChanges}</p>
                 </motion.div>
               </div>
-              <div className="-mx-4 sm:-mx-8 -mt-2 [&_main]:!overflow-visible [&_main]:!flex-none [&_.gradient-radial]:!hidden">
-                <Approvals />
+              <div className="[&_main]:!overflow-visible [&_main]:!flex-none">
+                <Approvals embedded />
               </div>
             </TabsContent>
 
@@ -906,8 +906,8 @@ const Operations = () => {
                   <p className="text-2xl font-bold text-foreground">{authRejected}</p>
                 </motion.div>
               </div>
-              <div className="-mx-4 sm:-mx-8 -mt-2 [&_main]:!overflow-visible [&_main]:!flex-none [&_.gradient-radial]:!hidden">
-                <PurchaseOrders />
+              <div className="[&_main]:!overflow-visible [&_main]:!flex-none">
+                <PurchaseOrders embedded />
               </div>
             </TabsContent>
 

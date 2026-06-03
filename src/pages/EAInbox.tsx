@@ -95,6 +95,7 @@ export default function EAInbox() {
   const { isAdmin, isLoading: roleLoading } = useIsAdmin();
   const { data: requests = [], isLoading } = useMeetingRequests();
   const triggerPoll = useTriggerPoll();
+  const backfill = useBackfillDuncanMeetings();
   const [filter, setFilter] = useState<Filter>("pending");
 
   const filtered = useMemo(() => {

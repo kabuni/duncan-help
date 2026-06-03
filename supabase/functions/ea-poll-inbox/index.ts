@@ -304,12 +304,12 @@ serve(async (req) => {
             );
             const parsed = parseJsonFromText(purposeResp);
             if (parsed?.purpose_found && parsed.purpose) {
-              await scoreAndPropose(supa, existing.id, parsed.purpose, gmailToken);
+              await scoreProposeAndBook(supa, existing.id, parsed.purpose, gmailToken);
               log.scored++;
             }
-          } else if (existing.status === "pending_approval" && !existing.proposed_slot && existing.purpose) {
-            // Retry slot proposal for rows that previously failed (e.g. token refresh issue)
-            await scoreAndPropose(supa, existing.id, existing.purpose, gmailToken);
+          } else if (existing.status === "pending_approval" && existing.purpose) {
+            // Auto-book legacy pending rows now that approval is no longer required
+            await scoreProposeAndBook(supa, existing.id, existing.purpose, gmailToken);
             log.scored++;
           }
           continue;

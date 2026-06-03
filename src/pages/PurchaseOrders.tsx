@@ -40,17 +40,28 @@ const PurchaseOrders = ({ embedded = false }: { embedded?: boolean } = {}) => {
                 </h2>
               </div>
             )}
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={() => setShowForm("budget")} variant="outline" className="gap-2">
-                <Wallet className="h-4 w-4" /> Budget Authorisation
-              </Button>
-              <Button onClick={() => setShowForm("creative")} variant="outline" className="gap-2">
-                <Megaphone className="h-4 w-4" /> Marketing & Creative
-              </Button>
-              <Button onClick={() => setShowTravelForm(true)} variant="outline" className="gap-2">
-                <Plane className="h-4 w-4" /> Travel Request
-              </Button>
+            <div className="rounded-xl border border-border bg-card/50 p-4 sm:p-5">
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold text-foreground tracking-tight">
+                  Submit a New Request
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Raise a request for budget spend, creative sign-off, or business travel. Each request is routed to the appropriate approver automatically.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => setShowForm("budget")} variant="outline" className="gap-2">
+                  <Wallet className="h-4 w-4" /> Budget Authorisation
+                </Button>
+                <Button onClick={() => setShowForm("creative")} variant="outline" className="gap-2">
+                  <Megaphone className="h-4 w-4" /> Marketing & Creative
+                </Button>
+                <Button onClick={() => setShowTravelForm(true)} variant="outline" className="gap-2">
+                  <Plane className="h-4 w-4" /> Travel Request
+                </Button>
+              </div>
             </div>
+
           </motion.div>
 
 

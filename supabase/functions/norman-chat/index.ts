@@ -6501,7 +6501,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const googleFormsToolNames = ["list_google_forms", "submit_google_form", "parse_google_form", "save_parsed_google_form"];
       const ndaToolNames = ["generate_nda", "list_nda_submissions", "send_nda_for_signature", "send_pdf_for_signature"];
       
-      const meetingToolNames = ["fetch_plaud_meetings", "list_meetings", "list_meetings_by_source", "get_meeting", "analyze_meetings", "search_meeting_transcripts"];
+      const meetingToolNames = ["fetch_plaud_meetings", "list_meetings", "list_meetings_by_source", "get_meeting", "get_meeting_action_items_with_context", "analyze_meetings", "search_meeting_transcripts"];
       const azureDevOpsToolNames = ["list_azure_devops_projects", "query_azure_work_items", "get_azure_work_item", "search_synced_work_items"];
       const azureReposToolNames = ["list_azure_repos", "get_recent_commits", "list_pull_requests", "get_pr_reviews", "get_repos_team_summary"];
       const xeroToolNames = ["list_xero_invoices", "get_xero_invoice", "approve_xero_invoice_payment", "search_xero_contacts", "create_xero_invoice", "list_xero_bank_accounts", "create_xero_expense"];

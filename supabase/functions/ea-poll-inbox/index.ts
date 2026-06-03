@@ -298,7 +298,6 @@ serve(async (req) => {
         if (existing) {
           // If awaiting_purpose and there's a new reply from sender, try to extract purpose
           if (existing.status === "awaiting_purpose") {
-            // ensure this message is NEWER than last_polled_at (or just attempt extraction)
             const purposeResp = await callClaude(
               "You are Duncan, an AI Executive Assistant. Extract the user's stated purpose for meeting with Nimesh from this email reply. Return JSON only: { \"purpose_found\": true|false, \"purpose\": \"string or null\" }",
               body,
@@ -308,6 +307,10 @@ serve(async (req) => {
               await scoreAndPropose(supa, existing.id, parsed.purpose, gmailToken);
               log.scored++;
             }
+          } else if (existing.status === "pending_approval" && !existing.proposed_slot && existing.purpose) {
+            // Retry slot proposal for rows that previously failed (e.g. token refresh issue)
+            await scoreAndPropose(supa, existing.id, existing.purpose, gmailToken);
+            log.scored++;
           }
           continue;
         }

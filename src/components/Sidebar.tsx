@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { useApprovalCount } from "@/hooks/useApprovals";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 
 

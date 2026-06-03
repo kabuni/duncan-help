@@ -149,13 +149,23 @@ function parseFromHeader(from: string): { name: string; email: string } {
   return { name: from.split("@")[0], email: from.trim().toLowerCase() };
 }
 
+function encodeMimeSubject(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  if (/^[\x00-\x7F]*$/.test(s)) return s;
+  const b64 = btoa(unescape(encodeURIComponent(s)));
+  return `=?UTF-8?B?${b64}?=`;
+}
+
 async function sendGmailReply(
   token: string, threadId: string, toEmail: string, subject: string, body: string, inReplyTo?: string,
 ) {
+  const subj = subject.startsWith("Re:") ? subject : `Re: ${subject}`;
   const headers = [
     `To: ${toEmail}`,
-    `Subject: ${subject.startsWith("Re:") ? subject : `Re: ${subject}`}`,
+    `Subject: ${encodeMimeSubject(subj)}`,
+    'MIME-Version: 1.0',
     'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: 8bit',
   ];
   if (inReplyTo) {
     headers.push(`In-Reply-To: ${inReplyTo}`);
@@ -258,6 +268,49 @@ function findSlot(busy: BusyBlock[], priority: string, now: Date): { start: Date
   return null;
 }
 
+function londonYmdToUtc(y: number, m: number, d: number, minutesFromMidnight: number): Date {
+  const tmp = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const lp = londonParts(tmp);
+  const londonOffsetMin = (12 - lp.hour) * 60 - lp.minute;
+  const start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+  start.setUTCMinutes(start.getUTCMinutes() + minutesFromMidnight - londonOffsetMin);
+  return start;
+}
+
+interface Preferred {
+  date?: string | null;  // YYYY-MM-DD (London)
+  timeStart?: string | null; // HH:MM 24h
+  timeEnd?: string | null;   // HH:MM 24h
+}
+
+function hhmmToMin(s?: string | null): number | null {
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10), mm = parseInt(m[2], 10);
+  if (h < 0 || h > 23 || mm < 0 || mm > 59) return null;
+  return h * 60 + mm;
+}
+
+function findSlotOnDate(
+  busy: BusyBlock[], durationMin: number, dateStr: string,
+  winStartMin: number, winEndMin: number, now: Date,
+): { start: Date; end: Date } | null {
+  const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  for (let t = winStartMin; t + durationMin <= winEndMin; t += 15) {
+    const start = londonYmdToUtc(y, mo, d, t);
+    const end = new Date(start.getTime() + durationMin * 60_000);
+    if (start.getTime() < now.getTime() + 30 * 60_000) continue;
+    const sp = londonParts(start);
+    if (sp.isWeekend) continue;
+    if (isInsideAny(start, end, busy)) continue;
+    return { start, end };
+  }
+  return null;
+}
+
 // ---------- main poll ----------
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -295,16 +348,28 @@ serve(async (req) => {
           .eq("gmail_thread_id", threadId)
           .maybeSingle();
 
+        const todayLondon = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
+        }).format(new Date()); // YYYY-MM-DD
+        const weekdayLondon = new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Europe/London", weekday: "long",
+        }).format(new Date());
+
         if (existing) {
           // If awaiting_purpose and there's a new reply from sender, try to extract purpose
           if (existing.status === "awaiting_purpose") {
             const purposeResp = await callClaude(
-              "You are Duncan, an AI Executive Assistant. Extract the user's stated purpose for meeting with Nimesh from this email reply. Return JSON only: { \"purpose_found\": true|false, \"purpose\": \"string or null\" }",
+              `You are Duncan, an AI Executive Assistant. Today is ${weekdayLondon} ${todayLondon} (Europe/London). Extract the user's stated purpose for meeting with Nimesh from this email reply, AND any preferred date/time they mention. Resolve relative dates ("tomorrow", "next Friday", "5th June") against today's date. Return JSON only: { "purpose_found": true|false, "purpose": "string or null", "preferred_date": "YYYY-MM-DD or null", "preferred_time_start": "HH:MM or null (24h London)", "preferred_time_end": "HH:MM or null (24h London)" }. If they say "anytime" set both times to null but still return the date.`,
               body,
             );
             const parsed = parseJsonFromText(purposeResp);
             if (parsed?.purpose_found && parsed.purpose) {
-              await scoreProposeAndBook(supa, existing.id, parsed.purpose, gmailToken);
+              const preferred: Preferred = {
+                date: parsed.preferred_date || null,
+                timeStart: parsed.preferred_time_start || null,
+                timeEnd: parsed.preferred_time_end || null,
+              };
+              await scoreProposeAndBook(supa, existing.id, parsed.purpose, gmailToken, preferred);
               log.scored++;
             }
           } else if (existing.status === "pending_approval" && existing.purpose) {
@@ -318,7 +383,7 @@ serve(async (req) => {
         // New thread — assess intent + extract purpose
         log.new_threads++;
         const intentResp = await callClaude(
-          "You are Duncan, an AI Executive Assistant. Determine if this email is a request to meet, call, or schedule time with Nimesh Patel (CEO). Then check if a clear purpose for the meeting is stated. Return JSON only: { \"is_meeting_request\": true|false, \"purpose_found\": true|false, \"purpose\": \"string or null\" }",
+          `You are Duncan, an AI Executive Assistant. Today is ${weekdayLondon} ${todayLondon} (Europe/London). Determine if this email is a request to meet, call, or schedule time with Nimesh Patel (CEO). Then check if a clear purpose is stated, and extract any preferred date/time. Resolve relative dates ("tomorrow", "next Friday", "5th June") against today. Return JSON only: { "is_meeting_request": true|false, "purpose_found": true|false, "purpose": "string or null", "preferred_date": "YYYY-MM-DD or null", "preferred_time_start": "HH:MM or null (24h London)", "preferred_time_end": "HH:MM or null (24h London)" }`,
           `Subject: ${subject}\n\n${body}`,
         );
         const intent = parseJsonFromText(intentResp);
@@ -339,7 +404,12 @@ serve(async (req) => {
           const { data: inserted } = await supa
             .from("meeting_requests").insert(insertRow).select().single();
           if (inserted) {
-            await scoreProposeAndBook(supa, inserted.id, intent.purpose, gmailToken);
+            const preferred: Preferred = {
+              date: intent.preferred_date || null,
+              timeStart: intent.preferred_time_start || null,
+              timeEnd: intent.preferred_time_end || null,
+            };
+            await scoreProposeAndBook(supa, inserted.id, intent.purpose, gmailToken, preferred);
             log.scored++;
           }
         } else {
@@ -391,7 +461,9 @@ function fmtLondonDayTime(iso: string) {
   };
 }
 
-async function scoreProposeAndBook(supa: any, rowId: string, purpose: string, gmailToken: string) {
+async function scoreProposeAndBook(
+  supa: any, rowId: string, purpose: string, gmailToken: string, preferred?: Preferred,
+) {
   const scoreResp = await callClaude(
     `You are an intelligent scheduling assistant for a Series A startup one week away from a major product launch. Classify the following meeting request into one of four priority tiers using these rules:
 P1 – CRITICAL: Investors, board members, product launch blockers, enterprise deals that are time-sensitive, press or PR opportunities, legal matters.
@@ -409,17 +481,27 @@ Return JSON only: { "priority": "P1|P2|P3|P4", "reason": "one sentence explanati
   const { data: row } = await supa.from("meeting_requests").select("*").eq("id", rowId).maybeSingle();
   if (!row) return;
 
-  // Find slot
+  // Find slot — honor sender's preferred date/time if provided
   let proposedStart: Date | null = null;
   let proposedEnd: Date | null = null;
   let calToken: string | null = null;
   try {
     calToken = await getNimeshCalendarAccess(supa);
     const now = new Date();
-    const horizonEnd = new Date(now.getTime() + 21 * 86_400_000);
+    const horizonEnd = new Date(now.getTime() + 35 * 86_400_000);
     const busy = await fetchBusy(calToken, now, horizonEnd);
-    const slot = findSlot(busy, priority, now);
-    if (slot) { proposedStart = slot.start; proposedEnd = slot.end; }
+    const durationMin = (priority === "P1" || priority === "P2") ? 60 : 30;
+
+    if (preferred?.date) {
+      const ws = hhmmToMin(preferred.timeStart) ?? 9 * 60;
+      const we = hhmmToMin(preferred.timeEnd) ?? 18 * 60;
+      const slot = findSlotOnDate(busy, durationMin, preferred.date, ws, we, now);
+      if (slot) { proposedStart = slot.start; proposedEnd = slot.end; }
+    }
+    if (!proposedStart) {
+      const slot = findSlot(busy, priority, now);
+      if (slot) { proposedStart = slot.start; proposedEnd = slot.end; }
+    }
   } catch (e) {
     console.warn("slot find failed", e);
   }

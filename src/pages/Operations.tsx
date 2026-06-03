@@ -288,14 +288,16 @@ const Operations = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={() => handleSync("azure")}
-                  disabled={syncing === "azure"}
-                  className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
-                >
-                  {syncing === "azure" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                  Sync DevOps
-                </button>
+                {section === "azure" && (
+                  <button
+                    onClick={() => handleSync("azure")}
+                    disabled={syncing === "azure"}
+                    className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+                  >
+                    {syncing === "azure" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    Sync DevOps
+                  </button>
+                )}
               </div>
             </div>
           </motion.div>

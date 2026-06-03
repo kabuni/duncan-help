@@ -665,6 +665,21 @@ const MEETING_TOOLS = [
   {
     type: "function",
     function: {
+      name: "get_meeting_action_items_with_context",
+      description: "Return the action items for a specific meeting AND aggregate the action items from every other meeting in the days_back window ending at that meeting's date (default 7 days). Use this whenever the user asks for action items, tasks, follow-ups, or to-dos from a named meeting — the response includes the focus meeting plus weekly rollup so Duncan can present both sections. meeting_id MUST come from a prior list_meetings / list_meetings_by_source call in this turn.",
+      parameters: {
+        type: "object",
+        properties: {
+          meeting_id: { type: "string", description: "The meeting UUID returned by list_meetings or list_meetings_by_source." },
+          days_back: { type: "number", description: "Days before the meeting to include in the rollup (default 7, min 1, max 30)." },
+        },
+        required: ["meeting_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "analyze_meetings",
       description: "Run AI analysis on meetings that have transcripts but haven't been analyzed yet. Can also re-analyze specific meetings. Extracts summary, action items, decisions, participants, sentiment, risks, and follow-ups.",
       parameters: {

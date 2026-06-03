@@ -379,7 +379,19 @@ Duncan (EA for Nimesh Patel)`;
   });
 });
 
-async function scoreAndPropose(supa: any, rowId: string, purpose: string, _gmailToken: string) {
+const NIMESH_EMAIL = "nimesh@kabuni.com";
+
+function fmtLondonDayTime(iso: string) {
+  const d = new Date(iso);
+  return {
+    day: new Intl.DateTimeFormat("en-GB",
+      { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long" }).format(d),
+    time: new Intl.DateTimeFormat("en-GB",
+      { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", hour12: false }).format(d),
+  };
+}
+
+async function scoreProposeAndBook(supa: any, rowId: string, purpose: string, gmailToken: string) {
   const scoreResp = await callClaude(
     `You are an intelligent scheduling assistant for a Series A startup one week away from a major product launch. Classify the following meeting request into one of four priority tiers using these rules:
 P1 – CRITICAL: Investors, board members, product launch blockers, enterprise deals that are time-sensitive, press or PR opportunities, legal matters.
@@ -393,11 +405,16 @@ Return JSON only: { "priority": "P1|P2|P3|P4", "reason": "one sentence explanati
   const priority = ["P1","P2","P3","P4"].includes(score?.priority) ? score.priority : "P3";
   const reason = score?.reason || "";
 
+  // Fetch the meeting request row for sender details
+  const { data: row } = await supa.from("meeting_requests").select("*").eq("id", rowId).maybeSingle();
+  if (!row) return;
+
   // Find slot
   let proposedStart: Date | null = null;
   let proposedEnd: Date | null = null;
+  let calToken: string | null = null;
   try {
-    const calToken = await getNimeshCalendarAccess(supa);
+    calToken = await getNimeshCalendarAccess(supa);
     const now = new Date();
     const horizonEnd = new Date(now.getTime() + 21 * 86_400_000);
     const busy = await fetchBusy(calToken, now, horizonEnd);
@@ -407,11 +424,91 @@ Return JSON only: { "priority": "P1|P2|P3|P4", "reason": "one sentence explanati
     console.warn("slot find failed", e);
   }
 
+  // If no slot found, store as pending_approval so admin can manually pick a time
+  if (!proposedStart || !proposedEnd || !calToken) {
+    await supa.from("meeting_requests").update({
+      purpose, priority, priority_reason: reason,
+      status: "pending_approval",
+      last_polled_at: new Date().toISOString(),
+    }).eq("id", rowId);
+    return;
+  }
+
+  const startIso = proposedStart.toISOString();
+  const endIso = proposedEnd.toISOString();
+
+  // Create calendar event with Google Meet
+  let eventId: string | null = null;
+  try {
+    const eventRes = await fetch(
+      "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all",
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${calToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          summary: `${purpose} – ${row.sender_name}`,
+          description: `${row.original_email_body}\n\n—\nPriority: ${priority} — ${reason}`,
+          start: { dateTime: startIso, timeZone: "Europe/London" },
+          end:   { dateTime: endIso,   timeZone: "Europe/London" },
+          attendees: [{ email: NIMESH_EMAIL }, { email: row.sender_email }],
+          conferenceData: {
+            createRequest: { requestId: crypto.randomUUID(),
+              conferenceSolutionKey: { type: "hangoutsMeet" } },
+          },
+        }),
+      },
+    );
+    if (eventRes.ok) {
+      const ev = await eventRes.json();
+      eventId = ev.id;
+    } else {
+      console.warn("calendar create failed", await eventRes.text());
+    }
+  } catch (e) {
+    console.warn("calendar create error", e);
+  }
+
+  if (!eventId) {
+    // Fall back: store proposed slot but mark pending so admin can review
+    await supa.from("meeting_requests").update({
+      purpose, priority, priority_reason: reason,
+      proposed_slot: startIso, proposed_slot_end: endIso,
+      status: "pending_approval",
+      last_polled_at: new Date().toISOString(),
+    }).eq("id", rowId);
+    return;
+  }
+
+  // Send confirmation email to requester
+  try {
+    const f = fmtLondonDayTime(startIso);
+    const firstName = (row.sender_name || "").split(" ")[0] || "there";
+    const confirmBody =
+`Hi ${firstName},
+
+Great news — I've booked your meeting with Nimesh.
+
+📅 ${f.day}
+⏰ ${f.time} (UK Time)
+📍 Google Meet (invite sent separately)
+
+Topic: ${purpose}
+
+If you need to reschedule, just reply to this email.
+
+Best,
+Duncan (EA for Nimesh Patel)`;
+    const subject = `Meeting Confirmed – Nimesh Patel | ${f.day}, ${f.time}`;
+    await sendGmailReply(gmailToken, row.gmail_thread_id, row.sender_email, subject, confirmBody, row.gmail_message_id);
+  } catch (e) {
+    console.warn("confirm email failed", e);
+  }
+
   await supa.from("meeting_requests").update({
     purpose, priority, priority_reason: reason,
-    proposed_slot: proposedStart?.toISOString() ?? null,
-    proposed_slot_end: proposedEnd?.toISOString() ?? null,
-    status: "pending_approval",
+    proposed_slot: startIso, proposed_slot_end: endIso,
+    calendar_event_id: eventId,
+    status: "confirmed",
     last_polled_at: new Date().toISOString(),
   }).eq("id", rowId);
 }

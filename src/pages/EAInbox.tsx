@@ -4,7 +4,7 @@ import { useIsAdmin } from "@/hooks/useUserRoles";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Inbox, RefreshCw, Calendar as CalIcon, Mail } from "lucide-react";
+import { Inbox, RefreshCw, Calendar as CalIcon, Mail, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const PRIORITY_STYLES: Record<string, string> = {

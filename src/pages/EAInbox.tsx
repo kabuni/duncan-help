@@ -124,7 +124,7 @@ export default function EAInbox() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">EA Inbox</h1>
             <p className="text-sm text-muted-foreground">
-              Duncan handles inbound meeting requests for Nimesh. Approve a slot to confirm.
+              Duncan auto-books inbound meeting requests for Nimesh once the purpose is confirmed.
             </p>
           </div>
         </div>

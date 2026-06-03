@@ -11,7 +11,7 @@ const corsHeaders = {
 };
 
 const NIMESH_USER_ID = "517bf518-6111-41b8-9ff0-1249f3055ec7";
-const ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
+const ANTHROPIC_MODEL = "claude-sonnet-4-5";
 const SEARCH_QUERY =
   'newer_than:7d (nimesh OR "meeting" OR "schedule" OR "call" OR "speak" OR "intro" OR "chat")';
 

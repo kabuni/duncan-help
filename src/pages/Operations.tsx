@@ -107,20 +107,23 @@ const Operations = () => {
   const [analyticsAnswer, setAnalyticsAnswer] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("work-items");
 
-  const sectionOf: Record<string, "overview" | "action" | "directory"> = {
-    "work-items": "overview",
-    "repos": "overview",
-    "analytics": "overview",
-    "sync-logs": "overview",
-    "approvals": "action",
-    "authorisation": "action",
-    "suppliers": "directory",
+  type SectionId = "azure" | "approvals-auth" | "suppliers" | "analytics" | "sync-logs";
+  const sectionOf: Record<string, SectionId> = {
+    "work-items": "azure",
+    "repos": "azure",
+    "approvals": "approvals-auth",
+    "authorisation": "approvals-auth",
+    "suppliers": "suppliers",
+    "analytics": "analytics",
+    "sync-logs": "sync-logs",
   };
-  const section = sectionOf[activeTab] ?? "overview";
-  const sectionDefaults: Record<"overview" | "action" | "directory", string> = {
-    overview: "work-items",
-    action: "approvals",
-    directory: "suppliers",
+  const section: SectionId = sectionOf[activeTab] ?? "azure";
+  const sectionDefaults: Record<SectionId, string> = {
+    "azure": "work-items",
+    "approvals-auth": "approvals",
+    "suppliers": "suppliers",
+    "analytics": "analytics",
+    "sync-logs": "sync-logs",
   };
 
   const reposEnabled = activeTab === "repos";
@@ -273,11 +276,15 @@ const Operations = () => {
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Operations Hub</h2>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  {section === "action"
+                  {section === "azure"
+                    ? "Azure DevOps work items and repository activity."
+                    : section === "approvals-auth"
                     ? "Approvals and authorisation requests awaiting your decision."
-                    : section === "directory"
+                    : section === "suppliers"
                     ? "Suppliers and operational directories."
-                    : "Work items, repos, website analytics and sync activity."}
+                    : section === "analytics"
+                    ? "Website analytics and traffic insights."
+                    : "Sync activity across connected systems."}
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -294,18 +301,20 @@ const Operations = () => {
           </motion.div>
 
           {/* Primary section tabs */}
-          <div className="mb-4 flex items-center gap-1 rounded-xl border border-border bg-card p-1 w-full sm:w-fit">
+          <div className="mb-4 flex items-center gap-1 rounded-xl border border-border bg-card p-1 w-full sm:w-fit overflow-x-auto">
             {([
-              { id: "overview", label: "Overview", badge: 0 },
-              { id: "action", label: "Action", badge: pendingApprovals },
-              { id: "directory", label: "Directory", badge: 0 },
+              { id: "azure", label: "Azure DevOps", badge: 0 },
+              { id: "approvals-auth", label: "Approvals & Authorisation", badge: pendingApprovals },
+              { id: "suppliers", label: "Suppliers", badge: 0 },
+              { id: "analytics", label: "Website Analytics", badge: 0 },
+              { id: "sync-logs", label: "Sync Logs", badge: 0 },
             ] as const).map((s) => {
               const isActive = section === s.id;
               return (
                 <button
                   key={s.id}
                   onClick={() => setActiveTab(sectionDefaults[s.id])}
-                  className={`flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+                  className={`flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                     isActive
                       ? "bg-secondary text-foreground"
                       : "text-muted-foreground hover:text-foreground"
@@ -325,7 +334,7 @@ const Operations = () => {
 
           {/* Secondary sub-tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            {section === "overview" && (
+            {section === "azure" && (
               <TabsList className="bg-card border border-border w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
                 <TabsTrigger value="work-items" className="gap-1.5 whitespace-nowrap">
                   <GitBranch className="h-3.5 w-3.5" /> Work Items
@@ -333,16 +342,10 @@ const Operations = () => {
                 <TabsTrigger value="repos" className="gap-1.5 whitespace-nowrap">
                   <FolderGit2 className="h-3.5 w-3.5" /> Repos
                 </TabsTrigger>
-                <TabsTrigger value="analytics" className="gap-1.5 whitespace-nowrap">
-                  <BarChart3 className="h-3.5 w-3.5" /> Website Analytics
-                </TabsTrigger>
-                <TabsTrigger value="sync-logs" className="gap-1.5 whitespace-nowrap">
-                  <Clock className="h-3.5 w-3.5" /> Sync Logs
-                </TabsTrigger>
               </TabsList>
             )}
 
-            {section === "action" && (
+            {section === "approvals-auth" && (
               <TabsList className="bg-card border border-border w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
                 <TabsTrigger value="approvals" className="gap-1.5 whitespace-nowrap">
                   <Inbox className="h-3.5 w-3.5" /> Approvals
@@ -358,13 +361,6 @@ const Operations = () => {
               </TabsList>
             )}
 
-            {section === "directory" && (
-              <TabsList className="bg-card border border-border w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
-                <TabsTrigger value="suppliers" className="gap-1.5 whitespace-nowrap">
-                  <Building2 className="h-3.5 w-3.5" /> Suppliers
-                </TabsTrigger>
-              </TabsList>
-            )}
 
             {/* Work Items */}
             <TabsContent value="work-items" className="space-y-3">

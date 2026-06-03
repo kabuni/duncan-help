@@ -268,6 +268,49 @@ function findSlot(busy: BusyBlock[], priority: string, now: Date): { start: Date
   return null;
 }
 
+function londonYmdToUtc(y: number, m: number, d: number, minutesFromMidnight: number): Date {
+  const tmp = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const lp = londonParts(tmp);
+  const londonOffsetMin = (12 - lp.hour) * 60 - lp.minute;
+  const start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+  start.setUTCMinutes(start.getUTCMinutes() + minutesFromMidnight - londonOffsetMin);
+  return start;
+}
+
+interface Preferred {
+  date?: string | null;  // YYYY-MM-DD (London)
+  timeStart?: string | null; // HH:MM 24h
+  timeEnd?: string | null;   // HH:MM 24h
+}
+
+function hhmmToMin(s?: string | null): number | null {
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10), mm = parseInt(m[2], 10);
+  if (h < 0 || h > 23 || mm < 0 || mm > 59) return null;
+  return h * 60 + mm;
+}
+
+function findSlotOnDate(
+  busy: BusyBlock[], durationMin: number, dateStr: string,
+  winStartMin: number, winEndMin: number, now: Date,
+): { start: Date; end: Date } | null {
+  const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  for (let t = winStartMin; t + durationMin <= winEndMin; t += 15) {
+    const start = londonYmdToUtc(y, mo, d, t);
+    const end = new Date(start.getTime() + durationMin * 60_000);
+    if (start.getTime() < now.getTime() + 30 * 60_000) continue;
+    const sp = londonParts(start);
+    if (sp.isWeekend) continue;
+    if (isInsideAny(start, end, busy)) continue;
+    return { start, end };
+  }
+  return null;
+}
+
 // ---------- main poll ----------
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });

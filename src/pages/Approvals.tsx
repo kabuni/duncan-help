@@ -240,24 +240,26 @@ export default function Approvals({ embedded = false }: { embedded?: boolean } =
   return (
     <>
       <main className="flex-1 overflow-y-auto">
-        <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />
-        <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-7xl">
-          <div className="mb-6">
-            <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1">
-              Inbox
-            </p>
-            <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center gap-3">
-              Approvals
-              {myPendingCount > 0 && (
-                <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 border">
-                  {myPendingCount} awaiting you
-                </Badge>
-              )}
-            </h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              One place for every sign-off — costs, event dates, releases. Decisions write back to the source.
-            </p>
-          </div>
+        {!embedded && <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />}
+        <div className={embedded ? "relative z-10" : "relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-7xl"}>
+          {!embedded && (
+            <div className="mb-6">
+              <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1">
+                Inbox
+              </p>
+              <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center gap-3">
+                Approvals
+                {myPendingCount > 0 && (
+                  <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 border">
+                    {myPendingCount} awaiting you
+                  </Badge>
+                )}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                One place for every sign-off — costs, event dates, releases. Decisions write back to the source.
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="w-full sm:w-auto">

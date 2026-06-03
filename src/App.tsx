@@ -33,6 +33,7 @@ import CEOBriefing from "./pages/CEOBriefing";
 import KeyEventsDiary from "./pages/KeyEventsDiary";
 import Approvals from "./pages/Approvals";
 import PurchaseOrders from "./pages/PurchaseOrders";
+import EAInbox from "./pages/EAInbox";
 
 import SlackCallback from "./pages/SlackCallback";
 import KnowledgeBase from "./pages/KnowledgeBase";

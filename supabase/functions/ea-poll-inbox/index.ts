@@ -60,8 +60,8 @@ export async function getNimeshCalendarAccess(supa: any): Promise<string> {
   if (new Date(row.token_expiry).getTime() - Date.now() > 60_000) return row.access_token;
   const refreshed = await refreshGoogleToken(
     row.refresh_token,
-    Deno.env.get("GOOGLE_CLIENT_ID") || Deno.env.get("GMAIL_CLIENT_ID")!,
-    Deno.env.get("GOOGLE_CLIENT_SECRET") || Deno.env.get("GMAIL_CLIENT_SECRET")!,
+    Deno.env.get("GOOGLE_CALENDAR_CLIENT_ID")!,
+    Deno.env.get("GOOGLE_CALENDAR_CLIENT_SECRET")!,
   );
   const expiry = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
   await supa.from("google_calendar_tokens")

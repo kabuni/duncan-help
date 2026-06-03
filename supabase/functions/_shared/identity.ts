@@ -188,13 +188,22 @@ export function formatIdentityForPrompt(id: ResolvedIdentity): string {
   ].join("\n");
 }
 
+export type WindowName =
+  | "today"
+  | "tomorrow"
+  | "this_week"
+  | "next_week"
+  | "last_week"
+  | "this_month"
+  | "last_month";
+
 /**
- * Resolve "today" / "tomorrow" / "this week" in the caller's timezone.
- * Returns ISO strings (UTC) for the boundaries so DB queries stay portable.
+ * Resolve named date windows in the caller's timezone. Returns ISO strings
+ * (UTC) for the boundaries so DB queries stay portable. `endISO` is exclusive.
  */
 export function resolveWindow(
   id: ResolvedIdentity,
-  window: "today" | "tomorrow" | "this_week" | "next_week",
+  window: WindowName,
   now: Date = new Date(),
 ): { startISO: string; endISO: string; label: string; timezone: string } {
   // Build a date in the user's timezone by formatting then re-parsing.
@@ -213,22 +222,42 @@ export function resolveWindow(
                     - now.getTime()) / 60000;
   const todayStart = new Date(midnightLocalAsUTC.getTime() - offsetMin * 60000);
 
+  const localMidnight = (y: number, mZero: number, d: number) =>
+    new Date(Date.UTC(y, mZero, d, 0, 0, 0).valueOf() - offsetMin * 60000);
+
   let start = todayStart;
-  let days = 1;
-  let label = "today";
-  if (window === "tomorrow") { start = new Date(todayStart.getTime() + 86400000); label = "tomorrow"; }
-  else if (window === "this_week") {
-    const dow = new Date(todayStart).getUTCDay(); // 0..6 relative to local midnight UTC equiv
-    const offset = (dow + 6) % 7; // make Monday=0
+  let end: Date;
+  const label: string = window;
+
+  if (window === "tomorrow") {
+    start = new Date(todayStart.getTime() + 86400000);
+    end = new Date(start.getTime() + 86400000);
+  } else if (window === "this_week") {
+    const dow = new Date(todayStart).getUTCDay();
+    const offset = (dow + 6) % 7; // Monday=0
     start = new Date(todayStart.getTime() - offset * 86400000);
-    days = 7; label = "this_week";
+    end = new Date(start.getTime() + 7 * 86400000);
   } else if (window === "next_week") {
     const dow = new Date(todayStart).getUTCDay();
     const offset = (dow + 6) % 7;
     start = new Date(todayStart.getTime() + (7 - offset) * 86400000);
-    days = 7; label = "next_week";
+    end = new Date(start.getTime() + 7 * 86400000);
+  } else if (window === "last_week") {
+    const dow = new Date(todayStart).getUTCDay();
+    const offset = (dow + 6) % 7;
+    start = new Date(todayStart.getTime() - (offset + 7) * 86400000);
+    end = new Date(start.getTime() + 7 * 86400000);
+  } else if (window === "this_month") {
+    start = localMidnight(localY, localM - 1, 1);
+    end = localMidnight(localY, localM, 1);
+  } else if (window === "last_month") {
+    start = localMidnight(localY, localM - 2, 1);
+    end = localMidnight(localY, localM - 1, 1);
+  } else {
+    // today
+    end = new Date(start.getTime() + 86400000);
   }
-  const end = new Date(start.getTime() + days * 86400000);
+
   return {
     startISO: start.toISOString(),
     endISO: end.toISOString(),

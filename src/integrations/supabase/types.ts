@@ -4113,6 +4113,10 @@ export type Database = {
         Args: { _days_back?: number; _meeting_id: string }
         Returns: Json
       }
+      get_action_items_for_range: {
+        Args: { _from_date: string; _to_date: string }
+        Returns: Json
+      }
       get_company_integration_secret: {
         Args: { p_integration_id: string }
         Returns: string

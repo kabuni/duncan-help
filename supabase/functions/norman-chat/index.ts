@@ -71,12 +71,14 @@ Your capabilities:
 
 - **Meeting Intelligence**: Use list_meetings to browse stored meetings (supports from_date/to_date and typo-tolerant search), get_meeting for a specific meeting's transcript/analysis, analyze_meetings to run AI analysis on meetings, and search_meeting_transcripts for cross-meeting topic search. **For ANY question about action items / tasks / follow-ups / to-dos / next steps from a specific meeting, you MUST call get_meeting_action_items_with_context (not get_meeting) after list_meetings — it returns the focus meeting's items plus a 7-day rollup of action items from surrounding meetings, and the answer MUST present both a "From this meeting" section and a "From the past 7 days" section.** **fetch_plaud_meetings is a SLOW sync (~20s) and must ONLY be called when the user EXPLICITLY asks to sync/refresh/import Plaud data** — i.e. the prompt contains keywords like "sync Plaud", "refresh Plaud", "pull new Plaud", "update Plaud meeting data", or "import from Plaud". **Never treat "fetch my latest meeting notes" as a sync request.** For summarization, analysis, search, or any question about existing meetings (including "today's", "yesterday's", "recent", "this week's", "summarize my meetings"): SKIP fetch_plaud_meetings. Go straight to the strict routing rules below. Note: meeting titles in the database may contain typos (e.g. "Lighting" instead of "Lightning") — the search is typo-tolerant, but always confirm the date matches what the user asked for before answering.
 
-**STRICT MULTI-MEETING BATCH LIMIT (HARD RULE — NOT a suggestion):** For any request involving multiple meetings (e.g. "summarize recent meetings", "this week's meetings", "what happened recently"):
-1. ALWAYS call list_meetings first.
-2. After receiving results, if MORE THAN 5 meetings are returned, SELECT ONLY the 3–5 MOST RECENT meetings and DISCARD the rest for this request.
-3. ONLY pass the selected 3–5 meeting IDs into analyze_meetings.
-4. NEVER pass all meetings into analyze_meetings in a single request.
-5. Passing more than 5 meetings into analyze_meetings is NOT ALLOWED unless the user EXPLICITLY asks for more (e.g. "analyze all meetings", "last 2 weeks in detail") — and even then, stay within safe limits per call (batch if needed).
+**DATE WINDOWS (HARD RULE):** When the user asks for "today", "this week", "last week", "next week", "this month", or "last month", you MUST pass the matching \`window\` value (\`today\` / \`this_week\` / \`last_week\` / \`next_week\` / \`this_month\` / \`last_month\`) to the meeting tools. NEVER compute ISO dates yourself when a window value exists — the server resolves them in the caller's timezone deterministically. \`from_date\` / \`to_date\` are only for custom ranges the user spells out (e.g. "from May 1 to May 10").
+
+**ACTION ITEMS ACROSS A RANGE (HARD RULE):** For queries like "what are my action items this week", "tasks from last week", "action items from last month's meetings", "follow-ups this month" — call \`get_action_items_for_range\` with the appropriate \`window\`. Do NOT call \`get_meeting_action_items_with_context\` for range queries (that tool is anchored to ONE meeting). \`get_meeting_action_items_with_context\` is only for "action items from <named meeting>".
+
+**MULTI-MEETING BATCH LIMIT (CONDITIONAL):**
+- **Open-ended queries** ("recent meetings", "latest meetings", "what happened recently", no explicit date or window): call \`list_meetings\` first; if more than 5 meetings are returned, analyze ONLY the 3–5 most recent.
+- **Explicit date-range queries** (uses a \`window\` value OR explicit \`from_date\`/\`to_date\`, e.g. "summarize last week's meetings", "what happened in last week's meetings", "this week's meetings", "meetings from May 1–10"): analyze ALL meetings returned by \`list_meetings\` (up to a safety cap of 20). DO NOT discard older meetings to fit a 3–5 cap. For each meeting include the title, date, and a per-meeting summary, then end with an Overall Summary covering the whole period.
+- NEVER pass more than 20 meetings into \`analyze_meetings\` in one call; batch if necessary.
 
 **STRICT MEETING TOOL ROUTING (HARD RULE — NOT a suggestion):**
 - **SOURCE DISAMBIGUATION (ASK FIRST):** For ANY query like "fetch my latest meeting", "my latest meeting notes", "latest meeting", "recent meeting", "my meetings", "meeting notes" — if the user has NOT explicitly mentioned a source (Google Meet / Gemini / gemini-notes / Plaud), you MUST NOT call any meeting tool yet. Instead, reply with EXACTLY this question and stop: "Which source should I use — **Google Meet** or **Plaud**?" Wait for the user's answer before calling any tool.
@@ -641,7 +643,7 @@ const MEETING_TOOLS = [
           search: { type: "string", description: "Keyword(s) to match in title or transcript. Words are matched independently (OR), so partial / misspelled queries still work." },
           from_date: { type: "string", description: "Only return meetings on or after this date (YYYY-MM-DD). Ignored if 'window' is set." },
           to_date: { type: "string", description: "Only return meetings on or before this date (YYYY-MM-DD). Ignored if 'window' is set." },
-          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Resolve a date window in the caller's timezone. Preferred over from_date/to_date for natural-language ranges." },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week", "last_week", "this_month", "last_month"], description: "Resolve a date window in the caller's timezone. ALWAYS prefer this over from_date/to_date for natural-language ranges like 'this week', 'last week', 'last month'. Do NOT compute dates yourself when a window value exists." },
           scope: { type: "string", enum: ["mine", "all"], description: "'mine' (default) returns only the current user's meetings. 'all' requires admin and returns the full company list — use ONLY when the user explicitly asks for everyone's meetings." },
         },
         required: [],
@@ -680,6 +682,22 @@ const MEETING_TOOLS = [
   {
     type: "function",
     function: {
+      name: "get_action_items_for_range",
+      description: "Aggregate action items across EVERY meeting the caller can see within a date range. Use this for queries like 'what are my action items this week', 'action items from last week', 'tasks from last month's meetings', or anytime the user wants follow-ups across a period rather than a single meeting. Prefer the `window` shortcut over manual dates. Returns one combined list plus per-meeting breakdown.",
+      parameters: {
+        type: "object",
+        properties: {
+          window: { type: "string", enum: ["today", "this_week", "next_week", "last_week", "this_month", "last_month"], description: "Resolve a date window in the caller's timezone. ALWAYS prefer this over from_date/to_date for natural-language ranges." },
+          from_date: { type: "string", description: "YYYY-MM-DD inclusive lower bound. Ignored if `window` is set." },
+          to_date: { type: "string", description: "YYYY-MM-DD inclusive upper bound. Ignored if `window` is set." },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "analyze_meetings",
       description: "Run AI analysis on meetings that have transcripts but haven't been analyzed yet. Can also re-analyze specific meetings. Extracts summary, action items, decisions, participants, sentiment, risks, and follow-ups.",
       parameters: {
@@ -703,7 +721,7 @@ const MEETING_TOOLS = [
           limit: { type: "number", description: "Max results (default 10, max 25)." },
           from_date: { type: "string", description: "YYYY-MM-DD lower bound on meeting_date. Ignored if 'window' is set." },
           to_date: { type: "string", description: "YYYY-MM-DD upper bound on meeting_date. Ignored if 'window' is set." },
-          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Resolve a date window in the caller's timezone instead of supplying from_date/to_date." },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week", "last_week", "this_month", "last_month"], description: "Resolve a date window in the caller's timezone instead of supplying from_date/to_date." },
         },
         required: ["source"],
       },
@@ -3646,7 +3664,9 @@ async function executeMeetingTool(
     !sourceArgProvided &&
     meetingFlowState &&
     meetingFlowState.listedIds.size === 0 &&
-    !(toolName === "fetch_plaud_meetings" && explicitPlaudSyncRequested)
+    !(toolName === "fetch_plaud_meetings" && explicitPlaudSyncRequested) &&
+    toolName !== "get_action_items_for_range" &&
+    !(toolName === "list_meetings" && (args?.window || args?.from_date || args?.to_date))
   ) {
     console.log("[MEETING FLOW] ASK_SOURCE — blocking", toolName, "until user picks source");
     return {
@@ -4049,6 +4069,52 @@ async function executeMeetingTool(
         meta: { readResult: true },
       };
     }
+
+    case "get_action_items_for_range": {
+      // The window resolver above (top of executeMeetingTool) already converted
+      // args.window → from_date / to_date in the caller's timezone.
+      const fromDateStr: string | undefined = args.from_date;
+      const toDateStr: string | undefined = args.to_date;
+      if (!fromDateStr || !toDateStr) {
+        return {
+          error: "from_date and to_date are required (or pass a `window` value).",
+        };
+      }
+      const fromIso = new Date(`${fromDateStr}T00:00:00`).toISOString();
+      // to_date is inclusive in the tool contract; the RPC expects an exclusive upper bound.
+      const toIso = new Date(new Date(`${toDateStr}T00:00:00`).getTime() + 86400000).toISOString();
+
+      const { data, error } = await supabaseUser.rpc("get_action_items_for_range", {
+        _from_date: fromIso,
+        _to_date: toIso,
+      });
+      if (error) {
+        console.error("[get_action_items_for_range] rpc error", error);
+        return { error: error.message };
+      }
+      const payload = (data as any) || {};
+      const rr = createReadResult({
+        data: payload,
+        source: "meetings_db",
+        freshness_sla_seconds: 300,
+        row_count: Number(payload.meeting_count || 0),
+        filters_applied: {
+          from_date: fromDateStr,
+          to_date: toDateStr,
+          ...(resolvedMeetingWindow ? { resolved_window: resolvedMeetingWindow } : {}),
+        },
+        query_echo: `action_items range [${fromDateStr}..${toDateStr}]`,
+      });
+      return {
+        ...payload,
+        instructions:
+          "Aggregate the response: list every meeting in `meetings` with its title + date, then present `combined_action_items` grouped by meeting_title (with meeting_date). End with an Overall Summary covering the whole period. If `total_action_items` is 0, say so plainly and do not invent items. Do NOT discard meetings to fit a 3–5 cap when an explicit date range is in play.",
+        read_result: rr,
+        meta: { readResult: true },
+      };
+    }
+
+
 
 
 
@@ -6501,7 +6567,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const googleFormsToolNames = ["list_google_forms", "submit_google_form", "parse_google_form", "save_parsed_google_form"];
       const ndaToolNames = ["generate_nda", "list_nda_submissions", "send_nda_for_signature", "send_pdf_for_signature"];
       
-      const meetingToolNames = ["fetch_plaud_meetings", "list_meetings", "list_meetings_by_source", "get_meeting", "get_meeting_action_items_with_context", "analyze_meetings", "search_meeting_transcripts"];
+      const meetingToolNames = ["fetch_plaud_meetings", "list_meetings", "list_meetings_by_source", "get_meeting", "get_meeting_action_items_with_context", "get_action_items_for_range", "analyze_meetings", "search_meeting_transcripts"];
       const azureDevOpsToolNames = ["list_azure_devops_projects", "query_azure_work_items", "get_azure_work_item", "search_synced_work_items"];
       const azureReposToolNames = ["list_azure_repos", "get_recent_commits", "list_pull_requests", "get_pr_reviews", "get_repos_team_summary"];
       const xeroToolNames = ["list_xero_invoices", "get_xero_invoice", "approve_xero_invoice_payment", "search_xero_contacts", "create_xero_invoice", "list_xero_bank_accounts", "create_xero_expense"];

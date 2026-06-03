@@ -129,10 +129,16 @@ export default function EAInbox() {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => triggerPoll.mutate()} disabled={triggerPoll.isPending}>
-          <RefreshCw className={cn("h-4 w-4", triggerPoll.isPending && "animate-spin")} />
-          Poll now
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => backfill.mutate()} disabled={backfill.isPending} title="Scan Duncan's full mailbox history for meeting notes and store them.">
+            <Download className={cn("h-4 w-4", backfill.isPending && "animate-pulse")} />
+            Backfill meeting notes
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => triggerPoll.mutate()} disabled={triggerPoll.isPending}>
+            <RefreshCw className={cn("h-4 w-4", triggerPoll.isPending && "animate-spin")} />
+            Poll now
+          </Button>
+        </div>
       </header>
 
       <div className="flex gap-2 flex-wrap">

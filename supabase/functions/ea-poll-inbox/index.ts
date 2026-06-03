@@ -348,16 +348,28 @@ serve(async (req) => {
           .eq("gmail_thread_id", threadId)
           .maybeSingle();
 
+        const todayLondon = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
+        }).format(new Date()); // YYYY-MM-DD
+        const weekdayLondon = new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Europe/London", weekday: "long",
+        }).format(new Date());
+
         if (existing) {
           // If awaiting_purpose and there's a new reply from sender, try to extract purpose
           if (existing.status === "awaiting_purpose") {
             const purposeResp = await callClaude(
-              "You are Duncan, an AI Executive Assistant. Extract the user's stated purpose for meeting with Nimesh from this email reply. Return JSON only: { \"purpose_found\": true|false, \"purpose\": \"string or null\" }",
+              `You are Duncan, an AI Executive Assistant. Today is ${weekdayLondon} ${todayLondon} (Europe/London). Extract the user's stated purpose for meeting with Nimesh from this email reply, AND any preferred date/time they mention. Resolve relative dates ("tomorrow", "next Friday", "5th June") against today's date. Return JSON only: { "purpose_found": true|false, "purpose": "string or null", "preferred_date": "YYYY-MM-DD or null", "preferred_time_start": "HH:MM or null (24h London)", "preferred_time_end": "HH:MM or null (24h London)" }. If they say "anytime" set both times to null but still return the date.`,
               body,
             );
             const parsed = parseJsonFromText(purposeResp);
             if (parsed?.purpose_found && parsed.purpose) {
-              await scoreProposeAndBook(supa, existing.id, parsed.purpose, gmailToken);
+              const preferred: Preferred = {
+                date: parsed.preferred_date || null,
+                timeStart: parsed.preferred_time_start || null,
+                timeEnd: parsed.preferred_time_end || null,
+              };
+              await scoreProposeAndBook(supa, existing.id, parsed.purpose, gmailToken, preferred);
               log.scored++;
             }
           } else if (existing.status === "pending_approval" && existing.purpose) {
@@ -371,7 +383,7 @@ serve(async (req) => {
         // New thread — assess intent + extract purpose
         log.new_threads++;
         const intentResp = await callClaude(
-          "You are Duncan, an AI Executive Assistant. Determine if this email is a request to meet, call, or schedule time with Nimesh Patel (CEO). Then check if a clear purpose for the meeting is stated. Return JSON only: { \"is_meeting_request\": true|false, \"purpose_found\": true|false, \"purpose\": \"string or null\" }",
+          `You are Duncan, an AI Executive Assistant. Today is ${weekdayLondon} ${todayLondon} (Europe/London). Determine if this email is a request to meet, call, or schedule time with Nimesh Patel (CEO). Then check if a clear purpose is stated, and extract any preferred date/time. Resolve relative dates ("tomorrow", "next Friday", "5th June") against today. Return JSON only: { "is_meeting_request": true|false, "purpose_found": true|false, "purpose": "string or null", "preferred_date": "YYYY-MM-DD or null", "preferred_time_start": "HH:MM or null (24h London)", "preferred_time_end": "HH:MM or null (24h London)" }`,
           `Subject: ${subject}\n\n${body}`,
         );
         const intent = parseJsonFromText(intentResp);
@@ -392,7 +404,12 @@ serve(async (req) => {
           const { data: inserted } = await supa
             .from("meeting_requests").insert(insertRow).select().single();
           if (inserted) {
-            await scoreProposeAndBook(supa, inserted.id, intent.purpose, gmailToken);
+            const preferred: Preferred = {
+              date: intent.preferred_date || null,
+              timeStart: intent.preferred_time_start || null,
+              timeEnd: intent.preferred_time_end || null,
+            };
+            await scoreProposeAndBook(supa, inserted.id, intent.purpose, gmailToken, preferred);
             log.scored++;
           }
         } else {

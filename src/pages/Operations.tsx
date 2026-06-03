@@ -276,11 +276,15 @@ const Operations = () => {
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Operations Hub</h2>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  {section === "action"
+                  {section === "azure"
+                    ? "Azure DevOps work items and repository activity."
+                    : section === "approvals-auth"
                     ? "Approvals and authorisation requests awaiting your decision."
-                    : section === "directory"
+                    : section === "suppliers"
                     ? "Suppliers and operational directories."
-                    : "Work items, repos, website analytics and sync activity."}
+                    : section === "analytics"
+                    ? "Website analytics and traffic insights."
+                    : "Sync activity across connected systems."}
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">

@@ -339,7 +339,7 @@ serve(async (req) => {
           const { data: inserted } = await supa
             .from("meeting_requests").insert(insertRow).select().single();
           if (inserted) {
-            await scoreAndPropose(supa, inserted.id, intent.purpose, gmailToken);
+            await scoreProposeAndBook(supa, inserted.id, intent.purpose, gmailToken);
             log.scored++;
           }
         } else {

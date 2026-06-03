@@ -2124,6 +2124,66 @@ export type Database = {
           },
         ]
       }
+      meeting_requests: {
+        Row: {
+          calendar_event_id: string | null
+          created_at: string
+          gmail_message_id: string | null
+          gmail_thread_id: string
+          id: string
+          last_polled_at: string | null
+          original_email_body: string
+          original_email_subject: string | null
+          priority: string | null
+          priority_reason: string | null
+          proposed_slot: string | null
+          proposed_slot_end: string | null
+          purpose: string | null
+          sender_email: string
+          sender_name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          calendar_event_id?: string | null
+          created_at?: string
+          gmail_message_id?: string | null
+          gmail_thread_id: string
+          id?: string
+          last_polled_at?: string | null
+          original_email_body: string
+          original_email_subject?: string | null
+          priority?: string | null
+          priority_reason?: string | null
+          proposed_slot?: string | null
+          proposed_slot_end?: string | null
+          purpose?: string | null
+          sender_email: string
+          sender_name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          calendar_event_id?: string | null
+          created_at?: string
+          gmail_message_id?: string | null
+          gmail_thread_id?: string
+          id?: string
+          last_polled_at?: string | null
+          original_email_body?: string
+          original_email_subject?: string | null
+          priority?: string | null
+          priority_reason?: string | null
+          proposed_slot?: string | null
+          proposed_slot_end?: string | null
+          purpose?: string | null
+          sender_email?: string
+          sender_name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       meetings: {
         Row: {
           action_items: Json | null

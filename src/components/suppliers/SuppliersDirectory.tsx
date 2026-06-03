@@ -24,29 +24,31 @@ export default function SuppliersDirectory() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center justify-between">
-        <div className="flex gap-2 flex-1">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search suppliers..." className="pl-9" />
-          </div>
-          <div className="flex gap-1">
+      <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+        <div className="relative w-full lg:max-w-xs">
+          <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search suppliers..." className="pl-9" />
+        </div>
+        <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap">
+          <div className="inline-flex items-center rounded-lg border border-border bg-muted/40 p-1">
             {["all", "supplier", "stakeholder", "partner"].map(t => (
               <button
                 key={t}
                 onClick={() => setTypeFilter(t)}
-                className={`px-3 py-1.5 text-xs rounded-md border capitalize transition-colors ${
-                  typeFilter === t ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:bg-muted"
+                className={`px-3 py-1.5 text-xs font-medium rounded-md capitalize transition-colors ${
+                  typeFilter === t
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {t}
               </button>
             ))}
           </div>
+          <Button onClick={() => { setIsNew(true); setOpenId(null); }}>
+            <Plus className="h-4 w-4 mr-1.5" /> Add supplier
+          </Button>
         </div>
-        <Button onClick={() => { setIsNew(true); setOpenId(null); }}>
-          <Plus className="h-4 w-4 mr-1.5" /> Add supplier
-        </Button>
       </div>
 
       {isLoading ? (

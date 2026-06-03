@@ -6969,7 +6969,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const SOURCE_LABELS: Record<string, string> = {
       search_emails: "Gmail", read_email: "Gmail", send_email: "Gmail", draft_email: "Gmail", reply_email: "Gmail", forward_email: "Gmail",
       list_calendar_events: "Google Calendar", create_calendar_event: "Google Calendar", update_calendar_event: "Google Calendar", delete_calendar_event: "Google Calendar", check_team_availability: "Google Calendar",
-      fetch_plaud_meetings: "Plaud Meetings", list_meetings: "Meetings", get_meeting: "Meetings",
+      fetch_plaud_meetings: "Plaud Meetings", list_meetings: "Meetings", get_meeting: "Meetings", get_meeting_action_items_with_context: "Meetings",
       list_workstream_cards: "Workstreams", get_workstream_card: "Workstreams", create_workstream_card: "Workstreams", update_workstream_card: "Workstreams",
       list_planner_items: "Planner", create_planner_item: "Planner", update_planner_item: "Planner",
       list_drive_files: "Google Drive", read_drive_file: "Google Drive", search_drive: "Google Drive",

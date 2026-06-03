@@ -41,27 +41,6 @@ function toLocalInput(iso: string | null): string {
 
 function MeetingCard({ req }: { req: MeetingRequest }) {
   const confirm = useConfirmMeeting();
-  const [editing, setEditing] = useState(false);
-  const [start, setStart] = useState(toLocalInput(req.proposed_slot));
-
-  const canAct = req.status === "pending_approval";
-
-  const handleApprove = () => {
-    if (editing && start) {
-      const startDate = new Date(start);
-      const durationMs = req.proposed_slot && req.proposed_slot_end
-        ? new Date(req.proposed_slot_end).getTime() - new Date(req.proposed_slot).getTime()
-        : (req.priority === "P3" || req.priority === "P4" ? 30 : 60) * 60_000;
-      const endDate = new Date(startDate.getTime() + durationMs);
-      confirm.mutate({
-        request_id: req.id, action: "approve",
-        override_start: startDate.toISOString(),
-        override_end: endDate.toISOString(),
-      });
-    } else {
-      confirm.mutate({ request_id: req.id, action: "approve" });
-    }
-  };
 
   return (
     <Card className="p-5 space-y-4">
@@ -97,33 +76,20 @@ function MeetingCard({ req }: { req: MeetingRequest }) {
         )}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <CalIcon className="h-3.5 w-3.5" />
-          Proposed: <span className="text-foreground font-medium">{fmtLondon(req.proposed_slot)}</span>
+          {req.status === "confirmed" ? "Booked" : "Proposed"}:{" "}
+          <span className="text-foreground font-medium">{fmtLondon(req.proposed_slot)}</span>
         </div>
       </div>
 
-      {canAct && (
-        <div className="space-y-3 pt-2 border-t border-border">
-          {editing && (
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Override start time (local)</label>
-              <Input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} />
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={handleApprove} disabled={confirm.isPending}>
-              Approve &amp; Confirm
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setEditing(v => !v)}>
-              {editing ? "Use proposed slot" : "Pick different time"}
-            </Button>
-            <Button
-              size="sm" variant="ghost"
-              onClick={() => confirm.mutate({ request_id: req.id, action: "decline" })}
-              disabled={confirm.isPending}
-            >
-              Decline
-            </Button>
-          </div>
+      {req.status === "pending_approval" && (
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+          <Button
+            size="sm" variant="ghost"
+            onClick={() => confirm.mutate({ request_id: req.id, action: "decline" })}
+            disabled={confirm.isPending}
+          >
+            Decline
+          </Button>
         </div>
       )}
     </Card>

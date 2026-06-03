@@ -93,6 +93,31 @@ const stateColors: Record<string, string> = {
   "Removed": "bg-destructive/10 text-destructive border-destructive/20",
 };
 
+// Unified tile primitives — keep Operations visually consistent with Home dashboard.
+const StatTile = ({
+  icon: Icon, label, value, iconClass = "text-primary", delay = 0,
+}: { icon: any; label: string; value: React.ReactNode; iconClass?: string; delay?: number }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay, duration: 0.3 }}
+    className="rounded-xl border border-border bg-card p-4 sm:p-5"
+  >
+    <div className="flex items-center gap-2 mb-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+      <Icon className={`h-3 w-3 ${iconClass}`} />
+      {label}
+    </div>
+    <p className="text-xl font-bold text-foreground tracking-tight">{value}</p>
+  </motion.div>
+);
+
+const PanelHeader = ({ icon: Icon, title }: { icon: any; title: string }) => (
+  <div className="flex items-center gap-2 mb-3 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+    <Icon className="h-3 w-3" />
+    {title}
+  </div>
+);
+
 const Operations = () => {
   const { data: workItems = [], isLoading: wiLoading } = useWorkItems();
   const { data: syncLogs = [], isLoading: slLoading } = useSyncLogs();

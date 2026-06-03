@@ -3998,6 +3998,60 @@ async function executeMeetingTool(
       return { ...payload, read_result: rr, meta: { readResult: true } };
     }
 
+    case "get_meeting_action_items_with_context": {
+      const daysBack = Math.min(30, Math.max(1, Number(args.days_back) || 7));
+      // Same listed-id guard as get_meeting — auto-recover if the model invents an id.
+      if (
+        meetingFlowState &&
+        meetingFlowState.listedIds.size > 0 &&
+        !meetingFlowState.listedIds.has(args.meeting_id)
+      ) {
+        const recovery = await executeMeetingTool(
+          "list_meetings",
+          { scope: "mine", limit: 5 },
+          supabaseAdmin,
+          supabaseUser,
+          supabaseUrl,
+          authHeader,
+          userId,
+          { listedIds: new Set(), userIntent: intent },
+          identity,
+        );
+        return {
+          ...recovery,
+          notice: "Pick a meeting_id from this list and call get_meeting_action_items_with_context again.",
+        };
+      }
+
+      const readClient = meetingFlowState?.sourceFallbackIds?.has(args.meeting_id)
+        ? supabaseAdmin
+        : supabaseUser;
+      const { data, error } = await readClient.rpc("get_action_items_around", {
+        _meeting_id: args.meeting_id,
+        _days_back: daysBack,
+      });
+      if (error) {
+        console.error("[get_meeting_action_items_with_context] rpc error", error);
+        return { error: error.message };
+      }
+      if (!data || (data as any).error) {
+        return { error: (data as any)?.error || "Meeting not found or no access." };
+      }
+      const rr = createReadResult({
+        data, source: "meetings_db", freshness_sla_seconds: 300, row_count: 1,
+        filters_applied: { meeting_id: args.meeting_id, days_back: daysBack },
+        query_echo: `action_items rollup meeting=${args.meeting_id} window=${daysBack}d`,
+      });
+      return {
+        ...(data as any),
+        instructions: "Present two clearly labeled sections in the answer: **From this meeting** (the focus_meeting.action_items) and **From the past " + daysBack + " days** (combined_action_items where is_focus=false, grouped by meeting_title with the meeting date). If both lists are empty, say so plainly and do not invent items.",
+        read_result: rr,
+        meta: { readResult: true },
+      };
+    }
+
+
+
     case "analyze_meetings": {
       const res = await fetch(`${supabaseUrl}/functions/v1/analyze-meeting`, {
         method: "POST",

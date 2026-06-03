@@ -107,20 +107,23 @@ const Operations = () => {
   const [analyticsAnswer, setAnalyticsAnswer] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("work-items");
 
-  const sectionOf: Record<string, "overview" | "action" | "directory"> = {
-    "work-items": "overview",
-    "repos": "overview",
-    "analytics": "overview",
-    "sync-logs": "overview",
-    "approvals": "action",
-    "authorisation": "action",
-    "suppliers": "directory",
+  type SectionId = "azure" | "approvals-auth" | "suppliers" | "analytics" | "sync-logs";
+  const sectionOf: Record<string, SectionId> = {
+    "work-items": "azure",
+    "repos": "azure",
+    "approvals": "approvals-auth",
+    "authorisation": "approvals-auth",
+    "suppliers": "suppliers",
+    "analytics": "analytics",
+    "sync-logs": "sync-logs",
   };
-  const section = sectionOf[activeTab] ?? "overview";
-  const sectionDefaults: Record<"overview" | "action" | "directory", string> = {
-    overview: "work-items",
-    action: "approvals",
-    directory: "suppliers",
+  const section: SectionId = sectionOf[activeTab] ?? "azure";
+  const sectionDefaults: Record<SectionId, string> = {
+    "azure": "work-items",
+    "approvals-auth": "approvals",
+    "suppliers": "suppliers",
+    "analytics": "analytics",
+    "sync-logs": "sync-logs",
   };
 
   const reposEnabled = activeTab === "repos";

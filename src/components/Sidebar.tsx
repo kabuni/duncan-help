@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { useApprovalCount } from "@/hooks/useApprovals";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 
 
@@ -47,6 +48,7 @@ const Sidebar = ({
   const isChatRoute = !isProjectsRoute;
   const [showModal, setShowModal] = useState(false);
   const { data: pendingApprovals = 0 } = useApprovalCount();
+  const { isAdmin } = useIsAdmin();
 
 
   const handleNavigate = (to: string) => {
@@ -225,6 +227,23 @@ const Sidebar = ({
             </span>
           )}
         </RouterNavLink>
+
+        {isAdmin && (
+          <RouterNavLink
+            to="/ea-inbox"
+            onClick={() => onMobileClose?.()}
+            className={({ isActive }) =>
+              cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              )
+            }
+          >
+            <Inbox className="h-4 w-4" />
+            EA Inbox
+          </RouterNavLink>
+        )}
+
+
 
         {canViewBriefing(user?.email) && (
           <RouterNavLink

@@ -33,6 +33,7 @@ import CEOBriefing from "./pages/CEOBriefing";
 import KeyEventsDiary from "./pages/KeyEventsDiary";
 import Approvals from "./pages/Approvals";
 import PurchaseOrders from "./pages/PurchaseOrders";
+import EAInbox from "./pages/EAInbox";
 
 import SlackCallback from "./pages/SlackCallback";
 import KnowledgeBase from "./pages/KnowledgeBase";
@@ -85,6 +86,7 @@ const AppContent = () => {
             <Route path="/diary" element={<KeyEventsDiary />} />
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/purchase-orders" element={<PurchaseOrders />} />
+            <Route path="/ea-inbox" element={<EAInbox />} />
             <Route path="/knowledge-base" element={<KnowledgeBase />} />
             <Route path="/travel" element={<Navigate to="/purchase-orders?tab=travel" replace />} />
             <Route path="/ceo" element={<Navigate to="/team-briefing" replace />} />

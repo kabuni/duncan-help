@@ -1,5 +1,12 @@
 project_id = "rfwvemsjwytxxhwowpqh"
 
+[functions.ea-poll-inbox]
+verify_jwt = false
+
+[functions.ea-confirm-meeting]
+verify_jwt = false
+
+
 [functions.norman-chat]
 verify_jwt = true
 

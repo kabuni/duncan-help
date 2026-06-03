@@ -14,7 +14,7 @@ import { useIsAdmin } from "@/hooks/useUserRoles";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { RefreshCw, Plus, ChevronLeft, ChevronRight, Mail } from "lucide-react";
+import { RefreshCw, Plus, ChevronLeft, ChevronRight, Mail, CalendarDays } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
@@ -363,14 +363,21 @@ export default function KeyEventsDiary() {
   return (
     <>
       <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 h-[calc(100dvh-3.5rem)] md:h-[100dvh] min-h-0 overflow-y-auto overflow-x-hidden">
-        <header className="space-y-1 shrink-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight">Duncan Planner</h1>
-            <Badge variant="outline" className="hidden sm:inline-flex font-mono text-[10px] uppercase">execution system</Badge>
+        <header className="shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary glow-primary-sm shrink-0">
+              <CalendarDays className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl md:text-2xl font-bold tracking-tight">Duncan Planner</h1>
+                <Badge variant="outline" className="hidden sm:inline-flex font-mono text-[10px] uppercase">execution system</Badge>
+              </div>
+              <p className="text-xs md:text-sm text-muted-foreground break-words mt-1">
+                Strategic events synced from <span className="font-semibold">Duncan | Planner</span>. Goal target dates appear as pinned markers.
+              </p>
+            </div>
           </div>
-          <p className="text-xs md:text-sm text-muted-foreground break-words">
-            Strategic events synced from <span className="font-semibold">Duncan | Planner</span>. Goal target dates appear as pinned markers.
-          </p>
         </header>
 
         <Card className="p-3 shrink-0 overflow-hidden">

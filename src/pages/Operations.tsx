@@ -288,78 +288,109 @@ const Operations = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={() => handleSync("azure")}
-                  disabled={syncing === "azure"}
-                  className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
-                >
-                  {syncing === "azure" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                  Sync DevOps
-                </button>
+                {section === "azure" && (
+                  <button
+                    onClick={() => handleSync("azure")}
+                    disabled={syncing === "azure"}
+                    className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+                  >
+                    {syncing === "azure" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    Sync DevOps
+                  </button>
+                )}
               </div>
             </div>
           </motion.div>
 
-          {/* Primary section tabs */}
-          <div className="mb-4 flex items-center gap-1 rounded-xl border border-border bg-card p-1 w-full sm:w-fit overflow-x-auto">
-            {([
-              { id: "azure", label: "Azure DevOps", badge: 0 },
-              { id: "approvals-auth", label: "Approvals & Authorisation", badge: pendingApprovals },
-              { id: "suppliers", label: "Suppliers", badge: 0 },
-              { id: "analytics", label: "Website Analytics", badge: 0 },
-              { id: "sync-logs", label: "Sync Logs", badge: 0 },
-            ] as const).map((s) => {
-              const isActive = section === s.id;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => setActiveTab(sectionDefaults[s.id])}
-                  className={`flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
-                    isActive
-                      ? "bg-secondary text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {s.label}
-                  {s.badge && s.badge > 0 ? (
-                    <span className="rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
-                      {s.badge}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-
-
-          {/* Secondary sub-tabs */}
+          {/* Nested tabs: primary section + sub-tabs in one container */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            {section === "azure" && (
-              <TabsList className="bg-card border border-border w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
-                <TabsTrigger value="work-items" className="gap-1.5 whitespace-nowrap">
-                  <GitBranch className="h-3.5 w-3.5" /> Work Items
-                </TabsTrigger>
-                <TabsTrigger value="repos" className="gap-1.5 whitespace-nowrap">
-                  <FolderGit2 className="h-3.5 w-3.5" /> Repos
-                </TabsTrigger>
-              </TabsList>
-            )}
+            <div className="mb-4 rounded-xl border border-border bg-card overflow-hidden">
+              {/* Primary section tabs */}
+              <div className="flex items-center gap-1 p-1 border-b border-border overflow-x-auto">
+                {([
+                  { id: "azure", label: "Azure DevOps", badge: 0 },
+                  { id: "approvals-auth", label: "Approvals & Authorisation", badge: pendingApprovals },
+                  { id: "suppliers", label: "Suppliers", badge: 0 },
+                  { id: "analytics", label: "Website Analytics", badge: 0 },
+                  { id: "sync-logs", label: "Sync Logs", badge: 0 },
+                ] as const).map((s) => {
+                  const isActive = section === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => setActiveTab(sectionDefaults[s.id])}
+                      className={`flex items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                        isActive
+                          ? "bg-secondary text-foreground"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                      }`}
+                    >
+                      {s.label}
+                      {s.badge && s.badge > 0 ? (
+                        <span className="rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
+                          {s.badge}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
 
-            {section === "approvals-auth" && (
-              <TabsList className="bg-card border border-border w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
-                <TabsTrigger value="approvals" className="gap-1.5 whitespace-nowrap">
-                  <Inbox className="h-3.5 w-3.5" /> Approvals
-                  {pendingApprovals > 0 && (
-                    <span className="ml-1 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
-                      {pendingApprovals}
-                    </span>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="authorisation" className="gap-1.5 whitespace-nowrap">
-                  <Receipt className="h-3.5 w-3.5" /> Authorisation Requests
-                </TabsTrigger>
-              </TabsList>
-            )}
+              {/* Secondary sub-tabs */}
+              <div className="px-3 py-2 bg-muted/30 overflow-x-auto">
+                {section === "azure" && (
+                  <TabsList className="bg-transparent p-0 h-auto gap-1 flex-nowrap justify-start">
+                    <TabsTrigger value="work-items" className="gap-1.5 whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                      <GitBranch className="h-3.5 w-3.5" /> Work Items
+                    </TabsTrigger>
+                    <TabsTrigger value="repos" className="gap-1.5 whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                      <FolderGit2 className="h-3.5 w-3.5" /> Repos
+                    </TabsTrigger>
+                  </TabsList>
+                )}
+
+                {section === "approvals-auth" && (
+                  <TabsList className="bg-transparent p-0 h-auto gap-1 flex-nowrap justify-start">
+                    <TabsTrigger value="approvals" className="gap-1.5 whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                      <Inbox className="h-3.5 w-3.5" /> Approvals
+                      {pendingApprovals > 0 && (
+                        <span className="ml-1 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
+                          {pendingApprovals}
+                        </span>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="authorisation" className="gap-1.5 whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                      <Receipt className="h-3.5 w-3.5" /> Authorisation Requests
+                    </TabsTrigger>
+                  </TabsList>
+                )}
+
+                {section === "suppliers" && (
+                  <TabsList className="bg-transparent p-0 h-auto gap-1 flex-nowrap justify-start">
+                    <TabsTrigger value="suppliers" className="gap-1.5 whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                      <Building2 className="h-3.5 w-3.5" /> Directory
+                    </TabsTrigger>
+                  </TabsList>
+                )}
+
+                {section === "analytics" && (
+                  <TabsList className="bg-transparent p-0 h-auto gap-1 flex-nowrap justify-start">
+                    <TabsTrigger value="analytics" className="gap-1.5 whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                      <BarChart3 className="h-3.5 w-3.5" /> Overview
+                    </TabsTrigger>
+                  </TabsList>
+                )}
+
+                {section === "sync-logs" && (
+                  <TabsList className="bg-transparent p-0 h-auto gap-1 flex-nowrap justify-start">
+                    <TabsTrigger value="sync-logs" className="gap-1.5 whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                      <Clock className="h-3.5 w-3.5" /> Recent Activity
+                    </TabsTrigger>
+                  </TabsList>
+                )}
+              </div>
+            </div>
+
 
 
             {/* Work Items */}

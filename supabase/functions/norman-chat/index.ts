@@ -694,6 +694,7 @@ const MEETING_TOOLS = [
         required: [],
       },
     },
+  },
   {
     type: "function",
     function: {

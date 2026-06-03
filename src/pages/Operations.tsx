@@ -531,92 +531,59 @@ const Operations = () => {
               ) : (
                 <>
                   {/* Summary cards */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="rounded-xl border border-border bg-card p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <FolderGit2 className="h-4 w-4 text-primary" />
-                        <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repos</span>
-                      </div>
-                      <p className="text-2xl font-bold text-foreground">{reposListResp?.count ?? reposSummary?.repos_total ?? 0}</p>
-                    </div>
-                    <div className="rounded-xl border border-border bg-card p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <GitCommit className="h-4 w-4 text-primary" />
-                        <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Commits / 7d</span>
-                      </div>
-                      <p className="text-2xl font-bold text-foreground">{reposSummary?.commits_total ?? 0}</p>
-                    </div>
-                    <div className="rounded-xl border border-border bg-card p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <GitPullRequest className="h-4 w-4 text-primary" />
-                        <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Active PRs</span>
-                      </div>
-                      <p className="text-2xl font-bold text-foreground">{activePRsResp?.count ?? reposSummary?.active_prs_total ?? 0}</p>
-                    </div>
-                    <div className="rounded-xl border border-border bg-card p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Users className="h-4 w-4 text-primary" />
-                        <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Contributors</span>
-                      </div>
-                      <p className="text-2xl font-bold text-foreground">{reposSummary ? Object.keys(reposSummary.commits_by_author).length : 0}</p>
-                    </div>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <StatTile icon={FolderGit2} label="Repos" value={reposListResp?.count ?? reposSummary?.repos_total ?? 0} delay={0.05} />
+                    <StatTile icon={GitCommit} label="Commits / 7d" value={reposSummary?.commits_total ?? 0} delay={0.1} />
+                    <StatTile icon={GitPullRequest} label="Active PRs" value={activePRsResp?.count ?? reposSummary?.active_prs_total ?? 0} delay={0.15} />
+                    <StatTile icon={Users} label="Contributors" value={reposSummary ? Object.keys(reposSummary.commits_by_author).length : 0} delay={0.2} />
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
                     {/* Commits by author */}
-                    <div className="rounded-xl border border-border bg-card p-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <GitCommit className="h-4 w-4 text-primary" />
-                        <h3 className="font-semibold text-foreground">Commits by author (7d)</h3>
-                      </div>
+                    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+                      <PanelHeader icon={GitCommit} title="Commits by author · 7d" />
                       {reposSummary && Object.keys(reposSummary.commits_by_author).length > 0 ? (
-                        <div className="space-y-2">
+                        <div className="divide-y divide-border/40">
                           {Object.entries(reposSummary.commits_by_author)
                             .sort(([, a], [, b]) => (b as number) - (a as number))
                             .slice(0, 10)
                             .map(([author, count]) => (
-                              <div key={author} className="flex justify-between text-sm">
+                              <div key={author} className="flex justify-between text-xs py-1.5">
                                 <span className="text-foreground truncate">{author}</span>
-                                <span className="font-mono text-muted-foreground">{count as number}</span>
+                                <span className="font-mono tabular-nums text-muted-foreground">{count as number}</span>
                               </div>
                             ))}
                         </div>
                       ) : (
-                        <p className="text-sm text-muted-foreground">No commits in the last 7 days.</p>
+                        <p className="text-xs text-muted-foreground">No commits in the last 7 days.</p>
                       )}
                     </div>
 
                     {/* Commits by repo */}
-                    <div className="rounded-xl border border-border bg-card p-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <FolderGit2 className="h-4 w-4 text-primary" />
-                        <h3 className="font-semibold text-foreground">Most active repos (7d)</h3>
-                      </div>
+                    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+                      <PanelHeader icon={FolderGit2} title="Most active repos · 7d" />
                       {reposSummary && Object.keys(reposSummary.commits_by_repo).length > 0 ? (
-                        <div className="space-y-2">
+                        <div className="divide-y divide-border/40">
                           {Object.entries(reposSummary.commits_by_repo)
                             .filter(([, c]) => (c as number) > 0)
                             .sort(([, a], [, b]) => (b as number) - (a as number))
                             .slice(0, 10)
                             .map(([repo, count]) => (
-                              <div key={repo} className="flex justify-between text-sm">
-                                <span className="text-foreground truncate font-mono text-xs">{repo}</span>
-                                <span className="font-mono text-muted-foreground">{count as number}</span>
+                              <div key={repo} className="flex justify-between text-xs py-1.5">
+                                <span className="text-foreground truncate font-mono">{repo}</span>
+                                <span className="font-mono tabular-nums text-muted-foreground">{count as number}</span>
                               </div>
                             ))}
                         </div>
                       ) : (
-                        <p className="text-sm text-muted-foreground">No repo activity in the last 7 days.</p>
+                        <p className="text-xs text-muted-foreground">No repo activity in the last 7 days.</p>
                       )}
                     </div>
                   </div>
 
                   {/* Active PRs */}
-                  <div className="rounded-xl border border-border bg-card p-4">
-                    <div className="flex items-center gap-2 mb-4">
-                      <GitPullRequest className="h-4 w-4 text-primary" />
-                      <h3 className="font-semibold text-foreground">Active pull requests</h3>
-                    </div>
+                  <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+                    <PanelHeader icon={GitPullRequest} title="Active pull requests" />
                     {(activePRsResp?.pull_requests || []).length === 0 ? (
                       <p className="text-sm text-muted-foreground">No active pull requests.</p>
                     ) : (

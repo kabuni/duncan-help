@@ -42,12 +42,21 @@ export default function POList() {
 
   return (
     <>
-      <Tabs value={view} onValueChange={(v) => setView(v as "open" | "closed")} className="mb-4">
-        <TabsList>
-          <TabsTrigger value="open">Open ({open.length})</TabsTrigger>
-          <TabsTrigger value="closed">Closed ({closed.length})</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="rounded-xl border border-border bg-card/50 overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-border bg-muted/30">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground tracking-tight">My Approval Requests</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Track the status of requests you've submitted.</p>
+          </div>
+          <Tabs value={view} onValueChange={(v) => setView(v as "open" | "closed")}>
+            <TabsList className="bg-background/60">
+              <TabsTrigger value="open">Open ({open.length})</TabsTrigger>
+              <TabsTrigger value="closed">Closed ({closed.length})</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+        <div className="p-4 sm:p-5">
+
 
       {visible.length === 0 ? (
         <Card className="border-dashed">

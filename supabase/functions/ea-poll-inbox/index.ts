@@ -461,7 +461,9 @@ function fmtLondonDayTime(iso: string) {
   };
 }
 
-async function scoreProposeAndBook(supa: any, rowId: string, purpose: string, gmailToken: string) {
+async function scoreProposeAndBook(
+  supa: any, rowId: string, purpose: string, gmailToken: string, preferred?: Preferred,
+) {
   const scoreResp = await callClaude(
     `You are an intelligent scheduling assistant for a Series A startup one week away from a major product launch. Classify the following meeting request into one of four priority tiers using these rules:
 P1 – CRITICAL: Investors, board members, product launch blockers, enterprise deals that are time-sensitive, press or PR opportunities, legal matters.
@@ -479,17 +481,27 @@ Return JSON only: { "priority": "P1|P2|P3|P4", "reason": "one sentence explanati
   const { data: row } = await supa.from("meeting_requests").select("*").eq("id", rowId).maybeSingle();
   if (!row) return;
 
-  // Find slot
+  // Find slot — honor sender's preferred date/time if provided
   let proposedStart: Date | null = null;
   let proposedEnd: Date | null = null;
   let calToken: string | null = null;
   try {
     calToken = await getNimeshCalendarAccess(supa);
     const now = new Date();
-    const horizonEnd = new Date(now.getTime() + 21 * 86_400_000);
+    const horizonEnd = new Date(now.getTime() + 35 * 86_400_000);
     const busy = await fetchBusy(calToken, now, horizonEnd);
-    const slot = findSlot(busy, priority, now);
-    if (slot) { proposedStart = slot.start; proposedEnd = slot.end; }
+    const durationMin = (priority === "P1" || priority === "P2") ? 60 : 30;
+
+    if (preferred?.date) {
+      const ws = hhmmToMin(preferred.timeStart) ?? 9 * 60;
+      const we = hhmmToMin(preferred.timeEnd) ?? 18 * 60;
+      const slot = findSlotOnDate(busy, durationMin, preferred.date, ws, we, now);
+      if (slot) { proposedStart = slot.start; proposedEnd = slot.end; }
+    }
+    if (!proposedStart) {
+      const slot = findSlot(busy, priority, now);
+      if (slot) { proposedStart = slot.start; proposedEnd = slot.end; }
+    }
   } catch (e) {
     console.warn("slot find failed", e);
   }

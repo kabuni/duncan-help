@@ -50,13 +50,13 @@ const PurchaseOrders = ({ embedded = false }: { embedded?: boolean } = {}) => {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => setShowForm("budget")} variant="outline" className="gap-2">
+                <Button onClick={() => setShowForm("budget")} variant="outline" className="gap-2 hover:bg-primary/15 hover:text-primary hover:border-primary/40 transition-colors">
                   <Wallet className="h-4 w-4" /> Budget Authorisation
                 </Button>
-                <Button onClick={() => setShowForm("creative")} variant="outline" className="gap-2">
+                <Button onClick={() => setShowForm("creative")} variant="outline" className="gap-2 hover:bg-primary/15 hover:text-primary hover:border-primary/40 transition-colors">
                   <Megaphone className="h-4 w-4" /> Marketing & Creative
                 </Button>
-                <Button onClick={() => setShowTravelForm(true)} variant="outline" className="gap-2">
+                <Button onClick={() => setShowTravelForm(true)} variant="outline" className="gap-2 hover:bg-primary/15 hover:text-primary hover:border-primary/40 transition-colors">
                   <Plane className="h-4 w-4" /> Travel Request
                 </Button>
               </div>

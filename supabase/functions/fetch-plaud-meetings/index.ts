@@ -557,7 +557,7 @@ serve(async (req) => {
       }
 
       // Determine source: Gemini meeting notes vs Plaud
-      const isGeminiNotes = subject.toLowerCase().startsWith("notes -") || subject.toLowerCase().startsWith("notes -");
+      const isGeminiNotes = senderEmail.toLowerCase() === "gemini-notes@google.com" || subject.toLowerCase().startsWith("notes -") || subject.toLowerCase().startsWith("notes:");
       const source = isGeminiNotes ? "google_meet" : "plaud";
 
       // Generate a title from the subject

@@ -81,7 +81,9 @@ Your capabilities:
 - NEVER pass more than 20 meetings into \`analyze_meetings\` in one call; batch if necessary.
 
 **STRICT MEETING TOOL ROUTING (HARD RULE — NOT a suggestion):**
-- **SOURCE DISAMBIGUATION (ASK FIRST):** For ANY query like "fetch my latest meeting", "my latest meeting notes", "latest meeting", "recent meeting", "my meetings", "meeting notes" — if the user has NOT explicitly mentioned a source (Google Meet / Gemini / gemini-notes / Plaud), you MUST NOT call any meeting tool yet. Instead, reply with EXACTLY this question and stop: "Which source should I use — **Google Meet** or **Plaud**?" Wait for the user's answer before calling any tool.
+- **SOURCE DISAMBIGUATION (ASK FIRST):** For source-ambiguous *latest/single-note* queries like "fetch my latest meeting", "my latest meeting notes", "latest meeting", "recent meeting", or generic "meeting notes" — if the user has NOT explicitly mentioned a source (Google Meet / Gemini / gemini-notes / Plaud), ask: "Which source should I use — **Google Meet** or **Plaud**?" Wait for the user's answer before calling any tool.
+- **DATE-RANGE MEETING SUMMARIES:** For broad period questions like "what happened in last week's meetings", "summarize this week's meetings", "weekly summary of meetings and decisions" that do NOT explicitly say "my meetings", "meetings I attended", or "directly linked to me", call \`list_meetings\` with \`scope="all"\` and the correct \`window\`. Do NOT default to \`scope="mine"\` for company-wide period summaries.
+- **DATE-RANGE SOURCE FALLBACK:** If \`list_meetings(scope="all")\` returns no meetings for a period, say no meetings are currently ingested for that date range and suggest syncing/importing Plaud data. Do NOT reframe the failure as "not directly linked to you" unless the user explicitly asked for personal/linked meetings.
 - Once the user picks a source (or mentioned it up-front):
   - **Gemini / Google Meet** → use the dedicated Google Meet shortcut. It reads the calling user's connected Gmail inbox for emails from gemini-notes@google.com. NEVER call \`list_meetings_by_source\` for Google Meet/Gemini notes.
   - **Plaud** → use the dedicated Plaud shortcut. It fetches the latest centrally ingested Plaud note.
@@ -90,12 +92,12 @@ Your capabilities:
   1. Call list_meetings FIRST with scope="mine".
   2. You MUST NOT call analyze_meetings, search_meeting_transcripts, get_meeting, or get_operational_summary BEFORE list_meetings has returned results in the current turn.
   3. You MUST NOT call get_meeting with a meeting_id that did not come from a prior list_meetings/list_meetings_by_source result in this turn — invented IDs will be rejected by the server.
-- scope="all" requires explicit user intent ("all meetings across the company", "everyone\'s meetings"). Never default to it.
+- scope="all" requires explicit broad intent ("all meetings across the company", "everyone\'s meetings", or unqualified date-range summaries like "last week's meetings"). Never use it for explicitly personal queries.
 
 **EMPTY RESULT HANDLING (HARD RULE):** If list_meetings returns \`empty: true\` or \`count: 0\`:
   - DO NOT hallucinate, invent, or summarize any meeting.
   - DO NOT call get_meeting, analyze_meetings, or search_meeting_transcripts to "try harder".
-  - Reply honestly with the tool's \`message\` field: "I couldn't find any meetings directly linked to you based on email/participant data."
+  - Reply honestly with the tool's \`message\` field. If scope="all", say no meetings are currently ingested for that date range; if scope="mine", say no directly linked meetings were found.
   - Then OFFER the fallback verbatim: "Would you like me to fetch recent meeting notes from Gemini or Plaud instead?" — DO NOT auto-run the fallback. Wait for the user to confirm OR for them to explicitly ask for "gemini notes" / "plaud notes" / "any recent meetings".
   - Once confirmed (or the user's intent is broad like "any recent meetings"), call \`list_meetings_by_source\` with \`source="gemini"\` or \`"plaud"\`.
   - When presenting fallback results, ALWAYS prefix with a clear disclosure such as: "These aren't linked to you directly — showing recent Gemini/Plaud notes as a fallback." NEVER call them "your meetings".
@@ -3733,6 +3735,9 @@ async function executeMeetingTool(
     }
 
     case "list_meetings": {
+      if ((args.window || args.from_date || args.to_date) && !isMyMeetingsIntent && identity?.is_admin) {
+        args.scope = "all";
+      }
       // Force scope default — never allow undefined to fall through
       const scope: "mine" | "all" = args.scope === "all" ? "all" : "mine";
       args.scope = scope;
@@ -3861,8 +3866,12 @@ async function executeMeetingTool(
           meetings: [],
           read_result: rr,
           meta: { readResult: true },
-          message: "I couldn't find any meetings directly linked to you based on email/participant data.",
-          hint: "Ownership requires a verified email/host/participant match. Some meetings may exist in the system but aren't attributed to you.",
+          message: scope === "all"
+            ? "I couldn't find any meetings ingested for that date range."
+            : "I couldn't find any meetings directly linked to you based on email/participant data.",
+          hint: scope === "all"
+            ? "The meeting database currently has no records in this window. Plaud/Gemini notes may need to be synced/imported first."
+            : "Ownership requires a verified email/host/participant match. Some meetings may exist in the system but aren't attributed to you.",
           fallback_available: true,
           fallback_prompt: "Would you like me to fetch recent meeting notes from Gemini or Plaud instead? (These are not your meetings — they are unattributed source-based notes.)",
           fallback_tool: "list_meetings_by_source",
@@ -3898,7 +3907,9 @@ async function executeMeetingTool(
       if (source === "gemini") {
         query = query.ilike("sender_email", "%gemini-notes@google.com%");
       } else {
-        query = query.eq("source", "plaud");
+        query = query
+          .eq("source", "plaud")
+          .not("sender_email", "ilike", "%gemini-notes@google.com%");
       }
 
       if (args.from_date) query = query.gte("meeting_date", args.from_date);
@@ -5777,6 +5788,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
         .from("meetings")
         .select("id, title, meeting_date, status, source, sender_email, summary, transcript, analysis, created_at")
         .eq("source", "plaud")
+        .not("sender_email", "ilike", "%gemini-notes@google.com%")
         .order("meeting_date", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(1);

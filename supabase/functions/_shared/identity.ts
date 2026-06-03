@@ -233,17 +233,17 @@ export function resolveWindow(
     start = new Date(todayStart.getTime() + 86400000);
     end = new Date(start.getTime() + 86400000);
   } else if (window === "this_week") {
-    const dow = new Date(todayStart).getUTCDay();
+    const dow = new Date(Date.UTC(localY, localM - 1, localD)).getUTCDay();
     const offset = (dow + 6) % 7; // Monday=0
     start = new Date(todayStart.getTime() - offset * 86400000);
     end = new Date(start.getTime() + 7 * 86400000);
   } else if (window === "next_week") {
-    const dow = new Date(todayStart).getUTCDay();
+    const dow = new Date(Date.UTC(localY, localM - 1, localD)).getUTCDay();
     const offset = (dow + 6) % 7;
     start = new Date(todayStart.getTime() + (7 - offset) * 86400000);
     end = new Date(start.getTime() + 7 * 86400000);
   } else if (window === "last_week") {
-    const dow = new Date(todayStart).getUTCDay();
+    const dow = new Date(Date.UTC(localY, localM - 1, localD)).getUTCDay();
     const offset = (dow + 6) % 7;
     start = new Date(todayStart.getTime() - (offset + 7) * 86400000);
     end = new Date(start.getTime() + 7 * 86400000);

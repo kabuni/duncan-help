@@ -3663,7 +3663,9 @@ async function executeMeetingTool(
     !sourceArgProvided &&
     meetingFlowState &&
     meetingFlowState.listedIds.size === 0 &&
-    !(toolName === "fetch_plaud_meetings" && explicitPlaudSyncRequested)
+    !(toolName === "fetch_plaud_meetings" && explicitPlaudSyncRequested) &&
+    toolName !== "get_action_items_for_range" &&
+    !(toolName === "list_meetings" && (args?.window || args?.from_date || args?.to_date))
   ) {
     console.log("[MEETING FLOW] ASK_SOURCE — blocking", toolName, "until user picks source");
     return {

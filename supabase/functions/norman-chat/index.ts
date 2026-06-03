@@ -680,6 +680,21 @@ const MEETING_TOOLS = [
   {
     type: "function",
     function: {
+      name: "get_action_items_for_range",
+      description: "Aggregate action items across EVERY meeting the caller can see within a date range. Use this for queries like 'what are my action items this week', 'action items from last week', 'tasks from last month's meetings', or anytime the user wants follow-ups across a period rather than a single meeting. Prefer the `window` shortcut over manual dates. Returns one combined list plus per-meeting breakdown.",
+      parameters: {
+        type: "object",
+        properties: {
+          window: { type: "string", enum: ["today", "this_week", "next_week", "last_week", "this_month", "last_month"], description: "Resolve a date window in the caller's timezone. ALWAYS prefer this over from_date/to_date for natural-language ranges." },
+          from_date: { type: "string", description: "YYYY-MM-DD inclusive lower bound. Ignored if `window` is set." },
+          to_date: { type: "string", description: "YYYY-MM-DD inclusive upper bound. Ignored if `window` is set." },
+        },
+        required: [],
+      },
+    },
+  {
+    type: "function",
+    function: {
       name: "analyze_meetings",
       description: "Run AI analysis on meetings that have transcripts but haven't been analyzed yet. Can also re-analyze specific meetings. Extracts summary, action items, decisions, participants, sentiment, risks, and follow-ups.",
       parameters: {

@@ -42,20 +42,10 @@ export default function POList() {
 
   return (
     <>
-      <Tabs value={view} onValueChange={(v) => setView(v as "open" | "closed")} className="mb-5">
-        <TabsList className="bg-muted/60 p-1 gap-1 h-9">
-          <TabsTrigger
-            value="open"
-            className="text-xs font-medium px-4 rounded-md data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground transition-colors"
-          >
-            Open <span className="ml-1.5 text-[10px] tabular-nums opacity-60">{open.length}</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="closed"
-            className="text-xs font-medium px-4 rounded-md data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground transition-colors"
-          >
-            Closed <span className="ml-1.5 text-[10px] tabular-nums opacity-60">{closed.length}</span>
-          </TabsTrigger>
+      <Tabs value={view} onValueChange={(v) => setView(v as "open" | "closed")} className="mb-4">
+        <TabsList>
+          <TabsTrigger value="open">Open ({open.length})</TabsTrigger>
+          <TabsTrigger value="closed">Closed ({closed.length})</TabsTrigger>
         </TabsList>
       </Tabs>
 

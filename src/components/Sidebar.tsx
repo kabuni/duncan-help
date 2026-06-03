@@ -48,6 +48,7 @@ const Sidebar = ({
   const isChatRoute = !isProjectsRoute;
   const [showModal, setShowModal] = useState(false);
   const { data: pendingApprovals = 0 } = useApprovalCount();
+  const { isAdmin } = useIsAdmin();
 
 
   const handleNavigate = (to: string) => {

@@ -149,13 +149,23 @@ function parseFromHeader(from: string): { name: string; email: string } {
   return { name: from.split("@")[0], email: from.trim().toLowerCase() };
 }
 
+function encodeMimeSubject(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  if (/^[\x00-\x7F]*$/.test(s)) return s;
+  const b64 = btoa(unescape(encodeURIComponent(s)));
+  return `=?UTF-8?B?${b64}?=`;
+}
+
 async function sendGmailReply(
   token: string, threadId: string, toEmail: string, subject: string, body: string, inReplyTo?: string,
 ) {
+  const subj = subject.startsWith("Re:") ? subject : `Re: ${subject}`;
   const headers = [
     `To: ${toEmail}`,
-    `Subject: ${subject.startsWith("Re:") ? subject : `Re: ${subject}`}`,
+    `Subject: ${encodeMimeSubject(subj)}`,
+    'MIME-Version: 1.0',
     'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: 8bit',
   ];
   if (inReplyTo) {
     headers.push(`In-Reply-To: ${inReplyTo}`);

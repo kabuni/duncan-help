@@ -703,7 +703,7 @@ const MEETING_TOOLS = [
           limit: { type: "number", description: "Max results (default 10, max 25)." },
           from_date: { type: "string", description: "YYYY-MM-DD lower bound on meeting_date. Ignored if 'window' is set." },
           to_date: { type: "string", description: "YYYY-MM-DD upper bound on meeting_date. Ignored if 'window' is set." },
-          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week"], description: "Resolve a date window in the caller's timezone instead of supplying from_date/to_date." },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week", "last_week", "this_month", "last_month"], description: "Resolve a date window in the caller's timezone instead of supplying from_date/to_date." },
         },
         required: ["source"],
       },

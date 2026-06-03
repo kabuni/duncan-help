@@ -273,19 +273,16 @@ const Operations = () => {
         <div className="relative z-10 px-4 sm:px-8 py-6 sm:py-8 max-w-7xl">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Operations Hub</h2>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  {section === "azure"
-                    ? "Azure DevOps work items and repository activity."
-                    : section === "approvals-auth"
-                    ? "Approvals and authorisation requests awaiting your decision."
-                    : section === "suppliers"
-                    ? "Suppliers and operational directories."
-                    : section === "analytics"
-                    ? "Website analytics and traffic insights."
-                    : "Sync activity across connected systems."}
-                </p>
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary glow-primary-sm shrink-0">
+                  <GitBranch className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Operations</h2>
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                    Unified command center for approvals, suppliers, DevOps activity, and sync operations across connected systems.
+                  </p>
+                </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 {section === "azure" && (

@@ -4,7 +4,6 @@ import { useIsAdmin } from "@/hooks/useUserRoles";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Inbox, RefreshCw, Calendar as CalIcon, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -16,9 +15,9 @@ const PRIORITY_STYLES: Record<string, string> = {
 };
 
 const STATUS_LABEL: Record<MeetingStatus, string> = {
-  awaiting_purpose: "Awaiting purpose",
-  pending_approval: "Pending approval",
-  confirmed: "Confirmed",
+  awaiting_purpose: "Awaiting reply",
+  pending_approval: "Needs manual slot",
+  confirmed: "Booked",
   declined: "Declined",
   rescheduled: "Rescheduled",
 };
@@ -32,12 +31,6 @@ function fmtLondon(iso: string | null): string {
   }).format(d) + " (UK)";
 }
 
-function toLocalInput(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 function MeetingCard({ req }: { req: MeetingRequest }) {
   const confirm = useConfirmMeeting();

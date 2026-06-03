@@ -4065,6 +4065,52 @@ async function executeMeetingTool(
       };
     }
 
+    case "get_action_items_for_range": {
+      // The window resolver above (top of executeMeetingTool) already converted
+      // args.window → from_date / to_date in the caller's timezone.
+      const fromDateStr: string | undefined = args.from_date;
+      const toDateStr: string | undefined = args.to_date;
+      if (!fromDateStr || !toDateStr) {
+        return {
+          error: "from_date and to_date are required (or pass a `window` value).",
+        };
+      }
+      const fromIso = new Date(`${fromDateStr}T00:00:00`).toISOString();
+      // to_date is inclusive in the tool contract; the RPC expects an exclusive upper bound.
+      const toIso = new Date(new Date(`${toDateStr}T00:00:00`).getTime() + 86400000).toISOString();
+
+      const { data, error } = await supabaseUser.rpc("get_action_items_for_range", {
+        _from_date: fromIso,
+        _to_date: toIso,
+      });
+      if (error) {
+        console.error("[get_action_items_for_range] rpc error", error);
+        return { error: error.message };
+      }
+      const payload = (data as any) || {};
+      const rr = createReadResult({
+        data: payload,
+        source: "meetings_db",
+        freshness_sla_seconds: 300,
+        row_count: Number(payload.meeting_count || 0),
+        filters_applied: {
+          from_date: fromDateStr,
+          to_date: toDateStr,
+          ...(resolvedMeetingWindow ? { resolved_window: resolvedMeetingWindow } : {}),
+        },
+        query_echo: `action_items range [${fromDateStr}..${toDateStr}]`,
+      });
+      return {
+        ...payload,
+        instructions:
+          "Aggregate the response: list every meeting in `meetings` with its title + date, then present `combined_action_items` grouped by meeting_title (with meeting_date). End with an Overall Summary covering the whole period. If `total_action_items` is 0, say so plainly and do not invent items. Do NOT discard meetings to fit a 3–5 cap when an explicit date range is in play.",
+        read_result: rr,
+        meta: { readResult: true },
+      };
+    }
+
+
+
 
 
     case "analyze_meetings": {

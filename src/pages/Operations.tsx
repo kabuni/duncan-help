@@ -630,11 +630,8 @@ const Operations = () => {
                   </div>
 
                   {/* Recent commits */}
-                  <div className="rounded-xl border border-border bg-card p-4">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Activity className="h-4 w-4 text-primary" />
-                      <h3 className="font-semibold text-foreground">Recent commits</h3>
-                    </div>
+                  <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+                    <PanelHeader icon={Activity} title="Recent commits" />
                     {(reposSummary?.recent_commits || []).length === 0 ? (
                       <p className="text-sm text-muted-foreground">No recent commits.</p>
                     ) : (

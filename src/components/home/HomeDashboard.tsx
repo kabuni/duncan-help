@@ -369,6 +369,9 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
         </div>
       </TileShell>
 
+      {/* GBP → INR EXCHANGE RATE */}
+      <GbpInrRateTile />
+
       {/* WEBSITE + SOCIAL */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <TileShell delay={0.05}>

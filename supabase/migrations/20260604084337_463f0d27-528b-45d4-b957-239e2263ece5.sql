@@ -1,0 +1,1 @@
+DELETE FROM public.event_rsvp_messages WHERE gmail_message_id IN ('19e911c10f11ec94','19e911469f0e6f71','19e9112ef31bce28');

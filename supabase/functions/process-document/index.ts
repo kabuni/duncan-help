@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { Buffer } from "node:buffer";
 // @ts-ignore
 import pdfParse from "npm:pdf-parse@1.1.1";
 import JSZip from "npm:jszip@3.10.1";

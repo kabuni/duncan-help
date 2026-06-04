@@ -1,67 +1,54 @@
-# Meeting Notes Backfill + Weekly Action Rollup
 
-## Goal
+## What I found
 
-1. Scan **all** meeting notes Duncan's mailbox has ever received (Plaud, Gemini/Google Meet, Otter, Fireflies, Read.ai, generic `notes -` / "meeting notes" subjects), store them in the existing `meetings` table, and analyze each one.
-2. When the user asks for action items from a specific meeting, Duncan also returns aggregated action items from all meetings in the **past 7 days** ending on that meeting's date.
-
-## What already exists (reuse, don't rebuild)
-
-- `meetings` table with `transcript`, `analysis`, `action_items`, `gmail_message_id` (used as dedupe key), `source`.
-- `fetch-plaud-meetings` edge function — already polls Plaud / Nimesh / Patrick / Gemini notes for the last 60 days from `duncan@kabuni.com`.
-- `analyze-meeting` edge function — runs GPT-4o analysis to populate `summary` / `action_items` / `analysis`.
-- `norman-chat` exposes `list_meetings`, `get_meeting`, `analyze_meetings`, `search_meeting_transcripts`.
-
-## Changes
-
-### 1. New edge function: `backfill-duncan-meetings`
-A one-shot (and re-runnable) full-history sweep of Duncan's Gmail using the existing `duncan_gmail_tokens`.
-
-- Run a wider Gmail query, no `newer_than` cap, paginated until done:
+### 1. Knowledge Base upload — PDF fails with "Buffer is not defined"
+- Your latest upload (`KABUNI-SCHOOLS-HANDOUT-A5BOOKLET_FINAL.pdf`) shows in `documents` with `status='failed'`, `error_message='Buffer is not defined'`.
+- The blob actually uploaded to Azure fine. The crash is in **`process-document`** (the text-extraction/chunking step) at this line:
+  ```ts
+  const buf = Buffer.from(bytes);   // ← Node-only, doesn't exist in Deno
+  const res = await pdfParse(buf);
   ```
-  (from:plaud OR from:noreply@plaud.ai OR subject:"invited you to view"
-   OR from:gemini-notes@google.com OR subject:"notes -"
-   OR from:noreply@otter.ai OR from:fireflies.ai OR from:read.ai
-   OR subject:"meeting notes" OR subject:"meeting summary"
-   OR subject:"meeting recap" OR subject:"meeting transcript")
+  `Buffer` is a Node.js global that Deno does not expose by default. Every PDF upload to KB currently dies here. Non-PDFs (txt, csv, md, docx, xlsx) are unaffected.
+
+**Fix**: import Buffer from `node:buffer` (or pass the `Uint8Array` straight to `pdf-parse`). One-line change in `supabase/functions/process-document/index.ts`.
+
+---
+
+### 2. Duncan re-sends RSVP emails on every reply
+- Looking at `event_rsvp_messages` for Samaresh (thread `19e4ea2c…`): three `follow_up` rows at **05:20, 05:25, 05:30** today, all producing outbound Gmail replies — even though the RSVP was already complete and `reply_sent_at` was set.
+- The "skip duplicate send" guard in `process-rsvp-emails/index.ts` (~line 935) is too strict:
+  ```ts
+  const skipSend = allComplete
+    && wasAlreadyComplete
+    && alreadySentConfirmation
+    && existingNotesAttendees.length === attendeesForReply.length;
   ```
-- For each message: skip if `gmail_message_id` already exists, otherwise extract subject / sender / date / body, classify `source` (`plaud` | `gemini` | `otter` | `fireflies` | `read` | `email`), and insert into `meetings`.
-- Process Plaud "invited you to view" links the same way `fetch-plaud-meetings` already does (reuse the helper or import the logic).
-- Use `EdgeRuntime.waitUntil` for the long-running loop; respond immediately with `{ started: true }`.
-- After insert, enqueue `analyze-meeting` per batch of 10 ids so summaries/action items get populated.
-- Idempotent: safe to re-run. Returns `{ inserted, skipped, analyzed_queued }`.
+  Whenever the user sends another reply in the thread (a "thanks!", a forwarded note, a duplicate confirmation), the AI re-extracts attendees, the count often differs by 1, `skipSend` flips to false, and Duncan fires another full confirmation email. Each new inbound = new outbound.
 
-Trigger: admin-only button on the EA Inbox / Settings page, plus a manual chat command "backfill all meeting notes". No cron — it's a one-time historical sweep (existing `fetch-plaud-meetings` already handles ongoing 60-day polling).
+**Fix**: tighten the rule. Once `reply_sent_at` is set AND status hasn't changed AND no previously-missing fields were filled in by this new inbound, skip the outbound entirely (just update the ledger as `follow_up_silent`). Only send again if (a) status flipped (yes↔no), or (b) a missing field is now present, or (c) operator manually clears `reply_sent_at`.
 
-### 2. New SQL helper + chat tool: weekly action-item rollup
-Add a Postgres function `get_action_items_around(meeting_id uuid)` that returns action items from the target meeting plus all meetings in the 7 days before its `meeting_date`, scoped by the same RLS rules as `meetings`.
+---
 
-Expose in `norman-chat` as a new tool `get_meeting_action_items_with_context`:
-- Input: `meeting_id` (and optional `days_back`, default 7).
-- Output: `{ focus_meeting: {...}, related_meetings: [{title, date, action_items}], combined_action_items: [...] }`.
-- Update the system prompt so that whenever the user asks "what are the action items from <meeting>" / "tasks from that meeting" / "follow-ups from <meeting>", Duncan calls this tool instead of `get_meeting`, and answers with two clearly labeled sections: **From this meeting** and **From the past 7 days**.
+### 3. NDA "not being generated"
+- Backend is healthy. Last NDA request (`Charles Blake Thomas`, 2026-06-03 17:29) generated successfully with no error. No new attempt has hit `nda_submissions` in the last 24 h.
+- Most likely you tried to generate one through chat and the AI didn't fire the `generate_nda` tool — or stopped mid-flow at the validation step. The tool requires 7 strict fields (Receiving Party Name & Entity, Date, Registered Address, Purpose, Recipient Name, Recipient Email) and rejects the whole call if any one is missing/invalid.
 
-### 3. UI hook (small)
-- EA Inbox page gets an admin-only "Backfill all meeting notes" button that invokes the new function and toasts progress, mirroring the existing "Poll now" button pattern.
+**Proposed action**: I'll add server-side logging to `nda-generate` so any future failed attempt is captured even when the chat layer silently rejects validation. Then I need from you: which NDA you tried to generate and roughly when, so I can pull the matching chat turn and confirm whether the tool was called at all vs. blocked by validation.
 
-## Technical notes
+---
 
-- All Gmail calls use the existing Duncan OAuth refresh-token flow (`duncan_gmail_tokens` + `GMAIL_CLIENT_ID/SECRET`).
-- Analysis stays on `gpt-4o` via the existing `analyze-meeting` function — no new model wiring.
-- No schema changes to `meetings` (existing columns cover everything). Only a new SQL function with `SECURITY DEFINER` + `search_path = public`.
-- Dedupe stays on `gmail_message_id`.
-- Times remain UTC in DB, formatted to Europe/London on display.
+## Plan
 
-## Files
+1. **KB PDF fix** — `supabase/functions/process-document/index.ts`
+   - Add `import { Buffer } from "node:buffer"` at the top.
+   - Re-trigger processing for `bfda13c8-…` (and any other `status='failed'` PDFs) by re-invoking `process-document` with their `document_id`.
 
-- `supabase/functions/backfill-duncan-meetings/index.ts` (new)
-- `supabase/config.toml` (register function, `verify_jwt = false` + in-code admin check)
-- `supabase/functions/norman-chat/index.ts` (new tool + prompt rules)
-- `supabase/migrations/<ts>_action_items_rollup.sql` (new SQL function)
-- `src/pages/EAInbox.tsx` (admin button)
+2. **RSVP repeat-reply fix** — `supabase/functions/process-rsvp-emails/index.ts`
+   - Replace the `skipSend` block with: skip the outbound whenever `reply_sent_at` is set, status is unchanged from the existing row, and no previously-missing field has just been provided.
+   - When skipping, write `outcome: 'follow_up_silent'` to `event_rsvp_messages` for visibility.
 
-## Out of scope
+3. **NDA visibility** — `supabase/functions/nda-generate/index.ts` + `supabase/functions/norman-chat/index.ts`
+   - Log every `generate_nda` tool call attempt (even validation rejections) with the offending fields so we can diagnose.
+   - Then ask you to retry once, and I'll inspect the turn log to confirm what's happening.
 
-- Real-time push from Gmail (existing 5-min cron + manual button is enough).
-- Changing the existing Plaud poller's 60-day window.
-- Modifying RLS on `meetings`.
+No DB migrations, no UI changes. All three are edge-function edits.

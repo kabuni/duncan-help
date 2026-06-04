@@ -68,6 +68,36 @@ function extractBody(payload: any): string {
   return "";
 }
 
+// Strip quoted history so the LLM only sees the NEW reply the sender just wrote.
+// Without this, a short reply like "Swayam Shah is from New Delhi" is buried
+// under the huge quoted Duncan template (which still lists the attendee as
+// missing-location), and the LLM treats the quote as authoritative — Swayam's
+// location stays null forever and Duncan re-asks on every reply.
+function stripQuotedReply(raw: string): string {
+  if (!raw) return raw;
+  const lines = raw.replace(/\r\n/g, "\n").split("\n");
+  const markers: RegExp[] = [
+    /^\s*-{2,}\s*Original Message\s*-{2,}\s*$/i,
+    /^\s*_{5,}\s*$/,
+    /^\s*From:\s.+/i,
+    /^\s*On\s.+\swrote:\s*$/i,
+    /^\s*El\s.+\sescribi[oó]:\s*$/i,
+    /^\s*Le\s.+\sa\s[ée]crit\s*:\s*$/i,
+    /^\s*Sent from my .+$/i,
+    /^\s*Get Outlook for .+$/i,
+    /^\s*Duncan\s*[·•]\s*Kabuni\s*$/i,
+  ];
+  let cutAt = lines.length;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (markers.some((rx) => rx.test(l))) { cutAt = i; break; }
+    if (/^\s*>/.test(l) && i + 1 < lines.length && /^\s*>/.test(lines[i + 1])) { cutAt = i; break; }
+  }
+  let body = lines.slice(0, cutAt).join("\n").trim();
+  if (body.length > 4000) body = body.slice(0, 4000);
+  return body;
+}
+
 function parseFromHeader(from: string): { email: string; name: string } {
   const m = from.match(/^\s*"?([^"<]*)"?\s*<([^>]+)>\s*$/);
   if (m) return { name: m[1].trim(), email: m[2].trim().toLowerCase() };
@@ -605,7 +635,8 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const body = extractBody(msg.payload);
+        const rawBody = extractBody(msg.payload);
+        const body = stripQuotedReply(rawBody);
         const emailText = `From: ${senderName} <${senderEmail}>\nSubject: ${subjectHdr}\n\n${body}`;
 
         // Skip Google/Outlook calendar auto-notifications outright — these are never RSVPs

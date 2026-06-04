@@ -925,7 +925,13 @@ Deno.serve(async (req) => {
           if (r.state) highlights.push({ label: "Travelling from", value: r.state });
         }
 
-        // Skip duplicate completion email
+        // Skip duplicate confirmation email.
+        //
+        // Once we've already sent a confirmation AND the RSVP was already fully
+        // complete on file AND nothing material has changed (status unchanged,
+        // no previously-missing field has just been filled in), do NOT send
+        // another email. This stops Duncan from auto-replying to every
+        // "thanks!" / forwarded-confirmation / re-reply on the same thread.
         const existingNotesAttendees = parseAttendeesSidecar(existingRsvp?.notes).attendees;
         const wasAlreadyComplete = existingRsvp
           ? (existingNotesAttendees.length
@@ -933,13 +939,31 @@ Deno.serve(async (req) => {
               : [existingRsvp.first_name, existingRsvp.last_name, existingRsvp.phone, existingRsvp.organisation_name].every((v) => !isEmpty(v)))
           : false;
         const alreadySentConfirmation = !!existingRsvp?.reply_sent_at;
-        const skipSend = allComplete && wasAlreadyComplete && alreadySentConfirmation
-          && existingNotesAttendees.length === attendeesForReply.length;
+        const statusUnchanged = !!existingRsvp && String(existingRsvp.status || "").toLowerCase() === String(finalStatus || "").toLowerCase();
+        const skipSend = alreadySentConfirmation
+          && statusUnchanged
+          && wasAlreadyComplete
+          && allComplete;
 
         if (skipSend) {
-          console.log("[process-rsvp-emails] skipping duplicate completion email", { rsvp_id: rsvpId, thread_id: threadId });
+          console.log("[process-rsvp-emails] skipping duplicate confirmation email — already sent, status unchanged, all complete", {
+            rsvp_id: rsvpId,
+            thread_id: threadId,
+            existing_status: existingRsvp?.status,
+            final_status: finalStatus,
+            existing_attendees: existingNotesAttendees.length,
+            incoming_attendees: attendeesForReply.length,
+          });
+          await finalizeLedger({
+            gmail_thread_id: threadId || null,
+            rsvp_id: rsvpId,
+            sender_email: senderEmail,
+            subject: subjectHdr,
+            outcome: "follow_up_silent",
+          });
           continue;
         }
+
 
         // ── Declined RSVPs: send one short acknowledgement, never chase missing details ──
         if (finalStatus === "no") {

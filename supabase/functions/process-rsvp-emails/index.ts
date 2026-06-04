@@ -635,7 +635,8 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const body = extractBody(msg.payload);
+        const rawBody = extractBody(msg.payload);
+        const body = stripQuotedReply(rawBody);
         const emailText = `From: ${senderName} <${senderEmail}>\nSubject: ${subjectHdr}\n\n${body}`;
 
         // Skip Google/Outlook calendar auto-notifications outright — these are never RSVPs

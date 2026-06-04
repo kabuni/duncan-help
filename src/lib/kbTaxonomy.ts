@@ -17,7 +17,7 @@ export const KB_SUBCATEGORIES: Record<KBCategory, string[]> = {
   "Finance": ["Expense Policy & Claims", "Invoicing & Billing", "Budgets & Forecasts", "Tax & HMRC"],
   "Operations": ["SOPs & Playbooks", "Vendor & Supplier Info", "Office & Facilities"],
   "Product & Engineering": ["Architecture & Technical Docs", "Product Specs", "Engineering Standards", "Runbooks"],
-  "Sales & Marketing": ["Brand Guidelines", "Pitch Decks", "Case Studies", "Pricing & Packaging"],
+  "Sales & Marketing": ["Brand Guidelines", "Pitch Decks", "Case Studies", "Pricing & Packaging", "Promotions"],
   "Recruitment": ["Job Descriptions", "Interview Scorecards", "Hiring Process", "Offer Letters"],
   "General / Company-Wide": ["Vision & Values", "OKRs", "Meeting Cadences", "Announcements"],
 };

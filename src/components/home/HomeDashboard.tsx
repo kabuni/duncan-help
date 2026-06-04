@@ -381,8 +381,8 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
         </TileShell>
       </div>
 
-      {/* HUBSPOT SOCIAL FEED */}
-      <HubSpotSocialFeedTile />
+      {/* HUBSPOT SOCIAL FEED — temporarily hidden */}
+      {false && <HubSpotSocialFeedTile />}
 
 
       {/* RSVP SUMMARY — Kabuni Showcase Mumbai */}

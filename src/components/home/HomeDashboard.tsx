@@ -1,8 +1,9 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import {
   Globe2, TrendingUp, TrendingDown, Users, Briefcase, FolderKanban,
-  AlertTriangle, Share2, BarChart3, ExternalLink, Loader2, CalendarCheck, ListChecks,
+  AlertTriangle, Share2, BarChart3, ExternalLink, Loader2, CalendarCheck, ListChecks, PoundSterling,
 } from "lucide-react";
 import {
   useGAHomeSummary, useHiresStats, useWorkstreamsStats, useProjectsStats, useSocialStats, useRsvpStats, useMyPendingTasks,

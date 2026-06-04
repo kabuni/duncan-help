@@ -244,6 +244,69 @@ function HubSpotSocialFeedTile() {
 
 
 
+function GbpInrRateTile() {
+  const [rate, setRate] = useState<number | null>(null);
+  const [prev, setPrev] = useState<number | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchRate = async () => {
+      try {
+        const res = await fetch("https://open.er-api.com/v6/latest/GBP");
+        const json = await res.json();
+        if (cancelled) return;
+        const inr = json?.rates?.INR;
+        if (typeof inr !== "number") throw new Error("no rate");
+        setPrev((p) => (rate !== null ? rate : p));
+        setRate(inr);
+        setUpdatedAt(json?.time_last_update_utc ?? new Date().toUTCString());
+        setError(false);
+      } catch {
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchRate();
+    const id = setInterval(fetchRate, 60 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const delta = rate !== null && prev !== null ? rate - prev : null;
+
+  return (
+    <TileShell delay={0.04}>
+      <TileHeader icon={PoundSterling} label="GBP → INR · Exchange Rate" />
+      {loading ? (
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      ) : error || rate === null ? (
+        <div className="text-xs text-muted-foreground">Rate unavailable right now.</div>
+      ) : (
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <div className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+              ₹{rate.toFixed(2)}
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              per £1 · {updatedAt ? new Date(updatedAt).toLocaleString() : "—"}
+            </div>
+          </div>
+          {delta !== null && delta !== 0 && (
+            <div className={`text-[11px] inline-flex items-center gap-0.5 font-medium ${delta >= 0 ? "text-norman-success" : "text-destructive"}`}>
+              {delta >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {delta >= 0 ? "+" : ""}{delta.toFixed(4)}
+            </div>
+          )}
+        </div>
+      )}
+    </TileShell>
+  );
+}
+
 export const HomeDashboard = ({ userName }: { userName: string }) => {
   const navigate = useNavigate();
   const ga = useGAHomeSummary();

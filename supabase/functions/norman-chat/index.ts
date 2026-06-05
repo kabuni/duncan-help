@@ -369,8 +369,23 @@ const DOCUMENT_TOOLS = [
   {
     type: "function",
     function: {
+      name: "search_knowledge_base",
+      description: "Semantic search over the Kabuni Knowledge Base (documents uploaded via the Knowledge Base UI — handbooks, policies, brochures, playbooks, company docs). USE THIS FIRST whenever the user asks 'do we have a document/policy/handout on X', references company knowledge, or wants info that could plausibly live in an uploaded doc. Returns ranked passages with their source document title.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Natural-language query. Descriptive phrasing works best (semantic search)." },
+          match_count: { type: "number", description: "Max chunks to return (default 8, max 25)." },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "search_documents",
-      description: "Search for documents in the company document storage (Azure Blob Storage). Use this when the user asks about company documents, policies, guides, or any information that might be stored in the document system.",
+      description: "Search raw Azure Blob document storage by FILENAME (NDAs, generated reports, legacy folders). Prefer search_knowledge_base for anything uploaded via the Knowledge Base UI. Use this only when the user explicitly references a stored file by name or a non-KB folder.",
       parameters: {
         type: "object",
         properties: {
@@ -4512,6 +4527,36 @@ async function executeDocumentTool(
   authHeader: string
 ): Promise<any> {
   switch (toolName) {
+    case "search_knowledge_base": {
+      const res = await fetch(`${supabaseUrl}/functions/v1/query-knowledge-base`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+        body: JSON.stringify({ query: args.query, match_count: args.match_count ?? 8 }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Knowledge base search failed");
+      }
+      const data = await res.json();
+      const results = (data.results || []).map((r: any) => ({
+        document_title: r.document_title,
+        chunk_index: r.chunk_index,
+        similarity: Number(r.similarity?.toFixed?.(3) ?? r.similarity),
+        content: (r.content || "").slice(0, 2000),
+      }));
+      return {
+        found: results.length,
+        results,
+        formatted_context: data.formatted_context || "",
+        message: results.length === 0
+          ? "No matching passages found in the Knowledge Base."
+          : `Found ${results.length} passage(s) across ${new Set(results.map((r: any) => r.document_title)).size} document(s).`,
+      };
+    }
+
     case "search_documents": {
       const res = await fetch(`${supabaseUrl}/functions/v1/azure-blob-api`, {
         method: "POST",
@@ -6544,7 +6589,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const bypassWriteConfirm = !!opts.bypassWriteConfirm;
 
       const calendarToolNames = ["list_calendar_events", "create_calendar_event", "update_calendar_event", "delete_calendar_event"];
-      const documentToolNames = ["search_documents", "read_document", "list_documents"];
+      const documentToolNames = ["search_knowledge_base", "search_documents", "read_document", "list_documents"];
       
       const googleFormsToolNames = ["list_google_forms", "submit_google_form", "parse_google_form", "save_parsed_google_form"];
       const ndaToolNames = ["generate_nda", "list_nda_submissions", "send_nda_for_signature", "send_pdf_for_signature"];

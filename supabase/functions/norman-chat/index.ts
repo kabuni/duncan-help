@@ -4364,6 +4364,34 @@ async function executeNdaTool(
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "NDA generation failed");
       const downloadUrl = result.download_url || result.document_url || result.google_doc_url || result.url || null;
+
+      // Auto-send for e-signature once the NDA is generated.
+      let signatureResult: any = null;
+      let signatureError: string | null = null;
+      if (result.success !== false && result.submission_id) {
+        try {
+          const sigRes = await fetch(`${supabaseUrl}/functions/v1/nda-send-signature`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: authHeader },
+            body: JSON.stringify({ submission_id: result.submission_id, dry_run: false }),
+          });
+          const sigJson = await sigRes.json();
+          if (!sigRes.ok) {
+            signatureError = sigJson.error || `nda-send-signature failed (${sigRes.status})`;
+          } else {
+            signatureResult = sigJson;
+          }
+        } catch (e: any) {
+          signatureError = e?.message || "Unknown error sending for signature";
+        }
+      }
+
+      const sigMsg = signatureResult
+        ? ` Sent for e-signature to internal signer first (envelope: ${signatureResult.envelope_id || "created"}).`
+        : signatureError
+          ? ` Note: auto e-signature dispatch failed — ${signatureError}. You can retry with send_nda_for_signature.`
+          : "";
+
       return {
         ...result,
         success: result.success ?? true,
@@ -4371,9 +4399,11 @@ async function executeNdaTool(
         status: "success",
         download_url: downloadUrl,
         google_doc_url: result.google_doc_url || downloadUrl,
+        signature: signatureResult,
+        signature_error: signatureError,
         message: downloadUrl
-          ? `NDA generated successfully. Download link: ${downloadUrl}`
-          : (result.message || "NDA generation completed, but no download URL was returned."),
+          ? `NDA generated successfully. Download link: ${downloadUrl}.${sigMsg}`
+          : (result.message || "NDA generation completed, but no download URL was returned.") + sigMsg,
       };
     }
 

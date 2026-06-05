@@ -5846,11 +5846,26 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     // Persistent across all tool-call iterations in this request — tracks meeting IDs the LLM has actually been shown
     const meetingFlowState = { listedIds: new Set<string>(), sourceFallbackIds: new Set<string>(), userIntent: latestUserText };
-    const shouldBypassTools =
+    let shouldBypassTools =
       latestUserText.length > 0 &&
       !sourceChosenForPendingMeeting &&
       !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
       (latestUserText.length < 20 || SIMPLE_INPUT_PATTERNS.some((pattern) => pattern.test(latestUserText)));
+    const isNdaConfirmationReply = (() => {
+      const normalized = latestUserText.trim().toLowerCase().replace(/[.!?]+$/g, "");
+      const isAffirmative = /^(yes|y|yeah|yep|ok|okay|sure|confirmed|confirm|go|go ahead|please do|do it)$/i.test(normalized);
+      if (!isAffirmative) return false;
+      const recentText = messages
+        .slice(-8)
+        .map((m: any) => typeof m?.content === "string" ? m.content : JSON.stringify(m?.content ?? ""))
+        .join("\n");
+      return /\bNDA\b|generate_nda/i.test(recentText) &&
+        /Receiving Party|Legal Entity|registered address|recipient email|NDA details captured|Generating the NDA/i.test(recentText);
+    })();
+    if (isNdaConfirmationReply) {
+      shouldBypassTools = false;
+      systemContent += `\n\n## CURRENT REQUEST OVERRIDE — NDA CONFIRMATION\nThe latest user reply is confirming a pending NDA generation. Do not answer with a promise. Immediately call \`generate_nda\` using the confirmed NDA fields from the conversation history. After the tool returns, share the actual download link from the tool result. If a Notion link is absent/null, say the Notion entry was skipped/unavailable rather than promising it later.`;
+    }
 
     // ── Lightweight entity resolver ─────────────────────────────────────────
     // Fuzzy-match the user message against known enum/source values BEFORE the

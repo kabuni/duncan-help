@@ -215,7 +215,7 @@ When generating NDAs:
   f. Once all required fields (1–7) are captured, show a one-block summary and ask a single yes/no confirmation, then call generate_nda. Never loop back to asking fields after confirmation.
 - After generation, share links using markdown: [Download NDA](download_url) and [View in Notion](notion_page_url) using the actual URLs from the tool result.
 - To view existing NDA submissions or check status, use list_nda_submissions.
-- To send an NDA for e-signature (admin only), use send_nda_for_signature with the submission_id. Use dry_run=true to validate without sending.
+- To send an NDA for e-signature (admin only), use send_nda_for_signature with the submission_id. Use dry_run=true to validate without sending. Do NOT ask about e-signature until after the generated NDA download link has been delivered.
 
 **Release Logging (Auto-capture for /whats-new)**:
 - Whenever the user describes shipping, fixing, improving, or releasing ANY user-facing change in conversation (e.g. "I just fixed X", "we shipped Y", "Z is now live"), IMMEDIATELY call log_release_change with the appropriate type and a clear one-line description. Do NOT ask for confirmation. Do NOT ask which release. Just log it.
@@ -5623,6 +5623,80 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const latestUserMessage = [...messages].reverse().find((message: any) => message?.role === "user");
     const latestUserText = extractPlainText(latestUserMessage?.content).trim();
 
+    const recentConversationText = messages
+      .slice(-12)
+      .map((m: any) => typeof m?.content === "string" ? m.content : JSON.stringify(m?.content ?? ""))
+      .join("\n");
+
+    function cleanNdaFieldValue(value: string | null | undefined): string | undefined {
+      if (!value) return undefined;
+      const cleaned = value
+        .replace(/^[-*\s]+/, "")
+        .replace(/\s+$/g, "")
+        .replace(/["'`]+$/g, "")
+        .trim();
+      return cleaned.length > 0 ? cleaned : undefined;
+    }
+
+    function readNdaLabel(text: string, labels: string[]): string | undefined {
+      for (const label of labels) {
+        const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const re = new RegExp(`(?:\\*\\*)?${escaped}(?:\\*\\*)?\\s*[:：]\\s*([^\\n]+)`, "i");
+        const match = text.match(re);
+        const value = cleanNdaFieldValue(match?.[1]);
+        if (value) return value;
+      }
+      return undefined;
+    }
+
+    function extractNdaArgsFromConversation(text: string): Record<string, any> | null {
+      const normalizedFromJson = (() => {
+        try {
+          const marker = text.lastIndexOf('"tool_name":"generate_nda"');
+          const spacedMarker = marker >= 0 ? marker : text.lastIndexOf('"tool_name": "generate_nda"');
+          if (spacedMarker >= 0) {
+            const start = text.lastIndexOf("{", spacedMarker);
+            const end = text.indexOf("}", spacedMarker);
+            if (start >= 0 && end > start) {
+              const parsed = JSON.parse(repairJsonCandidate(text.slice(start, end + 1)));
+              const { tool_name: _toolName, toolName: _toolName2, name: _name, ...rest } = parsed;
+              return rest;
+            }
+          }
+        } catch { /* fall through to markdown label extraction */ }
+        return null;
+      })();
+
+      const args: Record<string, any> = normalizedFromJson && typeof normalizedFromJson === "object"
+        ? { ...normalizedFromJson }
+        : {};
+
+      args.receiving_party_name ??= readNdaLabel(text, ["Receiving Party Name", "Receiving Party"]);
+      args.receiving_party_entity ??= args.receiving_party_legal_entity_name ?? readNdaLabel(text, ["Receiving Party Legal Entity", "Receiving Party Legal Entity Name", "Legal Entity", "Legal Entity Name"]);
+      args.date_of_agreement ??= readNdaLabel(text, ["Date of Agreement", "Agreement Date"]);
+      args.registered_address ??= readNdaLabel(text, ["Registered Address", "Registered Address of the Receiving Party Legal Entity"]);
+      args.purpose ??= readNdaLabel(text, ["Purpose", "Purpose of the NDA", "NDA Purpose"]);
+      args.recipient_name ??= readNdaLabel(text, ["Recipient Name", "Recipient Name for Signature", "Signer Name"]);
+      args.recipient_email ??= readNdaLabel(text, ["Recipient Email", "Recipient Email for Signature", "Signer Email"]);
+      args.internal_signer_name ??= readNdaLabel(text, ["Internal Signer Name"]);
+      args.internal_signer_email ??= readNdaLabel(text, ["Internal Signer Email"]);
+
+      if (!args.internal_signer_name) args.internal_signer_name = "Palash Soundarkar";
+      if (!args.internal_signer_email) args.internal_signer_email = "palash@kabuni.com";
+
+      const required = ["receiving_party_name", "receiving_party_entity", "date_of_agreement", "registered_address", "purpose", "recipient_name", "recipient_email"];
+      const complete = required.every((key) => typeof args[key] === "string" && args[key].trim().length > 0);
+      return complete ? args : null;
+    }
+
+    function looksLikeNdaGenerationPromise(text: string): boolean {
+      return /\bNDA\b/i.test(text) &&
+        /\bgenerating\b|\bgenerate(?:d|ing)?\b/i.test(text) &&
+        /download link|as soon as|once (?:the document is )?ready|share (?:the )?link|notion page/i.test(text);
+    }
+
+    const pendingNdaArgsFromHistory = extractNdaArgsFromConversation(recentConversationText);
+
     // Phase 5: raise the tool-call ceiling to 6 rounds so multi-step
     // operational sequences (resolve entity → list → fetch detail → mutate →
     // re-verify → narrate) can complete in a single turn without the loop
@@ -5868,16 +5942,27 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const normalized = latestUserText.trim().toLowerCase().replace(/[.!?]+$/g, "");
       const isAffirmative = /^(yes|y|yeah|yep|ok|okay|sure|confirmed|confirm|go|go ahead|please do|do it)$/i.test(normalized);
       if (!isAffirmative) return false;
-      const recentText = messages
-        .slice(-8)
-        .map((m: any) => typeof m?.content === "string" ? m.content : JSON.stringify(m?.content ?? ""))
-        .join("\n");
-      return /\bNDA\b|generate_nda/i.test(recentText) &&
-        /Receiving Party|Legal Entity|registered address|recipient email|NDA details captured|Generating the NDA/i.test(recentText);
+      if (/##\s*NDA generated|\[Download NDA\]\(/i.test(recentConversationText)) return false;
+      return /\bNDA\b|generate_nda/i.test(recentConversationText) &&
+        /Receiving Party|Legal Entity|registered address|recipient email|NDA details captured|ready to generate|Generating the NDA|NDA — Summary/i.test(recentConversationText);
     })();
     if (isNdaConfirmationReply) {
       shouldBypassTools = false;
       systemContent += `\n\n## CURRENT REQUEST OVERRIDE — NDA CONFIRMATION\nThe latest user reply is confirming a pending NDA generation. Do not answer with a promise. Immediately call \`generate_nda\` using the confirmed NDA fields from the conversation history. After the tool returns, share the actual download link from the tool result. If a Notion link is absent/null, say the Notion entry was skipped/unavailable rather than promising it later.`;
+    }
+
+    if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {
+      try {
+        const result = await executeNdaTool("generate_nda", pendingNdaArgsFromHistory, supabaseAdmin, userId, userEmail, authHeader);
+        const downloadUrl = result?.download_url || result?.google_doc_url || result?.document_url;
+        const notionUrl = result?.notion_page_url || result?.notion_url;
+        const content = downloadUrl
+          ? `## NDA generated\n\n[Download NDA](${downloadUrl})${notionUrl ? `\n\n[View in Notion](${notionUrl})` : "\n\nNotion page was not created/available."}`
+          : `## NDA generated\n\nThe document was generated, but no download link was returned. Please ask me to list NDA submissions and I’ll retrieve it.`;
+        return buildTextSseResponse(content);
+      } catch (error: any) {
+        return buildTextSseResponse(`## NDA generation failed\n\n${error?.message || "Unknown error"}`);
+      }
     }
 
     // ── Lightweight entity resolver ─────────────────────────────────────────
@@ -6142,7 +6227,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     if (mode !== "briefing" && !shouldBypassTools && filteredTools.length > 0) {
       requestBody.tools = filteredTools;
-      if (isDataIntent && !isVoiceMode && !mustAskMeetingSource) {
+      if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {
+        requestBody.tool_choice = { type: "function", function: { name: "generate_nda" } };
+      } else if (isDataIntent && !isVoiceMode && !mustAskMeetingSource) {
         requestBody.tool_choice = "auto";
       }
     }
@@ -7311,6 +7398,16 @@ Format as a natural, readable summary with clear sections. If a section has no d
               // a real tool call so the downstream tool actually runs.
               const recoveredCall = (() => {
                 try {
+                  if (pendingNdaArgsFromHistory && (isNdaConfirmationReply || looksLikeNdaGenerationPromise(fullContent))) {
+                    return {
+                      id: `recovered_nda_${Date.now().toString(36)}`,
+                      type: "function",
+                      function: {
+                        name: "generate_nda",
+                        arguments: JSON.stringify(pendingNdaArgsFromHistory),
+                      },
+                    };
+                  }
                   if (!fullContent) return null;
                   const firstBrace = fullContent.indexOf("{");
                   const lastBrace = fullContent.lastIndexOf("}");

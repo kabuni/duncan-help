@@ -4416,7 +4416,20 @@ async function executeNdaTool(
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "NDA generation failed");
-      return result;
+      const downloadUrl = result.download_url || result.document_url || result.google_doc_url || result.url || null;
+      const notionUrl = result.notion_page_url || result.notion_url || null;
+      return {
+        ...result,
+        success: result.success ?? true,
+        generation_status: result.status || "generated",
+        status: "success",
+        download_url: downloadUrl,
+        google_doc_url: result.google_doc_url || downloadUrl,
+        notion_page_url: notionUrl,
+        message: downloadUrl
+          ? `NDA generated successfully. Download link: ${downloadUrl}${notionUrl ? `. Notion page: ${notionUrl}` : `. Notion page was not created/available.`}`
+          : (result.message || "NDA generation completed, but no download URL was returned."),
+      };
     }
 
     case "list_nda_submissions": {
@@ -5846,11 +5859,26 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     // Persistent across all tool-call iterations in this request — tracks meeting IDs the LLM has actually been shown
     const meetingFlowState = { listedIds: new Set<string>(), sourceFallbackIds: new Set<string>(), userIntent: latestUserText };
-    const shouldBypassTools =
+    let shouldBypassTools =
       latestUserText.length > 0 &&
       !sourceChosenForPendingMeeting &&
       !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
       (latestUserText.length < 20 || SIMPLE_INPUT_PATTERNS.some((pattern) => pattern.test(latestUserText)));
+    const isNdaConfirmationReply = (() => {
+      const normalized = latestUserText.trim().toLowerCase().replace(/[.!?]+$/g, "");
+      const isAffirmative = /^(yes|y|yeah|yep|ok|okay|sure|confirmed|confirm|go|go ahead|please do|do it)$/i.test(normalized);
+      if (!isAffirmative) return false;
+      const recentText = messages
+        .slice(-8)
+        .map((m: any) => typeof m?.content === "string" ? m.content : JSON.stringify(m?.content ?? ""))
+        .join("\n");
+      return /\bNDA\b|generate_nda/i.test(recentText) &&
+        /Receiving Party|Legal Entity|registered address|recipient email|NDA details captured|Generating the NDA/i.test(recentText);
+    })();
+    if (isNdaConfirmationReply) {
+      shouldBypassTools = false;
+      systemContent += `\n\n## CURRENT REQUEST OVERRIDE — NDA CONFIRMATION\nThe latest user reply is confirming a pending NDA generation. Do not answer with a promise. Immediately call \`generate_nda\` using the confirmed NDA fields from the conversation history. After the tool returns, share the actual download link from the tool result. If a Notion link is absent/null, say the Notion entry was skipped/unavailable rather than promising it later.`;
+    }
 
     // ── Lightweight entity resolver ─────────────────────────────────────────
     // Fuzzy-match the user message against known enum/source values BEFORE the
@@ -7379,6 +7407,30 @@ Format as a natural, readable summary with clear sections. If a section has no d
             }
             const toolResults = await executeToolCalls(toolCalls, provider, { emit: emitDuncanEvent });
             recordTurnToolOutcomes(toolResults);
+            const generatedNdaResult = (() => {
+              if (!toolCalls.some((tc: any) => tc?.function?.name === "generate_nda")) return null;
+              for (const msg of toolResults || []) {
+                const raw = msg?.content;
+                let parsed: any = null;
+                if (typeof raw === "string") {
+                  try { parsed = JSON.parse(raw); } catch { parsed = null; }
+                } else if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+                  parsed = raw;
+                }
+                if (parsed?.tool === "generate_nda" && parsed?.ok === true && parsed?.download_url) {
+                  return parsed;
+                }
+              }
+              return null;
+            })();
+            if (generatedNdaResult) {
+              const ndaResponse = `## NDA generated\n\n[Download NDA](${generatedNdaResult.download_url})${generatedNdaResult.notion_page_url ? `\n\n[View in Notion](${generatedNdaResult.notion_page_url})` : "\n\nNotion page was not created/available."}`;
+              lastFullContent = ndaResponse;
+              aggregatedContent += ndaResponse;
+              forcedRecoveryContent = ndaResponse;
+              enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: ndaResponse } }] })}\n\n`);
+              break;
+            }
             const toolResultsString = JSON.stringify(toolResults);
             const allToolResultsNoData = toolResults.length > 0 && toolResults.every((message: any) => {
               const content = message?.content;

@@ -152,6 +152,45 @@ async function azureRequest(
   });
 }
 
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+function base64UrlDecode(value: string): string {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4);
+  return atob(padded);
+}
+
+async function signDownloadPayload(payloadB64: string): Promise<string> {
+  const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!secret) throw new Error("Download signing key not configured");
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payloadB64));
+  return base64UrlEncode(new Uint8Array(sig));
+}
+
+async function verifyDownloadToken(token: string | null, blobPath: string | null): Promise<boolean> {
+  try {
+    if (!token || !blobPath) return false;
+    const [payloadB64, signature] = token.split(".");
+    if (!payloadB64 || !signature) return false;
+    const expected = await signDownloadPayload(payloadB64);
+    if (expected !== signature) return false;
+    const payload = JSON.parse(base64UrlDecode(payloadB64));
+    return payload?.blob_path === blobPath && typeof payload?.exp === "number" && payload.exp > Math.floor(Date.now() / 1000);
+  } catch {
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -163,10 +202,14 @@ serve(async (req) => {
     // Verify authenticated user OR service-role internal call
     const authHeader = req.headers.get("Authorization");
     const serviceSecret = req.headers.get("x-service-secret");
+    const requestUrl = new URL(req.url);
+    const requestedBlobPath = requestUrl.searchParams.get("blob_path") || requestUrl.searchParams.get("path");
+    const hasValidDownloadToken = req.method === "GET" &&
+      await verifyDownloadToken(requestUrl.searchParams.get("download_token"), requestedBlobPath);
     const isServiceCall = !!serviceSecret &&
       serviceSecret === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!isServiceCall) {
+    if (!isServiceCall && !hasValidDownloadToken) {
       if (!authHeader) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,

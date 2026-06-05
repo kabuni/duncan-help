@@ -203,6 +203,30 @@ async function uploadBlobBytes(
   return `https://${accountName}.blob.core.windows.net/${CONTAINER_NAME}/${blobPath}`;
 }
 
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+async function createDownloadToken(blobPath: string): Promise<string> {
+  const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!secret) throw new Error("Download signing key not configured");
+  const payload = base64UrlEncode(new TextEncoder().encode(JSON.stringify({
+    blob_path: blobPath,
+    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
+  })));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+  return `${payload}.${base64UrlEncode(new Uint8Array(signature))}`;
+}
+
 /**
  * Download the Word template from Azure, replace placeholders, and return the modified docx bytes.
  * 
@@ -585,7 +609,8 @@ serve(async (req) => {
       console.log(`NDA generated successfully: blob=${blobPath}, notion=${notionPageId || "skipped"}`);
 
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const downloadUrl = `${supabaseUrl}/functions/v1/azure-blob-api?blob_path=${encodeURIComponent(blobPath)}`;
+      const downloadToken = await createDownloadToken(blobPath);
+      const downloadUrl = `${supabaseUrl}/functions/v1/azure-blob-api?blob_path=${encodeURIComponent(blobPath)}&download_token=${encodeURIComponent(downloadToken)}`;
 
       return new Response(JSON.stringify({
         success: true,

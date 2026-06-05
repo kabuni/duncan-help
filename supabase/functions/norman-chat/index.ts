@@ -4527,6 +4527,36 @@ async function executeDocumentTool(
   authHeader: string
 ): Promise<any> {
   switch (toolName) {
+    case "search_knowledge_base": {
+      const res = await fetch(`${supabaseUrl}/functions/v1/query-knowledge-base`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+        body: JSON.stringify({ query: args.query, match_count: args.match_count ?? 8 }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Knowledge base search failed");
+      }
+      const data = await res.json();
+      const results = (data.results || []).map((r: any) => ({
+        document_title: r.document_title,
+        chunk_index: r.chunk_index,
+        similarity: Number(r.similarity?.toFixed?.(3) ?? r.similarity),
+        content: (r.content || "").slice(0, 2000),
+      }));
+      return {
+        found: results.length,
+        results,
+        formatted_context: data.formatted_context || "",
+        message: results.length === 0
+          ? "No matching passages found in the Knowledge Base."
+          : `Found ${results.length} passage(s) across ${new Set(results.map((r: any) => r.document_title)).size} document(s).`,
+      };
+    }
+
     case "search_documents": {
       const res = await fetch(`${supabaseUrl}/functions/v1/azure-blob-api`, {
         method: "POST",

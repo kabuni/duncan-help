@@ -5230,7 +5230,7 @@ serve(async (req) => {
     let userEmail: string = "";
     let calendarAccessToken: string | null = null;
     let azureStorageAvailable = false;
-    let notionToken: string | null = null;
+    
     
     let slackConnection: { accessToken: string; teamName: string | null; scope: string | null } | null = null;
 
@@ -5278,13 +5278,11 @@ serve(async (req) => {
     const [
       calendarTokenResult,
       slackResult,
-      notionResult,
       formsResult,
       duncanCalendarResult,
     ] = await Promise.all([
       getCalendarAccessToken(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] calendar:", e); return null; }),
       getSlackConnection(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] slack:", e); return null; }),
-      getNotionToken(supabaseAdmin).catch((e) => { console.warn("[warmup] notion:", e); return null; }),
       supabaseAdmin.from("google_forms").select("id, name, description, fields"),
       // Admins write calendar invites through the shared duncan@kabuni.com mailbox.
       resolvedIdentity.is_admin
@@ -5293,7 +5291,6 @@ serve(async (req) => {
     ]);
     calendarAccessToken = calendarTokenResult;
     slackConnection = slackResult;
-    notionToken = notionResult;
     azureStorageAvailable = !!getAzureStorageConfig();
     const googleForms = formsResult?.data;
     const duncanCalendar = duncanCalendarResult;

@@ -419,7 +419,7 @@ const DOCUMENT_TOOLS = [
   },
 ];
 
-const NOTION_TOOLS: any[] = [];
+
 
 const NDA_TOOLS = [
   {

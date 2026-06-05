@@ -185,16 +185,19 @@ export function EventRsvps({ eventId }: { eventId: string }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-          <Users className="h-3 w-3" />
-          Attendees (RSVPs)
-          {attendees.length > 0 && (
-            <span>
-              · {attendees.length} total · {counts.yes || 0} yes · {counts.maybe || 0} maybe · {counts.no || 0} no
-            </span>
-          )}
+      <div className="flex items-center justify-between mb-1.5 gap-2">
+        <div className="text-xs text-muted-foreground flex items-center gap-1.5 min-w-0">
+          <Users className="h-3 w-3 shrink-0" />
+          <span className="truncate">
+            Attendees (RSVPs)
+            {attendees.length > 0 && (
+              <span>
+                {" "}· {attendees.length} total · {counts.yes || 0} yes · {counts.maybe || 0} maybe · {counts.no || 0} no
+              </span>
+            )}
+          </span>
         </div>
+        <InviteAttendeeButton eventId={eventId} />
       </div>
       {attendees.length === 0 ? (
         <div className="text-xs text-muted-foreground border border-dashed border-border rounded-md p-3">

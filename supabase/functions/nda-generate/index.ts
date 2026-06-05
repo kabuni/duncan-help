@@ -8,8 +8,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const NOTION_API_URL = "https://api.notion.com/v1";
-const NOTION_VERSION = "2022-06-28";
 const CONTAINER_NAME = "duncanstorage01";
 const NDA_TEMPLATE_PATH = "templates/nda_template.docx";
 
@@ -353,53 +351,6 @@ async function generateDocxFromTemplate(
   return outputBytes;
 }
 
-async function getNotionToken(supabaseAdmin: any): Promise<string> {
-  const { data: integration } = await supabaseAdmin
-    .from("company_integrations")
-    .select("encrypted_api_key, status")
-    .eq("integration_id", "notion")
-    .single();
-
-  if (!integration || integration.status !== "connected" || !integration.encrypted_api_key) {
-    throw new Error("Notion is not connected. An admin must connect it first.");
-  }
-  return atob(integration.encrypted_api_key);
-}
-
-async function createNotionRow(
-  data: NDARequest, docUrl: string, notionToken: string, formattedDate: string
-): Promise<{ pageId: string; pageUrl: string }> {
-  const notionDbId = Deno.env.get("NOTION_NDA_DB_ID");
-  if (!notionDbId) throw new Error("NOTION_NDA_DB_ID not configured");
-
-  const properties: Record<string, any> = {
-    "Name": { title: [{ text: { content: `NDA - ${data.receiving_party_name}` } }] },
-    "Date of Agreement": { date: { start: data.date_of_agreement } },
-    "Receiving Party Legal Entity Name": { rich_text: [{ text: { content: data.receiving_party_entity } }] },
-    "Registered Address": { rich_text: [{ text: { content: data.registered_address } }] },
-    "Purpose": { rich_text: [{ text: { content: data.purpose } }] },
-    "Doc URL": { url: docUrl },
-    "Submitted By": { email: data.submitter_email },
-    "Recipient Email": { email: data.recipient_email },
-    "Signature Status": { checkbox: false },
-    "DocuSign Envelope ID": { rich_text: [{ text: { content: "" } }] },
-    "Signature Audit URL": { url: null },
-  };
-
-  const res = await fetch(`${NOTION_API_URL}/pages`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${notionToken}`,
-      "Notion-Version": NOTION_VERSION,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ parent: { database_id: notionDbId }, properties }),
-  });
-
-  if (!res.ok) throw new Error(`Failed to create Notion row: ${await res.text()}`);
-  const page = await res.json();
-  return { pageId: page.id, pageUrl: page.url };
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -465,17 +416,15 @@ serve(async (req) => {
     if (submissionId) {
       const { data: existing } = await supabaseAdmin
         .from("nda_submissions")
-        .select("id, google_doc_id, notion_page_id, status")
+        .select("id, google_doc_id, google_doc_url, status")
         .eq("id", submissionId)
         .single();
 
-      // Consider generated if doc exists (Notion may have been skipped)
       if (existing && existing.google_doc_id && existing.status === "generated") {
         return new Response(JSON.stringify({
           success: true,
           submission_id: existing.id,
           document_url: (existing as any).google_doc_url || existing.google_doc_id,
-          notion_page_id: existing.notion_page_id,
           status: existing.status,
           message: "NDA was already generated.",
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -572,31 +521,12 @@ serve(async (req) => {
         }
       }
 
-      // ── Priority 2: Notion creation is non-critical ──
-      let notionPageId: string | null = null;
-      let notionPageUrl: string | null = null;
-      try {
-        const notionToken = await getNotionToken(supabaseAdmin);
-        const notionResult = await createNotionRow(
-          { ...body, submitter_email: submitterEmail },
-          docUrl,
-          notionToken,
-          formattedDate,
-        );
-        notionPageId = notionResult.pageId;
-        notionPageUrl = notionResult.pageUrl;
-      } catch (notionErr) {
-        console.error("Non-critical: Notion row creation failed:", notionErr instanceof Error ? notionErr.message : notionErr);
-      }
-
-      // ── Priority 3: Checked DB update ──
+      // ── Checked DB update ──
       const { error: updateErr } = await supabaseAdmin
         .from("nda_submissions")
         .update({
           google_doc_id: blobPath,
           google_doc_url: docUrl,
-          notion_page_id: notionPageId,
-          notion_page_url: notionPageUrl,
           status: "generated",
           last_error: null,
         })
@@ -606,7 +536,7 @@ serve(async (req) => {
         console.error("DB update failed (save generated NDA):", updateErr.message);
       }
 
-      console.log(`NDA generated successfully: blob=${blobPath}, notion=${notionPageId || "skipped"}`);
+      console.log(`NDA generated successfully: blob=${blobPath}`);
 
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const downloadToken = await createDownloadToken(blobPath);
@@ -618,10 +548,8 @@ serve(async (req) => {
         document_url: docUrl,
         download_url: downloadUrl,
         blob_path: blobPath,
-        notion_page_id: notionPageId,
-        notion_page_url: notionPageUrl,
         status: "generated",
-        message: `NDA for ${body.receiving_party_name} generated successfully as Word document. Stored in Azure Blob Storage and logged in Notion.`,
+        message: `NDA for ${body.receiving_party_name} generated successfully as Word document. Stored in Azure Blob Storage.`,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (genError) {

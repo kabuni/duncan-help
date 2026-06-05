@@ -7405,6 +7405,30 @@ Format as a natural, readable summary with clear sections. If a section has no d
             }
             const toolResults = await executeToolCalls(toolCalls, provider, { emit: emitDuncanEvent });
             recordTurnToolOutcomes(toolResults);
+            const generatedNdaResult = (() => {
+              if (!toolCalls.some((tc: any) => tc?.function?.name === "generate_nda")) return null;
+              for (const msg of toolResults || []) {
+                const raw = msg?.content;
+                let parsed: any = null;
+                if (typeof raw === "string") {
+                  try { parsed = JSON.parse(raw); } catch { parsed = null; }
+                } else if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+                  parsed = raw;
+                }
+                if (parsed?.tool === "generate_nda" && parsed?.ok === true && parsed?.download_url) {
+                  return parsed;
+                }
+              }
+              return null;
+            })();
+            if (generatedNdaResult) {
+              const ndaResponse = `## NDA generated\n\n[Download NDA](${generatedNdaResult.download_url})${generatedNdaResult.notion_page_url ? `\n\n[View in Notion](${generatedNdaResult.notion_page_url})` : "\n\nNotion page was not created/available."}`;
+              lastFullContent = ndaResponse;
+              aggregatedContent += ndaResponse;
+              forcedRecoveryContent = ndaResponse;
+              enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: ndaResponse } }] })}\n\n`);
+              break;
+            }
             const toolResultsString = JSON.stringify(toolResults);
             const allToolResultsNoData = toolResults.length > 0 && toolResults.every((message: any) => {
               const content = message?.content;

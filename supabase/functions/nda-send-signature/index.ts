@@ -196,7 +196,10 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Verify authenticated admin user
+    // Auth: accept either a service-role bearer (server-to-server invocation
+    // from norman-chat after the user is already authenticated) OR any
+    // authenticated end-user. Generation is gated upstream, so requiring
+    // admin here just blocks the auto-dispatch for non-admin staff.
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -204,28 +207,19 @@ serve(async (req) => {
       });
     }
 
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user } } = await supabaseUser.auth.getUser();
-    if (!user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const isServiceRole = bearer === supabaseServiceKey;
 
-    // Check admin role
-    const { data: roleData } = await supabaseAdmin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("role", "admin")
-      .maybeSingle();
-
-    if (!roleData) {
-      return new Response(JSON.stringify({ error: "Admin access required" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (!isServiceRole) {
+      const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: authHeader } },
       });
+      const { data: { user } } = await supabaseUser.auth.getUser();
+      if (!user) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const { submission_id, dry_run } = await req.json();

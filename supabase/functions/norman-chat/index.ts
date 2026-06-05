@@ -5330,9 +5330,6 @@ serve(async (req) => {
       systemContent += "\n\nNote: Document storage is not configured. If the user asks about documents or company files, let them know the document storage system needs to be configured first.";
     }
 
-    if (!notionToken) {
-      systemContent += "\n\nNote: Notion is not connected. If the user asks about Notion data, let them know an admin needs to connect Notion first via the Integrations page.";
-    }
 
 
 
@@ -5523,7 +5520,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
     function looksLikeNdaGenerationPromise(text: string): boolean {
       return /\bNDA\b/i.test(text) &&
         /\bgenerating\b|\bgenerate(?:d|ing)?\b/i.test(text) &&
-        /download link|as soon as|once (?:the document is )?ready|share (?:the )?link|notion page/i.test(text);
+        /download link|as soon as|once (?:the document is )?ready|share (?:the )?link/i.test(text);
     }
 
     const pendingNdaArgsFromHistory = extractNdaArgsFromConversation(recentConversationText);
@@ -5779,16 +5776,15 @@ Format as a natural, readable summary with clear sections. If a section has no d
     })();
     if (isNdaConfirmationReply) {
       shouldBypassTools = false;
-      systemContent += `\n\n## CURRENT REQUEST OVERRIDE — NDA CONFIRMATION\nThe latest user reply is confirming a pending NDA generation. Do not answer with a promise. Immediately call \`generate_nda\` using the confirmed NDA fields from the conversation history. After the tool returns, share the actual download link from the tool result. If a Notion link is absent/null, say the Notion entry was skipped/unavailable rather than promising it later.`;
+      systemContent += `\n\n## CURRENT REQUEST OVERRIDE — NDA CONFIRMATION\nThe latest user reply is confirming a pending NDA generation. Do not answer with a promise. Immediately call \`generate_nda\` using the confirmed NDA fields from the conversation history. After the tool returns, share the actual download link from the tool result.`;
     }
 
     if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {
       try {
         const result = await executeNdaTool("generate_nda", pendingNdaArgsFromHistory, supabaseAdmin, userId, userEmail, authHeader);
         const downloadUrl = result?.download_url || result?.google_doc_url || result?.document_url;
-        const notionUrl = result?.notion_page_url || result?.notion_url;
         const content = downloadUrl
-          ? `## NDA generated\n\n[Download NDA](${downloadUrl})${notionUrl ? `\n\n[View in Notion](${notionUrl})` : "\n\nNotion page was not created/available."}`
+          ? `## NDA generated\n\n[Download NDA](${downloadUrl})`
           : `## NDA generated\n\nThe document was generated, but no download link was returned. Please ask me to list NDA submissions and I’ll retrieve it.`;
         return buildTextSseResponse(content);
       } catch (error: any) {
@@ -5915,9 +5911,6 @@ Format as a natural, readable summary with clear sections. If a section has no d
     if (azureStorageAvailable) {
       tools.push(...DOCUMENT_TOOLS);
     }
-    if (notionToken) {
-      tools.push(...NOTION_TOOLS);
-    }
     // Meeting tools always available (Gmail connection checked at execution time)
     tools.push(...MEETING_TOOLS);
     // Azure DevOps tools always available (connection checked at execution time)
@@ -5966,7 +5959,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       { groups: [GOOGLE_DRIVE_TOOLS], re: /\b(drive|google drive|gdrive|folder|shared drive|doc\b|docs\b|sheet\b|sheets\b|slide|slides|file in)\b/i },
       { groups: [DOCUMENT_TOOLS], re: /\b(document|documents|file|files|attachment|policy|policies|contract|nda|sop|playbook|handbook|wiki|knowledge base)\b/i },
       { groups: [SLACK_TOOLS], re: /\b(slack|channel|channels|dm\b|huddle|thread|reaction|posted in)\b/i },
-      { groups: [NOTION_TOOLS], re: /\b(notion|page in notion|notion db|notion database)\b/i },
+      
       
       { groups: [AZURE_DEVOPS_TOOLS], re: /\b(devops|ado\b|work item|workitem|backlog item|pull request|pr\b|sprint|iteration|user story|epic\b|feature\b|bug\b)\b/i },
       { groups: [AZURE_REPOS_TOOLS], re: /\b(repo|repos|repository|commit|commits|branch|branches|merge|main branch|push|pushed|shipped)\b/i },
@@ -6004,7 +5997,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
           // (it covers local Planner rows and uses the Duncan calendar identity for Google events).
           if (CALENDAR_TOOLS.includes(t) && !calendarAccessToken && name !== "reschedule_event") return false;
           if (DOCUMENT_TOOLS.includes(t) && !azureStorageAvailable) return false;
-          if (NOTION_TOOLS.includes(t) && !notionToken) return false;
+          
           
           if (SLACK_TOOLS.includes(t) && !slackConnection) return false;
           seen.add(name);
@@ -6521,7 +6514,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
       const calendarToolNames = ["list_calendar_events", "create_calendar_event", "update_calendar_event", "delete_calendar_event"];
       const documentToolNames = ["search_documents", "read_document", "list_documents"];
-      const notionToolNames = ["search_notion", "query_notion_database", "get_notion_page_content"];
+      
       const googleFormsToolNames = ["list_google_forms", "submit_google_form", "parse_google_form", "save_parsed_google_form"];
       const ndaToolNames = ["generate_nda", "list_nda_submissions", "send_nda_for_signature", "send_pdf_for_signature"];
       
@@ -6703,12 +6696,6 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = { error: "Document storage is not configured. Please contact an admin." };
             } else {
               result = await withToolTimeout(tc.function.name, executeDocumentTool(tc.function.name, args, supabaseUrl, authHeader || ""));
-            }
-          } else if (notionToolNames.includes(tc.function.name)) {
-            if (!notionToken) {
-              result = { error: "Notion is not connected. An admin needs to connect it via the Integrations page." };
-            } else {
-              result = await withToolTimeout(tc.function.name, executeNotionTool(tc.function.name, args, notionToken));
             }
           } else if (googleFormsToolNames.includes(tc.function.name)) {
             result = await withToolTimeout(tc.function.name, executeGoogleFormsTool(tc.function.name, args, supabaseAdmin));
@@ -7002,7 +6989,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       list_devops_work_items: "Azure DevOps", get_devops_work_item: "Azure DevOps", list_devops_commits: "Azure DevOps",
       list_azure_repo_commits: "Azure Repos",
       list_invoices: "Xero", list_contacts: "Xero", get_pnl: "Xero",
-      list_notion_pages: "Notion", read_notion_page: "Notion",
+      
       
     };
     const sourcesUsed: Record<string, number> = {};
@@ -7352,7 +7339,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               return null;
             })();
             if (generatedNdaResult) {
-              const ndaResponse = `## NDA generated\n\n[Download NDA](${generatedNdaResult.download_url})${generatedNdaResult.notion_page_url ? `\n\n[View in Notion](${generatedNdaResult.notion_page_url})` : "\n\nNotion page was not created/available."}`;
+              const ndaResponse = `## NDA generated\n\n[Download NDA](${generatedNdaResult.download_url})`;
               lastFullContent = ndaResponse;
               aggregatedContent += ndaResponse;
               forcedRecoveryContent = ndaResponse;

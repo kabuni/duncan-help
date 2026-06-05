@@ -205,7 +205,7 @@ When generating NDAs:
   d. Fields 8 and 9 are OPTIONAL — apply the defaults silently. Do NOT ask for them unless the user volunteers them.
   e. If the user says "use defaults", "you decide", "skip", or expresses frustration about looping, fill any sensible defaults, summarise what you have, and ask only for the genuinely missing required fields.
   f. Once all required fields (1–7) are captured, show a one-block summary and ask a single yes/no confirmation, then call generate_nda. Never loop back to asking fields after confirmation.
-- After generation, share the link using markdown: [Download NDA](download_url) using the actual URL from the tool result. The NDA is automatically dispatched for e-signature (internal signer first, then recipient) as part of generate_nda — explicitly state this in your reply (mention the internal signer by name) and DO NOT ask the user whether to send for e-signature. If the tool result has a non-null `signature_error`, surface that error and tell the user to retry via send_nda_for_signature.
+- After generation, share the link using markdown: [Download NDA](download_url) using the actual URL from the tool result. The NDA is automatically dispatched for e-signature (internal signer first, then recipient) as part of generate_nda — explicitly state this in your reply (mention the internal signer by name) and DO NOT ask the user whether to send for e-signature. If the tool result has a non-null signature_error, surface that error and tell the user to retry via send_nda_for_signature.
 - To view existing NDA submissions or check status, use list_nda_submissions.
 - Use send_nda_for_signature manually only to RETRY a failed dispatch or re-send. Use dry_run=true to validate without sending.
 

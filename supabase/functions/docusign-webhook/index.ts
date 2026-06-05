@@ -7,8 +7,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const NOTION_API_URL = "https://api.notion.com/v1";
-const NOTION_VERSION = "2022-06-28";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -92,51 +90,6 @@ serve(async (req) => {
       .from("nda_submissions")
       .update({ status: newStatus })
       .eq("id", submission.id);
-
-    // Update Notion if we have a page
-    if (submission.notion_page_id) {
-      try {
-        const { data: integration } = await supabaseAdmin
-          .from("company_integrations")
-          .select("encrypted_api_key, status")
-          .eq("integration_id", "notion")
-          .single();
-
-        if (integration && integration.status === "connected" && integration.encrypted_api_key) {
-          const notionToken = atob(integration.encrypted_api_key);
-
-          const notionProperties: Record<string, any> = {};
-
-          if (normalizedStatus === "completed") {
-            notionProperties["Signature Status"] = { checkbox: true };
-          } else if (normalizedStatus === "declined" || normalizedStatus === "voided") {
-            notionProperties["Signature Status"] = { checkbox: false };
-          }
-
-          if (Object.keys(notionProperties).length > 0) {
-            const res = await fetch(`${NOTION_API_URL}/pages/${submission.notion_page_id}`, {
-              method: "PATCH",
-              headers: {
-                Authorization: `Bearer ${notionToken}`,
-                "Notion-Version": NOTION_VERSION,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ properties: notionProperties }),
-            });
-
-            if (!res.ok) {
-              const errText = await res.text();
-              console.error("Failed to update Notion:", errText);
-              // Non-critical — don't fail the webhook
-            } else {
-              console.log(`Updated Notion page ${submission.notion_page_id} with status ${normalizedStatus}`);
-            }
-          }
-        }
-      } catch (notionErr) {
-        console.error("Notion update error:", notionErr);
-      }
-    }
 
     console.log(`Webhook processed: submission=${submission.id}, status=${newStatus}`);
     return new Response("OK", { status: 200 });

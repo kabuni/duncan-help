@@ -31,8 +31,6 @@ verify_jwt = false
 [functions.azure-blob-api]
 verify_jwt = false
 
-[functions.notion-api]
-verify_jwt = false
 
 [functions.submit-google-form]
 verify_jwt = false

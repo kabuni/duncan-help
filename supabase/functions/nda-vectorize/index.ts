@@ -286,7 +286,7 @@ function buildNdaText(nda: Record<string, unknown>): string {
     `STATUS: ${nda.status}`,
     nda.docusign_envelope_id ? `DocuSign Envelope: ${nda.docusign_envelope_id}` : "",
     nda.google_doc_url ? `Document URL: ${nda.google_doc_url}` : "",
-    nda.notion_page_url ? `Notion Page: ${nda.notion_page_url}` : "",
+    
   ]
     .filter(Boolean)
     .join("\n");

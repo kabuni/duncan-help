@@ -26,8 +26,6 @@ const corsHeaders = {
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
-const NOTION_API_URL = "https://api.notion.com/v1";
-const NOTION_VERSION = "2022-06-28";
 const SLACK_API_URL = "https://slack.com/api";
 
 const SYSTEM_PROMPT = `You are Duncan, an advanced reasoning and agentic operating system for internal company operations.
@@ -56,18 +54,18 @@ const SYSTEM_PROMPT = `You are Duncan, an advanced reasoning and agentic operati
 
 **SINGLE-SOURCE EXECUTION RULE:** If exactly one tool supports the entity AND the entity matches a known enum / project_tag / source value (even fuzzily), call the tool directly. Example: "Lightning Strike Event" matches workstream_cards.project_tag → call list_workstream_cards immediately. Never ask "should I pull this from Workstreams or [other system]?"
 
-**NEGATIVE GROUNDING (NEVER hallucinate disconnected systems):** The following systems are NOT connected and have NO runtime tools in this environment: Basecamp, Trello, Jira (non-DevOps), Asana, Monday.com, ClickUp, Notion tasks/databases-as-tasks. NEVER offer them, ask about them, imply they exist, or use them as a "should I pull from X or Y?" alternative. Workstreams is the canonical task/card system. Planner / Key Events is the canonical diary system. Azure DevOps is the canonical engineering work-item system. Gmail/Calendar/Drive/Slack/Xero/Notion-pages/Meetings are the only other connected sources — if a tool for a system isn't in your tool list, that system is not connected. Period.
+**NEGATIVE GROUNDING (NEVER hallucinate disconnected systems):** The following systems are NOT connected and have NO runtime tools in this environment: Basecamp, Trello, Jira (non-DevOps), Asana, Monday.com, ClickUp, Notion (entire workspace — decommissioned). NEVER offer them, ask about them, imply they exist, or use them as a "should I pull from X or Y?" alternative. Workstreams is the canonical task/card system. Planner / Key Events is the canonical diary system. Azure DevOps is the canonical engineering work-item system. Gmail/Calendar/Drive/Slack/Xero/Meetings are the only other connected sources — if a tool for a system isn't in your tool list, that system is not connected. Period.
 
 
 Your capabilities:
 - **Reasoning**: Analyze data, identify patterns, draw conclusions, and make recommendations across all ingested company data.
-- **Automation**: Suggest and describe automations that can streamline workflows between Google Workspace, Notion, Slack, and other connected tools.
+- **Automation**: Suggest and describe automations that can streamline workflows between Google Workspace, Slack, and other connected tools.
 - **Data Synthesis**: Cross-reference information from multiple sources (emails, documents, databases, project management tools) to provide comprehensive answers.
 - **Task Orchestration**: Break down complex requests into actionable steps and describe how they'd be executed across integrated systems.
 - **Azure DevOps**: You have access to the company's Azure DevOps (Azure Boards). You can list projects, query work items using WIQL, get details of specific work items, and search synced work items from the database. Use these tools when users ask about project status, tasks, bugs, sprints, blocked items, or anything related to development work tracking.
 - **Calendar Management**: You have access to the user's Google Calendar. You can list events, create new events, update existing events, and delete events.
 - **Document Search**: You have access to the company's document storage. You can search for documents, read their content, list folders, and answer questions based on them. Documents are organized in folders: documents/, ndas/, and templates/.
-- **Notion Access**: You have access to the company's Notion workspace. You can search for pages, query databases, and read page content. Use these tools when users ask about information stored in Notion.
+
 
 - **Meeting Intelligence**: Use list_meetings to browse stored meetings (supports from_date/to_date and typo-tolerant search), get_meeting for a specific meeting's transcript/analysis, analyze_meetings to run AI analysis on meetings, and search_meeting_transcripts for cross-meeting topic search. **For ANY question about action items / tasks / follow-ups / to-dos / next steps from a specific meeting, you MUST call get_meeting_action_items_with_context (not get_meeting) after list_meetings — it returns the focus meeting's items plus a 7-day rollup of action items from surrounding meetings, and the answer MUST present both a "From this meeting" section and a "From the past 7 days" section.** **fetch_plaud_meetings is a SLOW sync (~20s) and must ONLY be called when the user EXPLICITLY asks to sync/refresh/import Plaud data** — i.e. the prompt contains keywords like "sync Plaud", "refresh Plaud", "pull new Plaud", "update Plaud meeting data", or "import from Plaud". **Never treat "fetch my latest meeting notes" as a sync request.** For summarization, analysis, search, or any question about existing meetings (including "today's", "yesterday's", "recent", "this week's", "summarize my meetings"): SKIP fetch_plaud_meetings. Go straight to the strict routing rules below. Note: meeting titles in the database may contain typos (e.g. "Lighting" instead of "Lightning") — the search is typo-tolerant, but always confirm the date matches what the user asked for before answering.
 
@@ -87,7 +85,7 @@ Your capabilities:
 - Once the user picks a source (or mentioned it up-front):
   - **Gemini / Google Meet** → use the dedicated Google Meet shortcut. It reads the calling user's connected Gmail inbox for emails from gemini-notes@google.com. NEVER call \`list_meetings_by_source\` for Google Meet/Gemini notes.
   - **Plaud** → use the dedicated Plaud shortcut. It fetches the latest centrally ingested Plaud note.
-- When the user asked for latest meeting notes and then chooses a source, fetch immediately. DO NOT ask whether they want a summary, full notes, paste, a doc, or Notion. Return the notes/transcript directly; if only a summary exists, say the full transcript is unavailable and show the summary.
+- When the user asked for latest meeting notes and then chooses a source, fetch immediately. DO NOT ask whether they want a summary, full notes, paste, or a doc. Return the notes/transcript directly; if only a summary exists, say the full transcript is unavailable and show the summary.
 - Only when the user EXPLICITLY asks for "my meetings where I was a participant", "meetings I attended", "meetings linked to me" (i.e. ownership semantics, not source semantics):
   1. Call list_meetings FIRST with scope="mine".
   2. You MUST NOT call analyze_meetings, search_meeting_transcripts, get_meeting, or get_operational_summary BEFORE list_meetings has returned results in the current turn.
@@ -187,12 +185,6 @@ When working with documents:
 - Summarize key findings from documents and cite which document the information came from
 - If the user asks about something that might be in company docs, search for it first
 
-When working with Notion:
-- Use search_notion to find pages and databases by keyword
-- Use query_notion_database to query a specific database with optional filters
-- Use get_notion_page_content to read the block content of a specific page
-- Present Notion data clearly, referencing page titles and properties
-- If a user asks about contracts, agreements, or anything that might be in Notion, search there
 
 When generating NDAs:
 - Use the generate_nda tool when a user asks to create/generate an NDA.
@@ -213,7 +205,7 @@ When generating NDAs:
   d. Fields 8 and 9 are OPTIONAL — apply the defaults silently. Do NOT ask for them unless the user volunteers them.
   e. If the user says "use defaults", "you decide", "skip", or expresses frustration about looping, fill any sensible defaults, summarise what you have, and ask only for the genuinely missing required fields.
   f. Once all required fields (1–7) are captured, show a one-block summary and ask a single yes/no confirmation, then call generate_nda. Never loop back to asking fields after confirmation.
-- After generation, share links using markdown: [Download NDA](download_url) and [View in Notion](notion_page_url) using the actual URLs from the tool result.
+- After generation, share the link using markdown: [Download NDA](download_url) using the actual URL from the tool result.
 - To view existing NDA submissions or check status, use list_nda_submissions.
 - To send an NDA for e-signature (admin only), use send_nda_for_signature with the submission_id. Use dry_run=true to validate without sending. Do NOT ask about e-signature until after the generated NDA download link has been delivered.
 
@@ -427,59 +419,14 @@ const DOCUMENT_TOOLS = [
   },
 ];
 
-const NOTION_TOOLS = [
-  {
-    type: "function",
-    function: {
-      name: "search_notion",
-      description: "Search across all Notion pages and databases. Use when the user asks about information that might be in Notion.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "Search query text" },
-          page_size: { type: "number", description: "Max results (default 10)" },
-        },
-        required: [],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "query_notion_database",
-      description: "Query a specific Notion database to list its entries. Use when you know the database ID or after finding one via search.",
-      parameters: {
-        type: "object",
-        properties: {
-          database_id: { type: "string", description: "The Notion database ID to query" },
-          page_size: { type: "number", description: "Max results (default 20)" },
-        },
-        required: ["database_id"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_notion_page_content",
-      description: "Get the block content of a specific Notion page. Use after finding a page via search or database query to read its details.",
-      parameters: {
-        type: "object",
-        properties: {
-          page_id: { type: "string", description: "The Notion page ID" },
-        },
-        required: ["page_id"],
-      },
-    },
-  },
-];
+
 
 const NDA_TOOLS = [
   {
     type: "function",
     function: {
       name: "generate_nda",
-      description: "Generate an NDA document. Copies a Google Docs template, replaces placeholders, creates a Notion log entry, and returns document + Notion links. Use when a user asks to create/generate an NDA.",
+      description: "Generate an NDA document. Renders a Word .docx from the template, stores it in Azure Blob Storage, and returns a download link. Use when a user asks to create/generate an NDA.",
       parameters: {
         type: "object",
         properties: {
@@ -4417,7 +4364,6 @@ async function executeNdaTool(
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "NDA generation failed");
       const downloadUrl = result.download_url || result.document_url || result.google_doc_url || result.url || null;
-      const notionUrl = result.notion_page_url || result.notion_url || null;
       return {
         ...result,
         success: result.success ?? true,
@@ -4425,9 +4371,8 @@ async function executeNdaTool(
         status: "success",
         download_url: downloadUrl,
         google_doc_url: result.google_doc_url || downloadUrl,
-        notion_page_url: notionUrl,
         message: downloadUrl
-          ? `NDA generated successfully. Download link: ${downloadUrl}${notionUrl ? `. Notion page: ${notionUrl}` : `. Notion page was not created/available.`}`
+          ? `NDA generated successfully. Download link: ${downloadUrl}`
           : (result.message || "NDA generation completed, but no download URL was returned."),
       };
     }
@@ -4435,7 +4380,7 @@ async function executeNdaTool(
     case "list_nda_submissions": {
       let query = supabaseAdmin
         .from("nda_submissions")
-        .select("id, receiving_party_name, receiving_party_entity, date_of_agreement, recipient_name, recipient_email, status, google_doc_url, notion_page_url, docusign_envelope_id, last_error, created_at")
+        .select("id, receiving_party_name, receiving_party_entity, date_of_agreement, recipient_name, recipient_email, status, google_doc_url, docusign_envelope_id, last_error, created_at")
         .order("created_at", { ascending: false })
         .limit(args.limit || 20);
 
@@ -4515,117 +4460,6 @@ function mapCard(c: any) {
   };
 }
 
-async function getNotionToken(supabaseAdmin: any): Promise<string | null> {
-  // Plaintext is held in Supabase Vault; resolve via service-role RPC.
-  const { data: token, error } = await supabaseAdmin.rpc(
-    "get_company_integration_secret",
-    { p_integration_id: "notion" }
-  );
-  if (error) {
-    console.error("[norman-chat] getNotionToken vault lookup failed", error);
-    return null;
-  }
-  return (token as string | null) || null;
-}
-
-function extractNotionText(richText: any[]): string {
-  return (richText || []).map((t: any) => t.plain_text || "").join("");
-}
-
-function summarizeNotionProperties(properties: any): Record<string, string> {
-  const summary: Record<string, string> = {};
-  for (const [key, val] of Object.entries(properties || {})) {
-    const v = val as any;
-    switch (v.type) {
-      case "title": summary[key] = extractNotionText(v.title); break;
-      case "rich_text": summary[key] = extractNotionText(v.rich_text); break;
-      case "number": summary[key] = v.number != null ? String(v.number) : ""; break;
-      case "select": summary[key] = v.select?.name || ""; break;
-      case "multi_select": summary[key] = (v.multi_select || []).map((s: any) => s.name).join(", "); break;
-      case "date": summary[key] = v.date?.start || ""; break;
-      case "checkbox": summary[key] = v.checkbox ? "Yes" : "No"; break;
-      case "url": summary[key] = v.url || ""; break;
-      case "email": summary[key] = v.email || ""; break;
-      case "phone_number": summary[key] = v.phone_number || ""; break;
-      case "status": summary[key] = v.status?.name || ""; break;
-      default: break;
-    }
-  }
-  return summary;
-}
-
-function summarizeNotionBlock(block: any): string {
-  const type = block.type;
-  const data = block[type];
-  if (!data) return "";
-  if (data.rich_text) return extractNotionText(data.rich_text);
-  if (type === "image") return `[Image: ${data.external?.url || data.file?.url || ""}]`;
-  if (type === "divider") return "---";
-  return "";
-}
-
-async function executeNotionTool(toolName: string, args: any, token: string): Promise<any> {
-  const headers = {
-    "Authorization": `Bearer ${token}`,
-    "Notion-Version": NOTION_VERSION,
-    "Content-Type": "application/json",
-  };
-
-  switch (toolName) {
-    case "search_notion": {
-      const res = await fetch(`${NOTION_API_URL}/search`, {
-        method: "POST", headers,
-        body: JSON.stringify({ query: args.query || "", page_size: args.page_size || 10 }),
-      });
-      if (!res.ok) throw new Error(`Notion search failed: ${await res.text()}`);
-      const data = await res.json();
-      return (data.results || []).map((r: any) => ({
-        id: r.id,
-        type: r.object,
-        title: r.object === "page"
-          ? extractNotionText((Object.values(r.properties || {}).find((p: any) => p.type === "title") as any)?.title || [])
-          : r.title?.[0]?.plain_text || "Untitled",
-        url: r.url,
-        ...(r.object === "page" ? { properties: summarizeNotionProperties(r.properties) } : {}),
-      }));
-    }
-
-    case "query_notion_database": {
-      const res = await fetch(`${NOTION_API_URL}/databases/${args.database_id}/query`, {
-        method: "POST", headers,
-        body: JSON.stringify({ page_size: args.page_size || 20 }),
-      });
-      if (!res.ok) throw new Error(`Notion query failed: ${await res.text()}`);
-      const data = await res.json();
-      return {
-        total: data.results?.length || 0,
-        has_more: data.has_more,
-        entries: (data.results || []).map((r: any) => ({
-          id: r.id,
-          url: r.url,
-          properties: summarizeNotionProperties(r.properties),
-        })),
-      };
-    }
-
-    case "get_notion_page_content": {
-      const res = await fetch(`${NOTION_API_URL}/blocks/${args.page_id}/children?page_size=100`, {
-        method: "GET",
-        headers: { "Authorization": `Bearer ${token}`, "Notion-Version": NOTION_VERSION },
-      });
-      if (!res.ok) throw new Error(`Notion page read failed: ${await res.text()}`);
-      const data = await res.json();
-      const blocks = (data.results || []).map((b: any) => ({
-        type: b.type,
-        content: summarizeNotionBlock(b),
-      })).filter((b: any) => b.content);
-      return { block_count: blocks.length, content: blocks };
-    }
-
-    default:
-      throw new Error(`Unknown Notion tool: ${toolName}`);
-  }
-}
 
 function getAzureStorageConfig(): { accountName: string; accountKey: string; containerName: string } | null {
   const connStr = Deno.env.get("AZURE_STORAGE_CONNECTION_STRING");
@@ -5396,7 +5230,7 @@ serve(async (req) => {
     let userEmail: string = "";
     let calendarAccessToken: string | null = null;
     let azureStorageAvailable = false;
-    let notionToken: string | null = null;
+    
     
     let slackConnection: { accessToken: string; teamName: string | null; scope: string | null } | null = null;
 
@@ -5444,13 +5278,11 @@ serve(async (req) => {
     const [
       calendarTokenResult,
       slackResult,
-      notionResult,
       formsResult,
       duncanCalendarResult,
     ] = await Promise.all([
       getCalendarAccessToken(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] calendar:", e); return null; }),
       getSlackConnection(userId, supabaseAdmin).catch((e) => { console.warn("[warmup] slack:", e); return null; }),
-      getNotionToken(supabaseAdmin).catch((e) => { console.warn("[warmup] notion:", e); return null; }),
       supabaseAdmin.from("google_forms").select("id, name, description, fields"),
       // Admins write calendar invites through the shared duncan@kabuni.com mailbox.
       resolvedIdentity.is_admin
@@ -5459,7 +5291,6 @@ serve(async (req) => {
     ]);
     calendarAccessToken = calendarTokenResult;
     slackConnection = slackResult;
-    notionToken = notionResult;
     azureStorageAvailable = !!getAzureStorageConfig();
     const googleForms = formsResult?.data;
     const duncanCalendar = duncanCalendarResult;
@@ -5499,9 +5330,6 @@ serve(async (req) => {
       systemContent += "\n\nNote: Document storage is not configured. If the user asks about documents or company files, let them know the document storage system needs to be configured first.";
     }
 
-    if (!notionToken) {
-      systemContent += "\n\nNote: Notion is not connected. If the user asks about Notion data, let them know an admin needs to connect Notion first via the Integrations page.";
-    }
 
 
 
@@ -5692,7 +5520,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
     function looksLikeNdaGenerationPromise(text: string): boolean {
       return /\bNDA\b/i.test(text) &&
         /\bgenerating\b|\bgenerate(?:d|ing)?\b/i.test(text) &&
-        /download link|as soon as|once (?:the document is )?ready|share (?:the )?link|notion page/i.test(text);
+        /download link|as soon as|once (?:the document is )?ready|share (?:the )?link/i.test(text);
     }
 
     const pendingNdaArgsFromHistory = extractNdaArgsFromConversation(recentConversationText);
@@ -5948,16 +5776,15 @@ Format as a natural, readable summary with clear sections. If a section has no d
     })();
     if (isNdaConfirmationReply) {
       shouldBypassTools = false;
-      systemContent += `\n\n## CURRENT REQUEST OVERRIDE — NDA CONFIRMATION\nThe latest user reply is confirming a pending NDA generation. Do not answer with a promise. Immediately call \`generate_nda\` using the confirmed NDA fields from the conversation history. After the tool returns, share the actual download link from the tool result. If a Notion link is absent/null, say the Notion entry was skipped/unavailable rather than promising it later.`;
+      systemContent += `\n\n## CURRENT REQUEST OVERRIDE — NDA CONFIRMATION\nThe latest user reply is confirming a pending NDA generation. Do not answer with a promise. Immediately call \`generate_nda\` using the confirmed NDA fields from the conversation history. After the tool returns, share the actual download link from the tool result.`;
     }
 
     if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {
       try {
         const result = await executeNdaTool("generate_nda", pendingNdaArgsFromHistory, supabaseAdmin, userId, userEmail, authHeader);
         const downloadUrl = result?.download_url || result?.google_doc_url || result?.document_url;
-        const notionUrl = result?.notion_page_url || result?.notion_url;
         const content = downloadUrl
-          ? `## NDA generated\n\n[Download NDA](${downloadUrl})${notionUrl ? `\n\n[View in Notion](${notionUrl})` : "\n\nNotion page was not created/available."}`
+          ? `## NDA generated\n\n[Download NDA](${downloadUrl})`
           : `## NDA generated\n\nThe document was generated, but no download link was returned. Please ask me to list NDA submissions and I’ll retrieve it.`;
         return buildTextSseResponse(content);
       } catch (error: any) {
@@ -6084,9 +5911,6 @@ Format as a natural, readable summary with clear sections. If a section has no d
     if (azureStorageAvailable) {
       tools.push(...DOCUMENT_TOOLS);
     }
-    if (notionToken) {
-      tools.push(...NOTION_TOOLS);
-    }
     // Meeting tools always available (Gmail connection checked at execution time)
     tools.push(...MEETING_TOOLS);
     // Azure DevOps tools always available (connection checked at execution time)
@@ -6135,7 +5959,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       { groups: [GOOGLE_DRIVE_TOOLS], re: /\b(drive|google drive|gdrive|folder|shared drive|doc\b|docs\b|sheet\b|sheets\b|slide|slides|file in)\b/i },
       { groups: [DOCUMENT_TOOLS], re: /\b(document|documents|file|files|attachment|policy|policies|contract|nda|sop|playbook|handbook|wiki|knowledge base)\b/i },
       { groups: [SLACK_TOOLS], re: /\b(slack|channel|channels|dm\b|huddle|thread|reaction|posted in)\b/i },
-      { groups: [NOTION_TOOLS], re: /\b(notion|page in notion|notion db|notion database)\b/i },
+      
       
       { groups: [AZURE_DEVOPS_TOOLS], re: /\b(devops|ado\b|work item|workitem|backlog item|pull request|pr\b|sprint|iteration|user story|epic\b|feature\b|bug\b)\b/i },
       { groups: [AZURE_REPOS_TOOLS], re: /\b(repo|repos|repository|commit|commits|branch|branches|merge|main branch|push|pushed|shipped)\b/i },
@@ -6173,7 +5997,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
           // (it covers local Planner rows and uses the Duncan calendar identity for Google events).
           if (CALENDAR_TOOLS.includes(t) && !calendarAccessToken && name !== "reschedule_event") return false;
           if (DOCUMENT_TOOLS.includes(t) && !azureStorageAvailable) return false;
-          if (NOTION_TOOLS.includes(t) && !notionToken) return false;
+          
           
           if (SLACK_TOOLS.includes(t) && !slackConnection) return false;
           seen.add(name);
@@ -6690,7 +6514,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
       const calendarToolNames = ["list_calendar_events", "create_calendar_event", "update_calendar_event", "delete_calendar_event"];
       const documentToolNames = ["search_documents", "read_document", "list_documents"];
-      const notionToolNames = ["search_notion", "query_notion_database", "get_notion_page_content"];
+      
       const googleFormsToolNames = ["list_google_forms", "submit_google_form", "parse_google_form", "save_parsed_google_form"];
       const ndaToolNames = ["generate_nda", "list_nda_submissions", "send_nda_for_signature", "send_pdf_for_signature"];
       
@@ -6872,12 +6696,6 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = { error: "Document storage is not configured. Please contact an admin." };
             } else {
               result = await withToolTimeout(tc.function.name, executeDocumentTool(tc.function.name, args, supabaseUrl, authHeader || ""));
-            }
-          } else if (notionToolNames.includes(tc.function.name)) {
-            if (!notionToken) {
-              result = { error: "Notion is not connected. An admin needs to connect it via the Integrations page." };
-            } else {
-              result = await withToolTimeout(tc.function.name, executeNotionTool(tc.function.name, args, notionToken));
             }
           } else if (googleFormsToolNames.includes(tc.function.name)) {
             result = await withToolTimeout(tc.function.name, executeGoogleFormsTool(tc.function.name, args, supabaseAdmin));
@@ -7171,7 +6989,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       list_devops_work_items: "Azure DevOps", get_devops_work_item: "Azure DevOps", list_devops_commits: "Azure DevOps",
       list_azure_repo_commits: "Azure Repos",
       list_invoices: "Xero", list_contacts: "Xero", get_pnl: "Xero",
-      list_notion_pages: "Notion", read_notion_page: "Notion",
+      
       
     };
     const sourcesUsed: Record<string, number> = {};
@@ -7521,7 +7339,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               return null;
             })();
             if (generatedNdaResult) {
-              const ndaResponse = `## NDA generated\n\n[Download NDA](${generatedNdaResult.download_url})${generatedNdaResult.notion_page_url ? `\n\n[View in Notion](${generatedNdaResult.notion_page_url})` : "\n\nNotion page was not created/available."}`;
+              const ndaResponse = `## NDA generated\n\n[Download NDA](${generatedNdaResult.download_url})`;
               lastFullContent = ndaResponse;
               aggregatedContent += ndaResponse;
               forcedRecoveryContent = ndaResponse;

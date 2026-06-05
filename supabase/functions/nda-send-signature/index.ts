@@ -7,8 +7,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const NOTION_API_URL = "https://api.notion.com/v1";
-const NOTION_VERSION = "2022-06-28";
 const CONTAINER_NAME = "duncanstorage01";
 
 // ── Azure Blob helpers ──────────────────────────────────────────────
@@ -162,37 +160,6 @@ async function getDocuSignAccessToken(): Promise<string> {
   return (await tokenRes.json()).access_token;
 }
 
-// ── Notion helpers ──────────────────────────────────────────────────
-
-async function getNotionToken(supabaseAdmin: any): Promise<string> {
-  const { data: integration } = await supabaseAdmin
-    .from("company_integrations")
-    .select("encrypted_api_key, status")
-    .eq("integration_id", "notion")
-    .single();
-
-  if (!integration || integration.status !== "connected" || !integration.encrypted_api_key) {
-    throw new Error("Notion not connected");
-  }
-  return atob(integration.encrypted_api_key);
-}
-
-async function updateNotionPage(
-  pageId: string, properties: Record<string, any>, notionToken: string,
-): Promise<void> {
-  const res = await fetch(`${NOTION_API_URL}/pages/${pageId}`, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${notionToken}`,
-      "Notion-Version": NOTION_VERSION,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ properties }),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to update Notion page: ${await res.text()}`);
-  }
-}
 
 // ── Checked DB update helper ────────────────────────────────────────
 
@@ -411,20 +378,6 @@ serve(async (req) => {
         last_error: null,
       }, "id", submission_id, "save envelope_id");
 
-      // Step 5: Update Notion (non-critical)
-      if (submission.notion_page_id) {
-        try {
-          const notionToken = await getNotionToken(supabaseAdmin);
-          await updateNotionPage(submission.notion_page_id, {
-            "Signature Status": { checkbox: true },
-            "DocuSign Envelope ID": {
-              rich_text: [{ text: { content: envelopeId } }],
-            },
-          }, notionToken);
-        } catch (notionErr) {
-          console.error("Non-critical: Failed to update Notion:", notionErr);
-        }
-      }
 
       return new Response(JSON.stringify({
         success: true,

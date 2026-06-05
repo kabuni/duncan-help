@@ -4364,7 +4364,6 @@ async function executeNdaTool(
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "NDA generation failed");
       const downloadUrl = result.download_url || result.document_url || result.google_doc_url || result.url || null;
-      const notionUrl = result.notion_page_url || result.notion_url || null;
       return {
         ...result,
         success: result.success ?? true,
@@ -4372,9 +4371,8 @@ async function executeNdaTool(
         status: "success",
         download_url: downloadUrl,
         google_doc_url: result.google_doc_url || downloadUrl,
-        notion_page_url: notionUrl,
         message: downloadUrl
-          ? `NDA generated successfully. Download link: ${downloadUrl}${notionUrl ? `. Notion page: ${notionUrl}` : `. Notion page was not created/available.`}`
+          ? `NDA generated successfully. Download link: ${downloadUrl}`
           : (result.message || "NDA generation completed, but no download URL was returned."),
       };
     }
@@ -4382,7 +4380,7 @@ async function executeNdaTool(
     case "list_nda_submissions": {
       let query = supabaseAdmin
         .from("nda_submissions")
-        .select("id, receiving_party_name, receiving_party_entity, date_of_agreement, recipient_name, recipient_email, status, google_doc_url, notion_page_url, docusign_envelope_id, last_error, created_at")
+        .select("id, receiving_party_name, receiving_party_entity, date_of_agreement, recipient_name, recipient_email, status, google_doc_url, docusign_envelope_id, last_error, created_at")
         .order("created_at", { ascending: false })
         .limit(args.limit || 20);
 
@@ -4462,117 +4460,6 @@ function mapCard(c: any) {
   };
 }
 
-async function getNotionToken(supabaseAdmin: any): Promise<string | null> {
-  // Plaintext is held in Supabase Vault; resolve via service-role RPC.
-  const { data: token, error } = await supabaseAdmin.rpc(
-    "get_company_integration_secret",
-    { p_integration_id: "notion" }
-  );
-  if (error) {
-    console.error("[norman-chat] getNotionToken vault lookup failed", error);
-    return null;
-  }
-  return (token as string | null) || null;
-}
-
-function extractNotionText(richText: any[]): string {
-  return (richText || []).map((t: any) => t.plain_text || "").join("");
-}
-
-function summarizeNotionProperties(properties: any): Record<string, string> {
-  const summary: Record<string, string> = {};
-  for (const [key, val] of Object.entries(properties || {})) {
-    const v = val as any;
-    switch (v.type) {
-      case "title": summary[key] = extractNotionText(v.title); break;
-      case "rich_text": summary[key] = extractNotionText(v.rich_text); break;
-      case "number": summary[key] = v.number != null ? String(v.number) : ""; break;
-      case "select": summary[key] = v.select?.name || ""; break;
-      case "multi_select": summary[key] = (v.multi_select || []).map((s: any) => s.name).join(", "); break;
-      case "date": summary[key] = v.date?.start || ""; break;
-      case "checkbox": summary[key] = v.checkbox ? "Yes" : "No"; break;
-      case "url": summary[key] = v.url || ""; break;
-      case "email": summary[key] = v.email || ""; break;
-      case "phone_number": summary[key] = v.phone_number || ""; break;
-      case "status": summary[key] = v.status?.name || ""; break;
-      default: break;
-    }
-  }
-  return summary;
-}
-
-function summarizeNotionBlock(block: any): string {
-  const type = block.type;
-  const data = block[type];
-  if (!data) return "";
-  if (data.rich_text) return extractNotionText(data.rich_text);
-  if (type === "image") return `[Image: ${data.external?.url || data.file?.url || ""}]`;
-  if (type === "divider") return "---";
-  return "";
-}
-
-async function executeNotionTool(toolName: string, args: any, token: string): Promise<any> {
-  const headers = {
-    "Authorization": `Bearer ${token}`,
-    "Notion-Version": NOTION_VERSION,
-    "Content-Type": "application/json",
-  };
-
-  switch (toolName) {
-    case "search_notion": {
-      const res = await fetch(`${NOTION_API_URL}/search`, {
-        method: "POST", headers,
-        body: JSON.stringify({ query: args.query || "", page_size: args.page_size || 10 }),
-      });
-      if (!res.ok) throw new Error(`Notion search failed: ${await res.text()}`);
-      const data = await res.json();
-      return (data.results || []).map((r: any) => ({
-        id: r.id,
-        type: r.object,
-        title: r.object === "page"
-          ? extractNotionText((Object.values(r.properties || {}).find((p: any) => p.type === "title") as any)?.title || [])
-          : r.title?.[0]?.plain_text || "Untitled",
-        url: r.url,
-        ...(r.object === "page" ? { properties: summarizeNotionProperties(r.properties) } : {}),
-      }));
-    }
-
-    case "query_notion_database": {
-      const res = await fetch(`${NOTION_API_URL}/databases/${args.database_id}/query`, {
-        method: "POST", headers,
-        body: JSON.stringify({ page_size: args.page_size || 20 }),
-      });
-      if (!res.ok) throw new Error(`Notion query failed: ${await res.text()}`);
-      const data = await res.json();
-      return {
-        total: data.results?.length || 0,
-        has_more: data.has_more,
-        entries: (data.results || []).map((r: any) => ({
-          id: r.id,
-          url: r.url,
-          properties: summarizeNotionProperties(r.properties),
-        })),
-      };
-    }
-
-    case "get_notion_page_content": {
-      const res = await fetch(`${NOTION_API_URL}/blocks/${args.page_id}/children?page_size=100`, {
-        method: "GET",
-        headers: { "Authorization": `Bearer ${token}`, "Notion-Version": NOTION_VERSION },
-      });
-      if (!res.ok) throw new Error(`Notion page read failed: ${await res.text()}`);
-      const data = await res.json();
-      const blocks = (data.results || []).map((b: any) => ({
-        type: b.type,
-        content: summarizeNotionBlock(b),
-      })).filter((b: any) => b.content);
-      return { block_count: blocks.length, content: blocks };
-    }
-
-    default:
-      throw new Error(`Unknown Notion tool: ${toolName}`);
-  }
-}
 
 function getAzureStorageConfig(): { accountName: string; accountKey: string; containerName: string } | null {
   const connStr = Deno.env.get("AZURE_STORAGE_CONNECTION_STRING");

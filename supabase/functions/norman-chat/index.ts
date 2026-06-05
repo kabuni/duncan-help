@@ -369,8 +369,23 @@ const DOCUMENT_TOOLS = [
   {
     type: "function",
     function: {
+      name: "search_knowledge_base",
+      description: "Semantic search over the Kabuni Knowledge Base (documents uploaded via the Knowledge Base UI — handbooks, policies, brochures, playbooks, company docs). USE THIS FIRST whenever the user asks 'do we have a document/policy/handout on X', references company knowledge, or wants info that could plausibly live in an uploaded doc. Returns ranked passages with their source document title.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Natural-language query. Descriptive phrasing works best (semantic search)." },
+          match_count: { type: "number", description: "Max chunks to return (default 8, max 25)." },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "search_documents",
-      description: "Search for documents in the company document storage (Azure Blob Storage). Use this when the user asks about company documents, policies, guides, or any information that might be stored in the document system.",
+      description: "Search raw Azure Blob document storage by FILENAME (NDAs, generated reports, legacy folders). Prefer search_knowledge_base for anything uploaded via the Knowledge Base UI. Use this only when the user explicitly references a stored file by name or a non-KB folder.",
       parameters: {
         type: "object",
         properties: {

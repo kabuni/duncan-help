@@ -7209,7 +7209,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
           let forcedRecoveryContent = "";
 
           while (true) {
-            const { fullContent, toolCalls, finishReason, sawAnyDelta, sawContentDelta, sawToolDelta, hadIncompleteToolCall } = await consumeSSEStream(currentResponse, enqueue);
+            let { fullContent, toolCalls, finishReason, sawAnyDelta, sawContentDelta, sawToolDelta, hadIncompleteToolCall } = await consumeSSEStream(currentResponse, enqueue);
             lastFullContent = fullContent;
             aggregatedContent += fullContent;
             console.log("ROUND RESULT", {

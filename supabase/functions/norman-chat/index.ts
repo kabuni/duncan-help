@@ -6589,7 +6589,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const bypassWriteConfirm = !!opts.bypassWriteConfirm;
 
       const calendarToolNames = ["list_calendar_events", "create_calendar_event", "update_calendar_event", "delete_calendar_event"];
-      const documentToolNames = ["search_documents", "read_document", "list_documents"];
+      const documentToolNames = ["search_knowledge_base", "search_documents", "read_document", "list_documents"];
       
       const googleFormsToolNames = ["list_google_forms", "submit_google_form", "parse_google_form", "save_parsed_google_form"];
       const ndaToolNames = ["generate_nda", "list_nda_submissions", "send_nda_for_signature", "send_pdf_for_signature"];

@@ -4370,9 +4370,10 @@ async function executeNdaTool(
       let signatureError: string | null = null;
       if (result.success !== false && result.submission_id) {
         try {
+          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
           const sigRes = await fetch(`${supabaseUrl}/functions/v1/nda-send-signature`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: authHeader },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
             body: JSON.stringify({ submission_id: result.submission_id, dry_run: false }),
           });
           const sigJson = await sigRes.json();

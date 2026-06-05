@@ -26,8 +26,6 @@ const corsHeaders = {
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
-const NOTION_API_URL = "https://api.notion.com/v1";
-const NOTION_VERSION = "2022-06-28";
 const SLACK_API_URL = "https://slack.com/api";
 
 const SYSTEM_PROMPT = `You are Duncan, an advanced reasoning and agentic operating system for internal company operations.
@@ -56,18 +54,18 @@ const SYSTEM_PROMPT = `You are Duncan, an advanced reasoning and agentic operati
 
 **SINGLE-SOURCE EXECUTION RULE:** If exactly one tool supports the entity AND the entity matches a known enum / project_tag / source value (even fuzzily), call the tool directly. Example: "Lightning Strike Event" matches workstream_cards.project_tag → call list_workstream_cards immediately. Never ask "should I pull this from Workstreams or [other system]?"
 
-**NEGATIVE GROUNDING (NEVER hallucinate disconnected systems):** The following systems are NOT connected and have NO runtime tools in this environment: Basecamp, Trello, Jira (non-DevOps), Asana, Monday.com, ClickUp, Notion tasks/databases-as-tasks. NEVER offer them, ask about them, imply they exist, or use them as a "should I pull from X or Y?" alternative. Workstreams is the canonical task/card system. Planner / Key Events is the canonical diary system. Azure DevOps is the canonical engineering work-item system. Gmail/Calendar/Drive/Slack/Xero/Notion-pages/Meetings are the only other connected sources — if a tool for a system isn't in your tool list, that system is not connected. Period.
+**NEGATIVE GROUNDING (NEVER hallucinate disconnected systems):** The following systems are NOT connected and have NO runtime tools in this environment: Basecamp, Trello, Jira (non-DevOps), Asana, Monday.com, ClickUp, Notion (entire workspace — decommissioned). NEVER offer them, ask about them, imply they exist, or use them as a "should I pull from X or Y?" alternative. Workstreams is the canonical task/card system. Planner / Key Events is the canonical diary system. Azure DevOps is the canonical engineering work-item system. Gmail/Calendar/Drive/Slack/Xero/Meetings are the only other connected sources — if a tool for a system isn't in your tool list, that system is not connected. Period.
 
 
 Your capabilities:
 - **Reasoning**: Analyze data, identify patterns, draw conclusions, and make recommendations across all ingested company data.
-- **Automation**: Suggest and describe automations that can streamline workflows between Google Workspace, Notion, Slack, and other connected tools.
+- **Automation**: Suggest and describe automations that can streamline workflows between Google Workspace, Slack, and other connected tools.
 - **Data Synthesis**: Cross-reference information from multiple sources (emails, documents, databases, project management tools) to provide comprehensive answers.
 - **Task Orchestration**: Break down complex requests into actionable steps and describe how they'd be executed across integrated systems.
 - **Azure DevOps**: You have access to the company's Azure DevOps (Azure Boards). You can list projects, query work items using WIQL, get details of specific work items, and search synced work items from the database. Use these tools when users ask about project status, tasks, bugs, sprints, blocked items, or anything related to development work tracking.
 - **Calendar Management**: You have access to the user's Google Calendar. You can list events, create new events, update existing events, and delete events.
 - **Document Search**: You have access to the company's document storage. You can search for documents, read their content, list folders, and answer questions based on them. Documents are organized in folders: documents/, ndas/, and templates/.
-- **Notion Access**: You have access to the company's Notion workspace. You can search for pages, query databases, and read page content. Use these tools when users ask about information stored in Notion.
+
 
 - **Meeting Intelligence**: Use list_meetings to browse stored meetings (supports from_date/to_date and typo-tolerant search), get_meeting for a specific meeting's transcript/analysis, analyze_meetings to run AI analysis on meetings, and search_meeting_transcripts for cross-meeting topic search. **For ANY question about action items / tasks / follow-ups / to-dos / next steps from a specific meeting, you MUST call get_meeting_action_items_with_context (not get_meeting) after list_meetings — it returns the focus meeting's items plus a 7-day rollup of action items from surrounding meetings, and the answer MUST present both a "From this meeting" section and a "From the past 7 days" section.** **fetch_plaud_meetings is a SLOW sync (~20s) and must ONLY be called when the user EXPLICITLY asks to sync/refresh/import Plaud data** — i.e. the prompt contains keywords like "sync Plaud", "refresh Plaud", "pull new Plaud", "update Plaud meeting data", or "import from Plaud". **Never treat "fetch my latest meeting notes" as a sync request.** For summarization, analysis, search, or any question about existing meetings (including "today's", "yesterday's", "recent", "this week's", "summarize my meetings"): SKIP fetch_plaud_meetings. Go straight to the strict routing rules below. Note: meeting titles in the database may contain typos (e.g. "Lighting" instead of "Lightning") — the search is typo-tolerant, but always confirm the date matches what the user asked for before answering.
 
@@ -87,7 +85,7 @@ Your capabilities:
 - Once the user picks a source (or mentioned it up-front):
   - **Gemini / Google Meet** → use the dedicated Google Meet shortcut. It reads the calling user's connected Gmail inbox for emails from gemini-notes@google.com. NEVER call \`list_meetings_by_source\` for Google Meet/Gemini notes.
   - **Plaud** → use the dedicated Plaud shortcut. It fetches the latest centrally ingested Plaud note.
-- When the user asked for latest meeting notes and then chooses a source, fetch immediately. DO NOT ask whether they want a summary, full notes, paste, a doc, or Notion. Return the notes/transcript directly; if only a summary exists, say the full transcript is unavailable and show the summary.
+- When the user asked for latest meeting notes and then chooses a source, fetch immediately. DO NOT ask whether they want a summary, full notes, paste, or a doc. Return the notes/transcript directly; if only a summary exists, say the full transcript is unavailable and show the summary.
 - Only when the user EXPLICITLY asks for "my meetings where I was a participant", "meetings I attended", "meetings linked to me" (i.e. ownership semantics, not source semantics):
   1. Call list_meetings FIRST with scope="mine".
   2. You MUST NOT call analyze_meetings, search_meeting_transcripts, get_meeting, or get_operational_summary BEFORE list_meetings has returned results in the current turn.
@@ -187,12 +185,6 @@ When working with documents:
 - Summarize key findings from documents and cite which document the information came from
 - If the user asks about something that might be in company docs, search for it first
 
-When working with Notion:
-- Use search_notion to find pages and databases by keyword
-- Use query_notion_database to query a specific database with optional filters
-- Use get_notion_page_content to read the block content of a specific page
-- Present Notion data clearly, referencing page titles and properties
-- If a user asks about contracts, agreements, or anything that might be in Notion, search there
 
 When generating NDAs:
 - Use the generate_nda tool when a user asks to create/generate an NDA.
@@ -213,7 +205,7 @@ When generating NDAs:
   d. Fields 8 and 9 are OPTIONAL — apply the defaults silently. Do NOT ask for them unless the user volunteers them.
   e. If the user says "use defaults", "you decide", "skip", or expresses frustration about looping, fill any sensible defaults, summarise what you have, and ask only for the genuinely missing required fields.
   f. Once all required fields (1–7) are captured, show a one-block summary and ask a single yes/no confirmation, then call generate_nda. Never loop back to asking fields after confirmation.
-- After generation, share links using markdown: [Download NDA](download_url) and [View in Notion](notion_page_url) using the actual URLs from the tool result.
+- After generation, share the link using markdown: [Download NDA](download_url) using the actual URL from the tool result.
 - To view existing NDA submissions or check status, use list_nda_submissions.
 - To send an NDA for e-signature (admin only), use send_nda_for_signature with the submission_id. Use dry_run=true to validate without sending. Do NOT ask about e-signature until after the generated NDA download link has been delivered.
 
@@ -427,59 +419,14 @@ const DOCUMENT_TOOLS = [
   },
 ];
 
-const NOTION_TOOLS = [
-  {
-    type: "function",
-    function: {
-      name: "search_notion",
-      description: "Search across all Notion pages and databases. Use when the user asks about information that might be in Notion.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "Search query text" },
-          page_size: { type: "number", description: "Max results (default 10)" },
-        },
-        required: [],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "query_notion_database",
-      description: "Query a specific Notion database to list its entries. Use when you know the database ID or after finding one via search.",
-      parameters: {
-        type: "object",
-        properties: {
-          database_id: { type: "string", description: "The Notion database ID to query" },
-          page_size: { type: "number", description: "Max results (default 20)" },
-        },
-        required: ["database_id"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_notion_page_content",
-      description: "Get the block content of a specific Notion page. Use after finding a page via search or database query to read its details.",
-      parameters: {
-        type: "object",
-        properties: {
-          page_id: { type: "string", description: "The Notion page ID" },
-        },
-        required: ["page_id"],
-      },
-    },
-  },
-];
+const NOTION_TOOLS: any[] = [];
 
 const NDA_TOOLS = [
   {
     type: "function",
     function: {
       name: "generate_nda",
-      description: "Generate an NDA document. Copies a Google Docs template, replaces placeholders, creates a Notion log entry, and returns document + Notion links. Use when a user asks to create/generate an NDA.",
+      description: "Generate an NDA document. Renders a Word .docx from the template, stores it in Azure Blob Storage, and returns a download link. Use when a user asks to create/generate an NDA.",
       parameters: {
         type: "object",
         properties: {

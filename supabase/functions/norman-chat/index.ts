@@ -4416,7 +4416,18 @@ async function executeNdaTool(
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "NDA generation failed");
-      return result;
+      const downloadUrl = result.download_url || result.document_url || result.google_doc_url || result.url || null;
+      const notionUrl = result.notion_page_url || result.notion_url || null;
+      return {
+        ...result,
+        success: result.success ?? true,
+        download_url: downloadUrl,
+        google_doc_url: result.google_doc_url || downloadUrl,
+        notion_page_url: notionUrl,
+        message: downloadUrl
+          ? `NDA generated successfully. Download link: ${downloadUrl}${notionUrl ? `. Notion page: ${notionUrl}` : `. Notion page was not created/available.`}`
+          : (result.message || "NDA generation completed, but no download URL was returned."),
+      };
     }
 
     case "list_nda_submissions": {

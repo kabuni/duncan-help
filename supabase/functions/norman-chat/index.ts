@@ -7277,8 +7277,51 @@ Format as a natural, readable summary with clear sections. If a section has no d
             }
 
             if (!toolCalls || toolCalls.length === 0) {
-              console.log("FINAL ANSWER — no tool calls");
-              break;
+              // Recovery: model sometimes emits the tool invocation as a JSON
+              // text blob instead of a real OpenAI tool_call (e.g. printed
+              // `{"tool_name":"generate_nda", ...}`). Detect and convert into
+              // a real tool call so the downstream tool actually runs.
+              const recoveredCall = (() => {
+                try {
+                  if (!fullContent) return null;
+                  const firstBrace = fullContent.indexOf("{");
+                  const lastBrace = fullContent.lastIndexOf("}");
+                  if (firstBrace < 0 || lastBrace <= firstBrace) return null;
+                  const candidate = fullContent.slice(firstBrace, lastBrace + 1);
+                  const parsed = JSON.parse(candidate);
+                  if (!parsed || typeof parsed !== "object") return null;
+                  const name = parsed.tool_name || parsed.toolName || parsed.name;
+                  if (!name || typeof name !== "string") return null;
+                  const exists = Array.isArray(filteredTools) && filteredTools.some(
+                    (t: any) => t?.function?.name === name,
+                  );
+                  if (!exists) return null;
+                  const { tool_name: _tn, toolName: _tnc, name: _n, ...args } = parsed;
+                  return {
+                    id: `recovered_${Date.now().toString(36)}`,
+                    type: "function",
+                    function: {
+                      name,
+                      arguments: JSON.stringify(args),
+                    },
+                  };
+                } catch {
+                  return null;
+                }
+              })();
+
+              if (recoveredCall) {
+                console.warn("RECOVERED TOOL CALL FROM TEXT CONTENT", {
+                  name: recoveredCall.function.name,
+                });
+                toolCalls = [recoveredCall];
+                // Suppress the leaked JSON from the assistant transcript so it
+                // is not re-fed to the model in the next round.
+                fullContent = "";
+              } else {
+                console.log("FINAL ANSWER — no tool calls");
+                break;
+              }
             }
 
             if (toolHistory.has(signature)) {

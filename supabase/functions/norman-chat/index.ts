@@ -5942,12 +5942,27 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const normalized = latestUserText.trim().toLowerCase().replace(/[.!?]+$/g, "");
       const isAffirmative = /^(yes|y|yeah|yep|ok|okay|sure|confirmed|confirm|go|go ahead|please do|do it)$/i.test(normalized);
       if (!isAffirmative) return false;
+      if (/##\s*NDA generated|\[Download NDA\]\(/i.test(recentConversationText)) return false;
       return /\bNDA\b|generate_nda/i.test(recentConversationText) &&
         /Receiving Party|Legal Entity|registered address|recipient email|NDA details captured|ready to generate|Generating the NDA|NDA — Summary/i.test(recentConversationText);
     })();
     if (isNdaConfirmationReply) {
       shouldBypassTools = false;
       systemContent += `\n\n## CURRENT REQUEST OVERRIDE — NDA CONFIRMATION\nThe latest user reply is confirming a pending NDA generation. Do not answer with a promise. Immediately call \`generate_nda\` using the confirmed NDA fields from the conversation history. After the tool returns, share the actual download link from the tool result. If a Notion link is absent/null, say the Notion entry was skipped/unavailable rather than promising it later.`;
+    }
+
+    if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {
+      try {
+        const result = await executeNdaTool("generate_nda", pendingNdaArgsFromHistory, supabaseAdmin, userId, userEmail, authHeader);
+        const downloadUrl = result?.download_url || result?.google_doc_url || result?.document_url;
+        const notionUrl = result?.notion_page_url || result?.notion_url;
+        const content = downloadUrl
+          ? `## NDA generated\n\n[Download NDA](${downloadUrl})${notionUrl ? `\n\n[View in Notion](${notionUrl})` : "\n\nNotion page was not created/available."}`
+          : `## NDA generated\n\nThe document was generated, but no download link was returned. Please ask me to list NDA submissions and I’ll retrieve it.`;
+        return buildTextSseResponse(content);
+      } catch (error: any) {
+        return buildTextSseResponse(`## NDA generation failed\n\n${error?.message || "Unknown error"}`);
+      }
     }
 
     // ── Lightweight entity resolver ─────────────────────────────────────────

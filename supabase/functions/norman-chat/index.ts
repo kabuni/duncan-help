@@ -7383,6 +7383,16 @@ Format as a natural, readable summary with clear sections. If a section has no d
               // a real tool call so the downstream tool actually runs.
               const recoveredCall = (() => {
                 try {
+                  if (pendingNdaArgsFromHistory && (isNdaConfirmationReply || looksLikeNdaGenerationPromise(fullContent))) {
+                    return {
+                      id: `recovered_nda_${Date.now().toString(36)}`,
+                      type: "function",
+                      function: {
+                        name: "generate_nda",
+                        arguments: JSON.stringify(pendingNdaArgsFromHistory),
+                      },
+                    };
+                  }
                   if (!fullContent) return null;
                   const firstBrace = fullContent.indexOf("{");
                   const lastBrace = fullContent.lastIndexOf("}");

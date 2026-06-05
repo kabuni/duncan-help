@@ -4421,6 +4421,8 @@ async function executeNdaTool(
       return {
         ...result,
         success: result.success ?? true,
+        generation_status: result.status || "generated",
+        status: "success",
         download_url: downloadUrl,
         google_doc_url: result.google_doc_url || downloadUrl,
         notion_page_url: notionUrl,

@@ -5942,12 +5942,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const normalized = latestUserText.trim().toLowerCase().replace(/[.!?]+$/g, "");
       const isAffirmative = /^(yes|y|yeah|yep|ok|okay|sure|confirmed|confirm|go|go ahead|please do|do it)$/i.test(normalized);
       if (!isAffirmative) return false;
-      const recentText = messages
-        .slice(-8)
-        .map((m: any) => typeof m?.content === "string" ? m.content : JSON.stringify(m?.content ?? ""))
-        .join("\n");
-      return /\bNDA\b|generate_nda/i.test(recentText) &&
-        /Receiving Party|Legal Entity|registered address|recipient email|NDA details captured|Generating the NDA/i.test(recentText);
+      return /\bNDA\b|generate_nda/i.test(recentConversationText) &&
+        /Receiving Party|Legal Entity|registered address|recipient email|NDA details captured|ready to generate|Generating the NDA|NDA — Summary/i.test(recentConversationText);
     })();
     if (isNdaConfirmationReply) {
       shouldBypassTools = false;
@@ -6216,7 +6212,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     if (mode !== "briefing" && !shouldBypassTools && filteredTools.length > 0) {
       requestBody.tools = filteredTools;
-      if (isDataIntent && !isVoiceMode && !mustAskMeetingSource) {
+      if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {
+        requestBody.tool_choice = { type: "function", function: { name: "generate_nda" } };
+      } else if (isDataIntent && !isVoiceMode && !mustAskMeetingSource) {
         requestBody.tool_choice = "auto";
       }
     }

@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
-import { Mail, Phone, MapPin, Building2, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Mail, Phone, MapPin, Building2, ChevronDown, ChevronUp, Users, UserPlus, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface RsvpRow {
   id: string;
@@ -180,16 +185,19 @@ export function EventRsvps({ eventId }: { eventId: string }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-          <Users className="h-3 w-3" />
-          Attendees (RSVPs)
-          {attendees.length > 0 && (
-            <span>
-              · {attendees.length} total · {counts.yes || 0} yes · {counts.maybe || 0} maybe · {counts.no || 0} no
-            </span>
-          )}
+      <div className="flex items-center justify-between mb-1.5 gap-2">
+        <div className="text-xs text-muted-foreground flex items-center gap-1.5 min-w-0">
+          <Users className="h-3 w-3 shrink-0" />
+          <span className="truncate">
+            Attendees (RSVPs)
+            {attendees.length > 0 && (
+              <span>
+                {" "}· {attendees.length} total · {counts.yes || 0} yes · {counts.maybe || 0} maybe · {counts.no || 0} no
+              </span>
+            )}
+          </span>
         </div>
+        <InviteAttendeeButton eventId={eventId} />
       </div>
       {attendees.length === 0 ? (
         <div className="text-xs text-muted-foreground border border-dashed border-border rounded-md p-3">
@@ -272,5 +280,95 @@ function Detail({ label, value, icon }: { label: string; value: string | null; i
         {value || "—"}
       </dd>
     </div>
+  );
+}
+
+function InviteAttendeeButton({ eventId }: { eventId: string }) {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const reset = () => {
+    setEmail("");
+    setFirstName("");
+    setLastName("");
+  };
+
+  const submit = async () => {
+    const trimmed = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      toast.error("Enter a valid email address");
+      return;
+    }
+    setSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("event-invite-attendee", {
+        body: {
+          event_id: eventId,
+          email: trimmed,
+          first_name: firstName.trim() || null,
+          last_name: lastName.trim() || null,
+        },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(`RSVP request sent to ${trimmed}`);
+      reset();
+      setOpen(false);
+    } catch (e: any) {
+      const msg = e?.message || "Failed to send invite";
+      toast.error(msg.includes("duncan_mailbox") ? "Duncan mailbox not connected" : msg);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-7 text-xs gap-1.5"
+        onClick={() => setOpen(true)}
+      >
+        <UserPlus className="h-3 w-3" />
+        Invite
+      </Button>
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invite attendee</DialogTitle>
+            <DialogDescription>
+              Duncan will email this person from duncan@kabuni.com asking them to RSVP and share their details. Their reply gets picked up automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="inv-first" className="text-xs">First name</Label>
+                <Input id="inv-first" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Optional" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="inv-last" className="text-xs">Last name</Label>
+                <Input id="inv-last" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Optional" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="inv-email" className="text-xs">Email *</Label>
+              <Input id="inv-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" autoFocus />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setOpen(false); reset(); }} disabled={sending}>Cancel</Button>
+            <Button onClick={submit} disabled={sending || !email.trim()}>
+              {sending ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Sending…</> : "Send RSVP request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

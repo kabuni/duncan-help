@@ -45,14 +45,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { query, user_id, match_count } = await req.json();
+    const { query, match_count } = await req.json();
     if (!query || typeof query !== "string") {
       return new Response(JSON.stringify({ error: "query required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const uid = user_id || userData.user.id;
-    const k = Math.min(Math.max(Number(match_count) || 8, 1), 25);
+    const uid = userData.user.id;
+    const requestedCount = Math.min(Math.max(Number(match_count) || 8, 1), 25);
 
     const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY")!;
     const embRes = await fetch("https://api.openai.com/v1/embeddings", {
@@ -74,8 +74,8 @@ Deno.serve(async (req) => {
     );
     const { data: semanticMatches, error: rpcErr } = await service.rpc("match_documents", {
       query_embedding: queryEmbedding,
-      match_threshold: 0.7,
-      match_count: k,
+      match_threshold: 0.5,
+      match_count: requestedCount,
       p_user_id: uid,
     });
     if (rpcErr) throw rpcErr;
@@ -90,6 +90,7 @@ Deno.serve(async (req) => {
     if (docsErr) throw docsErr;
 
     const titleMatchedDocs = (docs || []).filter((d: any) => titleMatches(query, d.title || "", d.file_name || ""));
+    const k = titleMatchedDocs.length > 0 ? 50 : requestedCount;
     let titleMatchesResults: any[] = [];
     if (titleMatchedDocs.length > 0) {
       const { data: chunks, error: chunksErr } = await service

@@ -65,28 +65,28 @@ export default function RegisterSchool() {
   };
 
   return (
-    <main className="min-h-screen bg-background flex items-center justify-center px-4 py-10">
+    <main className="min-h-dvh bg-background flex items-start sm:items-center justify-center px-4 py-6 sm:py-10">
       <div className="w-full max-w-lg">
-        <div className="flex items-center justify-center gap-3 mb-6">
-          <div className="h-10 w-10 rounded-lg overflow-hidden">
+        <div className="flex items-center justify-center gap-3 mb-5 sm:mb-6">
+          <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg overflow-hidden shrink-0">
             <img src={duncanAvatar} alt="Duncan" className="h-full w-full object-cover object-[50%_30%] scale-150" />
           </div>
           <div className="text-left">
-            <h1 className="text-lg font-bold tracking-tight">Duncan</h1>
+            <h1 className="text-base sm:text-lg font-bold tracking-tight">Duncan</h1>
             <p className="text-[10px] font-mono tracking-widest text-muted-foreground">KABUNI</p>
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>School Registration</CardTitle>
-            <CardDescription>
+        <Card className="shadow-sm">
+          <CardHeader className="px-5 py-5 sm:px-6 sm:py-6">
+            <CardTitle className="text-lg sm:text-xl">School Registration</CardTitle>
+            <CardDescription className="text-sm">
               Register your school's interest. Our team will be in touch shortly.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-5 pb-6 sm:px-6">
             {done ? (
-              <div className="flex flex-col items-center text-center py-8 gap-3">
+              <div className="flex flex-col items-center text-center py-6 sm:py-8 gap-3">
                 <CheckCircle2 className="h-10 w-10 text-primary" />
                 <h2 className="text-lg font-semibold">Thank you</h2>
                 <p className="text-sm text-muted-foreground">
@@ -100,17 +100,17 @@ export default function RegisterSchool() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="school_name">School name *</Label>
-                  <Input id="school_name" value={form.school_name} onChange={update("school_name")} required maxLength={200} />
+                  <Input id="school_name" value={form.school_name} onChange={update("school_name")} required maxLength={200} className="text-base" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="contact_name">Contact name *</Label>
-                  <Input id="contact_name" value={form.contact_name} onChange={update("contact_name")} required maxLength={120} />
+                  <Input id="contact_name" value={form.contact_name} onChange={update("contact_name")} required maxLength={120} className="text-base" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="role">Role *</Label>
                     <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v as typeof ROLES[number] }))}>
-                      <SelectTrigger id="role">
+                      <SelectTrigger id="role" className="text-base">
                         <SelectValue placeholder="Select role" />
                       </SelectTrigger>
                       <SelectContent>
@@ -127,20 +127,21 @@ export default function RegisterSchool() {
                       value={form.number_of_schools}
                       onChange={update("number_of_schools")}
                       required
+                      className="text-base"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email *</Label>
-                  <Input id="email" type="email" value={form.email} onChange={update("email")} required maxLength={255} />
+                  <Input id="email" type="email" value={form.email} onChange={update("email")} required maxLength={255} className="text-base" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone *</Label>
-                  <Input id="phone" value={form.phone} onChange={update("phone")} required maxLength={40} />
+                  <Input id="phone" type="tel" value={form.phone} onChange={update("phone")} required maxLength={40} className="text-base" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="notes">Notes</Label>
-                  <Textarea id="notes" value={form.notes} onChange={update("notes")} maxLength={2000} rows={4} />
+                  <Textarea id="notes" value={form.notes} onChange={update("notes")} maxLength={2000} rows={3} className="text-base resize-y min-h-[80px]" />
                 </div>
                 <Button type="submit" disabled={submitting} className="w-full">
                   {submitting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting…</> : "Submit registration"}

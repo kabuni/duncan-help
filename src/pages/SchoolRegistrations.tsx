@@ -14,6 +14,8 @@ type Registration = {
   id: string;
   school_name: string;
   contact_name: string;
+  role: string | null;
+  number_of_schools: number | null;
   email: string;
   phone: string | null;
   notes: string | null;

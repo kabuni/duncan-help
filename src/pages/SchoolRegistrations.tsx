@@ -61,6 +61,8 @@ export default function SchoolRegistrations() {
       Submitted: format(new Date(r.created_at), "yyyy-MM-dd HH:mm"),
       School: r.school_name,
       Contact: r.contact_name,
+      Role: r.role ?? "",
+      "Number of schools": r.number_of_schools ?? "",
       Email: r.email,
       Phone: r.phone ?? "",
       Notes: r.notes ?? "",

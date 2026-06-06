@@ -142,6 +142,8 @@ export default function SchoolRegistrations() {
                     <TableHead>Submitted</TableHead>
                     <TableHead>School</TableHead>
                     <TableHead>Contact</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead className="text-right"># Schools</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Phone</TableHead>
                     <TableHead>Notes</TableHead>
@@ -156,6 +158,8 @@ export default function SchoolRegistrations() {
                       </TableCell>
                       <TableCell className="font-medium">{r.school_name}</TableCell>
                       <TableCell>{r.contact_name}</TableCell>
+                      <TableCell>{r.role ?? "—"}</TableCell>
+                      <TableCell className="text-right">{r.number_of_schools ?? "—"}</TableCell>
                       <TableCell>
                         <a href={`mailto:${r.email}`} className="text-primary hover:underline">{r.email}</a>
                       </TableCell>

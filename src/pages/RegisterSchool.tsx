@@ -19,7 +19,7 @@ const schema = z.object({
   role: z.enum(ROLES, { errorMap: () => ({ message: "Please select a role" }) }),
   number_of_schools: z.coerce.number().int().min(1, "Must be at least 1").max(100000),
   email: z.string().trim().email("Valid email required").max(255),
-  phone: z.string().trim().max(40).optional().or(z.literal("")),
+  phone: z.string().trim().min(1, "Phone number is required").max(40),
   notes: z.string().trim().max(2000).optional().or(z.literal("")),
 });
 
@@ -53,7 +53,7 @@ export default function RegisterSchool() {
       role: parsed.data.role,
       number_of_schools: parsed.data.number_of_schools,
       email: parsed.data.email,
-      phone: parsed.data.phone || null,
+      phone: parsed.data.phone,
       notes: parsed.data.notes || null,
     });
     setSubmitting(false);
@@ -135,8 +135,8 @@ export default function RegisterSchool() {
                   <Input id="email" type="email" value={form.email} onChange={update("email")} required maxLength={255} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input id="phone" value={form.phone} onChange={update("phone")} maxLength={40} />
+                  <Label htmlFor="phone">Phone *</Label>
+                  <Input id="phone" value={form.phone} onChange={update("phone")} required maxLength={40} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="notes">Notes</Label>

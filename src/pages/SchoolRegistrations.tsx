@@ -14,6 +14,8 @@ type Registration = {
   id: string;
   school_name: string;
   contact_name: string;
+  role: string | null;
+  number_of_schools: number | null;
   email: string;
   phone: string | null;
   notes: string | null;
@@ -59,6 +61,8 @@ export default function SchoolRegistrations() {
       Submitted: format(new Date(r.created_at), "yyyy-MM-dd HH:mm"),
       School: r.school_name,
       Contact: r.contact_name,
+      Role: r.role ?? "",
+      "Number of schools": r.number_of_schools ?? "",
       Email: r.email,
       Phone: r.phone ?? "",
       Notes: r.notes ?? "",
@@ -138,6 +142,8 @@ export default function SchoolRegistrations() {
                     <TableHead>Submitted</TableHead>
                     <TableHead>School</TableHead>
                     <TableHead>Contact</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead className="text-right"># Schools</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Phone</TableHead>
                     <TableHead>Notes</TableHead>
@@ -152,6 +158,8 @@ export default function SchoolRegistrations() {
                       </TableCell>
                       <TableCell className="font-medium">{r.school_name}</TableCell>
                       <TableCell>{r.contact_name}</TableCell>
+                      <TableCell>{r.role ?? "—"}</TableCell>
+                      <TableCell className="text-right">{r.number_of_schools ?? "—"}</TableCell>
                       <TableCell>
                         <a href={`mailto:${r.email}`} className="text-primary hover:underline">{r.email}</a>
                       </TableCell>

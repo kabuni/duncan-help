@@ -2971,7 +2971,9 @@ export type Database = {
           email: string
           id: string
           notes: string | null
+          number_of_schools: number | null
           phone: string | null
+          role: string | null
           school_name: string
         }
         Insert: {
@@ -2980,7 +2982,9 @@ export type Database = {
           email: string
           id?: string
           notes?: string | null
+          number_of_schools?: number | null
           phone?: string | null
+          role?: string | null
           school_name: string
         }
         Update: {
@@ -2989,7 +2993,9 @@ export type Database = {
           email?: string
           id?: string
           notes?: string | null
+          number_of_schools?: number | null
           phone?: string | null
+          role?: string | null
           school_name?: string
         }
         Relationships: []

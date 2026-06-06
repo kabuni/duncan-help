@@ -2972,7 +2972,7 @@ export type Database = {
           id: string
           notes: string | null
           number_of_schools: number | null
-          phone: string | null
+          phone: string
           role: string | null
           school_name: string
         }
@@ -2983,7 +2983,7 @@ export type Database = {
           id?: string
           notes?: string | null
           number_of_schools?: number | null
-          phone?: string | null
+          phone: string
           role?: string | null
           school_name: string
         }
@@ -2994,7 +2994,7 @@ export type Database = {
           id?: string
           notes?: string | null
           number_of_schools?: number | null
-          phone?: string | null
+          phone?: string
           role?: string | null
           school_name?: string
         }

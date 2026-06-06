@@ -1,0 +1,1 @@
+ALTER TABLE public.school_registrations ALTER COLUMN phone SET NOT NULL;

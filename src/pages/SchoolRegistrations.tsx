@@ -5,9 +5,10 @@ import { useIsAdmin } from "@/hooks/useUserRoles";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Trash2, RefreshCw } from "lucide-react";
+import { Loader2, Trash2, RefreshCw, Download, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import * as XLSX from "xlsx";
 
 type Registration = {
   id: string;
@@ -53,6 +54,37 @@ export default function SchoolRegistrations() {
     toast.success("Deleted");
   };
 
+  const exportRows = () =>
+    rows.map((r) => ({
+      Submitted: format(new Date(r.created_at), "yyyy-MM-dd HH:mm"),
+      School: r.school_name,
+      Contact: r.contact_name,
+      Email: r.email,
+      Phone: r.phone ?? "",
+      Notes: r.notes ?? "",
+    }));
+
+  const handleExportCsv = () => {
+    if (!rows.length) return toast.error("Nothing to export");
+    const ws = XLSX.utils.json_to_sheet(exportRows());
+    const csv = XLSX.utils.sheet_to_csv(ws);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `school-registrations-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportXlsx = () => {
+    if (!rows.length) return toast.error("Nothing to export");
+    const ws = XLSX.utils.json_to_sheet(exportRows());
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Registrations");
+    XLSX.writeFile(wb, `school-registrations-${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+  };
+
   if (loadingRole) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -65,16 +97,27 @@ export default function SchoolRegistrations() {
 
   return (
     <div className="container mx-auto p-6 max-w-6xl">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">School Registrations</h1>
           <p className="text-sm text-muted-foreground">Submissions from the public registration form.</p>
         </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportCsv} disabled={!rows.length}>
+            <Download className="h-4 w-4 mr-2" />
+            CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportXlsx} disabled={!rows.length}>
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            Excel
+          </Button>
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
+
 
       <Card>
         <CardHeader>

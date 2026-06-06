@@ -53,7 +53,7 @@ export default function RegisterSchool() {
       role: parsed.data.role,
       number_of_schools: parsed.data.number_of_schools,
       email: parsed.data.email,
-      phone: parsed.data.phone || null,
+      phone: parsed.data.phone,
       notes: parsed.data.notes || null,
     });
     setSubmitting(false);

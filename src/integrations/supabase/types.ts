@@ -2964,6 +2964,36 @@ export type Database = {
         }
         Relationships: []
       }
+      school_registrations: {
+        Row: {
+          contact_name: string
+          created_at: string
+          email: string
+          id: string
+          notes: string | null
+          phone: string | null
+          school_name: string
+        }
+        Insert: {
+          contact_name: string
+          created_at?: string
+          email: string
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          school_name: string
+        }
+        Update: {
+          contact_name?: string
+          created_at?: string
+          email?: string
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          school_name?: string
+        }
+        Relationships: []
+      }
       slack_connections: {
         Row: {
           access_token: string

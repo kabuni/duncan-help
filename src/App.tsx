@@ -37,6 +37,8 @@ import EAInbox from "./pages/EAInbox";
 
 import SlackCallback from "./pages/SlackCallback";
 import KnowledgeBase from "./pages/KnowledgeBase";
+import RegisterSchool from "./pages/RegisterSchool";
+import SchoolRegistrations from "./pages/SchoolRegistrations";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -65,6 +67,7 @@ const AppContent = () => {
           <Route path="/auth" element={<Auth />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/register-school" element={<RegisterSchool />} />
           <Route path="/auth/slack/callback" element={<ProtectedRoute><SlackCallback /></ProtectedRoute>} />
 
           {/* Shared layout for all authenticated app routes */}
@@ -88,6 +91,7 @@ const AppContent = () => {
             <Route path="/purchase-orders" element={<PurchaseOrders />} />
             <Route path="/ea-inbox" element={<EAInbox />} />
             <Route path="/knowledge-base" element={<KnowledgeBase />} />
+            <Route path="/school-registrations" element={<SchoolRegistrations />} />
             <Route path="/travel" element={<Navigate to="/purchase-orders?tab=travel" replace />} />
             <Route path="/ceo" element={<Navigate to="/team-briefing" replace />} />
           </Route>

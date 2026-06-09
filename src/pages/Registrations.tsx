@@ -13,6 +13,7 @@ import * as XLSX from "xlsx";
 import RegistrationsAnalytics from "@/components/school-registrations/RegistrationsAnalytics";
 import RegistrationsSummaryCards from "@/components/school-registrations/RegistrationsSummaryCards";
 import PagesAnalytics, { type PageGroup } from "@/components/school-registrations/PagesAnalytics";
+import GlobalRegistrationsSummary from "@/components/school-registrations/GlobalRegistrationsSummary";
 
 type Registration = {
   id: string;

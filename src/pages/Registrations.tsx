@@ -40,9 +40,11 @@ const KPL_PAGE_GROUPS: PageGroup[] = [
 // Category registry — add new entries here to scale (Events, Recruitment, Scout, etc.)
 type CategoryKey = "schools" | "kpl";
 const CATEGORIES: { key: CategoryKey; label: string }[] = [
-  { key: "schools", label: "Schools" },
-  { key: "kpl", label: "KPL" },
+  { key: "schools", label: "Schools Registrations" },
+  { key: "kpl", label: "KPL Registrations" },
 ];
+
+const ALL_PAGE_GROUPS: PageGroup[] = [...SCHOOLS_PAGE_GROUPS, ...KPL_PAGE_GROUPS];
 
 export default function SchoolRegistrations() {
   const { isAdmin, isLoading: loadingRole } = useIsAdmin();

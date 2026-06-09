@@ -5994,8 +5994,10 @@ Format as a natural, readable summary with clear sections. If a section has no d
     }
     // reschedule_event is always available — handles local Planner rows even without a personal Google Calendar token.
     tools.push(...RESCHEDULE_TOOLS);
+    // Knowledge Base RAG is ALWAYS available (Postgres+pgvector, no Azure dependency)
+    tools.push(...KB_TOOLS);
     if (azureStorageAvailable) {
-      tools.push(...DOCUMENT_TOOLS);
+      tools.push(...AZURE_DOC_TOOLS);
     }
     // Meeting tools always available (Gmail connection checked at execution time)
     tools.push(...MEETING_TOOLS);

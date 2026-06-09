@@ -7610,6 +7610,29 @@ Format as a natural, readable summary with clear sections. If a section has no d
               kinds: linterReport.violations.map(v => v.kind),
               read_results: linterReport.readResultsSeen.length,
             };
+            // Persist when one or more violations were detected so we can
+            // query patterns without relying on edge-function log retention.
+            if (linterReport.violations.length > 0) {
+              try {
+                const { error: persistErr } = await supabaseAdmin
+                  .from("correctness_violations")
+                  .insert({
+                    user_id: userId ?? null,
+                    turn_id: turnId,
+                    model: CHAT_MODEL,
+                    violation_count: linterReport.violations.length,
+                    violation_kinds: linterReport.violations.map(v => v.kind),
+                    violation_details: linterReport.violations,
+                    read_results_seen: linterReport.readResultsSeen,
+                    draft_preview: (lastFullContent || "").slice(0, 500),
+                  });
+                if (persistErr) {
+                  console.warn("[correctness-linter] persist failed:", persistErr.message);
+                }
+              } catch (persistEx) {
+                console.warn("[correctness-linter] persist threw:", persistEx);
+              }
+            }
           } catch (linterErr) {
             console.warn("[correctness-linter] failed:", linterErr);
           }

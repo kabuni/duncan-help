@@ -197,7 +197,7 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
 
   const trackedPaths = TRACKED_PAGES.flatMap((p) => p.paths);
 
-  const [playLast30, playPrev30, countriesToday, dailyPlay, web7d, topPage7d, tracked7d, tracked30d] = await Promise.all([
+  const [playLast30, playPrev30, countriesToday, dailyPlay, web7d, topPage7d, trackedToday, trackedYesterday] = await Promise.all([
     runReport(accessToken, propertyId, {
       dateRanges: last30,
       metrics: [{ name: "userEngagementDuration" }, { name: "activeUsers" }],

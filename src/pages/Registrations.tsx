@@ -261,8 +261,6 @@ export default function SchoolRegistrations() {
             </div>
           </div>
 
-          <PagesAnalytics title="Kabuni Premier League Analytics" groups={KPL_PAGE_GROUPS} />
-
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Card>
               <CardContent className="p-4">
@@ -299,6 +297,8 @@ export default function SchoolRegistrations() {
               </div>
             </CardContent>
           </Card>
+
+          <PagesAnalytics title="Kabuni Premier League Analytics" groups={KPL_PAGE_GROUPS} hideOverall />
         </TabsContent>
       </Tabs>
     </div>

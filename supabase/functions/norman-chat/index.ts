@@ -178,13 +178,13 @@ When working with calendar:
 - If creating events, ask for confirmation of the details before creating
 - **Cancelling / deleting events**: ALWAYS call \`delete_calendar_event\` to action the cancellation. The tool automatically uses Duncan's organizer identity when Duncan (duncan@kabuni.com) is the organizer, so the cancellation propagates to ALL attendees via \`sendUpdates=all\`. DO NOT tell the user "this only cancels it for you" or "Duncan needs to cancel it company-wide" or add any caveat about partial cancellation — that is factually wrong. After the user confirms, just call the tool and report the result. If the tool returns an error, surface the actual error message verbatim; do not invent a fallback narrative.
 
-When working with documents:
-- **ALWAYS call search_knowledge_base FIRST** when the user asks about a file/document/policy/handbook/list/report/brochure by name, topic, or content (e.g. "do we have a doc on X", "find the Kabuni_Combined_list"). The Knowledge Base is where users upload company documents via the Knowledge Base UI.
-- DO NOT use Google Drive search (search_drive_files / list_drive_folder) for finding uploaded company documents — Google Drive is a separate system that only contains files synced from a connected Drive account, NOT Knowledge Base uploads.
-- Only use search_documents (Azure Blob) for NDAs, generated reports, or non-KB folders that the user explicitly references by storage location.
-- Use read_document to get full content after locating a file.
-- Summarize key findings and cite the source document title.
-- If search_knowledge_base returns no matches, say so explicitly and mention the user can upload the document via the Knowledge Base page — do NOT silently fall back to Google Drive and claim "file not found".
+When working with documents and answering ANY informational/knowledge question:
+- **KNOWLEDGE BASE FIRST — ALWAYS.** Before any other retrieval tool (Google Drive, Azure Blob, Gmail search, web search, generic reasoning), call \`search_knowledge_base\` with a descriptive natural-language query. The Knowledge Base is the canonical RAG store of company documents (handbooks, policies, brochures, playbooks, lists, reports) uploaded via the Knowledge Base UI.
+- This applies even if the user does not mention "document" — questions like "what does our policy say…", "do we have info on…", "summarize the schools handout", "who's on the combined list", or "what's our position on X" MUST start with a KB search.
+- Only if \`search_knowledge_base\` returns no relevant matches should you fall back to other sources, in this order: (1) Google Drive (if the user references Drive or a synced doc), (2) Azure Blob via \`search_documents\` (NDAs, generated reports, legacy folders), (3) other connected systems, (4) general reasoning.
+- Cite the source document title returned by the KB in your answer.
+- If nothing is found anywhere, say so explicitly and tell the user they can upload the document via the Knowledge Base page. Do not silently invent an answer.
+- Use \`read_document\` only for Azure Blob items located via \`search_documents\`.
 
 
 When generating NDAs:
@@ -366,12 +366,14 @@ const RESCHEDULE_TOOLS = [
   },
 ];
 
-const DOCUMENT_TOOLS = [
+// KB_TOOLS: always-on Postgres+pgvector knowledge base search.
+// MUST be the first thing the assistant tries for any informational query.
+const KB_TOOLS = [
   {
     type: "function",
     function: {
       name: "search_knowledge_base",
-      description: "Semantic search over the Kabuni Knowledge Base (documents uploaded via the Knowledge Base UI — handbooks, policies, brochures, playbooks, company docs). USE THIS FIRST whenever the user asks 'do we have a document/policy/handout on X', references company knowledge, or wants info that could plausibly live in an uploaded doc. Returns ranked passages with their source document title.",
+      description: "Semantic RAG search over the Kabuni Knowledge Base (documents uploaded via the Knowledge Base UI — handbooks, policies, brochures, playbooks, lists, reports, company docs). ALWAYS CALL THIS FIRST before any other search/retrieval tool whenever the user asks a question that could plausibly be answered by an uploaded document, references company knowledge, asks 'do we have…', 'what does X say about…', or names a file/policy/handbook/list/report. Returns ranked passages with the source document title. If this returns no relevant results, then (and only then) fall back to other sources (Google Drive, Azure Blob, web).",
       parameters: {
         type: "object",
         properties: {
@@ -382,6 +384,10 @@ const DOCUMENT_TOOLS = [
       },
     },
   },
+];
+
+// AZURE_DOC_TOOLS: Azure Blob storage browse/read — only when Azure is connected.
+const AZURE_DOC_TOOLS = [
   {
     type: "function",
     function: {
@@ -434,6 +440,9 @@ const DOCUMENT_TOOLS = [
     },
   },
 ];
+
+// Backwards-compat union. New code should prefer KB_TOOLS / AZURE_DOC_TOOLS.
+const DOCUMENT_TOOLS = [...KB_TOOLS, ...AZURE_DOC_TOOLS];
 
 
 
@@ -5985,8 +5994,10 @@ Format as a natural, readable summary with clear sections. If a section has no d
     }
     // reschedule_event is always available — handles local Planner rows even without a personal Google Calendar token.
     tools.push(...RESCHEDULE_TOOLS);
+    // Knowledge Base RAG is ALWAYS available (Postgres+pgvector, no Azure dependency)
+    tools.push(...KB_TOOLS);
     if (azureStorageAvailable) {
-      tools.push(...DOCUMENT_TOOLS);
+      tools.push(...AZURE_DOC_TOOLS);
     }
     // Meeting tools always available (Gmail connection checked at execution time)
     tools.push(...MEETING_TOOLS);
@@ -6045,6 +6056,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
     ];
 
     const ALWAYS_ON_TOOLS = [
+      ...KB_TOOLS, // Knowledge Base RAG is always available — first port of call for any informational query.
       ...GOOGLE_FORMS_TOOLS,
       ...NDA_TOOLS,
       ...EXEC_SUMMARY_TOOLS,
@@ -6073,7 +6085,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
           // reschedule_event must remain available even without a personal Google Calendar token
           // (it covers local Planner rows and uses the Duncan calendar identity for Google events).
           if (CALENDAR_TOOLS.includes(t) && !calendarAccessToken && name !== "reschedule_event") return false;
-          if (DOCUMENT_TOOLS.includes(t) && !azureStorageAvailable) return false;
+          if (AZURE_DOC_TOOLS.includes(t) && !azureStorageAvailable) return false;
           
           
           if (SLACK_TOOLS.includes(t) && !slackConnection) return false;

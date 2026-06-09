@@ -478,6 +478,18 @@ serve(async (req) => {
       return new Response(JSON.stringify({ connected: true, ...summary }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (action === "pages_analytics") {
+      if (!Array.isArray(pages) || pages.length === 0) throw new Error("pages array is required");
+      const groups: PageGroup[] = pages.map((p: any, i: number) => ({
+        key: String(p.key ?? p.label ?? `group-${i}`),
+        label: String(p.label ?? p.key ?? `Page ${i + 1}`),
+        paths: Array.isArray(p.paths) ? p.paths.map(String) : [],
+      })).filter((g) => g.paths.length > 0);
+      if (!groups.length) throw new Error("Each page must include at least one path");
+      const result = await getPagesAnalytics(accessToken, propertyId, groups);
+      return new Response(JSON.stringify({ connected: true, ...result }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const dashboard = await getDashboard(accessToken, propertyId);
 
     if (action === "askQuestion") {

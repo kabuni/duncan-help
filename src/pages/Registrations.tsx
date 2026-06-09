@@ -142,10 +142,16 @@ export default function SchoolRegistrations() {
         </Button>
       </div>
 
+      <GlobalRegistrationsSummary totalRegistrations={rows.length} groups={ALL_PAGE_GROUPS} />
+
       <Tabs value={tab} onValueChange={(v) => setTab(v as CategoryKey)} className="space-y-6">
-        <TabsList>
+        <TabsList className="h-auto w-full justify-start gap-2 bg-transparent p-0 border-b rounded-none">
           {CATEGORIES.map((c) => (
-            <TabsTrigger key={c.key} value={c.key}>
+            <TabsTrigger
+              key={c.key}
+              value={c.key}
+              className="rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 text-base font-semibold text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+            >
               {c.label}
             </TabsTrigger>
           ))}

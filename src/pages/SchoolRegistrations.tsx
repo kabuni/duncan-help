@@ -131,6 +131,10 @@ export default function SchoolRegistrations() {
         </div>
       </div>
 
+      <PagesAnalytics groups={TRACKED_PAGE_GROUPS} />
+
+      <RegistrationsSummaryCards rows={rows} />
+
       <RegistrationsAnalytics rows={rows} />
 
       <Card>

@@ -95,7 +95,7 @@ export default function SchoolRegistrations() {
     const ws = XLSX.utils.json_to_sheet(exportRows());
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Registrations");
-    XLSX.writeFile(wb, `school-registrations-${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+    XLSX.writeFile(wb, `registrations-${format(new Date(), "yyyy-MM-dd")}.xlsx`);
   };
 
   if (loadingRole) {

@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
   Globe2, TrendingUp, TrendingDown, Users, Briefcase, FolderKanban,
-  AlertTriangle, Share2, BarChart3, ExternalLink, Loader2, CalendarCheck, ListChecks, PoundSterling,
+  AlertTriangle, Share2, BarChart3, ExternalLink, Loader2, ListChecks, PoundSterling,
 } from "lucide-react";
 import {
-  useGAHomeSummary, useHiresStats, useWorkstreamsStats, useProjectsStats, useSocialStats, useRsvpStats, useMyPendingTasks,
+  useGAHomeSummary, useHiresStats, useWorkstreamsStats, useProjectsStats, useSocialStats, useMyPendingTasks,
   useHubSpotSocialFeed,
 } from "@/hooks/useHomeDashboard";
 
@@ -60,26 +60,6 @@ const Stat = ({ label, value, hint }: { label: string; value: React.ReactNode; h
   </div>
 );
 
-const SHOWCASE_EVENT_ID = "e942181b-c52a-42a4-a0c2-1e2fdf499ed7";
-
-function RsvpSummaryTile() {
-  const { data, loading } = useRsvpStats(SHOWCASE_EVENT_ID);
-  if (loading) return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
-  const s = data ?? { total: 0, confirmed: 0, maybe: 0, declined: 0, missingInfo: 0 };
-  return (
-    <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-      <Stat label="Total Registrations" value={s.total} />
-      <Stat label="Confirmed" value={s.confirmed} />
-      <Stat label="Maybe" value={s.maybe} />
-      <Stat label="Declined" value={s.declined} />
-      <Stat
-        label="Missing Information"
-        value={s.missingInfo}
-        hint={s.missingInfo > 0 ? "Duncan has emailed attendees" : undefined}
-      />
-    </div>
-  );
-}
 
 const STATUS_STYLES: Record<string, string> = {
   red: "bg-destructive/10 text-destructive border-destructive/20",
@@ -477,24 +457,6 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
 
       {/* HUBSPOT SOCIAL FEED — temporarily hidden */}
       {false && <HubSpotSocialFeedTile />}
-
-
-      {/* RSVP SUMMARY — Kabuni Showcase Mumbai */}
-      <TileShell delay={0.125}>
-        <TileHeader
-          icon={CalendarCheck}
-          label="Kabuni Showcase Mumbai · RSVP Status"
-          action={
-            <button
-              onClick={() => navigate("/diary?event=e942181b-c52a-42a4-a0c2-1e2fdf499ed7")}
-              className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5"
-            >
-              Open <ExternalLink className="h-2.5 w-2.5" />
-            </button>
-          }
-        />
-        <RsvpSummaryTile />
-      </TileShell>
 
       {/* MY PENDING TASKS */}
       <MyPendingTasksTile />

@@ -85,7 +85,7 @@ export default function SchoolRegistrations() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `school-registrations-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.download = `registrations-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -95,7 +95,7 @@ export default function SchoolRegistrations() {
     const ws = XLSX.utils.json_to_sheet(exportRows());
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Registrations");
-    XLSX.writeFile(wb, `school-registrations-${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+    XLSX.writeFile(wb, `registrations-${format(new Date(), "yyyy-MM-dd")}.xlsx`);
   };
 
   if (loadingRole) {
@@ -112,7 +112,7 @@ export default function SchoolRegistrations() {
     <div className="container mx-auto p-6 max-w-6xl">
       <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">School Registrations</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Registrations</h1>
           <p className="text-sm text-muted-foreground">Submissions from the public registration form.</p>
         </div>
         <div className="flex items-center gap-2">

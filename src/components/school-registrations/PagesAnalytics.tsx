@@ -216,14 +216,16 @@ export default function PagesAnalytics({
         </Card>
       ) : (
         <div className="space-y-3">
-          <GroupBlock
-            label="Overall summary"
-            summary={query.data.overall.summary}
-            sources={query.data.overall.sources}
-            countries={query.data.overall.countries}
-            cities={query.data.overall.cities}
-            devices={query.data.overall.devices}
-          />
+          {!hideOverall && (
+            <GroupBlock
+              label="Overall summary"
+              summary={query.data.overall.summary}
+              sources={query.data.overall.sources}
+              countries={query.data.overall.countries}
+              cities={query.data.overall.cities}
+              devices={query.data.overall.devices}
+            />
+          )}
           {query.data.groups.map((g) => (
             <GroupBlock
               key={g.key}

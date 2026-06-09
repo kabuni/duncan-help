@@ -432,7 +432,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { action, question } = await req.json();
+    const { action, question, pages } = await req.json();
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Shared Google Analytics: always use the canonical (oldest) connected token,

@@ -366,12 +366,14 @@ const RESCHEDULE_TOOLS = [
   },
 ];
 
-const DOCUMENT_TOOLS = [
+// KB_TOOLS: always-on Postgres+pgvector knowledge base search.
+// MUST be the first thing the assistant tries for any informational query.
+const KB_TOOLS = [
   {
     type: "function",
     function: {
       name: "search_knowledge_base",
-      description: "Semantic search over the Kabuni Knowledge Base (documents uploaded via the Knowledge Base UI — handbooks, policies, brochures, playbooks, company docs). USE THIS FIRST whenever the user asks 'do we have a document/policy/handout on X', references company knowledge, or wants info that could plausibly live in an uploaded doc. Returns ranked passages with their source document title.",
+      description: "Semantic RAG search over the Kabuni Knowledge Base (documents uploaded via the Knowledge Base UI — handbooks, policies, brochures, playbooks, lists, reports, company docs). ALWAYS CALL THIS FIRST before any other search/retrieval tool whenever the user asks a question that could plausibly be answered by an uploaded document, references company knowledge, asks 'do we have…', 'what does X say about…', or names a file/policy/handbook/list/report. Returns ranked passages with the source document title. If this returns no relevant results, then (and only then) fall back to other sources (Google Drive, Azure Blob, web).",
       parameters: {
         type: "object",
         properties: {
@@ -382,6 +384,10 @@ const DOCUMENT_TOOLS = [
       },
     },
   },
+];
+
+// AZURE_DOC_TOOLS: Azure Blob storage browse/read — only when Azure is connected.
+const AZURE_DOC_TOOLS = [
   {
     type: "function",
     function: {
@@ -434,6 +440,9 @@ const DOCUMENT_TOOLS = [
     },
   },
 ];
+
+// Backwards-compat union. New code should prefer KB_TOOLS / AZURE_DOC_TOOLS.
+const DOCUMENT_TOOLS = [...KB_TOOLS, ...AZURE_DOC_TOOLS];
 
 
 

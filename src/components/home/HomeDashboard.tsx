@@ -398,6 +398,23 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
                   Top page: <span className="text-foreground font-medium">{web.topPage}</span>
                 </div>
               )}
+              {web?.trackedPages && web.trackedPages.length > 0 && (
+                <div className="col-span-3 mt-2 pt-2 border-t border-border/40 space-y-1.5">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tracked pages</div>
+                  {web.trackedPages.map((p) => (
+                    <div key={p.path} className="flex items-center justify-between gap-2 text-[11px]">
+                      <div className="min-w-0">
+                        <div className="text-foreground font-medium truncate">{p.label}</div>
+                        <div className="text-muted-foreground truncate">{p.path}</div>
+                      </div>
+                      <div className="text-right shrink-0 leading-tight">
+                        <div className="text-foreground font-semibold">{formatNumber(p.pageViews7d)} <span className="text-muted-foreground font-normal">· 7d</span></div>
+                        <div className="text-muted-foreground">{formatNumber(p.pageViews30d)} · 30d</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </TileShell>

@@ -17,6 +17,14 @@ export type GAHomeSummary = {
     sessions7d: number;
     pageViews7d: number;
     topPage: string | null;
+    trackedPages?: Array<{
+      label: string;
+      path: string;
+      pageViews7d: number;
+      activeUsers7d: number;
+      pageViews30d: number;
+      activeUsers30d: number;
+    }>;
   };
 };
 

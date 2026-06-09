@@ -6056,6 +6056,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
     ];
 
     const ALWAYS_ON_TOOLS = [
+      ...KB_TOOLS, // Knowledge Base RAG is always available — first port of call for any informational query.
       ...GOOGLE_FORMS_TOOLS,
       ...NDA_TOOLS,
       ...EXEC_SUMMARY_TOOLS,

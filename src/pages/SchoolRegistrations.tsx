@@ -112,7 +112,7 @@ export default function SchoolRegistrations() {
     <div className="container mx-auto p-6 max-w-6xl">
       <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">School Registrations</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Registrations</h1>
           <p className="text-sm text-muted-foreground">Submissions from the public registration form.</p>
         </div>
         <div className="flex items-center gap-2">

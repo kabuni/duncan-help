@@ -91,7 +91,8 @@ const AppContent = () => {
             <Route path="/purchase-orders" element={<PurchaseOrders />} />
             <Route path="/ea-inbox" element={<EAInbox />} />
             <Route path="/knowledge-base" element={<KnowledgeBase />} />
-            <Route path="/school-registrations" element={<SchoolRegistrations />} />
+            <Route path="/registrations" element={<SchoolRegistrations />} />
+            <Route path="/school-registrations" element={<Navigate to="/registrations" replace />} />
             <Route path="/travel" element={<Navigate to="/purchase-orders?tab=travel" replace />} />
             <Route path="/ceo" element={<Navigate to="/team-briefing" replace />} />
           </Route>

@@ -316,6 +316,92 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
   };
 }
 
+type PageGroup = { key: string; label: string; paths: string[] };
+
+async function getPageGroupAnalytics(accessToken: string, propertyId: string, paths: string[]) {
+  const dateRanges = [{ startDate: "30daysAgo", endDate: "today" }];
+  const filter = { filter: { fieldName: "pagePath", inListFilter: { values: paths } } };
+
+  const [summary, sources, countries, cities, devices] = await Promise.all([
+    runReport(accessToken, propertyId, {
+      dateRanges,
+      metrics: [
+        { name: "screenPageViews" },
+        { name: "totalUsers" },
+        { name: "sessions" },
+        { name: "engagementRate" },
+        { name: "userEngagementDuration" },
+        { name: "averageSessionDuration" },
+      ],
+      dimensionFilter: filter,
+    }).catch(() => ({ rows: [] })),
+    runReport(accessToken, propertyId, {
+      dateRanges,
+      dimensions: [{ name: "sessionDefaultChannelGroup" }],
+      metrics: [{ name: "sessions" }, { name: "totalUsers" }],
+      dimensionFilter: filter,
+      orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+      limit: 6,
+    }).catch(() => ({ rows: [] })),
+    runReport(accessToken, propertyId, {
+      dateRanges,
+      dimensions: [{ name: "country" }],
+      metrics: [{ name: "totalUsers" }, { name: "sessions" }],
+      dimensionFilter: filter,
+      orderBys: [{ metric: { metricName: "totalUsers" }, desc: true }],
+      limit: 6,
+    }).catch(() => ({ rows: [] })),
+    runReport(accessToken, propertyId, {
+      dateRanges,
+      dimensions: [{ name: "city" }],
+      metrics: [{ name: "totalUsers" }, { name: "sessions" }],
+      dimensionFilter: filter,
+      orderBys: [{ metric: { metricName: "totalUsers" }, desc: true }],
+      limit: 6,
+    }).catch(() => ({ rows: [] })),
+    runReport(accessToken, propertyId, {
+      dateRanges,
+      dimensions: [{ name: "deviceCategory" }],
+      metrics: [{ name: "totalUsers" }, { name: "sessions" }],
+      dimensionFilter: filter,
+      orderBys: [{ metric: { metricName: "totalUsers" }, desc: true }],
+      limit: 5,
+    }).catch(() => ({ rows: [] })),
+  ]);
+
+  const s = summary.rows?.[0];
+  const totalUsers = metricValue(s, 1);
+  const engagementSeconds = metricValue(s, 4);
+  return {
+    summary: {
+      pageViews: metricValue(s, 0),
+      users: totalUsers,
+      sessions: metricValue(s, 2),
+      engagementRate: metricValue(s, 3),
+      avgEngagementTimeSec: totalUsers > 0 ? engagementSeconds / totalUsers : 0,
+      avgSessionDurationSec: metricValue(s, 5),
+    },
+    sources: (sources.rows ?? []).map((r: any) => ({ label: dimensionValue(r, 0), sessions: metricValue(r, 0), users: metricValue(r, 1) })),
+    countries: (countries.rows ?? []).map((r: any) => ({ label: dimensionValue(r, 0), users: metricValue(r, 0), sessions: metricValue(r, 1) })),
+    cities: (cities.rows ?? []).map((r: any) => ({ label: dimensionValue(r, 0), users: metricValue(r, 0), sessions: metricValue(r, 1) })),
+    devices: (devices.rows ?? []).map((r: any) => ({ label: dimensionValue(r, 0), users: metricValue(r, 0), sessions: metricValue(r, 1) })),
+  };
+}
+
+async function getPagesAnalytics(accessToken: string, propertyId: string, groups: PageGroup[]) {
+  const allPaths = Array.from(new Set(groups.flatMap((g) => g.paths)));
+  const [overall, ...perGroup] = await Promise.all([
+    getPageGroupAnalytics(accessToken, propertyId, allPaths),
+    ...groups.map((g) => getPageGroupAnalytics(accessToken, propertyId, g.paths)),
+  ]);
+  return {
+    dateRange: { startDate: "30daysAgo", endDate: "today" },
+    overall,
+    groups: groups.map((g, i) => ({ key: g.key, label: g.label, paths: g.paths, ...perGroup[i] })),
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 async function answerQuestion(question: string, dashboard: any) {
   const data = await callLLMWithFallback({
     workflow: "google-analytics",
@@ -346,7 +432,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { action, question } = await req.json();
+    const { action, question, pages } = await req.json();
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Shared Google Analytics: always use the canonical (oldest) connected token,
@@ -390,6 +476,18 @@ serve(async (req) => {
     if (action === "home_summary") {
       const summary = await getHomeSummary(accessToken, propertyId);
       return new Response(JSON.stringify({ connected: true, ...summary }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (action === "pages_analytics") {
+      if (!Array.isArray(pages) || pages.length === 0) throw new Error("pages array is required");
+      const groups: PageGroup[] = pages.map((p: any, i: number) => ({
+        key: String(p.key ?? p.label ?? `group-${i}`),
+        label: String(p.label ?? p.key ?? `Page ${i + 1}`),
+        paths: Array.isArray(p.paths) ? p.paths.map(String) : [],
+      })).filter((g) => g.paths.length > 0);
+      if (!groups.length) throw new Error("Each page must include at least one path");
+      const result = await getPagesAnalytics(accessToken, propertyId, groups);
+      return new Response(JSON.stringify({ connected: true, ...result }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const dashboard = await getDashboard(accessToken, propertyId);

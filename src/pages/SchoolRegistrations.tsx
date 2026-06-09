@@ -10,6 +10,14 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
 import RegistrationsAnalytics from "@/components/school-registrations/RegistrationsAnalytics";
+import RegistrationsSummaryCards from "@/components/school-registrations/RegistrationsSummaryCards";
+import PagesAnalytics, { type PageGroup } from "@/components/school-registrations/PagesAnalytics";
+
+const TRACKED_PAGE_GROUPS: PageGroup[] = [
+  { key: "schools", label: "Schools", paths: ["/schools", "/schools/"] },
+  { key: "register-school", label: "School Registration", paths: ["/register-school", "/register-school/"] },
+  { key: "kabuni-premier-league", label: "Kabuni Premier League", paths: ["/kabuni-premier-league", "/kabuni-premier-league/"] },
+];
 
 type Registration = {
   id: string;
@@ -122,6 +130,10 @@ export default function SchoolRegistrations() {
           </Button>
         </div>
       </div>
+
+      <PagesAnalytics groups={TRACKED_PAGE_GROUPS} />
+
+      <RegistrationsSummaryCards rows={rows} />
 
       <RegistrationsAnalytics rows={rows} />
 

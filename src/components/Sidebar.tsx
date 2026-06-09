@@ -245,7 +245,7 @@ const Sidebar = ({
 
         {isAdmin && (
           <RouterNavLink
-            to="/school-registrations"
+            to="/registrations"
             onClick={() => onMobileClose?.()}
             className={({ isActive }) =>
               cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
@@ -254,7 +254,7 @@ const Sidebar = ({
             }
           >
             <School className="h-4 w-4" />
-            School Registrations
+            Registrations
           </RouterNavLink>
         )}
 

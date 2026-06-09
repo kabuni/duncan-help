@@ -173,11 +173,7 @@ export default function SchoolRegistrations() {
             </div>
           </div>
 
-          <PagesAnalytics title="Schools Analytics" groups={SCHOOLS_PAGE_GROUPS} />
-
           <RegistrationsSummaryCards rows={rows} />
-
-          <RegistrationsAnalytics rows={rows} />
 
           <Card>
             <CardHeader>
@@ -243,6 +239,10 @@ export default function SchoolRegistrations() {
               )}
             </CardContent>
           </Card>
+
+          <PagesAnalytics title="Schools Analytics" groups={SCHOOLS_PAGE_GROUPS} hideOverall />
+
+          <RegistrationsAnalytics rows={rows} />
         </TabsContent>
 
         {/* KPL */}

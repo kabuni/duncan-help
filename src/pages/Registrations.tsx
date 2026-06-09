@@ -13,6 +13,7 @@ import * as XLSX from "xlsx";
 import RegistrationsAnalytics from "@/components/school-registrations/RegistrationsAnalytics";
 import RegistrationsSummaryCards from "@/components/school-registrations/RegistrationsSummaryCards";
 import PagesAnalytics, { type PageGroup } from "@/components/school-registrations/PagesAnalytics";
+import GlobalRegistrationsSummary from "@/components/school-registrations/GlobalRegistrationsSummary";
 
 type Registration = {
   id: string;
@@ -39,9 +40,11 @@ const KPL_PAGE_GROUPS: PageGroup[] = [
 // Category registry — add new entries here to scale (Events, Recruitment, Scout, etc.)
 type CategoryKey = "schools" | "kpl";
 const CATEGORIES: { key: CategoryKey; label: string }[] = [
-  { key: "schools", label: "Schools" },
-  { key: "kpl", label: "KPL" },
+  { key: "schools", label: "Schools Registrations" },
+  { key: "kpl", label: "KPL Registrations" },
 ];
+
+const ALL_PAGE_GROUPS: PageGroup[] = [...SCHOOLS_PAGE_GROUPS, ...KPL_PAGE_GROUPS];
 
 export default function SchoolRegistrations() {
   const { isAdmin, isLoading: loadingRole } = useIsAdmin();
@@ -139,10 +142,16 @@ export default function SchoolRegistrations() {
         </Button>
       </div>
 
+      <GlobalRegistrationsSummary totalRegistrations={rows.length} groups={ALL_PAGE_GROUPS} />
+
       <Tabs value={tab} onValueChange={(v) => setTab(v as CategoryKey)} className="space-y-6">
-        <TabsList>
+        <TabsList className="h-auto w-full justify-start gap-2 bg-transparent p-0 border-b rounded-none">
           {CATEGORIES.map((c) => (
-            <TabsTrigger key={c.key} value={c.key}>
+            <TabsTrigger
+              key={c.key}
+              value={c.key}
+              className="rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 text-base font-semibold text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+            >
               {c.label}
             </TabsTrigger>
           ))}
@@ -164,11 +173,7 @@ export default function SchoolRegistrations() {
             </div>
           </div>
 
-          <PagesAnalytics title="Schools Analytics" groups={SCHOOLS_PAGE_GROUPS} />
-
           <RegistrationsSummaryCards rows={rows} />
-
-          <RegistrationsAnalytics rows={rows} />
 
           <Card>
             <CardHeader>
@@ -234,6 +239,10 @@ export default function SchoolRegistrations() {
               )}
             </CardContent>
           </Card>
+
+          <PagesAnalytics title="Schools Analytics" groups={SCHOOLS_PAGE_GROUPS} hideOverall />
+
+          <RegistrationsAnalytics rows={rows} />
         </TabsContent>
 
         {/* KPL */}
@@ -251,8 +260,6 @@ export default function SchoolRegistrations() {
               </Button>
             </div>
           </div>
-
-          <PagesAnalytics title="Kabuni Premier League Analytics" groups={KPL_PAGE_GROUPS} />
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Card>
@@ -290,6 +297,8 @@ export default function SchoolRegistrations() {
               </div>
             </CardContent>
           </Card>
+
+          <PagesAnalytics title="Kabuni Premier League Analytics" groups={KPL_PAGE_GROUPS} hideOverall />
         </TabsContent>
       </Tabs>
     </div>

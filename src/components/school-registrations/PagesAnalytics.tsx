@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, AlertCircle, Globe } from "lucide-react";
+import { Loader2, AlertCircle, Globe, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -135,12 +137,20 @@ function GroupBlock({
       </CardHeader>
       <CardContent className="space-y-4">
         <MetricRow summary={summary} />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
-          <MiniList title="Top Traffic Sources" items={sources} metric="sessions" />
-          <MiniList title="Top Countries" items={countries} />
-          <MiniList title="Top Cities" items={cities} />
-          <MiniList title="Device Breakdown" items={devices} />
-        </div>
+        <Collapsible>
+          <CollapsibleTrigger className="group flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+            <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
+            Analytics Breakdown
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <MiniList title="Top Traffic Sources" items={sources} metric="sessions" />
+              <MiniList title="Top Countries" items={countries} />
+              <MiniList title="Top Cities" items={cities} />
+              <MiniList title="Device Breakdown" items={devices} />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );
@@ -149,9 +159,11 @@ function GroupBlock({
 export default function PagesAnalytics({
   title = "Schools & Kabuni Premier League Analytics",
   groups,
+  hideOverall = false,
 }: {
   title?: string;
   groups: PageGroup[];
+  hideOverall?: boolean;
 }) {
   const { session } = useAuth();
 
@@ -204,14 +216,16 @@ export default function PagesAnalytics({
         </Card>
       ) : (
         <div className="space-y-3">
-          <GroupBlock
-            label="Overall summary"
-            summary={query.data.overall.summary}
-            sources={query.data.overall.sources}
-            countries={query.data.overall.countries}
-            cities={query.data.overall.cities}
-            devices={query.data.overall.devices}
-          />
+          {!hideOverall && (
+            <GroupBlock
+              label="Overall summary"
+              summary={query.data.overall.summary}
+              sources={query.data.overall.sources}
+              countries={query.data.overall.countries}
+              cities={query.data.overall.cities}
+              devices={query.data.overall.devices}
+            />
+          )}
           {query.data.groups.map((g) => (
             <GroupBlock
               key={g.key}

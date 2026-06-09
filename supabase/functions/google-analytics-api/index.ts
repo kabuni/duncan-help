@@ -184,13 +184,20 @@ async function getDashboard(accessToken: string, propertyId: string) {
   };
 }
 
+const TRACKED_PAGES: { label: string; paths: string[] }[] = [
+  { label: "Kabuni Premier League", paths: ["/kabuni-premier-league", "/kabuni-premier-league/"] },
+  { label: "Kabuni Schools", paths: ["/schools", "/schools/"] },
+];
+
 async function getHomeSummary(accessToken: string, propertyId: string) {
   const last30 = [{ startDate: "30daysAgo", endDate: "today" }];
   const prev30 = [{ startDate: "60daysAgo", endDate: "31daysAgo" }];
   const last7 = [{ startDate: "7daysAgo", endDate: "today" }];
   const today = [{ startDate: "today", endDate: "today" }];
 
-  const [playLast30, playPrev30, countriesToday, dailyPlay, web7d, topPage7d] = await Promise.all([
+  const trackedPaths = TRACKED_PAGES.flatMap((p) => p.paths);
+
+  const [playLast30, playPrev30, countriesToday, dailyPlay, web7d, topPage7d, tracked7d, tracked30d] = await Promise.all([
     runReport(accessToken, propertyId, {
       dateRanges: last30,
       metrics: [{ name: "userEngagementDuration" }, { name: "activeUsers" }],
@@ -223,6 +230,24 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
       orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
       limit: 1,
     }).catch(() => ({ rows: [] })),
+    runReport(accessToken, propertyId, {
+      dateRanges: last7,
+      dimensions: [{ name: "pagePath" }],
+      metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
+      dimensionFilter: {
+        filter: { fieldName: "pagePath", inListFilter: { values: trackedPaths } },
+      },
+      limit: 50,
+    }).catch(() => ({ rows: [] })),
+    runReport(accessToken, propertyId, {
+      dateRanges: last30,
+      dimensions: [{ name: "pagePath" }],
+      metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
+      dimensionFilter: {
+        filter: { fieldName: "pagePath", inListFilter: { values: trackedPaths } },
+      },
+      limit: 50,
+    }).catch(() => ({ rows: [] })),
   ]);
 
   const secondsLast30 = metricValue(playLast30.rows?.[0], 0);
@@ -241,6 +266,33 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
   const webRow = web7d.rows?.[0];
   const topPagePath = topPage7d.rows?.[0]?.dimensionValues?.[0]?.value ?? null;
 
+  const sumForPaths = (rows: any[], paths: string[]) => {
+    const set = new Set(paths);
+    let views = 0;
+    let users = 0;
+    for (const r of rows ?? []) {
+      const p = dimensionValue(r, 0);
+      if (set.has(p)) {
+        views += metricValue(r, 0);
+        users += metricValue(r, 1);
+      }
+    }
+    return { views, users };
+  };
+
+  const trackedPages = TRACKED_PAGES.map((p) => {
+    const w = sumForPaths(tracked7d.rows ?? [], p.paths);
+    const m = sumForPaths(tracked30d.rows ?? [], p.paths);
+    return {
+      label: p.label,
+      path: p.paths[0],
+      pageViews7d: w.views,
+      activeUsers7d: w.users,
+      pageViews30d: m.views,
+      activeUsers30d: m.users,
+    };
+  });
+
   return {
     play: {
       hoursLast30: Math.round(hoursLast30),
@@ -254,6 +306,7 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
       sessions7d: metricValue(webRow, 1),
       pageViews7d: metricValue(webRow, 2),
       topPage: topPagePath,
+      trackedPages,
     },
     generatedAt: new Date().toISOString(),
   };

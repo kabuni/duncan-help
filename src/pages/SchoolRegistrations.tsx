@@ -9,6 +9,7 @@ import { Loader2, Trash2, RefreshCw, Download, FileSpreadsheet } from "lucide-re
 import { toast } from "sonner";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
+import RegistrationsAnalytics from "@/components/school-registrations/RegistrationsAnalytics";
 
 type Registration = {
   id: string;

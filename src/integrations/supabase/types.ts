@@ -691,6 +691,45 @@ export type Database = {
         }
         Relationships: []
       }
+      correctness_violations: {
+        Row: {
+          created_at: string
+          draft_preview: string | null
+          id: string
+          model: string | null
+          read_results_seen: Json
+          turn_id: string | null
+          user_id: string | null
+          violation_count: number
+          violation_details: Json
+          violation_kinds: string[]
+        }
+        Insert: {
+          created_at?: string
+          draft_preview?: string | null
+          id?: string
+          model?: string | null
+          read_results_seen?: Json
+          turn_id?: string | null
+          user_id?: string | null
+          violation_count?: number
+          violation_details?: Json
+          violation_kinds?: string[]
+        }
+        Update: {
+          created_at?: string
+          draft_preview?: string | null
+          id?: string
+          model?: string | null
+          read_results_seen?: Json
+          turn_id?: string | null
+          user_id?: string | null
+          violation_count?: number
+          violation_details?: Json
+          violation_kinds?: string[]
+        }
+        Relationships: []
+      }
       departments: {
         Row: {
           created_at: string

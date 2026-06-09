@@ -10,7 +10,10 @@ import {
   useHubSpotSocialFeed,
 } from "@/hooks/useHomeDashboard";
 
-const formatNumber = (n: number) => new Intl.NumberFormat("en-US").format(Math.round(n));
+const formatNumber = (n: number | undefined | null) => {
+  if (n == null || Number.isNaN(n)) return "—";
+  return new Intl.NumberFormat("en-US").format(Math.round(n));
+};
 
 const Sparkline = ({ data }: { data: { date: string; hours: number }[] }) => {
   if (!data?.length) return null;
@@ -411,7 +414,7 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
                         <div className="text-foreground font-semibold">{formatNumber(p.pageViewsToday)} <span className="text-muted-foreground font-normal">· today</span></div>
                         <div className="text-muted-foreground">
                           {formatNumber(p.pageViewsYesterday)} · yest
-                          {p.deltaPct !== null && (
+                          {p.deltaPct != null && !Number.isNaN(p.deltaPct) && (
                             <span className={`ml-1.5 font-medium ${p.deltaPct >= 0 ? "text-norman-success" : "text-destructive"}`}>
                               {p.deltaPct >= 0 ? "+" : ""}{p.deltaPct}%
                             </span>

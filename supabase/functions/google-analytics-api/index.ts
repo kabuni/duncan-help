@@ -284,7 +284,8 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
   const trackedPages = TRACKED_PAGES.map((p) => {
     const t = sumForPaths(trackedToday.rows ?? [], p.paths);
     const y = sumForPaths(trackedYesterday.rows ?? [], p.paths);
-    const deltaPct = y.views > 0 ? ((t.views - y.views) / y.views) * 100 : (t.views > 0 ? null : 0);
+    let deltaPct = y.views > 0 ? ((t.views - y.views) / y.views) * 100 : (t.views > 0 ? null : 0);
+    if (Number.isNaN(deltaPct as any)) deltaPct = null;
     return {
       label: p.label,
       path: p.paths[0],

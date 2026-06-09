@@ -123,8 +123,10 @@ export default function SchoolRegistrations() {
         </div>
       </div>
 
+      <RegistrationsAnalytics rows={rows} />
 
       <Card>
+
         <CardHeader>
           <CardTitle className="text-base">{rows.length} {rows.length === 1 ? "registration" : "registrations"}</CardTitle>
         </CardHeader>

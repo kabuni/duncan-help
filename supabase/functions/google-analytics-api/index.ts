@@ -231,7 +231,7 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
       limit: 1,
     }).catch(() => ({ rows: [] })),
     runReport(accessToken, propertyId, {
-      dateRanges: last7,
+      dateRanges: today,
       dimensions: [{ name: "pagePath" }],
       metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
       dimensionFilter: {
@@ -240,7 +240,7 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
       limit: 50,
     }).catch(() => ({ rows: [] })),
     runReport(accessToken, propertyId, {
-      dateRanges: last30,
+      dateRanges: [{ startDate: "yesterday", endDate: "yesterday" }],
       dimensions: [{ name: "pagePath" }],
       metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
       dimensionFilter: {
@@ -248,6 +248,7 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
       },
       limit: 50,
     }).catch(() => ({ rows: [] })),
+
   ]);
 
   const secondsLast30 = metricValue(playLast30.rows?.[0], 0);

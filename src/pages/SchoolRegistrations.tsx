@@ -9,6 +9,7 @@ import { Loader2, Trash2, RefreshCw, Download, FileSpreadsheet } from "lucide-re
 import { toast } from "sonner";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
+import RegistrationsAnalytics from "@/components/school-registrations/RegistrationsAnalytics";
 
 type Registration = {
   id: string;
@@ -122,8 +123,10 @@ export default function SchoolRegistrations() {
         </div>
       </div>
 
+      <RegistrationsAnalytics rows={rows} />
 
       <Card>
+
         <CardHeader>
           <CardTitle className="text-base">{rows.length} {rows.length === 1 ? "registration" : "registrations"}</CardTitle>
         </CardHeader>

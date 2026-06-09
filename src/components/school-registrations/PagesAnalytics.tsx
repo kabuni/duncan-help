@@ -137,12 +137,20 @@ function GroupBlock({
       </CardHeader>
       <CardContent className="space-y-4">
         <MetricRow summary={summary} />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
-          <MiniList title="Top Traffic Sources" items={sources} metric="sessions" />
-          <MiniList title="Top Countries" items={countries} />
-          <MiniList title="Top Cities" items={cities} />
-          <MiniList title="Device Breakdown" items={devices} />
-        </div>
+        <Collapsible>
+          <CollapsibleTrigger className="group flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+            <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
+            Analytics Breakdown
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <MiniList title="Top Traffic Sources" items={sources} metric="sessions" />
+              <MiniList title="Top Countries" items={countries} />
+              <MiniList title="Top Cities" items={cities} />
+              <MiniList title="Device Breakdown" items={devices} />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );

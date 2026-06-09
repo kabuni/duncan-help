@@ -408,8 +408,15 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
                         <div className="text-muted-foreground truncate">{p.path}</div>
                       </div>
                       <div className="text-right shrink-0 leading-tight">
-                        <div className="text-foreground font-semibold">{formatNumber(p.pageViews7d)} <span className="text-muted-foreground font-normal">· 7d</span></div>
-                        <div className="text-muted-foreground">{formatNumber(p.pageViews30d)} · 30d</div>
+                        <div className="text-foreground font-semibold">{formatNumber(p.pageViewsToday)} <span className="text-muted-foreground font-normal">· today</span></div>
+                        <div className="text-muted-foreground">
+                          {formatNumber(p.pageViewsYesterday)} · yest
+                          {p.deltaPct !== null && (
+                            <span className={`ml-1.5 font-medium ${p.deltaPct >= 0 ? "text-norman-success" : "text-destructive"}`}>
+                              {p.deltaPct >= 0 ? "+" : ""}{p.deltaPct}%
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}

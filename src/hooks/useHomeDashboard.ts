@@ -20,10 +20,11 @@ export type GAHomeSummary = {
     trackedPages?: Array<{
       label: string;
       path: string;
-      pageViews7d: number;
-      activeUsers7d: number;
-      pageViews30d: number;
-      activeUsers30d: number;
+      pageViewsToday: number;
+      activeUsersToday: number;
+      pageViewsYesterday: number;
+      activeUsersYesterday: number;
+      deltaPct: number | null;
     }>;
   };
 };

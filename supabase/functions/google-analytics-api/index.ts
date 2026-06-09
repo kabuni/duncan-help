@@ -197,7 +197,7 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
 
   const trackedPaths = TRACKED_PAGES.flatMap((p) => p.paths);
 
-  const [playLast30, playPrev30, countriesToday, dailyPlay, web7d, topPage7d, tracked7d, tracked30d] = await Promise.all([
+  const [playLast30, playPrev30, countriesToday, dailyPlay, web7d, topPage7d, trackedToday, trackedYesterday] = await Promise.all([
     runReport(accessToken, propertyId, {
       dateRanges: last30,
       metrics: [{ name: "userEngagementDuration" }, { name: "activeUsers" }],
@@ -231,7 +231,7 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
       limit: 1,
     }).catch(() => ({ rows: [] })),
     runReport(accessToken, propertyId, {
-      dateRanges: last7,
+      dateRanges: today,
       dimensions: [{ name: "pagePath" }],
       metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
       dimensionFilter: {
@@ -240,7 +240,7 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
       limit: 50,
     }).catch(() => ({ rows: [] })),
     runReport(accessToken, propertyId, {
-      dateRanges: last30,
+      dateRanges: [{ startDate: "yesterday", endDate: "yesterday" }],
       dimensions: [{ name: "pagePath" }],
       metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
       dimensionFilter: {
@@ -248,6 +248,7 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
       },
       limit: 50,
     }).catch(() => ({ rows: [] })),
+
   ]);
 
   const secondsLast30 = metricValue(playLast30.rows?.[0], 0);
@@ -281,15 +282,17 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
   };
 
   const trackedPages = TRACKED_PAGES.map((p) => {
-    const w = sumForPaths(tracked7d.rows ?? [], p.paths);
-    const m = sumForPaths(tracked30d.rows ?? [], p.paths);
+    const t = sumForPaths(trackedToday.rows ?? [], p.paths);
+    const y = sumForPaths(trackedYesterday.rows ?? [], p.paths);
+    const deltaPct = y.views > 0 ? ((t.views - y.views) / y.views) * 100 : (t.views > 0 ? null : 0);
     return {
       label: p.label,
       path: p.paths[0],
-      pageViews7d: w.views,
-      activeUsers7d: w.users,
-      pageViews30d: m.views,
-      activeUsers30d: m.users,
+      pageViewsToday: t.views,
+      activeUsersToday: t.users,
+      pageViewsYesterday: y.views,
+      activeUsersYesterday: y.users,
+      deltaPct: deltaPct === null ? null : Math.round(deltaPct * 10) / 10,
     };
   });
 

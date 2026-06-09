@@ -159,9 +159,11 @@ function GroupBlock({
 export default function PagesAnalytics({
   title = "Schools & Kabuni Premier League Analytics",
   groups,
+  hideOverall = false,
 }: {
   title?: string;
   groups: PageGroup[];
+  hideOverall?: boolean;
 }) {
   const { session } = useAuth();
 

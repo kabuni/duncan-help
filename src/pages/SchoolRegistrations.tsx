@@ -85,7 +85,7 @@ export default function SchoolRegistrations() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `school-registrations-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.download = `registrations-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

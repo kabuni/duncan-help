@@ -6085,7 +6085,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
           // reschedule_event must remain available even without a personal Google Calendar token
           // (it covers local Planner rows and uses the Duncan calendar identity for Google events).
           if (CALENDAR_TOOLS.includes(t) && !calendarAccessToken && name !== "reschedule_event") return false;
-          if (DOCUMENT_TOOLS.includes(t) && !azureStorageAvailable) return false;
+          if (AZURE_DOC_TOOLS.includes(t) && !azureStorageAvailable) return false;
           
           
           if (SLACK_TOOLS.includes(t) && !slackConnection) return false;

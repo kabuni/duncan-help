@@ -230,21 +230,6 @@ const Sidebar = ({
 
         {isAdmin && (
           <RouterNavLink
-            to="/ea-inbox"
-            onClick={() => onMobileClose?.()}
-            className={({ isActive }) =>
-              cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
-                isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              )
-            }
-          >
-            <Inbox className="h-4 w-4" />
-            EA Inbox
-          </RouterNavLink>
-        )}
-
-        {isAdmin && (
-          <RouterNavLink
             to="/registrations"
             onClick={() => onMobileClose?.()}
             className={({ isActive }) =>
@@ -258,7 +243,20 @@ const Sidebar = ({
           </RouterNavLink>
         )}
 
-
+        {isAdmin && (
+          <RouterNavLink
+            to="/ea-inbox"
+            onClick={() => onMobileClose?.()}
+            className={({ isActive }) =>
+              cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              )
+            }
+          >
+            <Inbox className="h-4 w-4" />
+            EA Inbox
+          </RouterNavLink>
+        )}
 
         {canViewBriefing(user?.email) && (
           <RouterNavLink

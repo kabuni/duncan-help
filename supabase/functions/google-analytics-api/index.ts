@@ -282,15 +282,17 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
   };
 
   const trackedPages = TRACKED_PAGES.map((p) => {
-    const w = sumForPaths(tracked7d.rows ?? [], p.paths);
-    const m = sumForPaths(tracked30d.rows ?? [], p.paths);
+    const t = sumForPaths(trackedToday.rows ?? [], p.paths);
+    const y = sumForPaths(trackedYesterday.rows ?? [], p.paths);
+    const deltaPct = y.views > 0 ? ((t.views - y.views) / y.views) * 100 : (t.views > 0 ? null : 0);
     return {
       label: p.label,
       path: p.paths[0],
-      pageViews7d: w.views,
-      activeUsers7d: w.users,
-      pageViews30d: m.views,
-      activeUsers30d: m.users,
+      pageViewsToday: t.views,
+      activeUsersToday: t.users,
+      pageViewsYesterday: y.views,
+      activeUsersYesterday: y.users,
+      deltaPct: deltaPct === null ? null : Math.round(deltaPct * 10) / 10,
     };
   });
 

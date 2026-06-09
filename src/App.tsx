@@ -38,7 +38,7 @@ import EAInbox from "./pages/EAInbox";
 import SlackCallback from "./pages/SlackCallback";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import RegisterSchool from "./pages/RegisterSchool";
-import SchoolRegistrations from "./pages/SchoolRegistrations";
+import Registrations from "./pages/Registrations";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();

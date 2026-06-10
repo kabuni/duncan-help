@@ -182,25 +182,27 @@ export default function SettingsIntegrations({ onNavigate: _onNavigate }: Props)
             className="absolute inset-0 bg-background/80 backdrop-blur-sm"
             onClick={() => setOpenRow(null)}
           />
-          <div className="relative z-10 w-full max-w-md mx-4 rounded-2xl border border-border bg-card shadow-2xl p-6">
+          <div className="relative z-10 w-full max-w-md mx-4 max-h-[85vh] rounded-2xl border border-border bg-card shadow-2xl flex flex-col overflow-hidden">
             <button
               onClick={() => setOpenRow(null)}
-              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors z-10"
             >
               <X className="h-4 w-4" />
             </button>
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary shrink-0">
-                <openRow.icon className="h-5 w-5 text-secondary-foreground" />
-              </div>
-              <div className="min-w-0">
-                <h4 className="text-base font-semibold text-foreground">{openRow.name}</h4>
-                <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mt-0.5">
-                  {openRow.category} · {openRow.scope === "company" ? "Company" : "Personal"}
-                </p>
+            <div className="shrink-0 p-6 pb-0">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary shrink-0">
+                  <openRow.icon className="h-5 w-5 text-secondary-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-base font-semibold text-foreground">{openRow.name}</h4>
+                  <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mt-0.5">
+                    {openRow.category} · {openRow.scope === "company" ? "Company" : "Personal"}
+                  </p>
+                </div>
               </div>
             </div>
-            <div className="space-y-4 pt-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 pt-4 space-y-4">
               <p className="text-sm text-muted-foreground leading-6">{openRow.description}</p>
 
               <div

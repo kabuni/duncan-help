@@ -66,7 +66,7 @@ export default function SettingsGmail({ embedded = false }: { embedded?: boolean
 
   if (!status?.connected) {
     return (
-      <div className="px-6 py-8">
+      <div className={embedded ? "" : "px-6 py-8"}>
         <div className="flex items-start gap-3">
           <Mail className="h-5 w-5 text-muted-foreground mt-0.5" />
           <div>
@@ -81,7 +81,7 @@ export default function SettingsGmail({ embedded = false }: { embedded?: boolean
   }
 
   return (
-    <div className="px-6 py-6 space-y-6">
+    <div className={embedded ? "space-y-6" : "px-6 py-6 space-y-6"}>
       <div>
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />

@@ -37,14 +37,20 @@ const KPL_PAGE_GROUPS: PageGroup[] = [
   { key: "kabuni-premier-league", label: "Kabuni Premier League", paths: ["/kabuni-premier-league", "/kabuni-premier-league/"] },
 ];
 
+const EVENTS_PAGE_GROUPS: PageGroup[] = [
+  { key: "events", label: "Events", paths: ["/events", "/events/"] },
+  { key: "register-event", label: "Event Registration", paths: ["/register-event", "/register-event/"] },
+];
+
 // Category registry — add new entries here to scale (Events, Recruitment, Scout, etc.)
-type CategoryKey = "schools" | "kpl";
+type CategoryKey = "schools" | "kpl" | "events";
 const CATEGORIES: { key: CategoryKey; label: string }[] = [
   { key: "schools", label: "Schools Registrations" },
   { key: "kpl", label: "KPL Registrations" },
+  { key: "events", label: "Event Registrations" },
 ];
 
-const ALL_PAGE_GROUPS: PageGroup[] = [...SCHOOLS_PAGE_GROUPS, ...KPL_PAGE_GROUPS];
+const ALL_PAGE_GROUPS: PageGroup[] = [...SCHOOLS_PAGE_GROUPS, ...KPL_PAGE_GROUPS, ...EVENTS_PAGE_GROUPS];
 
 export default function SchoolRegistrations() {
   const { isAdmin, isLoading: loadingRole } = useIsAdmin();

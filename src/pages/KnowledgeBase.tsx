@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Loader2, BookOpen, Upload as UploadIcon } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Loader2, BookOpen, Upload as UploadIcon, Settings as SettingsIcon, BarChart3, FileStack } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import KBRecentUploads from "@/components/kb/KBRecentUploads";
 import KBObservability from "@/components/kb/KBObservability";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { getFileType } from "@/lib/kbTaxonomy";
+import { Label } from "@/components/ui/label";
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -24,17 +25,6 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
-}
-
-function StepLabel({ n, children }: { n: number; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">
-        {n}
-      </span>
-      <Label className="text-sm font-medium">{children}</Label>
-    </div>
-  );
 }
 
 export default function KnowledgeBase() {
@@ -109,7 +99,7 @@ export default function KnowledgeBase() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10 space-y-10">
+    <div className="mx-auto max-w-6xl px-6 py-10 space-y-8">
       <header className="flex items-start gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
           <BookOpen className="h-5 w-5 text-muted-foreground" />
@@ -117,62 +107,82 @@ export default function KnowledgeBase() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Knowledge Base</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Upload documents to train Duncan. Company files are searchable by everyone; private files stay with you.
+            Upload documents to train Duncan, manage what's indexed, and monitor retrieval quality.
           </p>
         </div>
       </header>
 
-      <section className="rounded-xl border bg-card">
-        <div className="border-b px-6 py-4">
-          <h2 className="text-sm font-semibold">New upload</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">PDF, DOCX, XLSX, TXT, CSV · max 25 MB each</p>
-        </div>
+      <Tabs defaultValue="documents" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="documents" className="gap-2"><FileStack className="h-4 w-4" />Documents</TabsTrigger>
+          {isAdmin && <TabsTrigger value="analytics" className="gap-2"><BarChart3 className="h-4 w-4" />Analytics</TabsTrigger>}
+          <TabsTrigger value="settings" className="gap-2"><SettingsIcon className="h-4 w-4" />Settings</TabsTrigger>
+        </TabsList>
 
-        <div className="divide-y">
-          <div className="px-6 py-5 space-y-3">
-            <StepLabel n={1}>Files</StepLabel>
-            <KBDropzone files={files} onChange={setFiles} />
-          </div>
+        <TabsContent value="documents" className="space-y-6">
+          {/* Compact upload card */}
+          <section className="rounded-xl border bg-card">
+            <div className="flex items-center justify-between border-b px-5 py-3">
+              <div>
+                <h2 className="text-sm font-semibold">Upload documents</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">PDF, DOCX, XLSX, TXT, CSV · max 25 MB each</p>
+              </div>
+              <Button onClick={upload} disabled={!canSubmit} size="sm">
+                {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UploadIcon className="h-4 w-4 mr-2" />}
+                Upload{files.length > 0 ? ` (${files.length})` : ""}
+              </Button>
+            </div>
 
-          <div className="px-6 py-5 space-y-3">
-            <StepLabel n={2}>Visibility</StepLabel>
-            <KBScopePicker value={scope} onChange={setScope} />
-          </div>
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 p-5">
+              <div className="lg:col-span-3">
+                <KBDropzone files={files} onChange={setFiles} />
+              </div>
 
-          {scope === "public" && (
-            <div className="px-6 py-5 space-y-3">
-              <StepLabel n={3}>Categorise</StepLabel>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <KBCategorySelect value={category} onChange={(v) => { setCategory(v); setSubcategory(""); }} />
-                {category && (
-                  <KBSubcategorySelect category={category} value={subcategory} onChange={setSubcategory} />
+              <div className="lg:col-span-2 space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Visibility</Label>
+                  <KBScopePicker value={scope} onChange={setScope} />
+                </div>
+
+                {scope === "public" && (
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Category</Label>
+                    <div className="space-y-2">
+                      <KBCategorySelect value={category} onChange={(v) => { setCategory(v); setSubcategory(""); }} />
+                      {category && (
+                        <KBSubcategorySelect category={category} value={subcategory} onChange={setSubcategory} />
+                      )}
+                    </div>
+                  </div>
                 )}
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tags <span className="normal-case text-[10px] text-muted-foreground/70">(optional)</span></Label>
+                  <KBTagsInput tags={tags} onChange={setTags} />
+                </div>
               </div>
             </div>
-          )}
+          </section>
 
-          <div className="px-6 py-5 space-y-3">
-            <StepLabel n={scope === "public" ? 4 : 3}>Tags <span className="text-xs font-normal text-muted-foreground">(optional)</span></StepLabel>
-            <KBTagsInput tags={tags} onChange={setTags} />
-          </div>
-        </div>
+          <KBRecentUploads refreshKey={refreshKey} />
+        </TabsContent>
 
-        <div className="flex items-center justify-between border-t bg-muted/30 px-6 py-3 rounded-b-xl">
-          <p className="text-xs text-muted-foreground">
-            {files.length === 0
-              ? "Add at least one file to continue."
-              : `${files.length} file${files.length === 1 ? "" : "s"} ready.`}
-          </p>
-          <Button onClick={upload} disabled={!canSubmit} size="sm">
-            {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UploadIcon className="h-4 w-4 mr-2" />}
-            Upload
-          </Button>
-        </div>
-      </section>
+        {isAdmin && (
+          <TabsContent value="analytics" className="space-y-6">
+            <KBObservability />
+          </TabsContent>
+        )}
 
-      <KBRecentUploads refreshKey={refreshKey} />
-
-      {isAdmin && <KBObservability />}
+        <TabsContent value="settings">
+          <section className="rounded-xl border bg-card p-12 text-center">
+            <SettingsIcon className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
+            <h3 className="text-sm font-semibold">Knowledge Base settings</h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+              Retention rules, chunk sizing, embedding model, and re-index controls will live here. Nothing to configure yet.
+            </p>
+          </section>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -64,24 +64,39 @@ function QualityCell({ r }: { r: DocRow }) {
   }
   const density = pages && chars ? Math.round(chars / pages) : null;
   const lowDensity = r.file_type === "pdf" && density != null && pages! > 1 && density < 200;
-  return (
-    <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-      {pages != null && <span>{pages}p</span>}
-      {chars != null && <span>· {chars.toLocaleString()}c</span>}
-      {chunks != null && <span>· {chunks} chunks</span>}
-      {lowDensity && (
-        <TooltipProvider delayDuration={150}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <AlertTriangle className="h-3 w-3 text-amber-500" />
-            </TooltipTrigger>
-            <TooltipContent className="max-w-xs text-xs">
-              Low text density ({density} chars/page). Likely image-based PDF — OCR needed.
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      )}
+  const lowChunks = r.status === "ready" && chunks != null && chunks < 2 && (pages == null || pages > 1);
+  const warn = lowDensity || lowChunks;
+
+  const tooltip = (
+    <div className="space-y-0.5">
+      {pages != null && <div>Pages: <span className="font-medium">{pages}</span></div>}
+      {chars != null && <div>Characters: <span className="font-medium">{chars.toLocaleString()}</span></div>}
+      {chunks != null && <div>Chunks: <span className="font-medium">{chunks}</span></div>}
+      {density != null && <div>Density: <span className="font-medium">{density}</span> c/page</div>}
+      {lowDensity && <div className="mt-1 text-amber-500">Low text density — likely image-based PDF.</div>}
+      {lowChunks && <div className="mt-1 text-amber-500">Very few chunks — content may have failed to extract cleanly.</div>}
     </div>
+  );
+
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="inline-flex items-center gap-1.5 cursor-help">
+            {warn ? (
+              <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="h-3 w-3" />Low quality
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-muted-foreground">
+                {chunks ?? 0} {chunks === 1 ? "chunk" : "chunks"}
+              </Badge>
+            )}
+          </div>
+        </TooltipTrigger>
+        <TooltipContent className="text-xs">{tooltip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 

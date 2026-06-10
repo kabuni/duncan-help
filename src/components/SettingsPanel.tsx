@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Settings, User, Bug, Palette, Mail, Lightbulb, Plug } from "lucide-react";
+import { X, Settings, User, Bug, Palette, Lightbulb, Plug } from "lucide-react";
 import SettingsGeneral from "./settings/SettingsGeneral";
 import SettingsProfile from "./settings/SettingsProfile";
 import SettingsBugReport from "./settings/SettingsBugReport";
 import SettingsAppearance from "./settings/SettingsAppearance";
-import SettingsGmail from "./settings/SettingsGmail";
 import FeatureRequestsAdmin from "./settings/FeatureRequestsAdmin";
 import SettingsIntegrations from "./settings/SettingsIntegrations";
 import { useIsAdmin } from "@/hooks/useUserRoles";

@@ -232,6 +232,13 @@ export default function SettingsFeatureRequest() {
           {submitting ? (uploadingIdx !== null ? `Uploading ${uploadingIdx + 1}/${files.length}…` : "Submitting…") : "Submit Request"}
         </button>
       </div>
+
+      {isAdmin && (
+        <div className="pt-6 border-t border-border space-y-3">
+          <h4 className="text-sm font-semibold text-foreground">Feature Requests</h4>
+          <FeatureRequestsAdmin />
+        </div>
+      )}
     </form>
   );
 }

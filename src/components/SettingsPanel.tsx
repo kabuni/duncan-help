@@ -29,8 +29,7 @@ interface SettingsPanelProps {
 
 export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [active, setActive] = useState<SectionId>("profile");
-  const { isAdmin } = useIsAdmin();
-  const sections = isAdmin ? [...baseSections, adminFeatureSection] : baseSections;
+  const sections = baseSections;
 
   useEffect(() => {
     if (open) {

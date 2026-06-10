@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { formatDistanceToNow } from "date-fns";
 
-export default function SettingsGmail() {
+export default function SettingsGmail({ embedded = false }: { embedded?: boolean }) {
   const { data: status } = useGmailStatus();
   const { data: profile, isLoading } = useGmailWritingProfile();
   const trainMutation = useGmailTrainStyle();

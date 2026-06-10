@@ -145,14 +145,17 @@ export default function KnowledgeBase() {
                 </div>
 
                 {scope === "public" && (
-                  <div className="space-y-2">
-                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Category</Label>
+                  <div className="space-y-3">
                     <div className="space-y-2">
+                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Category</Label>
                       <KBCategorySelect value={category} onChange={(v) => { setCategory(v); setSubcategory(""); }} />
-                      {category && (
-                        <KBSubcategorySelect category={category} value={subcategory} onChange={setSubcategory} />
-                      )}
                     </div>
+                    {category && (
+                      <div className="space-y-2">
+                        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Subcategory</Label>
+                        <KBSubcategorySelect category={category} value={subcategory} onChange={setSubcategory} />
+                      </div>
+                    )}
                   </div>
                 )}
 

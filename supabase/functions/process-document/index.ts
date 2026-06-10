@@ -163,14 +163,17 @@ function qualityFailureReason(opts: {
   }
   if (fileType === "pdf" && pageCount && pageCount > 1) {
     const density = charsExtracted / pageCount;
-    const minChunks = Math.max(2, Math.ceil(pageCount / 10));
     if (density < 200) {
       return `Low text density: only ${charsExtracted.toLocaleString()} chars across ${pageCount} pages (${density.toFixed(0)} chars/page, threshold 200). PDF is likely image-based or uses vector text without a text layer; OCR is required.`;
     }
-    if (chunksGenerated < minChunks) {
-      return `Too few chunks: ${chunksGenerated} generated from ${pageCount} pages (expected ≥${minChunks}). Extraction likely incomplete.`;
+    // Only enforce a chunk floor when the text volume actually warrants
+    // multiple chunks — short documents legitimately produce 1 chunk.
+    const expectedChunks = Math.max(1, Math.floor(charsExtracted / (CHUNK_CHARS * 0.6)));
+    if (chunksGenerated < Math.min(expectedChunks, Math.max(2, Math.ceil(pageCount / 10)))) {
+      return `Too few chunks: ${chunksGenerated} generated from ${pageCount} pages with ${charsExtracted.toLocaleString()} chars. Extraction likely incomplete.`;
     }
   }
+
   return null;
 }
 

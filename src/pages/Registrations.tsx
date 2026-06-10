@@ -61,6 +61,39 @@ function pickField(row: Record<string, unknown>, aliases: string[]): string | nu
   return null;
 }
 
+// Parse a worksheet into row objects, auto-detecting the header row.
+// Handles sheets where the first row is a title/banner rather than column headers.
+function parseSheetRows(sheet: XLSX.WorkSheet): Record<string, unknown>[] {
+  const aoa: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", blankrows: false });
+  if (!aoa.length) return [];
+  const HEADER_HINTS = ["name", "email", "e-mail", "mail", "phone", "mobile", "company", "school", "organisation", "organization", "attendee", "first name", "last name", "full name"];
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(aoa.length, 15); i++) {
+    const row = aoa[i] ?? [];
+    const cells = row.map((c) => String(c ?? "").toLowerCase().trim());
+    if (cells.some((c) => HEADER_HINTS.includes(c))) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx === -1) return [];
+  const rawHeaders = (aoa[headerIdx] ?? []).map((c) => String(c ?? "").trim());
+  const headers = rawHeaders.map((h, idx) => (h === "" ? `__col_${idx}` : h));
+  const out: Record<string, unknown>[] = [];
+  for (let i = headerIdx + 1; i < aoa.length; i++) {
+    const row = aoa[i] ?? [];
+    const obj: Record<string, unknown> = {};
+    let hasVal = false;
+    for (let j = 0; j < headers.length; j++) {
+      const v = row[j];
+      obj[headers[j]] = v ?? "";
+      if (v != null && String(v).trim() !== "") hasVal = true;
+    }
+    if (hasVal) out.push(obj);
+  }
+  return out;
+}
+
 // Page groups for GA, scoped per category
 const SCHOOLS_PAGE_GROUPS: PageGroup[] = [
   { key: "schools", label: "Schools", paths: ["/schools", "/schools/"] },

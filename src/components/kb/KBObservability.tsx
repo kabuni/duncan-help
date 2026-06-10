@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Loader2, BarChart3 } from "lucide-react";
+import { Loader2, Search, AlertTriangle, FileStack, Gauge, Inbox } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 type TopQuery = { query_normalized: string; sample_query: string; search_count: number; avg_top_similarity: number; avg_result_count: number; last_searched_at: string };
@@ -18,6 +17,35 @@ function simBadge(v: number | null | undefined) {
   return <Badge variant="destructive">{n.toFixed(3)}</Badge>;
 }
 
+function StatCard({ icon: Icon, label, value, hint }: { icon: any; label: string; value: string | number; hint?: string }) {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
+      {hint && <div className="mt-1 text-[11px] text-muted-foreground">{hint}</div>}
+    </div>
+  );
+}
+
+function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border bg-card">
+      <div className="border-b px-4 py-3">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+      </div>
+      <div className="p-3">{children}</div>
+    </div>
+  );
+}
+
+function EmptyState({ children }: { children: React.ReactNode }) {
+  return <div className="py-10 text-center text-xs text-muted-foreground">{children}</div>;
+}
+
 export default function KBObservability() {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(true);
@@ -26,121 +54,162 @@ export default function KBObservability() {
   const [unretrieved, setUnretrieved] = useState<UnretrievedDoc[]>([]);
   const [avgSim, setAvgSim] = useState<AvgSim[]>([]);
   const [weak, setWeak] = useState<WeakQuery[]>([]);
+  const [docsIndexed, setDocsIndexed] = useState<number>(0);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const [a, b, c, d, e] = await Promise.all([
+      const [a, b, c, d, e, f] = await Promise.all([
         supabase.from("kb_query_log_top_queries" as any).select("*").limit(50),
         supabase.from("kb_query_log_top_documents" as any).select("*").limit(50),
         supabase.from("kb_query_log_unretrieved_documents" as any).select("*").limit(100),
         supabase.from("kb_query_log_avg_similarity_by_query" as any).select("*").limit(50),
         supabase.from("kb_query_log_weak_queries" as any).select("*").limit(100),
+        supabase.from("documents").select("id", { count: "exact", head: true }).eq("status", "ready"),
       ]);
-      // If RLS blocks (non-admin), every result is an empty array with no error
-      // but the user clearly shouldn't be on this page. Hide gracefully.
       if (a.error?.code === "42501" || b.error?.code === "42501") setAllowed(false);
       setTopQueries((a.data as any) || []);
       setTopDocs((b.data as any) || []);
       setUnretrieved((c.data as any) || []);
       setAvgSim((d.data as any) || []);
       setWeak((e.data as any) || []);
+      setDocsIndexed(f.count || 0);
       setLoading(false);
     })();
   }, []);
 
   if (!allowed) {
-    return <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">Admins only.</div>;
+    return <div className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">Admins only.</div>;
   }
 
+  if (loading) {
+    return (
+      <div className="rounded-xl border bg-card p-12 text-center text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin inline mr-2" />Loading analytics…
+      </div>
+    );
+  }
+
+  const totalSearches = topQueries.reduce((s, r) => s + Number(r.search_count || 0), 0);
+  const allSims = avgSim.map((r) => Number(r.avg_top_similarity)).filter((n) => !isNaN(n));
+  const overallAvg = allSims.length ? allSims.reduce((a, b) => a + b, 0) / allSims.length : null;
+
   return (
-    <div className="rounded-lg border bg-card">
-      <div className="flex items-center gap-2 border-b px-4 py-3">
-        <BarChart3 className="h-4 w-4 text-muted-foreground" />
-        <h2 className="text-sm font-semibold">Retrieval observability</h2>
-        <span className="text-xs text-muted-foreground ml-2">Last 30 days</span>
+    <div className="space-y-6">
+      <div className="flex items-baseline justify-between">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Retrieval analytics</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">How Duncan is using the knowledge base · last 30 days</p>
+        </div>
       </div>
 
-      {loading ? (
-        <div className="p-6 text-center text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin inline mr-2" />Loading…</div>
-      ) : (
-        <Tabs defaultValue="queries" className="p-4">
-          <TabsList>
-            <TabsTrigger value="queries">Top queries</TabsTrigger>
-            <TabsTrigger value="docs">Top documents</TabsTrigger>
-            <TabsTrigger value="unretrieved">Never retrieved</TabsTrigger>
-            <TabsTrigger value="similarity">Avg similarity</TabsTrigger>
-            <TabsTrigger value="weak">Weak results</TabsTrigger>
-          </TabsList>
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard icon={Search} label="Total searches" value={totalSearches.toLocaleString()} hint={`${topQueries.length} unique queries`} />
+        <StatCard icon={AlertTriangle} label="Weak queries" value={weak.length} hint="Top sim < 0.55 or zero results" />
+        <StatCard icon={FileStack} label="Documents indexed" value={docsIndexed} hint={`${unretrieved.length} never retrieved`} />
+        <StatCard icon={Gauge} label="Avg top similarity" value={overallAvg != null ? overallAvg.toFixed(3) : "—"} hint="Across all queries" />
+      </div>
 
-          <TabsContent value="queries" className="mt-4 overflow-x-auto">
+      {/* Two-column grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Panel title="Top queries" subtitle="Most-searched questions">
+          {topQueries.length === 0 ? (
+            <EmptyState><Inbox className="h-5 w-5 mx-auto mb-2 opacity-50" />No searches recorded yet.</EmptyState>
+          ) : (
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground border-b">
-                <tr><th className="text-left px-2 py-2 font-medium">Query</th><th className="text-left px-2 py-2 font-medium">Searches</th><th className="text-left px-2 py-2 font-medium">Avg top sim</th><th className="text-left px-2 py-2 font-medium">Avg results</th><th className="text-left px-2 py-2 font-medium">Last</th></tr>
+                <tr><th className="text-left px-2 py-2 font-medium">Query</th><th className="text-left px-2 py-2 font-medium">Hits</th><th className="text-left px-2 py-2 font-medium">Avg sim</th></tr>
               </thead>
               <tbody>
-                {topQueries.length === 0 && <tr><td colSpan={5} className="px-2 py-6 text-center text-muted-foreground text-xs">No data yet.</td></tr>}
-                {topQueries.map((r) => (
+                {topQueries.slice(0, 10).map((r) => (
                   <tr key={r.query_normalized} className="border-b last:border-b-0 hover:bg-muted/30">
-                    <td className="px-2 py-2 truncate max-w-[420px]" title={r.sample_query}>{r.sample_query}</td>
-                    <td className="px-2 py-2">{r.search_count}</td>
+                    <td className="px-2 py-2 truncate max-w-[260px]" title={r.sample_query}>{r.sample_query}</td>
+                    <td className="px-2 py-2 text-muted-foreground text-xs">{r.search_count}</td>
                     <td className="px-2 py-2">{simBadge(r.avg_top_similarity)}</td>
-                    <td className="px-2 py-2 text-muted-foreground text-xs">{r.avg_result_count}</td>
-                    <td className="px-2 py-2 text-muted-foreground text-xs">{new Date(r.last_searched_at).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </TabsContent>
+          )}
+        </Panel>
 
-          <TabsContent value="docs" className="mt-4 overflow-x-auto">
+        <Panel title="Top documents" subtitle="Most frequently retrieved">
+          {topDocs.length === 0 ? (
+            <EmptyState><Inbox className="h-5 w-5 mx-auto mb-2 opacity-50" />No retrievals recorded yet.</EmptyState>
+          ) : (
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground border-b">
-                <tr><th className="text-left px-2 py-2 font-medium">Document</th><th className="text-left px-2 py-2 font-medium">Type</th><th className="text-left px-2 py-2 font-medium">Scope</th><th className="text-left px-2 py-2 font-medium">Retrievals</th><th className="text-left px-2 py-2 font-medium">Last</th></tr>
+                <tr><th className="text-left px-2 py-2 font-medium">Document</th><th className="text-left px-2 py-2 font-medium">Scope</th><th className="text-left px-2 py-2 font-medium">Hits</th></tr>
               </thead>
               <tbody>
-                {topDocs.length === 0 && <tr><td colSpan={5} className="px-2 py-6 text-center text-muted-foreground text-xs">No data yet.</td></tr>}
-                {topDocs.map((r) => (
+                {topDocs.slice(0, 10).map((r) => (
                   <tr key={r.document_id} className="border-b last:border-b-0 hover:bg-muted/30">
-                    <td className="px-2 py-2 truncate max-w-[420px]" title={r.title}>{r.title}</td>
-                    <td className="px-2 py-2 text-muted-foreground text-xs uppercase">{r.file_type}</td>
+                    <td className="px-2 py-2 truncate max-w-[260px]" title={r.title}>{r.title}</td>
                     <td className="px-2 py-2 text-muted-foreground text-xs">{r.scope === "public" ? "Company" : "Private"}</td>
-                    <td className="px-2 py-2">{r.retrieval_count}</td>
-                    <td className="px-2 py-2 text-muted-foreground text-xs">{new Date(r.last_retrieved_at).toLocaleString()}</td>
+                    <td className="px-2 py-2 text-muted-foreground text-xs">{r.retrieval_count}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </TabsContent>
+          )}
+        </Panel>
 
-          <TabsContent value="unretrieved" className="mt-4 overflow-x-auto">
-            <p className="text-xs text-muted-foreground mb-3">Ready documents never returned by any search in the last 30 days. Candidates for archive, re-tagging, or re-titling.</p>
+        <Panel title="Weak queries" subtitle="Zero results or top similarity below 0.55">
+          {weak.length === 0 ? (
+            <EmptyState>No weak queries detected — nice.</EmptyState>
+          ) : (
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground border-b">
-                <tr><th className="text-left px-2 py-2 font-medium">Document</th><th className="text-left px-2 py-2 font-medium">Type</th><th className="text-left px-2 py-2 font-medium">Chunks</th><th className="text-left px-2 py-2 font-medium">Added</th></tr>
+                <tr><th className="text-left px-2 py-2 font-medium">Query</th><th className="text-left px-2 py-2 font-medium">Top sim</th><th className="text-left px-2 py-2 font-medium">Results</th></tr>
               </thead>
               <tbody>
-                {unretrieved.length === 0 && <tr><td colSpan={4} className="px-2 py-6 text-center text-muted-foreground text-xs">Every ready document has been retrieved at least once.</td></tr>}
-                {unretrieved.map((r) => (
+                {weak.slice(0, 10).map((r) => (
                   <tr key={r.id} className="border-b last:border-b-0 hover:bg-muted/30">
-                    <td className="px-2 py-2 truncate max-w-[420px]" title={r.title}>{r.title}</td>
+                    <td className="px-2 py-2 truncate max-w-[260px]" title={r.query}>{r.query}</td>
+                    <td className="px-2 py-2">{simBadge(r.top_similarity)}</td>
+                    <td className="px-2 py-2 text-muted-foreground text-xs">{r.result_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Panel>
+
+        <Panel title="Unretrieved documents" subtitle="Ready but never returned — candidates for re-tagging or archive">
+          {unretrieved.length === 0 ? (
+            <EmptyState>Every ready document has been retrieved at least once.</EmptyState>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground border-b">
+                <tr><th className="text-left px-2 py-2 font-medium">Document</th><th className="text-left px-2 py-2 font-medium">Type</th><th className="text-left px-2 py-2 font-medium">Chunks</th></tr>
+              </thead>
+              <tbody>
+                {unretrieved.slice(0, 10).map((r) => (
+                  <tr key={r.id} className="border-b last:border-b-0 hover:bg-muted/30">
+                    <td className="px-2 py-2 truncate max-w-[260px]" title={r.title}>{r.title}</td>
                     <td className="px-2 py-2 text-muted-foreground text-xs uppercase">{r.file_type}</td>
                     <td className="px-2 py-2 text-muted-foreground text-xs">{r.chunk_count}</td>
-                    <td className="px-2 py-2 text-muted-foreground text-xs">{new Date(r.created_at).toLocaleDateString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </TabsContent>
+          )}
+        </Panel>
+      </div>
 
-          <TabsContent value="similarity" className="mt-4 overflow-x-auto">
+      {/* Average similarity full-width */}
+      <Panel title="Average similarity by query" subtitle="Spread of retrieval confidence per question">
+        {avgSim.length === 0 ? (
+          <EmptyState>No data yet.</EmptyState>
+        ) : (
+          <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground border-b">
                 <tr><th className="text-left px-2 py-2 font-medium">Query</th><th className="text-left px-2 py-2 font-medium">Searches</th><th className="text-left px-2 py-2 font-medium">Avg</th><th className="text-left px-2 py-2 font-medium">Min</th><th className="text-left px-2 py-2 font-medium">Max</th></tr>
               </thead>
               <tbody>
-                {avgSim.length === 0 && <tr><td colSpan={5} className="px-2 py-6 text-center text-muted-foreground text-xs">No data yet.</td></tr>}
-                {avgSim.map((r) => (
+                {avgSim.slice(0, 20).map((r) => (
                   <tr key={r.query_normalized} className="border-b last:border-b-0 hover:bg-muted/30">
                     <td className="px-2 py-2 truncate max-w-[420px]" title={r.sample_query}>{r.sample_query}</td>
                     <td className="px-2 py-2 text-muted-foreground text-xs">{r.search_count}</td>
@@ -151,29 +220,9 @@ export default function KBObservability() {
                 ))}
               </tbody>
             </table>
-          </TabsContent>
-
-          <TabsContent value="weak" className="mt-4 overflow-x-auto">
-            <p className="text-xs text-muted-foreground mb-3">Searches that returned zero results or a top similarity below 0.55. These are the queries Duncan is failing to answer well.</p>
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground border-b">
-                <tr><th className="text-left px-2 py-2 font-medium">Query</th><th className="text-left px-2 py-2 font-medium">Top sim</th><th className="text-left px-2 py-2 font-medium">Results</th><th className="text-left px-2 py-2 font-medium">When</th></tr>
-              </thead>
-              <tbody>
-                {weak.length === 0 && <tr><td colSpan={4} className="px-2 py-6 text-center text-muted-foreground text-xs">No weak queries — nice.</td></tr>}
-                {weak.map((r) => (
-                  <tr key={r.id} className="border-b last:border-b-0 hover:bg-muted/30">
-                    <td className="px-2 py-2 truncate max-w-[420px]" title={r.query}>{r.query}</td>
-                    <td className="px-2 py-2">{simBadge(r.top_similarity)}</td>
-                    <td className="px-2 py-2 text-muted-foreground text-xs">{r.result_count}</td>
-                    <td className="px-2 py-2 text-muted-foreground text-xs">{new Date(r.created_at).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TabsContent>
-        </Tabs>
-      )}
+          </div>
+        )}
+      </Panel>
     </div>
   );
 }

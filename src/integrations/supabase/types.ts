@@ -793,6 +793,20 @@ export type Database = {
             referencedRelation: "documents"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "document_chunks_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "kb_query_log_top_documents"
+            referencedColumns: ["document_id"]
+          },
+          {
+            foreignKeyName: "document_chunks_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "kb_query_log_unretrieved_documents"
+            referencedColumns: ["id"]
+          },
         ]
       }
       documents: {
@@ -1853,6 +1867,45 @@ export type Database = {
           tags?: string[]
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      kb_query_log: {
+        Row: {
+          created_at: string
+          document_ids: string[]
+          id: string
+          latency_ms: number | null
+          query: string
+          query_normalized: string
+          result_count: number
+          similarities: number[]
+          top_similarity: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          document_ids?: string[]
+          id?: string
+          latency_ms?: number | null
+          query: string
+          query_normalized: string
+          result_count?: number
+          similarities?: number[]
+          top_similarity?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          document_ids?: string[]
+          id?: string
+          latency_ms?: number | null
+          query?: string
+          query_normalized?: string
+          result_count?: number
+          similarities?: number[]
+          top_similarity?: number | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -4221,7 +4274,93 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      kb_query_log_avg_similarity_by_query: {
+        Row: {
+          avg_top_similarity: number | null
+          max_top_similarity: number | null
+          min_top_similarity: number | null
+          query_normalized: string | null
+          sample_query: string | null
+          search_count: number | null
+        }
+        Relationships: []
+      }
+      kb_query_log_top_documents: {
+        Row: {
+          document_id: string | null
+          file_type: string | null
+          last_retrieved_at: string | null
+          retrieval_count: number | null
+          scope: string | null
+          title: string | null
+        }
+        Relationships: []
+      }
+      kb_query_log_top_queries: {
+        Row: {
+          avg_result_count: number | null
+          avg_top_similarity: number | null
+          last_searched_at: string | null
+          query_normalized: string | null
+          sample_query: string | null
+          search_count: number | null
+        }
+        Relationships: []
+      }
+      kb_query_log_unretrieved_documents: {
+        Row: {
+          chunk_count: number | null
+          created_at: string | null
+          file_type: string | null
+          id: string | null
+          scope: string | null
+          title: string | null
+        }
+        Insert: {
+          chunk_count?: number | null
+          created_at?: string | null
+          file_type?: string | null
+          id?: string | null
+          scope?: string | null
+          title?: string | null
+        }
+        Update: {
+          chunk_count?: number | null
+          created_at?: string | null
+          file_type?: string | null
+          id?: string | null
+          scope?: string | null
+          title?: string | null
+        }
+        Relationships: []
+      }
+      kb_query_log_weak_queries: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          query: string | null
+          result_count: number | null
+          top_similarity: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          query?: string | null
+          result_count?: number | null
+          top_similarity?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          query?: string | null
+          result_count?: number | null
+          top_similarity?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       backfill_meeting_ownership: {

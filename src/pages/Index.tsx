@@ -2,9 +2,9 @@ import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Trash2, Loader2, Download, Copy, Check,
-  Sparkles, Lightbulb,
+  Sparkles,
 } from "lucide-react";
-import FeatureRequestModal from "@/components/FeatureRequestModal";
+
 import ReactMarkdown from "react-markdown";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
 import remarkGfm from "remark-gfm";
@@ -148,7 +148,7 @@ const Index = () => {
   const [weather, setWeather] = useState<{ temp: number; description: string } | null>(null);
   
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [featureRequestOpen, setFeatureRequestOpen] = useState(false);
+  
   const [voiceOpen, setVoiceOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const savingRef = useRef(false);
@@ -455,9 +455,6 @@ const Index = () => {
             </h2>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button onClick={() => setFeatureRequestOpen(true)} className="flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
-              <Lightbulb className="h-3 w-3" /> <span className="hidden sm:inline">Request Feature</span>
-            </button>
             <button onClick={() => navigate("/whats-new")} className="flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
               <Sparkles className="h-3 w-3" /> <span className="hidden sm:inline">What's New</span>
             </button>
@@ -571,7 +568,7 @@ const Index = () => {
           isVoiceActive={voiceOpen}
         />
       </main>
-      <FeatureRequestModal open={featureRequestOpen} onClose={() => setFeatureRequestOpen(false)} />
+      
       <VoiceModeOverlay
         open={voiceOpen}
         onClose={() => setVoiceOpen(false)}

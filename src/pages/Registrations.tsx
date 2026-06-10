@@ -702,6 +702,7 @@ export default function SchoolRegistrations() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Imported</TableHead>
+                        <TableHead>Category</TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Phone</TableHead>
@@ -712,10 +713,17 @@ export default function SchoolRegistrations() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {events.map((e) => (
+                      {filteredEvents.map((e) => {
+                        const cat = classifyAttendee(e);
+                        return (
                         <TableRow key={e.id}>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {format(new Date(e.created_at), "d MMM yyyy HH:mm")}
+                          </TableCell>
+                          <TableCell>
+                            <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                              {CATEGORY_LABEL[cat]}
+                            </span>
                           </TableCell>
                           <TableCell className="font-medium">{e.name ?? "—"}</TableCell>
                           <TableCell>
@@ -737,7 +745,9 @@ export default function SchoolRegistrations() {
                             </Button>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
+
                     </TableBody>
                   </Table>
                 </div>

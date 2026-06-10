@@ -48,8 +48,6 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         return <SettingsProfile />;
       case "appearance":
         return <SettingsAppearance />;
-      case "gmail":
-        return <SettingsGmail />;
       case "integrations":
         return <SettingsIntegrations onNavigate={onClose} />;
       case "bug":

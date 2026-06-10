@@ -478,57 +478,159 @@ export default function SchoolRegistrations() {
         {/* Events */}
         <TabsContent value="events" className="space-y-6 mt-0">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="text-lg font-semibold tracking-tight">Event Registrations</h2>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled>
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">Event Registrations</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {DEFAULT_EVENT_NAME} — upload the attendee list from Google Sheets (.xlsx or .csv).
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleUploadEvents(f);
+                }}
+              />
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4 mr-2" />
+                )}
+                Upload sheet
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportEventsCsv}
+                disabled={!events.length}
+              >
                 <Download className="h-4 w-4 mr-2" />
                 CSV
               </Button>
-              <Button variant="outline" size="sm" disabled>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportEventsXlsx}
+                disabled={!events.length}
+              >
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
                 Excel
               </Button>
+              {events.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={handleClearAllEvents}>
+                  <Trash2 className="h-4 w-4 mr-2 text-muted-foreground" />
+                  Clear all
+                </Button>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Card>
               <CardContent className="p-4">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Total Registrations</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums">—</div>
-                <div className="mt-1 text-xs text-muted-foreground">No event form connected</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Total Attendees</div>
+                <div className="mt-1 text-2xl font-semibold tabular-nums">{events.length}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{DEFAULT_EVENT_NAME}</div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">This Week</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums">—</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Imported · 7d</div>
+                <div className="mt-1 text-2xl font-semibold tabular-nums">{eventsThisWeek}</div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">This Month</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums">—</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Imported · 30d</div>
+                <div className="mt-1 text-2xl font-semibold tabular-nums">{eventsThisMonth}</div>
               </CardContent>
             </Card>
           </div>
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Event Registrations</CardTitle>
+              <CardTitle className="text-base">
+                {events.length} {events.length === 1 ? "attendee" : "attendees"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-start gap-3 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                <div>
-                  Event registration submissions aren't being captured yet. Once an event form is wired to the
-                  backend, submissions and exports will appear here automatically alongside the analytics below.
+              {eventsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
-              </div>
+              ) : events.length === 0 ? (
+                <div className="flex items-start gap-3 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div>
+                    No attendees uploaded yet. Click <span className="font-medium text-foreground">Upload sheet</span> to
+                    import the Google Sheet for the {DEFAULT_EVENT_NAME}. Column headers like{" "}
+                    <code className="px-1 rounded bg-muted text-foreground">Name</code>,{" "}
+                    <code className="px-1 rounded bg-muted text-foreground">Email</code>,{" "}
+                    <code className="px-1 rounded bg-muted text-foreground">Phone</code>,{" "}
+                    <code className="px-1 rounded bg-muted text-foreground">Company</code>,{" "}
+                    <code className="px-1 rounded bg-muted text-foreground">Role</code>, and{" "}
+                    <code className="px-1 rounded bg-muted text-foreground">City</code> will be detected automatically.
+                    Any extra columns are preserved.
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Imported</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Company</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>City</TableHead>
+                        <TableHead className="w-12"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {events.map((e) => (
+                        <TableRow key={e.id}>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {format(new Date(e.created_at), "d MMM yyyy HH:mm")}
+                          </TableCell>
+                          <TableCell className="font-medium">{e.name ?? "—"}</TableCell>
+                          <TableCell>
+                            {e.email ? (
+                              <a href={`mailto:${e.email}`} className="text-primary hover:underline">
+                                {e.email}
+                              </a>
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                          <TableCell>{e.phone ?? "—"}</TableCell>
+                          <TableCell>{e.company ?? "—"}</TableCell>
+                          <TableCell>{e.role ?? "—"}</TableCell>
+                          <TableCell>{e.city ?? "—"}</TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" onClick={() => handleDeleteEvent(e.id)}>
+                              <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
-
-          <PagesAnalytics title="Events Analytics" groups={EVENTS_PAGE_GROUPS} hideOverall />
         </TabsContent>
       </Tabs>
     </div>

@@ -150,16 +150,46 @@ export default function SchoolRegistrations() {
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const json: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-      if (!json.length) {
-        toast.error("Sheet is empty");
-        return;
-      }
       const batch = crypto.randomUUID();
       const { data: userRes } = await supabase.auth.getUser();
       const uid = userRes.user?.id ?? null;
-      const rows = json.map((r) => ({
+
+      const allRows: Record<string, unknown>[] = [];
+      const perSheet: { sheet: string; kept: number; total: number }[] = [];
+      for (const sheetName of wb.SheetNames) {
+        const sheet = wb.Sheets[sheetName];
+        const parsed = parseSheetRows(sheet);
+        const kept = parsed
+          .map((r) => ({ ...r, __sheet: sheetName }))
+          .filter((r) => {
+            const name = pickField(r, FIELD_ALIASES.name);
+            const email = pickField(r, FIELD_ALIASES.email);
+            return !!(name || email);
+          });
+        perSheet.push({ sheet: sheetName, kept: kept.length, total: parsed.length });
+        allRows.push(...kept);
+      }
+
+      if (!allRows.length) {
+        const detail = perSheet.map((s) => `${s.sheet}: ${s.kept}/${s.total}`).join(", ");
+        toast.error(`No attendee rows found. Sheets scanned — ${detail || "none"}`);
+        return;
+      }
+
+      // De-duplicate within the file by email (case-insensitive) then by name+company
+      const seen = new Set<string>();
+      const deduped = allRows.filter((r) => {
+        const email = (pickField(r, FIELD_ALIASES.email) || "").toLowerCase();
+        const name = (pickField(r, FIELD_ALIASES.name) || "").toLowerCase();
+        const company = (pickField(r, FIELD_ALIASES.company) || "").toLowerCase();
+        const key = email || `${name}|${company}`;
+        if (!key) return false;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      const rows = deduped.map((r) => ({
         event_name: DEFAULT_EVENT_NAME,
         name: pickField(r, FIELD_ALIASES.name),
         email: pickField(r, FIELD_ALIASES.email),
@@ -176,7 +206,8 @@ export default function SchoolRegistrations() {
         const { error } = await supabase.from("event_attendees").insert(rows.slice(i, i + CHUNK));
         if (error) throw error;
       }
-      toast.success(`Imported ${rows.length} attendees`);
+      const sheetSummary = perSheet.filter((s) => s.kept > 0).map((s) => `${s.sheet} (${s.kept})`).join(", ");
+      toast.success(`Imported ${rows.length} attendees from ${sheetSummary || "1 sheet"}`);
       await loadEvents();
     } catch (e: any) {
       console.error(e);
@@ -186,6 +217,7 @@ export default function SchoolRegistrations() {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
+
 
   const handleDeleteEvent = async (id: string) => {
     if (!confirm("Delete this attendee?")) return;

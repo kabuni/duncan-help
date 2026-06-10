@@ -309,6 +309,20 @@ export default function SchoolRegistrations() {
     return events.filter((e) => new Date(e.created_at).getTime() >= since).length;
   }, [events]);
 
+  const eventCounts = useMemo(() => {
+    const c = { schools: 0, vip: 0, guests: 0, other: 0 };
+    for (const e of events) c[classifyAttendee(e)] += 1;
+    return c;
+  }, [events]);
+
+  const [eventCategory, setEventCategory] = useState<"all" | AttendeeCategory>("all");
+
+  const filteredEvents = useMemo(() => {
+    if (eventCategory === "all") return events;
+    return events.filter((e) => classifyAttendee(e) === eventCategory);
+  }, [events, eventCategory]);
+
+
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase

@@ -53,6 +53,7 @@ Deno.serve(async (req) => {
     }
     const uid = userData.user.id;
     const requestedCount = Math.min(Math.max(Number(match_count) || 8, 1), 25);
+    const t0 = Date.now();
 
     const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY")!;
     const embRes = await fetch("https://api.openai.com/v1/embeddings", {
@@ -164,6 +165,27 @@ Deno.serve(async (req) => {
       ).join("\n\n");
       formatted_context = `The following is from Kabuni's internal knowledge base:\n\n---\n${blocks}\n---`;
     }
+
+    // Fire-and-forget retrieval log (observability)
+    const docIdSet = Array.from(new Set(results.map((r: any) => r.document_id).filter(Boolean)));
+    const sims = results.map((r: any) => Number(r.similarity ?? 0));
+    const topSim = sims.length ? Math.max(...sims) : null;
+    const logRow = {
+      user_id: uid,
+      query: query.slice(0, 1000),
+      query_normalized: normalizeLookup(query).slice(0, 1000),
+      document_ids: docIdSet,
+      similarities: sims.map((s) => Math.round(s * 10000) / 10000),
+      top_similarity: topSim,
+      result_count: results.length,
+      latency_ms: Date.now() - t0,
+    };
+    // @ts-ignore EdgeRuntime
+    EdgeRuntime.waitUntil(
+      service.from("kb_query_log").insert(logRow).then((r: any) => {
+        if (r?.error) console.error("kb_query_log insert failed", r.error);
+      }),
+    );
 
     return new Response(JSON.stringify({ results, formatted_context }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

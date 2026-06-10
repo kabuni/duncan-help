@@ -10,6 +10,8 @@ import KBScopePicker, { KBScope } from "@/components/kb/KBScopePicker";
 import { KBCategorySelect, KBSubcategorySelect } from "@/components/kb/KBCategorySelect";
 import KBTagsInput from "@/components/kb/KBTagsInput";
 import KBRecentUploads from "@/components/kb/KBRecentUploads";
+import KBObservability from "@/components/kb/KBObservability";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import { getFileType } from "@/lib/kbTaxonomy";
 
 function fileToBase64(file: File): Promise<string> {
@@ -44,6 +46,7 @@ export default function KnowledgeBase() {
   const [tags, setTags] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const { isAdmin } = useIsAdmin();
 
   const canSubmit = files.length > 0 && !uploading && (scope === "private" || (category && subcategory));
 
@@ -168,6 +171,8 @@ export default function KnowledgeBase() {
       </section>
 
       <KBRecentUploads refreshKey={refreshKey} />
+
+      {isAdmin && <KBObservability />}
     </div>
   );
 }

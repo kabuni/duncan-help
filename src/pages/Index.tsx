@@ -2,9 +2,9 @@ import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Trash2, Loader2, Download, Copy, Check,
-  Sparkles, Lightbulb,
+  Sparkles,
 } from "lucide-react";
-import FeatureRequestModal from "@/components/FeatureRequestModal";
+
 import ReactMarkdown from "react-markdown";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
 import remarkGfm from "remark-gfm";

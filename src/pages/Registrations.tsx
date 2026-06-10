@@ -27,6 +27,40 @@ type Registration = {
   created_at: string;
 };
 
+type EventAttendee = {
+  id: string;
+  event_name: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  role: string | null;
+  city: string | null;
+  raw: Record<string, unknown>;
+  created_at: string;
+};
+
+const DEFAULT_EVENT_NAME = "Kabuni Showcase - Mumbai (Jio World Center)";
+
+const FIELD_ALIASES: Record<keyof Pick<EventAttendee, "name" | "email" | "phone" | "company" | "role" | "city">, string[]> = {
+  name: ["name", "full name", "fullname", "attendee", "attendee name", "first name"],
+  email: ["email", "email address", "e-mail", "mail"],
+  phone: ["phone", "phone number", "mobile", "mobile number", "contact", "contact number", "tel", "telephone"],
+  company: ["company", "organisation", "organization", "school", "institution", "company name", "school name"],
+  role: ["role", "title", "designation", "job title", "position"],
+  city: ["city", "location", "town"],
+};
+
+function pickField(row: Record<string, unknown>, aliases: string[]): string | null {
+  const normalized: Record<string, unknown> = {};
+  for (const k of Object.keys(row)) normalized[k.toLowerCase().trim()] = row[k];
+  for (const a of aliases) {
+    const v = normalized[a];
+    if (v != null && String(v).trim() !== "") return String(v).trim();
+  }
+  return null;
+}
+
 // Page groups for GA, scoped per category
 const SCHOOLS_PAGE_GROUPS: PageGroup[] = [
   { key: "schools", label: "Schools", paths: ["/schools", "/schools/"] },

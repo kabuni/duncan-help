@@ -172,16 +172,6 @@ export default function KnowledgeBase() {
             <KBObservability />
           </TabsContent>
         )}
-
-        <TabsContent value="settings">
-          <section className="rounded-xl border bg-card p-12 text-center">
-            <SettingsIcon className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
-            <h3 className="text-sm font-semibold">Knowledge Base settings</h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-              Retention rules, chunk sizing, embedding model, and re-index controls will live here. Nothing to configure yet.
-            </p>
-          </section>
-        </TabsContent>
       </Tabs>
     </div>
   );

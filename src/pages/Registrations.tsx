@@ -92,6 +92,140 @@ export default function SchoolRegistrations() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<CategoryKey>("schools");
 
+  // Event attendees state
+  const [events, setEvents] = useState<EventAttendee[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const loadEvents = async () => {
+    setEventsLoading(true);
+    const { data, error } = await supabase
+      .from("event_attendees")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setEventsLoading(false);
+    if (error) {
+      toast.error("Failed to load event attendees");
+      return;
+    }
+    setEvents((data ?? []) as EventAttendee[]);
+  };
+
+  const handleUploadEvents = async (file: File) => {
+    setUploading(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const json: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      if (!json.length) {
+        toast.error("Sheet is empty");
+        return;
+      }
+      const batch = crypto.randomUUID();
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id ?? null;
+      const rows = json.map((r) => ({
+        event_name: DEFAULT_EVENT_NAME,
+        name: pickField(r, FIELD_ALIASES.name),
+        email: pickField(r, FIELD_ALIASES.email),
+        phone: pickField(r, FIELD_ALIASES.phone),
+        company: pickField(r, FIELD_ALIASES.company),
+        role: pickField(r, FIELD_ALIASES.role),
+        city: pickField(r, FIELD_ALIASES.city),
+        raw: r as Record<string, unknown>,
+        uploaded_by: uid,
+        upload_batch_id: batch,
+      }));
+      const CHUNK = 500;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const { error } = await supabase.from("event_attendees").insert(rows.slice(i, i + CHUNK));
+        if (error) throw error;
+      }
+      toast.success(`Imported ${rows.length} attendees`);
+      await loadEvents();
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message ?? "Upload failed");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    if (!confirm("Delete this attendee?")) return;
+    const { error } = await supabase.from("event_attendees").delete().eq("id", id);
+    if (error) {
+      toast.error("Delete failed");
+      return;
+    }
+    setEvents((r) => r.filter((x) => x.id !== id));
+    toast.success("Deleted");
+  };
+
+  const handleClearAllEvents = async () => {
+    if (!events.length) return;
+    if (!confirm(`Delete ALL ${events.length} attendees? This cannot be undone.`)) return;
+    const { error } = await supabase
+      .from("event_attendees")
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+    if (error) {
+      toast.error("Clear failed");
+      return;
+    }
+    setEvents([]);
+    toast.success("Cleared");
+  };
+
+  const exportEventRows = () =>
+    events.map((e) => ({
+      Imported: format(new Date(e.created_at), "yyyy-MM-dd HH:mm"),
+      Event: e.event_name,
+      Name: e.name ?? "",
+      Email: e.email ?? "",
+      Phone: e.phone ?? "",
+      Company: e.company ?? "",
+      Role: e.role ?? "",
+      City: e.city ?? "",
+    }));
+
+  const handleExportEventsCsv = () => {
+    if (!events.length) return toast.error("Nothing to export");
+    const ws = XLSX.utils.json_to_sheet(exportEventRows());
+    const csv = XLSX.utils.sheet_to_csv(ws);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `event-attendees-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportEventsXlsx = () => {
+    if (!events.length) return toast.error("Nothing to export");
+    const ws = XLSX.utils.json_to_sheet(exportEventRows());
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Attendees");
+    XLSX.writeFile(wb, `event-attendees-${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+  };
+
+  useEffect(() => {
+    if (isAdmin) loadEvents();
+  }, [isAdmin]);
+
+  const eventsThisWeek = useMemo(() => {
+    const since = Date.now() - 7 * 86400000;
+    return events.filter((e) => new Date(e.created_at).getTime() >= since).length;
+  }, [events]);
+  const eventsThisMonth = useMemo(() => {
+    const since = Date.now() - 30 * 86400000;
+    return events.filter((e) => new Date(e.created_at).getTime() >= since).length;
+  }, [events]);
+
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase

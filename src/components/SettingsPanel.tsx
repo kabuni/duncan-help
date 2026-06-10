@@ -14,14 +14,13 @@ const baseSections = [
   { id: "general", label: "General", icon: Settings },
   { id: "profile", label: "Profile", icon: User },
   { id: "appearance", label: "Appearance", icon: Palette },
-  { id: "gmail", label: "Gmail", icon: Mail },
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "bug", label: "Bug Report", icon: Bug },
 ] as const;
 
 const adminFeatureSection = { id: "feature_requests", label: "Feature Requests", icon: Lightbulb } as const;
 
-type SectionId = "general" | "profile" | "appearance" | "gmail" | "integrations" | "bug" | "feature_requests";
+type SectionId = "general" | "profile" | "appearance" | "integrations" | "bug" | "feature_requests";
 
 interface SettingsPanelProps {
   open: boolean;

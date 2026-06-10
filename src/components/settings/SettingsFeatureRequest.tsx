@@ -3,7 +3,9 @@ import { Loader2, Upload, Paperclip, X } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import { toast } from "sonner";
+import FeatureRequestsAdmin from "./FeatureRequestsAdmin";
 
 const schema = z.object({
   title: z.string().trim().min(3, "Please provide a short title").max(120),
@@ -34,6 +36,7 @@ function validateFile(file: File): string | null {
 
 export default function SettingsFeatureRequest() {
   const { user } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [useCase, setUseCase] = useState("");
@@ -229,6 +232,13 @@ export default function SettingsFeatureRequest() {
           {submitting ? (uploadingIdx !== null ? `Uploading ${uploadingIdx + 1}/${files.length}…` : "Submitting…") : "Submit Request"}
         </button>
       </div>
+
+      {isAdmin && (
+        <div className="pt-6 border-t border-border space-y-3">
+          <h4 className="text-sm font-semibold text-foreground">Feature Requests</h4>
+          <FeatureRequestsAdmin />
+        </div>
+      )}
     </form>
   );
 }

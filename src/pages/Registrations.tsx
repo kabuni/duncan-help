@@ -634,34 +634,48 @@ export default function SchoolRegistrations() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Total Attendees</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums">{events.length}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{DEFAULT_EVENT_NAME}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Imported · 7d</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums">{eventsThisWeek}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Imported · 30d</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums">{eventsThisMonth}</div>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {([
+              { key: "all", label: "Total Attendees", count: events.length, sub: DEFAULT_EVENT_NAME },
+              { key: "schools", label: "Schools", count: eventCounts.schools, sub: "NIE, Non-NIE, GLF, GSLC" },
+              { key: "vip", label: "VIP", count: eventCounts.vip, sub: "From Guest List Final" },
+              { key: "guests", label: "Guests", count: eventCounts.guests, sub: "Kabuni guest list" },
+            ] as const).map((tile) => {
+              const active = eventCategory === tile.key;
+              return (
+                <button
+                  key={tile.key}
+                  type="button"
+                  onClick={() => setEventCategory(tile.key)}
+                  className={`text-left rounded-lg border bg-card p-4 transition-colors ${
+                    active ? "border-primary ring-1 ring-primary/30" : "hover:bg-secondary/40"
+                  }`}
+                >
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">{tile.label}</div>
+                  <div className="mt-1 text-2xl font-semibold tabular-nums">{tile.count}</div>
+                  <div className="mt-1 text-xs text-muted-foreground line-clamp-1">{tile.sub}</div>
+                </button>
+              );
+            })}
           </div>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
               <CardTitle className="text-base">
-                {events.length} {events.length === 1 ? "attendee" : "attendees"}
+                {filteredEvents.length} {filteredEvents.length === 1 ? "attendee" : "attendees"}
+                {eventCategory !== "all" && (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    · {CATEGORY_LABEL[eventCategory]}
+                  </span>
+                )}
               </CardTitle>
+              {eventCategory !== "all" && (
+                <Button variant="ghost" size="sm" onClick={() => setEventCategory("all")}>
+                  Show all
+                </Button>
+              )}
             </CardHeader>
+
             <CardContent>
               {eventsLoading ? (
                 <div className="flex items-center justify-center py-12">

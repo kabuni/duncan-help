@@ -148,7 +148,7 @@ const Index = () => {
   const [weather, setWeather] = useState<{ temp: number; description: string } | null>(null);
   
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [featureRequestOpen, setFeatureRequestOpen] = useState(false);
+  
   const [voiceOpen, setVoiceOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const savingRef = useRef(false);

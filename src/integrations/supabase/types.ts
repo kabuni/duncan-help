@@ -924,6 +924,51 @@ export type Database = {
         }
         Relationships: []
       }
+      event_attendees: {
+        Row: {
+          city: string | null
+          company: string | null
+          created_at: string
+          email: string | null
+          event_name: string
+          id: string
+          name: string | null
+          phone: string | null
+          raw: Json
+          role: string | null
+          upload_batch_id: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          city?: string | null
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          event_name?: string
+          id?: string
+          name?: string | null
+          phone?: string | null
+          raw?: Json
+          role?: string | null
+          upload_batch_id?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          city?: string | null
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          event_name?: string
+          id?: string
+          name?: string | null
+          phone?: string | null
+          raw?: Json
+          role?: string | null
+          upload_batch_id?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
       event_rsvp_messages: {
         Row: {
           created_at: string

@@ -182,7 +182,8 @@ export default function SchoolRegistrations() {
           .filter((r) => {
             const name = pickField(r, FIELD_ALIASES.name);
             const email = pickField(r, FIELD_ALIASES.email);
-            return !!(name || email);
+            const company = pickField(r, FIELD_ALIASES.company);
+            return !!(name || email || company);
           });
         perSheet.push({ sheet: sheetName, kept: kept.length, total: parsed.length });
         allRows.push(...kept);
@@ -194,20 +195,8 @@ export default function SchoolRegistrations() {
         return;
       }
 
-      // De-duplicate within the file by email (case-insensitive) then by name+company
-      const seen = new Set<string>();
-      const deduped = allRows.filter((r) => {
-        const email = (pickField(r, FIELD_ALIASES.email) || "").toLowerCase();
-        const name = (pickField(r, FIELD_ALIASES.name) || "").toLowerCase();
-        const company = (pickField(r, FIELD_ALIASES.company) || "").toLowerCase();
-        const key = email || `${name}|${company}`;
-        if (!key) return false;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      const rows = deduped.map((r) => ({
+      // Preserve every data row from the source sheets — no in-file dedup.
+      const rows = allRows.map((r) => ({
         event_name: DEFAULT_EVENT_NAME,
         name: pickField(r, FIELD_ALIASES.name),
         email: pickField(r, FIELD_ALIASES.email),

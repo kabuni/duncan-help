@@ -116,7 +116,7 @@ export default function KnowledgeBase() {
         <TabsList>
           <TabsTrigger value="documents" className="gap-2"><FileStack className="h-4 w-4" />Documents</TabsTrigger>
           {isAdmin && <TabsTrigger value="analytics" className="gap-2"><BarChart3 className="h-4 w-4" />Analytics</TabsTrigger>}
-          <TabsTrigger value="settings" className="gap-2"><SettingsIcon className="h-4 w-4" />Settings</TabsTrigger>
+          
         </TabsList>
 
         <TabsContent value="documents" className="space-y-6">

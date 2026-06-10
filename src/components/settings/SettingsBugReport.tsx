@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, X, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import ReportedBugsAdmin from "./ReportedBugsAdmin";
 
 const ISSUE_TYPES = [
   "Bug", "Retrieval Issue", "Incorrect Output", "Hallucination",
@@ -16,6 +18,7 @@ const ISSUE_TYPES = [
 
 export default function SettingsBugReport() {
   const { user } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
@@ -85,13 +88,21 @@ export default function SettingsBugReport() {
 
   if (submitted) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
-        <CheckCircle className="h-10 w-10 text-primary" />
-        <h3 className="text-sm font-semibold text-foreground">Issue Submitted</h3>
-        <p className="text-xs text-muted-foreground">Your feedback has been recorded.</p>
-        <button onClick={resetForm} className="rounded-lg border border-border px-4 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary transition-colors">
-          Submit Another
-        </button>
+      <div className="space-y-6">
+        <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
+          <CheckCircle className="h-10 w-10 text-primary" />
+          <h3 className="text-sm font-semibold text-foreground">Issue Submitted</h3>
+          <p className="text-xs text-muted-foreground">Your feedback has been recorded.</p>
+          <button onClick={resetForm} className="rounded-lg border border-border px-4 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary transition-colors">
+            Submit Another
+          </button>
+        </div>
+        {isAdmin && (
+          <div className="pt-6 border-t border-border space-y-3">
+            <h4 className="text-sm font-semibold text-foreground">Reported Bugs</h4>
+            <ReportedBugsAdmin />
+          </div>
+        )}
       </div>
     );
   }
@@ -167,6 +178,13 @@ export default function SettingsBugReport() {
           {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Issue"}
         </button>
       </form>
+
+      {isAdmin && (
+        <div className="pt-6 border-t border-border space-y-3">
+          <h4 className="text-sm font-semibold text-foreground">Reported Bugs</h4>
+          <ReportedBugsAdmin />
+        </div>
+      )}
     </div>
   );
 }

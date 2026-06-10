@@ -134,7 +134,7 @@ export default function SchoolRegistrations() {
         company: pickField(r, FIELD_ALIASES.company),
         role: pickField(r, FIELD_ALIASES.role),
         city: pickField(r, FIELD_ALIASES.city),
-        raw: r as Record<string, unknown>,
+        raw: r as any,
         uploaded_by: uid,
         upload_batch_id: batch,
       }));

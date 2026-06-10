@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/hooks/useUserRoles";
@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Loader2, Trash2, RefreshCw, Download, FileSpreadsheet, Info } from "lucide-react";
+import { Loader2, Trash2, RefreshCw, Download, FileSpreadsheet, Info, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
@@ -26,6 +26,40 @@ type Registration = {
   notes: string | null;
   created_at: string;
 };
+
+type EventAttendee = {
+  id: string;
+  event_name: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  role: string | null;
+  city: string | null;
+  raw: Record<string, unknown>;
+  created_at: string;
+};
+
+const DEFAULT_EVENT_NAME = "Kabuni Showcase - Mumbai (Jio World Center)";
+
+const FIELD_ALIASES: Record<keyof Pick<EventAttendee, "name" | "email" | "phone" | "company" | "role" | "city">, string[]> = {
+  name: ["name", "full name", "fullname", "attendee", "attendee name", "first name"],
+  email: ["email", "email address", "e-mail", "mail"],
+  phone: ["phone", "phone number", "mobile", "mobile number", "contact", "contact number", "tel", "telephone"],
+  company: ["company", "organisation", "organization", "school", "institution", "company name", "school name"],
+  role: ["role", "title", "designation", "job title", "position"],
+  city: ["city", "location", "town"],
+};
+
+function pickField(row: Record<string, unknown>, aliases: string[]): string | null {
+  const normalized: Record<string, unknown> = {};
+  for (const k of Object.keys(row)) normalized[k.toLowerCase().trim()] = row[k];
+  for (const a of aliases) {
+    const v = normalized[a];
+    if (v != null && String(v).trim() !== "") return String(v).trim();
+  }
+  return null;
+}
 
 // Page groups for GA, scoped per category
 const SCHOOLS_PAGE_GROUPS: PageGroup[] = [
@@ -57,6 +91,140 @@ export default function SchoolRegistrations() {
   const [rows, setRows] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<CategoryKey>("schools");
+
+  // Event attendees state
+  const [events, setEvents] = useState<EventAttendee[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const loadEvents = async () => {
+    setEventsLoading(true);
+    const { data, error } = await supabase
+      .from("event_attendees")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setEventsLoading(false);
+    if (error) {
+      toast.error("Failed to load event attendees");
+      return;
+    }
+    setEvents((data ?? []) as EventAttendee[]);
+  };
+
+  const handleUploadEvents = async (file: File) => {
+    setUploading(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const json: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      if (!json.length) {
+        toast.error("Sheet is empty");
+        return;
+      }
+      const batch = crypto.randomUUID();
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id ?? null;
+      const rows = json.map((r) => ({
+        event_name: DEFAULT_EVENT_NAME,
+        name: pickField(r, FIELD_ALIASES.name),
+        email: pickField(r, FIELD_ALIASES.email),
+        phone: pickField(r, FIELD_ALIASES.phone),
+        company: pickField(r, FIELD_ALIASES.company),
+        role: pickField(r, FIELD_ALIASES.role),
+        city: pickField(r, FIELD_ALIASES.city),
+        raw: r as any,
+        uploaded_by: uid,
+        upload_batch_id: batch,
+      }));
+      const CHUNK = 500;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const { error } = await supabase.from("event_attendees").insert(rows.slice(i, i + CHUNK));
+        if (error) throw error;
+      }
+      toast.success(`Imported ${rows.length} attendees`);
+      await loadEvents();
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message ?? "Upload failed");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    if (!confirm("Delete this attendee?")) return;
+    const { error } = await supabase.from("event_attendees").delete().eq("id", id);
+    if (error) {
+      toast.error("Delete failed");
+      return;
+    }
+    setEvents((r) => r.filter((x) => x.id !== id));
+    toast.success("Deleted");
+  };
+
+  const handleClearAllEvents = async () => {
+    if (!events.length) return;
+    if (!confirm(`Delete ALL ${events.length} attendees? This cannot be undone.`)) return;
+    const { error } = await supabase
+      .from("event_attendees")
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+    if (error) {
+      toast.error("Clear failed");
+      return;
+    }
+    setEvents([]);
+    toast.success("Cleared");
+  };
+
+  const exportEventRows = () =>
+    events.map((e) => ({
+      Imported: format(new Date(e.created_at), "yyyy-MM-dd HH:mm"),
+      Event: e.event_name,
+      Name: e.name ?? "",
+      Email: e.email ?? "",
+      Phone: e.phone ?? "",
+      Company: e.company ?? "",
+      Role: e.role ?? "",
+      City: e.city ?? "",
+    }));
+
+  const handleExportEventsCsv = () => {
+    if (!events.length) return toast.error("Nothing to export");
+    const ws = XLSX.utils.json_to_sheet(exportEventRows());
+    const csv = XLSX.utils.sheet_to_csv(ws);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `event-attendees-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportEventsXlsx = () => {
+    if (!events.length) return toast.error("Nothing to export");
+    const ws = XLSX.utils.json_to_sheet(exportEventRows());
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Attendees");
+    XLSX.writeFile(wb, `event-attendees-${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+  };
+
+  useEffect(() => {
+    if (isAdmin) loadEvents();
+  }, [isAdmin]);
+
+  const eventsThisWeek = useMemo(() => {
+    const since = Date.now() - 7 * 86400000;
+    return events.filter((e) => new Date(e.created_at).getTime() >= since).length;
+  }, [events]);
+  const eventsThisMonth = useMemo(() => {
+    const since = Date.now() - 30 * 86400000;
+    return events.filter((e) => new Date(e.created_at).getTime() >= since).length;
+  }, [events]);
 
   const load = async () => {
     setLoading(true);
@@ -310,57 +478,159 @@ export default function SchoolRegistrations() {
         {/* Events */}
         <TabsContent value="events" className="space-y-6 mt-0">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="text-lg font-semibold tracking-tight">Event Registrations</h2>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled>
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">Event Registrations</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {DEFAULT_EVENT_NAME} — upload the attendee list from Google Sheets (.xlsx or .csv).
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleUploadEvents(f);
+                }}
+              />
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4 mr-2" />
+                )}
+                Upload sheet
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportEventsCsv}
+                disabled={!events.length}
+              >
                 <Download className="h-4 w-4 mr-2" />
                 CSV
               </Button>
-              <Button variant="outline" size="sm" disabled>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportEventsXlsx}
+                disabled={!events.length}
+              >
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
                 Excel
               </Button>
+              {events.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={handleClearAllEvents}>
+                  <Trash2 className="h-4 w-4 mr-2 text-muted-foreground" />
+                  Clear all
+                </Button>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Card>
               <CardContent className="p-4">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Total Registrations</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums">—</div>
-                <div className="mt-1 text-xs text-muted-foreground">No event form connected</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Total Attendees</div>
+                <div className="mt-1 text-2xl font-semibold tabular-nums">{events.length}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{DEFAULT_EVENT_NAME}</div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">This Week</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums">—</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Imported · 7d</div>
+                <div className="mt-1 text-2xl font-semibold tabular-nums">{eventsThisWeek}</div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">This Month</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums">—</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Imported · 30d</div>
+                <div className="mt-1 text-2xl font-semibold tabular-nums">{eventsThisMonth}</div>
               </CardContent>
             </Card>
           </div>
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Event Registrations</CardTitle>
+              <CardTitle className="text-base">
+                {events.length} {events.length === 1 ? "attendee" : "attendees"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-start gap-3 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                <div>
-                  Event registration submissions aren't being captured yet. Once an event form is wired to the
-                  backend, submissions and exports will appear here automatically alongside the analytics below.
+              {eventsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
-              </div>
+              ) : events.length === 0 ? (
+                <div className="flex items-start gap-3 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div>
+                    No attendees uploaded yet. Click <span className="font-medium text-foreground">Upload sheet</span> to
+                    import the Google Sheet for the {DEFAULT_EVENT_NAME}. Column headers like{" "}
+                    <code className="px-1 rounded bg-muted text-foreground">Name</code>,{" "}
+                    <code className="px-1 rounded bg-muted text-foreground">Email</code>,{" "}
+                    <code className="px-1 rounded bg-muted text-foreground">Phone</code>,{" "}
+                    <code className="px-1 rounded bg-muted text-foreground">Company</code>,{" "}
+                    <code className="px-1 rounded bg-muted text-foreground">Role</code>, and{" "}
+                    <code className="px-1 rounded bg-muted text-foreground">City</code> will be detected automatically.
+                    Any extra columns are preserved.
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Imported</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Company</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>City</TableHead>
+                        <TableHead className="w-12"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {events.map((e) => (
+                        <TableRow key={e.id}>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {format(new Date(e.created_at), "d MMM yyyy HH:mm")}
+                          </TableCell>
+                          <TableCell className="font-medium">{e.name ?? "—"}</TableCell>
+                          <TableCell>
+                            {e.email ? (
+                              <a href={`mailto:${e.email}`} className="text-primary hover:underline">
+                                {e.email}
+                              </a>
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                          <TableCell>{e.phone ?? "—"}</TableCell>
+                          <TableCell>{e.company ?? "—"}</TableCell>
+                          <TableCell>{e.role ?? "—"}</TableCell>
+                          <TableCell>{e.city ?? "—"}</TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" onClick={() => handleDeleteEvent(e.id)}>
+                              <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
-
-          <PagesAnalytics title="Events Analytics" groups={EVENTS_PAGE_GROUPS} hideOverall />
         </TabsContent>
       </Tabs>
     </div>

@@ -264,9 +264,10 @@ export default function SchoolRegistrations() {
   };
 
   const exportEventRows = () =>
-    events.map((e) => ({
+    (eventCategory === "all" ? events : events.filter((e) => classifyAttendee(e) === eventCategory)).map((e) => ({
       Imported: format(new Date(e.created_at), "yyyy-MM-dd HH:mm"),
       Event: e.event_name,
+      Category: CATEGORY_LABEL[classifyAttendee(e)],
       Name: e.name ?? "",
       Email: e.email ?? "",
       Phone: e.phone ?? "",
@@ -274,6 +275,7 @@ export default function SchoolRegistrations() {
       Role: e.role ?? "",
       City: e.city ?? "",
     }));
+
 
   const handleExportEventsCsv = () => {
     if (!events.length) return toast.error("Nothing to export");

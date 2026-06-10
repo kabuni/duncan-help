@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Trash2, Loader2, Download, Copy, Check,
-  Sparkles,
+  Sparkles, BookOpen,
 } from "lucide-react";
 
 import ReactMarkdown from "react-markdown";
@@ -457,6 +457,9 @@ const Index = () => {
           <div className="flex items-center gap-2 shrink-0">
             <button onClick={() => navigate("/whats-new")} className="flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
               <Sparkles className="h-3 w-3" /> <span className="hidden sm:inline">What's New</span>
+            </button>
+            <button onClick={() => navigate("/knowledge-base")} className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+              <BookOpen className="h-3 w-3" /> <span className="hidden sm:inline">Knowledge Base</span>
             </button>
             {hasMessages && (
               <button onClick={handleClearChat} className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2 sm:px-3 py-1.5 sm:py-2 text-xs text-muted-foreground hover:text-foreground transition-colors">

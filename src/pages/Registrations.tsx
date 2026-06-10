@@ -51,6 +51,24 @@ const FIELD_ALIASES: Record<keyof Pick<EventAttendee, "name" | "email" | "phone"
   city: ["city", "location", "town"],
 };
 
+type AttendeeCategory = "schools" | "vip" | "guests" | "other";
+
+const CATEGORY_LABEL: Record<AttendeeCategory, string> = {
+  schools: "Schools",
+  vip: "VIP",
+  guests: "Guests",
+  other: "Other",
+};
+
+function classifyAttendee(e: { raw?: Record<string, unknown> | null }): AttendeeCategory {
+  const sheet = String((e.raw as Record<string, unknown> | null)?.__sheet ?? "").toLowerCase();
+  if (!sheet) return "other";
+  if (sheet.includes("vip")) return "vip";
+  if (sheet.includes("school") || sheet.includes("nie") || sheet.includes("glf") || sheet.includes("gslc")) return "schools";
+  if (sheet.includes("guest")) return "guests";
+  return "other";
+}
+
 function pickField(row: Record<string, unknown>, aliases: string[]): string | null {
   const normalized: Record<string, unknown> = {};
   for (const k of Object.keys(row)) normalized[k.toLowerCase().trim()] = row[k];

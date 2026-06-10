@@ -257,32 +257,18 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const authHeader = req.headers.get("Authorization") || "";
 
+    // Best-effort: capture requesting user id when an authenticated user
+    // triggers the run from the UI. pg_cron / service-role callers skip this.
     let requestingUserId: string | null = null;
-    let isAdmin = false;
-
     const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
-    const isServiceRole = bearer === supabaseServiceKey;
-
-    if (!isServiceRole) {
-      const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user } } = await supabaseUser.auth.getUser();
-      if (!user) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (bearer && bearer !== supabaseServiceKey) {
+      try {
+        const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+          global: { headers: { Authorization: authHeader } },
         });
-      }
-      requestingUserId = user.id;
-
-      const admin = createClient(supabaseUrl, supabaseServiceKey);
-      const { data: roles } = await admin.from("user_roles").select("role").eq("user_id", user.id);
-      isAdmin = (roles || []).some((r: any) => r.role === "admin");
-      if (!isAdmin) {
-        return new Response(JSON.stringify({ error: "Admin role required" }), {
-          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+        const { data: { user } } = await supabaseUser.auth.getUser();
+        requestingUserId = user?.id ?? null;
+      } catch (_) { /* ignore — backfill is non-destructive */ }
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);

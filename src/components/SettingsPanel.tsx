@@ -19,9 +19,7 @@ const baseSections = [
   { id: "bug", label: "Bug Report", icon: Bug },
 ] as const;
 
-const adminFeatureSection = { id: "feature_requests", label: "Feature Requests", icon: Lightbulb } as const;
-
-type SectionId = "general" | "profile" | "appearance" | "integrations" | "request_feature" | "bug" | "feature_requests";
+type SectionId = "general" | "profile" | "appearance" | "integrations" | "request_feature" | "bug";
 
 
 interface SettingsPanelProps {

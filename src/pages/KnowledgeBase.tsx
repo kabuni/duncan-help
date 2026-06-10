@@ -170,6 +170,8 @@ export default function KnowledgeBase() {
       </section>
 
       <KBRecentUploads refreshKey={refreshKey} />
+
+      {useIsAdmin().isAdmin && <KBObservability />}
     </div>
   );
 }

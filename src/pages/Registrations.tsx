@@ -64,8 +64,8 @@ function classifyAttendee(e: { raw?: Record<string, unknown> | null }): Attendee
   const sheet = String((e.raw as Record<string, unknown> | null)?.__sheet ?? "").toLowerCase();
   if (!sheet) return "other";
   if (sheet.includes("vip")) return "vip";
-  if (sheet.includes("school") || sheet.includes("nie") || sheet.includes("glf") || sheet.includes("gslc")) return "schools";
   if (sheet.includes("guest")) return "guests";
+  if (sheet.includes("school") || sheet.includes("nie") || sheet.includes("gslc") || sheet.includes("glf")) return "schools";
   return "other";
 }
 
@@ -160,7 +160,9 @@ export default function SchoolRegistrations() {
       toast.error("Failed to load event attendees");
       return;
     }
-    setEvents((data ?? []) as EventAttendee[]);
+    const attendees = (data ?? []) as EventAttendee[];
+    const latestBatch = attendees.find((e) => e.upload_batch_id)?.upload_batch_id;
+    setEvents(latestBatch ? attendees.filter((e) => e.upload_batch_id === latestBatch) : attendees);
   };
 
   const handleUploadEvents = async (file: File) => {
@@ -208,6 +210,12 @@ export default function SchoolRegistrations() {
         uploaded_by: uid,
         upload_batch_id: batch,
       }));
+      const { error: clearError } = await supabase
+        .from("event_attendees")
+        .delete()
+        .eq("event_name", DEFAULT_EVENT_NAME);
+      if (clearError) throw clearError;
+
       const CHUNK = 500;
       for (let i = 0; i < rows.length; i += CHUNK) {
         const { error } = await supabase.from("event_attendees").insert(rows.slice(i, i + CHUNK));

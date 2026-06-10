@@ -53,10 +53,13 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         return <SettingsAppearance />;
       case "integrations":
         return <SettingsIntegrations onNavigate={onClose} />;
+      case "request_feature":
+        return <SettingsFeatureRequest />;
       case "bug":
         return <SettingsBugReport />;
       case "feature_requests":
         return <FeatureRequestsAdmin />;
+
     }
   };
 

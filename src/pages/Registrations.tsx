@@ -37,6 +37,7 @@ type EventAttendee = {
   role: string | null;
   city: string | null;
   raw: Record<string, unknown>;
+  upload_batch_id: string | null;
   created_at: string;
 };
 

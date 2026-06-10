@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Loader2, BookOpen, Upload as UploadIcon, Settings as SettingsIcon, BarChart3, FileStack } from "lucide-react";
+import { Loader2, BookOpen, Upload as UploadIcon, BarChart3, FileStack } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";

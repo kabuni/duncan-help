@@ -11,6 +11,7 @@ import { useGmailStatus, useGmailConnect, useGmailDisconnect } from "@/hooks/use
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import SettingsGmail from "./SettingsGmail";
 
 type Row = {
   id: string;

@@ -37,14 +37,20 @@ const KPL_PAGE_GROUPS: PageGroup[] = [
   { key: "kabuni-premier-league", label: "Kabuni Premier League", paths: ["/kabuni-premier-league", "/kabuni-premier-league/"] },
 ];
 
+const EVENTS_PAGE_GROUPS: PageGroup[] = [
+  { key: "events", label: "Events", paths: ["/events", "/events/"] },
+  { key: "register-event", label: "Event Registration", paths: ["/register-event", "/register-event/"] },
+];
+
 // Category registry — add new entries here to scale (Events, Recruitment, Scout, etc.)
-type CategoryKey = "schools" | "kpl";
+type CategoryKey = "schools" | "kpl" | "events";
 const CATEGORIES: { key: CategoryKey; label: string }[] = [
   { key: "schools", label: "Schools Registrations" },
   { key: "kpl", label: "KPL Registrations" },
+  { key: "events", label: "Event Registrations" },
 ];
 
-const ALL_PAGE_GROUPS: PageGroup[] = [...SCHOOLS_PAGE_GROUPS, ...KPL_PAGE_GROUPS];
+const ALL_PAGE_GROUPS: PageGroup[] = [...SCHOOLS_PAGE_GROUPS, ...KPL_PAGE_GROUPS, ...EVENTS_PAGE_GROUPS];
 
 export default function SchoolRegistrations() {
   const { isAdmin, isLoading: loadingRole } = useIsAdmin();
@@ -299,6 +305,62 @@ export default function SchoolRegistrations() {
           </Card>
 
           <PagesAnalytics title="Kabuni Premier League Analytics" groups={KPL_PAGE_GROUPS} hideOverall />
+        </TabsContent>
+
+        {/* Events */}
+        <TabsContent value="events" className="space-y-6 mt-0">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h2 className="text-lg font-semibold tracking-tight">Event Registrations</h2>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled>
+                <Download className="h-4 w-4 mr-2" />
+                CSV
+              </Button>
+              <Button variant="outline" size="sm" disabled>
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Excel
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Total Registrations</div>
+                <div className="mt-1 text-2xl font-semibold tabular-nums">—</div>
+                <div className="mt-1 text-xs text-muted-foreground">No event form connected</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">This Week</div>
+                <div className="mt-1 text-2xl font-semibold tabular-nums">—</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">This Month</div>
+                <div className="mt-1 text-2xl font-semibold tabular-nums">—</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Event Registrations</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-start gap-3 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  Event registration submissions aren't being captured yet. Once an event form is wired to the
+                  backend, submissions and exports will appear here automatically alongside the analytics below.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <PagesAnalytics title="Events Analytics" groups={EVENTS_PAGE_GROUPS} hideOverall />
         </TabsContent>
       </Tabs>
     </div>

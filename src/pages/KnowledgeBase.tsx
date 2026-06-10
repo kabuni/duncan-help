@@ -10,6 +10,8 @@ import KBScopePicker, { KBScope } from "@/components/kb/KBScopePicker";
 import { KBCategorySelect, KBSubcategorySelect } from "@/components/kb/KBCategorySelect";
 import KBTagsInput from "@/components/kb/KBTagsInput";
 import KBRecentUploads from "@/components/kb/KBRecentUploads";
+import KBObservability from "@/components/kb/KBObservability";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import { getFileType } from "@/lib/kbTaxonomy";
 
 function fileToBase64(file: File): Promise<string> {

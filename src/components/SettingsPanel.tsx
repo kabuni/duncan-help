@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Settings, User, Bug, Palette, Mail, Lightbulb, Plug } from "lucide-react";
+import { X, Settings, User, Bug, Palette, Lightbulb, Plug } from "lucide-react";
 import SettingsGeneral from "./settings/SettingsGeneral";
 import SettingsProfile from "./settings/SettingsProfile";
 import SettingsBugReport from "./settings/SettingsBugReport";
 import SettingsAppearance from "./settings/SettingsAppearance";
-import SettingsGmail from "./settings/SettingsGmail";
 import FeatureRequestsAdmin from "./settings/FeatureRequestsAdmin";
 import SettingsIntegrations from "./settings/SettingsIntegrations";
 import { useIsAdmin } from "@/hooks/useUserRoles";
@@ -15,14 +14,13 @@ const baseSections = [
   { id: "general", label: "General", icon: Settings },
   { id: "profile", label: "Profile", icon: User },
   { id: "appearance", label: "Appearance", icon: Palette },
-  { id: "gmail", label: "Gmail", icon: Mail },
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "bug", label: "Bug Report", icon: Bug },
 ] as const;
 
 const adminFeatureSection = { id: "feature_requests", label: "Feature Requests", icon: Lightbulb } as const;
 
-type SectionId = "general" | "profile" | "appearance" | "gmail" | "integrations" | "bug" | "feature_requests";
+type SectionId = "general" | "profile" | "appearance" | "integrations" | "bug" | "feature_requests";
 
 interface SettingsPanelProps {
   open: boolean;
@@ -50,8 +48,6 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         return <SettingsProfile />;
       case "appearance":
         return <SettingsAppearance />;
-      case "gmail":
-        return <SettingsGmail />;
       case "integrations":
         return <SettingsIntegrations onNavigate={onClose} />;
       case "bug":

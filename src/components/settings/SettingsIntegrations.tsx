@@ -11,6 +11,7 @@ import { useGmailStatus, useGmailConnect, useGmailDisconnect } from "@/hooks/use
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import SettingsGmail from "./SettingsGmail";
 
 type Row = {
   id: string;
@@ -221,6 +222,12 @@ export default function SettingsIntegrations({ onNavigate: _onNavigate }: Props)
               </div>
 
               <div>{renderDetailActions(openRow)}</div>
+
+              {openRow.id === "gmail" && (
+                <div className="border-t border-border pt-4 mt-2">
+                  <SettingsGmail embedded />
+                </div>
+              )}
             </div>
           </div>
         </div>

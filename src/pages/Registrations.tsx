@@ -182,7 +182,8 @@ export default function SchoolRegistrations() {
           .filter((r) => {
             const name = pickField(r, FIELD_ALIASES.name);
             const email = pickField(r, FIELD_ALIASES.email);
-            return !!(name || email);
+            const company = pickField(r, FIELD_ALIASES.company);
+            return !!(name || email || company);
           });
         perSheet.push({ sheet: sheetName, kept: kept.length, total: parsed.length });
         allRows.push(...kept);

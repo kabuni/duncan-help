@@ -800,13 +800,17 @@ export type Database = {
           blob_path: string
           blob_url: string
           category: string | null
+          chars_extracted: number | null
           chunk_count: number
+          chunks_generated: number | null
           created_at: string
           error_message: string | null
           file_name: string
           file_type: string
           id: string
           owner_id: string
+          page_count: number | null
+          processing_started_at: string | null
           scope: string
           status: string
           subcategory: string | null
@@ -818,13 +822,17 @@ export type Database = {
           blob_path?: string
           blob_url?: string
           category?: string | null
+          chars_extracted?: number | null
           chunk_count?: number
+          chunks_generated?: number | null
           created_at?: string
           error_message?: string | null
           file_name: string
           file_type: string
           id?: string
           owner_id: string
+          page_count?: number | null
+          processing_started_at?: string | null
           scope: string
           status?: string
           subcategory?: string | null
@@ -836,13 +844,17 @@ export type Database = {
           blob_path?: string
           blob_url?: string
           category?: string | null
+          chars_extracted?: number | null
           chunk_count?: number
+          chunks_generated?: number | null
           created_at?: string
           error_message?: string | null
           file_name?: string
           file_type?: string
           id?: string
           owner_id?: string
+          page_count?: number | null
+          processing_started_at?: string | null
           scope?: string
           status?: string
           subcategory?: string | null

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Loader2, BookOpen, Upload as UploadIcon, Settings as SettingsIcon, BarChart3, FileStack } from "lucide-react";
+import { Loader2, BookOpen, Upload as UploadIcon, BarChart3, FileStack } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -116,7 +116,7 @@ export default function KnowledgeBase() {
         <TabsList>
           <TabsTrigger value="documents" className="gap-2"><FileStack className="h-4 w-4" />Documents</TabsTrigger>
           {isAdmin && <TabsTrigger value="analytics" className="gap-2"><BarChart3 className="h-4 w-4" />Analytics</TabsTrigger>}
-          <TabsTrigger value="settings" className="gap-2"><SettingsIcon className="h-4 w-4" />Settings</TabsTrigger>
+          
         </TabsList>
 
         <TabsContent value="documents" className="space-y-6">
@@ -172,16 +172,6 @@ export default function KnowledgeBase() {
             <KBObservability />
           </TabsContent>
         )}
-
-        <TabsContent value="settings">
-          <section className="rounded-xl border bg-card p-12 text-center">
-            <SettingsIcon className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
-            <h3 className="text-sm font-semibold">Knowledge Base settings</h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-              Retention rules, chunk sizing, embedding model, and re-index controls will live here. Nothing to configure yet.
-            </p>
-          </section>
-        </TabsContent>
       </Tabs>
     </div>
   );

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Loader2, BookOpen, Upload as UploadIcon, BarChart3, FileStack } from "lucide-react";
+import { Loader2, Upload as UploadIcon, BarChart3, FileStack } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -99,18 +99,13 @@ export default function KnowledgeBase() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-10 space-y-8">
-      <header className="flex items-start gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-          <BookOpen className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Knowledge Base</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Upload documents to train Duncan, manage what's indexed, and monitor retrieval quality.
-          </p>
-        </div>
-      </header>
+    <div className="max-w-3xl mx-auto py-6 sm:py-8 px-4 sm:px-6 space-y-8">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Knowledge Base</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+          Upload documents to train Duncan, manage what's indexed, and monitor retrieval quality.
+        </p>
+      </div>
 
       <Tabs defaultValue="documents" className="space-y-6">
         <TabsList>

@@ -51,6 +51,24 @@ const FIELD_ALIASES: Record<keyof Pick<EventAttendee, "name" | "email" | "phone"
   city: ["city", "location", "town"],
 };
 
+type AttendeeCategory = "schools" | "vip" | "guests" | "other";
+
+const CATEGORY_LABEL: Record<AttendeeCategory, string> = {
+  schools: "Schools",
+  vip: "VIP",
+  guests: "Guests",
+  other: "Other",
+};
+
+function classifyAttendee(e: { raw?: Record<string, unknown> | null }): AttendeeCategory {
+  const sheet = String((e.raw as Record<string, unknown> | null)?.__sheet ?? "").toLowerCase();
+  if (!sheet) return "other";
+  if (sheet.includes("vip")) return "vip";
+  if (sheet.includes("school") || sheet.includes("nie") || sheet.includes("glf") || sheet.includes("gslc")) return "schools";
+  if (sheet.includes("guest")) return "guests";
+  return "other";
+}
+
 function pickField(row: Record<string, unknown>, aliases: string[]): string | null {
   const normalized: Record<string, unknown> = {};
   for (const k of Object.keys(row)) normalized[k.toLowerCase().trim()] = row[k];
@@ -246,9 +264,10 @@ export default function SchoolRegistrations() {
   };
 
   const exportEventRows = () =>
-    events.map((e) => ({
+    (eventCategory === "all" ? events : events.filter((e) => classifyAttendee(e) === eventCategory)).map((e) => ({
       Imported: format(new Date(e.created_at), "yyyy-MM-dd HH:mm"),
       Event: e.event_name,
+      Category: CATEGORY_LABEL[classifyAttendee(e)],
       Name: e.name ?? "",
       Email: e.email ?? "",
       Phone: e.phone ?? "",
@@ -256,6 +275,7 @@ export default function SchoolRegistrations() {
       Role: e.role ?? "",
       City: e.city ?? "",
     }));
+
 
   const handleExportEventsCsv = () => {
     if (!events.length) return toast.error("Nothing to export");
@@ -290,6 +310,20 @@ export default function SchoolRegistrations() {
     const since = Date.now() - 30 * 86400000;
     return events.filter((e) => new Date(e.created_at).getTime() >= since).length;
   }, [events]);
+
+  const eventCounts = useMemo(() => {
+    const c = { schools: 0, vip: 0, guests: 0, other: 0 };
+    for (const e of events) c[classifyAttendee(e)] += 1;
+    return c;
+  }, [events]);
+
+  const [eventCategory, setEventCategory] = useState<"all" | AttendeeCategory>("all");
+
+  const filteredEvents = useMemo(() => {
+    if (eventCategory === "all") return events;
+    return events.filter((e) => classifyAttendee(e) === eventCategory);
+  }, [events, eventCategory]);
+
 
   const load = async () => {
     setLoading(true);
@@ -600,34 +634,48 @@ export default function SchoolRegistrations() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Total Attendees</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums">{events.length}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{DEFAULT_EVENT_NAME}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Imported · 7d</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums">{eventsThisWeek}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Imported · 30d</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums">{eventsThisMonth}</div>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {([
+              { key: "all", label: "Total Attendees", count: events.length, sub: DEFAULT_EVENT_NAME },
+              { key: "schools", label: "Schools", count: eventCounts.schools, sub: "NIE, Non-NIE, GLF, GSLC" },
+              { key: "vip", label: "VIP", count: eventCounts.vip, sub: "From Guest List Final" },
+              { key: "guests", label: "Guests", count: eventCounts.guests, sub: "Kabuni guest list" },
+            ] as const).map((tile) => {
+              const active = eventCategory === tile.key;
+              return (
+                <button
+                  key={tile.key}
+                  type="button"
+                  onClick={() => setEventCategory(tile.key)}
+                  className={`text-left rounded-lg border bg-card p-4 transition-colors ${
+                    active ? "border-primary ring-1 ring-primary/30" : "hover:bg-secondary/40"
+                  }`}
+                >
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">{tile.label}</div>
+                  <div className="mt-1 text-2xl font-semibold tabular-nums">{tile.count}</div>
+                  <div className="mt-1 text-xs text-muted-foreground line-clamp-1">{tile.sub}</div>
+                </button>
+              );
+            })}
           </div>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
               <CardTitle className="text-base">
-                {events.length} {events.length === 1 ? "attendee" : "attendees"}
+                {filteredEvents.length} {filteredEvents.length === 1 ? "attendee" : "attendees"}
+                {eventCategory !== "all" && (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    · {CATEGORY_LABEL[eventCategory]}
+                  </span>
+                )}
               </CardTitle>
+              {eventCategory !== "all" && (
+                <Button variant="ghost" size="sm" onClick={() => setEventCategory("all")}>
+                  Show all
+                </Button>
+              )}
             </CardHeader>
+
             <CardContent>
               {eventsLoading ? (
                 <div className="flex items-center justify-center py-12">
@@ -654,6 +702,7 @@ export default function SchoolRegistrations() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Imported</TableHead>
+                        <TableHead>Category</TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Phone</TableHead>
@@ -664,10 +713,17 @@ export default function SchoolRegistrations() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {events.map((e) => (
+                      {filteredEvents.map((e) => {
+                        const cat = classifyAttendee(e);
+                        return (
                         <TableRow key={e.id}>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {format(new Date(e.created_at), "d MMM yyyy HH:mm")}
+                          </TableCell>
+                          <TableCell>
+                            <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                              {CATEGORY_LABEL[cat]}
+                            </span>
                           </TableCell>
                           <TableCell className="font-medium">{e.name ?? "—"}</TableCell>
                           <TableCell>
@@ -689,7 +745,9 @@ export default function SchoolRegistrations() {
                             </Button>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
+
                     </TableBody>
                   </Table>
                 </div>

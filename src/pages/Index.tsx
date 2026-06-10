@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Trash2, Loader2, Download, Copy, Check,
-  Sparkles,
+  Sparkles, BookOpen,
 } from "lucide-react";
 
 import ReactMarkdown from "react-markdown";

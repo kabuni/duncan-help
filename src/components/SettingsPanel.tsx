@@ -16,8 +16,8 @@ const baseSections = [
   { id: "profile", label: "Profile", icon: User },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "integrations", label: "Integrations", icon: Plug },
-  { id: "request_feature", label: "Request Feature", icon: Sparkles },
   { id: "bug", label: "Bug Report", icon: Bug },
+  { id: "request_feature", label: "Request Feature", icon: Sparkles },
 ] as const;
 
 const adminFeatureSection = { id: "feature_requests", label: "Feature Requests", icon: Lightbulb } as const;

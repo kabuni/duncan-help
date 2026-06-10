@@ -100,17 +100,12 @@ export default function KnowledgeBase() {
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10 space-y-8">
-      <header className="flex items-start gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-          <BookOpen className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Knowledge Base</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Upload documents to train Duncan, manage what's indexed, and monitor retrieval quality.
-          </p>
-        </div>
-      </header>
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Knowledge Base</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+          Upload documents to train Duncan, manage what's indexed, and monitor retrieval quality.
+        </p>
+      </div>
 
       <Tabs defaultValue="documents" className="space-y-6">
         <TabsList>

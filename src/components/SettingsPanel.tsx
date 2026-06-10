@@ -7,7 +7,6 @@ import SettingsBugReport from "./settings/SettingsBugReport";
 import SettingsAppearance from "./settings/SettingsAppearance";
 import SettingsFeatureRequest from "./settings/SettingsFeatureRequest";
 import SettingsIntegrations from "./settings/SettingsIntegrations";
-import { useIsAdmin } from "@/hooks/useUserRoles";
 import { cn } from "@/lib/utils";
 
 const baseSections = [

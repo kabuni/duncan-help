@@ -568,7 +568,7 @@ const Index = () => {
           isVoiceActive={voiceOpen}
         />
       </main>
-      <FeatureRequestModal open={featureRequestOpen} onClose={() => setFeatureRequestOpen(false)} />
+      
       <VoiceModeOverlay
         open={voiceOpen}
         onClose={() => setVoiceOpen(false)}

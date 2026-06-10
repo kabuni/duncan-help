@@ -46,6 +46,7 @@ export default function KnowledgeBase() {
   const [tags, setTags] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const { isAdmin } = useIsAdmin();
 
   const canSubmit = files.length > 0 && !uploading && (scope === "private" || (category && subcategory));
 

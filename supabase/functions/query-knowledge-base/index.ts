@@ -53,6 +53,7 @@ Deno.serve(async (req) => {
     }
     const uid = userData.user.id;
     const requestedCount = Math.min(Math.max(Number(match_count) || 8, 1), 25);
+    const t0 = Date.now();
 
     const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY")!;
     const embRes = await fetch("https://api.openai.com/v1/embeddings", {

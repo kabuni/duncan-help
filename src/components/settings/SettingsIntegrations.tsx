@@ -223,9 +223,9 @@ export default function SettingsIntegrations({ onNavigate: _onNavigate }: Props)
 
               <div>{renderDetailActions(openRow)}</div>
 
-              {openRow.id === "gmail" && statusFor(openRow) === "connected" && (
+              {openRow.id === "gmail" && (
                 <div className="border-t border-border pt-4 mt-2">
-                  <SettingsGmail />
+                  <SettingsGmail embedded />
                 </div>
               )}
             </div>

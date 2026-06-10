@@ -90,34 +90,73 @@ Deno.serve(async (req) => {
     if (docsErr) throw docsErr;
 
     const titleMatchedDocs = (docs || []).filter((d: any) => titleMatches(query, d.title || "", d.file_name || ""));
-    const k = titleMatchedDocs.length > 0 ? 50 : requestedCount;
-    let titleMatchesResults: any[] = [];
+    const titleMatchedIds = new Set(titleMatchedDocs.map((d: any) => d.id));
+
+    // Title-match path: rather than dumping up to 50 sequential chunks with
+    // similarity=1 (which crowds the slice and pushes real semantic matches
+    // out), we run the same semantic search restricted to the title-matched
+    // doc ids, take the top N per doc, apply a similarity boost, then merge
+    // with the general semantic matches into a single ranked list capped at
+    // `requestedCount`.
+    const PER_DOC_CAP = 5;
+    const TITLE_BOOST = 1.15;
+    let titleSemanticResults: any[] = [];
     if (titleMatchedDocs.length > 0) {
-      const { data: chunks, error: chunksErr } = await service
-        .from("document_chunks")
-        .select("id,document_id,content,chunk_index,metadata")
-        .in("document_id", titleMatchedDocs.map((d: any) => d.id))
-        .order("chunk_index", { ascending: true })
-        .limit(k);
-      if (chunksErr) throw chunksErr;
+      const { data: titleSem, error: titleSemErr } = await service.rpc("match_documents", {
+        query_embedding: queryEmbedding,
+        match_threshold: 0.3,
+        match_count: Math.max(requestedCount * 2, PER_DOC_CAP * titleMatchedDocs.length),
+        p_user_id: uid,
+      });
+      if (titleSemErr) throw titleSemErr;
+
       const titleById = new Map(titleMatchedDocs.map((d: any) => [d.id, d.title]));
-      titleMatchesResults = (chunks || []).map((c: any) => ({
-        ...c,
-        similarity: 1,
-        document_title: titleById.get(c.document_id) || c.metadata?.document_title || "Knowledge Base document",
-        match_type: "title",
-      }));
+      const perDocCount = new Map<string, number>();
+      titleSemanticResults = (titleSem || [])
+        .filter((r: any) => titleMatchedIds.has(r.document_id))
+        .map((r: any) => ({
+          ...r,
+          similarity: Math.min(1, (r.similarity ?? 0) * TITLE_BOOST),
+          document_title: r.document_title || titleById.get(r.document_id) || "Knowledge Base document",
+          match_type: "title+semantic",
+        }))
+        .filter((r: any) => {
+          const n = perDocCount.get(r.document_id) || 0;
+          if (n >= PER_DOC_CAP) return false;
+          perDocCount.set(r.document_id, n + 1);
+          return true;
+        });
+
+      // Fallback: if semantic returned nothing inside the title-matched docs
+      // (very short / noisy queries), surface the first 3 chunks per doc so
+      // the user still sees the document they named.
+      if (titleSemanticResults.length === 0) {
+        const { data: chunks } = await service
+          .from("document_chunks")
+          .select("id,document_id,content,chunk_index,metadata")
+          .in("document_id", titleMatchedDocs.map((d: any) => d.id))
+          .order("chunk_index", { ascending: true })
+          .limit(3 * titleMatchedDocs.length);
+        titleSemanticResults = (chunks || []).map((c: any) => ({
+          ...c,
+          similarity: 0.7,
+          document_title: titleById.get(c.document_id) || c.metadata?.document_title || "Knowledge Base document",
+          match_type: "title-fallback",
+        }));
+      }
     }
 
     const seen = new Set<string>();
-    const results = [...titleMatchesResults, ...(semanticMatches || [])]
+    const results = [...titleSemanticResults, ...(semanticMatches || [])]
       .filter((r: any) => {
         const key = `${r.document_id}:${r.chunk_index}`;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
       })
-      .slice(0, k);
+      .sort((a: any, b: any) => (b.similarity ?? 0) - (a.similarity ?? 0))
+      .slice(0, requestedCount);
+
     let formatted_context = "";
     if (results.length > 0) {
       const blocks = results.map((r: any) =>

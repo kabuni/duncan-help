@@ -1,10 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { Buffer } from "node:buffer";
-// @ts-ignore
-import pdfParse from "npm:pdf-parse@1.1.1";
 import JSZip from "npm:jszip@3.10.1";
 // @ts-ignore
 import * as XLSX from "npm:xlsx@0.18.5";
+import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -72,32 +70,37 @@ async function downloadBlobBytes(doc: any): Promise<Uint8Array> {
   return new Uint8Array(await dl.arrayBuffer());
 }
 
-// ~4 chars/token rough; 500 tokens ≈ 2000 chars; overlap 100 tok ≈ 400 chars
 const CHUNK_CHARS = 2000;
 const OVERLAP_CHARS = 400;
 const EMBED_BATCH = 20;
 
-async function extractText(bytes: Uint8Array, fileType: string): Promise<string> {
+interface ExtractResult {
+  text: string;
+  pageCount: number | null;
+}
+
+async function extractText_(bytes: Uint8Array, fileType: string): Promise<ExtractResult> {
   const t = (fileType || "").toLowerCase();
   if (t === "txt" || t === "csv" || t === "md") {
-    return new TextDecoder().decode(bytes);
+    return { text: new TextDecoder().decode(bytes), pageCount: null };
   }
   if (t === "pdf") {
-    const buf = Buffer.from(bytes);
-    const res = await pdfParse(buf);
-    return res.text || "";
+    const pdf = await getDocumentProxy(bytes);
+    const { text, totalPages } = await extractText(pdf, { mergePages: true });
+    const joined = (Array.isArray(text) ? text.join("\n\n") : String(text || "")).trim();
+    return { text: joined, pageCount: totalPages ?? null };
   }
   if (t === "docx") {
     const zip = await JSZip.loadAsync(bytes);
     const xml = await zip.file("word/document.xml")?.async("string");
-    if (!xml) return "";
-    // Strip XML tags; preserve paragraph breaks
-    return xml
+    if (!xml) return { text: "", pageCount: null };
+    const text = xml
       .replace(/<w:p[ >]/g, "\n<w:p ")
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+\n/g, "\n")
       .replace(/[ \t]+/g, " ")
       .trim();
+    return { text, pageCount: null };
   }
   if (t === "xlsx" || t === "xls") {
     const wb = XLSX.read(bytes, { type: "array" });
@@ -106,7 +109,7 @@ async function extractText(bytes: Uint8Array, fileType: string): Promise<string>
       parts.push(`# Sheet: ${name}`);
       parts.push(XLSX.utils.sheet_to_csv(wb.Sheets[name]));
     }
-    return parts.join("\n\n");
+    return { text: parts.join("\n\n"), pageCount: wb.SheetNames.length };
   }
   throw new Error(`Unsupported file type: ${fileType}`);
 }
@@ -119,7 +122,6 @@ function chunkText(text: string): string[] {
   while (i < clean.length) {
     let end = Math.min(i + CHUNK_CHARS, clean.length);
     if (end < clean.length) {
-      // Find sentence boundary within last 300 chars
       const slice = clean.slice(i, end);
       const lastBreak = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("\n"), slice.lastIndexOf("! "), slice.lastIndexOf("? "));
       if (lastBreak > CHUNK_CHARS * 0.5) end = i + lastBreak + 1;
@@ -143,20 +145,77 @@ async function embedBatch(inputs: string[]): Promise<number[][]> {
   return j.data.map((d: any) => d.embedding);
 }
 
+/**
+ * Quality gate. Returns null if OK, or a human-readable failure reason.
+ * For PDFs, we require an average density of ≥200 chars/page AND at least
+ * max(2, ceil(pages/10)) chunks. This catches scanned/image-only PDFs that
+ * pdf-parse used to silently collapse into a handful of chunks.
+ */
+function qualityFailureReason(opts: {
+  fileType: string;
+  pageCount: number | null;
+  charsExtracted: number;
+  chunksGenerated: number;
+}): string | null {
+  const { fileType, pageCount, charsExtracted, chunksGenerated } = opts;
+  if (charsExtracted < 20 || chunksGenerated === 0) {
+    return `Extraction produced no usable text (chars=${charsExtracted}, chunks=${chunksGenerated}). The file may be image-only or scanned. OCR is not yet enabled.`;
+  }
+  if (fileType === "pdf" && pageCount && pageCount > 1) {
+    const density = charsExtracted / pageCount;
+    if (density < 200) {
+      return `Low text density: only ${charsExtracted.toLocaleString()} chars across ${pageCount} pages (${density.toFixed(0)} chars/page, threshold 200). PDF is likely image-based or uses vector text without a text layer; OCR is required.`;
+    }
+    // Only enforce a chunk floor when the text volume actually warrants
+    // multiple chunks — short documents legitimately produce 1 chunk.
+    const expectedChunks = Math.max(1, Math.floor(charsExtracted / (CHUNK_CHARS * 0.6)));
+    if (chunksGenerated < Math.min(expectedChunks, Math.max(2, Math.ceil(pageCount / 10)))) {
+      return `Too few chunks: ${chunksGenerated} generated from ${pageCount} pages with ${charsExtracted.toLocaleString()} chars. Extraction likely incomplete.`;
+    }
+  }
+
+  return null;
+}
+
 async function process(document_id: string) {
   const { data: doc, error: docErr } = await supabase
     .from("documents").select("*").eq("id", document_id).single();
   if (docErr || !doc) throw new Error(`Document not found: ${document_id}`);
 
+  // Mark when processing started (used by recover-stuck-documents)
+  await supabase.from("documents")
+    .update({ status: "processing", processing_started_at: new Date().toISOString(), error_message: null })
+    .eq("id", document_id);
+
   try {
-    // Download from Azure using SharedKey when available, because the container is private.
     const bytes = await downloadBlobBytes(doc);
 
-    const text = await extractText(bytes, doc.file_type);
+    const { text, pageCount } = await extractText_(bytes, doc.file_type);
+    const charsExtracted = text.length;
     const chunks = chunkText(text);
-    if (chunks.length === 0) throw new Error("No text content extracted");
+    const chunksGenerated = chunks.length;
 
-    // Wipe any prior chunks
+    const reason = qualityFailureReason({
+      fileType: (doc.file_type || "").toLowerCase(),
+      pageCount,
+      charsExtracted,
+      chunksGenerated,
+    });
+    if (reason) {
+      await supabase.from("documents").update({
+        status: "failed",
+        error_message: reason,
+        page_count: pageCount,
+        chars_extracted: charsExtracted,
+        chunks_generated: chunksGenerated,
+        chunk_count: 0,
+      }).eq("id", document_id);
+      // Make sure no stale chunks remain from a previous run
+      await supabase.from("document_chunks").delete().eq("document_id", document_id);
+      return;
+    }
+
+    // Wipe any prior chunks before re-inserting
     await supabase.from("document_chunks").delete().eq("document_id", document_id);
 
     let inserted = 0;
@@ -183,7 +242,14 @@ async function process(document_id: string) {
     }
 
     await supabase.from("documents")
-      .update({ status: "ready", chunk_count: inserted, error_message: null })
+      .update({
+        status: "ready",
+        chunk_count: inserted,
+        error_message: null,
+        page_count: pageCount,
+        chars_extracted: charsExtracted,
+        chunks_generated: chunksGenerated,
+      })
       .eq("id", document_id);
   } catch (e: any) {
     console.error("process-document failed", e);

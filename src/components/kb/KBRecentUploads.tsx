@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Trash2, FileText, FileSpreadsheet, File as FileIcon, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, Trash2, FileText, FileSpreadsheet, File as FileIcon, CheckCircle2, XCircle, RefreshCw, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface DocRow {
   id: string;
@@ -15,6 +16,9 @@ interface DocRow {
   status: string;
   error_message: string | null;
   chunk_count: number;
+  page_count: number | null;
+  chars_extracted: number | null;
+  chunks_generated: number | null;
   created_at: string;
   blob_path: string;
 }
@@ -29,18 +33,67 @@ function typeIcon(t: string) {
 function StatusBadge({ s, err }: { s: string; err?: string | null }) {
   if (s === "processing") return <Badge variant="secondary" className="gap-1"><Loader2 className="h-3 w-3 animate-spin" />Processing</Badge>;
   if (s === "ready") return <Badge variant="default" className="gap-1 bg-emerald-600 hover:bg-emerald-600"><CheckCircle2 className="h-3 w-3" />Ready</Badge>;
-  if (s === "failed") return <Badge variant="destructive" className="gap-1" title={err ?? ""}><XCircle className="h-3 w-3" />Failed</Badge>;
+  if (s === "failed") {
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="destructive" className="gap-1 cursor-help">
+              <XCircle className="h-3 w-3" />Failed
+            </Badge>
+          </TooltipTrigger>
+          {err && (
+            <TooltipContent className="max-w-xs text-xs leading-snug">
+              {err}
+            </TooltipContent>
+          )}
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
   return <Badge variant="secondary">{s}</Badge>;
+}
+
+function QualityCell({ r }: { r: DocRow }) {
+  if (r.status === "processing") return <span className="text-muted-foreground text-xs">—</span>;
+  const pages = r.page_count;
+  const chars = r.chars_extracted;
+  const chunks = r.chunks_generated ?? r.chunk_count;
+  if (chars == null && chunks == null && pages == null) {
+    return <span className="text-muted-foreground text-xs">—</span>;
+  }
+  const density = pages && chars ? Math.round(chars / pages) : null;
+  const lowDensity = r.file_type === "pdf" && density != null && pages! > 1 && density < 200;
+  return (
+    <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+      {pages != null && <span>{pages}p</span>}
+      {chars != null && <span>· {chars.toLocaleString()}c</span>}
+      {chunks != null && <span>· {chunks} chunks</span>}
+      {lowDensity && (
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <AlertTriangle className="h-3 w-3 text-amber-500" />
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs text-xs">
+              Low text density ({density} chars/page). Likely image-based PDF — OCR needed.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </div>
+  );
 }
 
 export default function KBRecentUploads({ refreshKey }: { refreshKey: number }) {
   const [rows, setRows] = useState<DocRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [retrying, setRetrying] = useState<Set<string>>(new Set());
 
   const load = async () => {
     const { data, error } = await supabase
       .from("documents")
-      .select("id,title,file_name,file_type,scope,category,status,error_message,chunk_count,created_at,blob_path")
+      .select("id,title,file_name,file_type,scope,category,status,error_message,chunk_count,page_count,chars_extracted,chunks_generated,created_at,blob_path")
       .order("created_at", { ascending: false })
       .limit(20);
     if (!error && data) setRows(data as DocRow[]);
@@ -63,6 +116,24 @@ export default function KBRecentUploads({ refreshKey }: { refreshKey: number }) 
     else { toast.success("Deleted"); load(); }
   };
 
+  const onRetry = async (id: string) => {
+    setRetrying((s) => new Set(s).add(id));
+    try {
+      await supabase.from("documents").update({
+        status: "processing",
+        error_message: null,
+      }).eq("id", id);
+      const { error } = await supabase.functions.invoke("process-document", { body: { document_id: id } });
+      if (error) throw error;
+      toast.success("Reprocessing started");
+      load();
+    } catch (e: any) {
+      toast.error(e?.message || "Retry failed");
+    } finally {
+      setRetrying((s) => { const n = new Set(s); n.delete(id); return n; });
+    }
+  };
+
   return (
     <div className="rounded-lg border bg-card">
       <div className="flex items-center justify-between border-b px-4 py-3">
@@ -80,8 +151,8 @@ export default function KBRecentUploads({ refreshKey }: { refreshKey: number }) 
               <tr>
                 <th className="text-left px-4 py-2 font-medium">Title</th>
                 <th className="text-left px-4 py-2 font-medium">Scope</th>
-                <th className="text-left px-4 py-2 font-medium">Category</th>
                 <th className="text-left px-4 py-2 font-medium">Status</th>
+                <th className="text-left px-4 py-2 font-medium">Quality</th>
                 <th className="text-left px-4 py-2 font-medium">Date</th>
                 <th className="px-4 py-2"></th>
               </tr>
@@ -92,21 +163,36 @@ export default function KBRecentUploads({ refreshKey }: { refreshKey: number }) 
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2">
                       {typeIcon(r.file_type)}
-                      <span className="truncate max-w-[280px]">{r.title}</span>
+                      <span className="truncate max-w-[280px]" title={r.title}>{r.title}</span>
                     </div>
                   </td>
                   <td className="px-4 py-2.5">
                     <Badge variant="outline" className="text-xs">{r.scope === "public" ? "Company" : "Private"}</Badge>
                   </td>
-                  <td className="px-4 py-2.5 text-muted-foreground text-xs">{r.category ?? "—"}</td>
                   <td className="px-4 py-2.5"><StatusBadge s={r.status} err={r.error_message} /></td>
+                  <td className="px-4 py-2.5"><QualityCell r={r} /></td>
                   <td className="px-4 py-2.5 text-muted-foreground text-xs">
                     {new Date(r.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    <Button variant="ghost" size="sm" onClick={() => onDelete(r.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      {(r.status === "failed" || r.status === "ready") && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onRetry(r.id)}
+                          disabled={retrying.has(r.id)}
+                          title={r.status === "failed" ? "Retry" : "Reprocess"}
+                        >
+                          {retrying.has(r.id)
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <RefreshCw className="h-4 w-4" />}
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => onDelete(r.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

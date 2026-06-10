@@ -52,9 +52,6 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         return <SettingsFeatureRequest />;
       case "bug":
         return <SettingsBugReport />;
-      case "feature_requests":
-        return <FeatureRequestsAdmin />;
-
     }
   };
 

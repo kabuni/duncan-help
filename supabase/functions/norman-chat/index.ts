@@ -5803,6 +5803,182 @@ Format as a natural, readable summary with clear sections. If a section has no d
       return `## ${meeting.title?.trim() || "Latest meeting notes"}\n\n- **Date:** ${date}\n- **Source:** Plaud\n\n${body.slice(0, 40000)}`;
     };
 
+    // ===== Smart "latest meeting" router =====
+    // For "latest/most recent/last/today's/yesterday's meeting" queries WITHOUT an
+    // explicit source, check the caller's personal Gmail first (Gemini + Plaud
+    // notification emails are usually newer than what's been ingested into the
+    // meetings DB). Fall back to the meetings DB when Gmail has no match.
+    // Range queries ("last week", "this week") are explicitly NOT handled here —
+    // they continue through the normal meeting-tool flow.
+    const LATEST_MEETING_RE = /\b(?:my\s+)?(latest|most\s+recent|last|today'?s|yesterday'?s)\b[\s\S]{0,80}?\b(meeting|meetings|call|calls|notes?|transcript|transcripts|recording|recordings|standup|recap)\b/i;
+    const RANGE_HINT_RE = /\b(this\s+week|last\s+week|next\s+week|this\s+month|last\s+month|from\s+\d|between\s+\d)\b/i;
+    const isLatestMeetingIntent =
+      LATEST_MEETING_RE.test(latestUserText) &&
+      !RANGE_HINT_RE.test(latestUserText) &&
+      !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
+      !sourceAlreadyChosen;
+
+    function extractLatestTitleHint(text: string): string | null {
+      const m = text.match(/\b(?:my\s+)?(?:latest|most\s+recent|last|today'?s|yesterday'?s)\s+(.{2,60}?)\s+(?:meeting|meetings|call|calls|notes?|transcript|standup|recap|recording)\b/i);
+      if (!m) return null;
+      let hint = m[1].trim().toLowerCase().replace(/\s+/g, " ");
+      // Strip leading filler words
+      hint = hint.replace(/^(the|a|an|my)\s+/i, "").trim();
+      if (!hint || /^(meeting|call|notes?|recording|transcript)$/i.test(hint)) return null;
+      return hint;
+    }
+
+    function titleSimilarity(subject: string, hint: string): number {
+      const a = (subject || "").toLowerCase();
+      const b = (hint || "").toLowerCase();
+      if (!a || !b) return 0;
+      if (a.includes(b)) return 0.95;
+      const tokensA = new Set(a.split(/[^a-z0-9]+/).filter((t) => t.length > 2));
+      const tokensB = b.split(/[^a-z0-9]+/).filter((t) => t.length > 2);
+      if (tokensA.size === 0 || tokensB.length === 0) return 0;
+      let hits = 0;
+      for (const t of tokensB) if (tokensA.has(t)) hits++;
+      return hits / tokensB.length;
+    }
+
+    const stripPlaudBoilerplate = (notes: string): string => {
+      let out = notes;
+      const footers = [
+        /\n\s*Unsubscribe[\s\S]*$/i,
+        /\n\s*Plaud(\.ai)?[\s\S]*$/i,
+        /\n\s*You are receiving this email[\s\S]*$/i,
+      ];
+      for (const re of footers) out = out.replace(re, "").trim();
+      return out;
+    };
+
+    async function fetchLatestMeetingFromUserGmail(
+      uid: string,
+      hint: string | null,
+    ): Promise<{ ok: true; markdown: string; matchedTitle: string; source: "gemini" | "plaud" } | { ok: false; reason: "no_gmail" | "no_match" | "fetch_error"; detail?: string }> {
+      const tok = await getUserGmailAccessToken(uid);
+      if (!tok) return { ok: false, reason: "no_gmail" };
+      const headers = { Authorization: `Bearer ${tok.accessToken}` };
+      const q = [
+        '(from:gemini-notes@google.com',
+        'OR subject:"Notes -"',
+        'OR from:plaud',
+        'OR from:noreply@plaud.ai',
+        'OR subject:"meeting notes"',
+        'OR subject:"meeting summary"',
+        'OR subject:"meeting recap"',
+        'OR subject:"invited you to view")',
+        'newer_than:30d',
+      ].join(" ");
+      const listRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=${encodeURIComponent(q)}`,
+        { headers },
+      );
+      if (!listRes.ok) {
+        return { ok: false, reason: "fetch_error", detail: `Gmail list ${listRes.status}` };
+      }
+      const listJson = await listRes.json();
+      const msgIds: string[] = (listJson?.messages || []).map((m: any) => m.id);
+      if (msgIds.length === 0) return { ok: false, reason: "no_match" };
+
+      // Fetch metadata for each so we can score by subject + recency
+      const metas = await Promise.all(
+        msgIds.map(async (id) => {
+          const r = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
+            { headers },
+          );
+          if (!r.ok) return null;
+          const j = await r.json();
+          const hdrs: any[] = j?.payload?.headers || [];
+          const getH = (n: string) => hdrs.find((h) => h.name?.toLowerCase() === n.toLowerCase())?.value || "";
+          const subject = getH("Subject");
+          const from = getH("From");
+          const dateRaw = getH("Date");
+          const ts = dateRaw ? new Date(dateRaw).getTime() : (Number(j?.internalDate) || 0);
+          const source: "gemini" | "plaud" = /plaud/i.test(from) || /plaud/i.test(subject) ? "plaud" : "gemini";
+          return { id, subject, from, ts, dateRaw, source };
+        }),
+      );
+      const candidates = metas.filter(Boolean) as Array<{ id: string; subject: string; from: string; ts: number; dateRaw: string; source: "gemini" | "plaud" }>;
+      if (candidates.length === 0) return { ok: false, reason: "no_match" };
+      candidates.sort((a, b) => b.ts - a.ts);
+
+      let chosen: typeof candidates[number] | null = null;
+      if (hint) {
+        const scored = candidates
+          .map((c) => ({ c, score: titleSimilarity(c.subject, hint) }))
+          .filter((x) => x.score >= 0.5)
+          .sort((a, b) => b.score - a.score || b.c.ts - a.c.ts);
+        chosen = scored[0]?.c || null;
+        if (!chosen) return { ok: false, reason: "no_match" };
+      } else {
+        chosen = candidates[0];
+      }
+
+      const msgRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${chosen.id}?format=full`,
+        { headers },
+      );
+      if (!msgRes.ok) return { ok: false, reason: "fetch_error", detail: `Gmail get ${msgRes.status}` };
+      const msg = await msgRes.json();
+      let body = extractPlainBodyFromGmailPayload(msg?.payload);
+      body = chosen.source === "gemini" ? stripGeminiBoilerplate(body) : stripPlaudBoilerplate(body);
+      if (!body) body = "No notes content was found in this email.";
+      const dateStr = chosen.dateRaw ? new Date(chosen.dateRaw).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Date unavailable";
+      const sourceLabel = chosen.source === "plaud" ? "Plaud" : "Google Meet (Gemini)";
+      const markdown = `## ${chosen.subject || "Latest meeting notes"}\n\n- **Date:** ${dateStr}\n- **Source:** ${sourceLabel} (from your Gmail: ${tok.emailAddress || "you"})\n\n${body.slice(0, 40000)}`;
+      return { ok: true, markdown, matchedTitle: chosen.subject, source: chosen.source };
+    }
+
+    async function fetchLatestMeetingFromDb(
+      hint: string | null,
+    ): Promise<string | null> {
+      let qb = supabaseUser
+        .from("meetings")
+        .select("id, title, meeting_date, source, summary, transcript, analysis, created_at")
+        .order("meeting_date", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (hint) qb = qb.ilike("title", `%${hint}%`);
+      const { data, error } = await qb;
+      if (error || !data || data.length === 0) return null;
+      const m = data[0];
+      const dateStr = m.meeting_date ? new Date(m.meeting_date).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Date unavailable";
+      const analysis = m.analysis && typeof m.analysis === "object" ? m.analysis as any : null;
+      const notes = String(m.transcript || m.summary || analysis?.summary || "").trim() || "No transcript or notes content is available for this meeting yet.";
+      const srcLabel = m.source === "plaud" ? "Plaud" : m.source === "gemini" ? "Google Meet (Gemini)" : (m.source || "Meetings DB");
+      return `## ${m.title?.trim() || "Latest meeting"}\n\n- **Date:** ${dateStr}\n- **Source:** ${srcLabel} (from the meetings database)\n\n${notes.slice(0, 40000)}`;
+    }
+
+    if (isLatestMeetingIntent) {
+      const hint = extractLatestTitleHint(latestUserText);
+      console.log("[LATEST MEETING SMART]", { user: userId, hint, latestUserText });
+      try {
+        const gmailResult = await fetchLatestMeetingFromUserGmail(userId, hint);
+        if (gmailResult.ok) {
+          return buildTextSseResponse(gmailResult.markdown);
+        }
+        // Gmail miss → DB fallback
+        const dbMarkdown = await fetchLatestMeetingFromDb(hint);
+        if (dbMarkdown) {
+          const prefix = gmailResult.reason === "no_gmail"
+            ? `> _Personal Gmail isn't connected — pulled from the meetings database instead._\n\n`
+            : hint
+              ? `> _No Gmail match for "${hint}" — pulled the best match from the meetings database._\n\n`
+              : `> _No recent meeting notes in your Gmail — pulled the latest from the meetings database._\n\n`;
+          return buildTextSseResponse(prefix + dbMarkdown);
+        }
+        const msg = hint
+          ? `I couldn't find any recent meeting notes matching "${hint}" in either your Gmail or the meetings database. Try broadening the title, or ask me to list recent meetings.`
+          : `I couldn't find any recent meeting notes in your Gmail or the meetings database. Try syncing Plaud, or ask me to list recent meetings.`;
+        return buildTextSseResponse(msg);
+      } catch (e: any) {
+        console.error("[LATEST MEETING SMART] error", e);
+        return buildTextSseResponse(`I hit an error trying to fetch your latest meeting: ${e?.message || "unknown error"}.`);
+      }
+    }
+
     if (sourceChosenForPendingMeeting || explicitSourceMeetingRequest) {
       const selectedSource: "gemini" | "plaud" = /plaud/i.test(latestUserText) ? "plaud" : "gemini";
       const rawContent = await formatLatestSourceMeetingNotes(selectedSource);

@@ -2,43 +2,42 @@ import { Link } from "react-router-dom";
 
 const PrivacyPolicy = () => {
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#F7F8FA" }}>
+    <div className="min-h-screen bg-muted">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
         {/* Wordmark */}
         <div className="mb-10">
           <Link
             to="/"
-            className="text-2xl font-bold tracking-tight no-underline"
-            style={{ color: "#2563EB" }}
+            className="text-2xl font-bold tracking-tight no-underline text-primary"
           >
             Duncan
           </Link>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-10">
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">
+        <div className="bg-card rounded-xl shadow-sm border border-border p-6 sm:p-10">
+          <h1 className="text-3xl sm:text-4xl font-bold text-card-foreground mb-2">
             Privacy Policy
           </h1>
-          <p className="text-sm text-gray-500 mb-10">
+          <p className="text-sm text-muted-foreground mb-10">
             Last updated: 11 June 2025 &nbsp;&middot;&nbsp; Effective date: 11 June 2025
           </p>
 
-          <div className="space-y-10 text-gray-700 leading-relaxed">
+          <div className="space-y-10 text-foreground leading-relaxed">
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mb-3">1. Who We Are</h2>
+              <h2 className="text-xl font-semibold text-card-foreground mb-3">1. Who We Are</h2>
               <p>
                 Duncan is an AI-powered workplace assistant operated by Kabuni Sports Ltd ("we", "us", or "our"), a company registered in England and Wales (Companies House CRN 16604952), accessible at{" "}
-                <a href="https://duncan.help" className="underline" style={{ color: "#2563EB" }}>duncan.help</a>. We are committed to protecting your personal information in accordance with the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018.
+                <a href="https://duncan.help" className="underline text-primary">duncan.help</a>. We are committed to protecting your personal information in accordance with the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018.
               </p>
               <p className="mt-2">
                 If you have questions about this policy, contact us at:{" "}
-                <a href="mailto:privacy@kabuni.com" className="underline" style={{ color: "#2563EB" }}>privacy@kabuni.com</a>
+                <a href="mailto:privacy@kabuni.com" className="underline text-primary">privacy@kabuni.com</a>
               </p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mb-3">2. Information We Collect</h2>
+              <h2 className="text-xl font-semibold text-card-foreground mb-3">2. Information We Collect</h2>
               <p className="mb-2">
                 We collect the following categories of information when you use Duncan:
               </p>
@@ -62,7 +61,7 @@ const PrivacyPolicy = () => {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mb-3">3. How We Use Your Information</h2>
+              <h2 className="text-xl font-semibold text-card-foreground mb-3">3. How We Use Your Information</h2>
               <p className="mb-2">We use the information we collect to:</p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>Provide, operate, and maintain the Duncan platform</li>
@@ -78,7 +77,7 @@ const PrivacyPolicy = () => {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mb-3">4. Legal Basis for Processing (UK GDPR)</h2>
+              <h2 className="text-xl font-semibold text-card-foreground mb-3">4. Legal Basis for Processing (UK GDPR)</h2>
               <p className="mb-2">We process your personal data under the following lawful bases:</p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>
@@ -97,7 +96,7 @@ const PrivacyPolicy = () => {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mb-3">5. Google OAuth &amp; API Data</h2>
+              <h2 className="text-xl font-semibold text-card-foreground mb-3">5. Google OAuth &amp; API Data</h2>
               <p className="mb-2">
                 Duncan's use of data received from Google APIs complies with the Google API Services User Data Policy, including the Limited Use requirements.
               </p>
@@ -114,7 +113,7 @@ const PrivacyPolicy = () => {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mb-3">6. Data Sharing &amp; Third Parties</h2>
+              <h2 className="text-xl font-semibold text-card-foreground mb-3">6. Data Sharing &amp; Third Parties</h2>
               <p className="mb-2">
                 We may share your data with trusted third-party service providers who assist us in operating Duncan, including:
               </p>
@@ -135,14 +134,14 @@ const PrivacyPolicy = () => {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mb-3">7. Data Retention</h2>
+              <h2 className="text-xl font-semibold text-card-foreground mb-3">7. Data Retention</h2>
               <p>
                 We retain your personal data only for as long as necessary to provide the service and fulfil the purposes described in this policy. If you close your account, we will delete your personal data within 30 days, unless retention is required by law.
               </p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mb-3">8. Your Rights</h2>
+              <h2 className="text-xl font-semibold text-card-foreground mb-3">8. Your Rights</h2>
               <p className="mb-2">Under UK GDPR, you have the following rights:</p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>
@@ -169,46 +168,46 @@ const PrivacyPolicy = () => {
               </ul>
               <p className="mt-2">
                 To exercise any of these rights, email us at{" "}
-                <a href="mailto:privacy@kabuni.com" className="underline" style={{ color: "#2563EB" }}>privacy@kabuni.com</a>. We will respond within 30 days. You also have the right to lodge a complaint with the Information Commissioner's Office (ICO).
+                <a href="mailto:privacy@kabuni.com" className="underline text-primary">privacy@kabuni.com</a>. We will respond within 30 days. You also have the right to lodge a complaint with the Information Commissioner's Office (ICO).
               </p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mb-3">9. Cookies &amp; Tracking</h2>
+              <h2 className="text-xl font-semibold text-card-foreground mb-3">9. Cookies &amp; Tracking</h2>
               <p>
                 Duncan uses essential cookies required for authentication and session management. We may also use analytics cookies to understand how the service is used. You can manage cookie preferences in your browser settings.
               </p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mb-3">10. Security</h2>
+              <h2 className="text-xl font-semibold text-card-foreground mb-3">10. Security</h2>
               <p>
                 We implement appropriate technical and organisational measures to protect your personal data, including encryption in transit (TLS) and at rest, access controls, and regular security reviews. However, no internet transmission is completely secure, and we cannot guarantee absolute security.
               </p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mb-3">11. Changes to This Policy</h2>
+              <h2 className="text-xl font-semibold text-card-foreground mb-3">11. Changes to This Policy</h2>
               <p>
                 We may update this Privacy Policy from time to time. We will notify you of significant changes via email or a notice within the platform. Your continued use of Duncan after changes are published constitutes acceptance of the updated policy.
               </p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mb-3">12. Contact Us</h2>
+              <h2 className="text-xl font-semibold text-card-foreground mb-3">12. Contact Us</h2>
               <p className="mb-2">If you have any questions or concerns about this Privacy Policy, please contact us:</p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>
                   Privacy enquiries:{" "}
-                  <a href="mailto:privacy@kabuni.com" className="underline" style={{ color: "#2563EB" }}>privacy@kabuni.com</a>
+                  <a href="mailto:privacy@kabuni.com" className="underline text-primary">privacy@kabuni.com</a>
                 </li>
                 <li>
                   Support:{" "}
-                  <a href="mailto:duncansupport@kabuni.com" className="underline" style={{ color: "#2563EB" }}>duncansupport@kabuni.com</a>
+                  <a href="mailto:duncansupport@kabuni.com" className="underline text-primary">duncansupport@kabuni.com</a>
                 </li>
                 <li>
                   Website:{" "}
-                  <a href="https://duncan.help" className="underline" style={{ color: "#2563EB" }}>duncan.help</a>
+                  <a href="https://duncan.help" className="underline text-primary">duncan.help</a>
                 </li>
               </ul>
             </section>
@@ -216,10 +215,10 @@ const PrivacyPolicy = () => {
         </div>
 
         {/* Footer */}
-        <div className="mt-8 text-center text-sm text-gray-500">
-          <Link to="/terms" className="underline" style={{ color: "#2563EB" }}>
+        <div className="mt-8 text-center text-sm text-muted-foreground">
+          <a href="https://duncan.help/terms" className="underline text-primary">
             Terms &amp; Conditions
-          </Link>
+          </a>
         </div>
       </div>
     </div>

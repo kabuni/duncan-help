@@ -82,7 +82,8 @@ const AppContent = () => {
             <Route path="/profile" element={<Navigate to="/settings" replace />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/recruitment" element={<Recruitment />} />
-            <Route path="/operations" element={<Operations />} />
+             <Route path="/operations" element={<Operations />} />
+             <Route path="/integrations" element={<Integrations />} />
             <Route path="/feedback" element={<FeedbackIssues />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:projectId" element={<ProjectWorkspace />} />

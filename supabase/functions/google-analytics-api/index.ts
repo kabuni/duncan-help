@@ -66,7 +66,7 @@ async function getProperty(accessToken: string, selectedPropertyId?: string | nu
   return firstProperty.name.replace("properties/", "") as string;
 }
 
-async function runReport(accessToken: string, propertyId: string, body: Record<string, unknown>) {
+async function runReport(accessToken: string, propertyId: string, body: Record<string, unknown>, attempt = 0): Promise<any> {
   const response = await fetch(`${ANALYTICS_DATA_API}/properties/${propertyId}:runReport`, {
     method: "POST",
     headers: {
@@ -76,12 +76,34 @@ async function runReport(accessToken: string, propertyId: string, body: Record<s
     body: JSON.stringify(body),
   });
 
+  if (response.status === 429 && attempt < 4) {
+    await response.text().catch(() => "");
+    const delay = Math.min(8000, 500 * Math.pow(2, attempt)) + Math.floor(Math.random() * 250);
+    await new Promise((r) => setTimeout(r, delay));
+    return runReport(accessToken, propertyId, body, attempt + 1);
+  }
+
   if (!response.ok) {
     const details = await response.text();
     throw new Error(`Google Analytics report failed (${response.status}): ${details}`);
   }
 
   return await response.json();
+}
+
+// Run async tasks with a max concurrency to avoid GA's per-property concurrent-request quota.
+async function runLimited<T>(limit: number, tasks: (() => Promise<T>)[]): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= tasks.length) return;
+      results[i] = await tasks[i]();
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 function metricValue(row: any, index: number) {
@@ -105,47 +127,47 @@ async function getDashboard(accessToken: string, propertyId: string) {
   const dateRanges = [{ startDate: "30daysAgo", endDate: "today" }];
   const yesterdayRange = [{ startDate: "yesterday", endDate: "today" }];
 
-  const [summary, pages, countries, cities, devices, demographics, sources] = await Promise.all([
-    runReport(accessToken, propertyId, {
+  const [summary, pages, countries, cities, devices, demographics, sources] = await runLimited(2, [
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       metrics: [{ name: "activeUsers" }, { name: "sessions" }, { name: "screenPageViews" }, { name: "engagementRate" }],
     }),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "pageTitle" }],
       metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
       orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
       limit: 8,
     }),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "country" }],
       metrics: [{ name: "activeUsers" }, { name: "sessions" }],
       orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
       limit: 8,
     }),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "city" }],
       metrics: [{ name: "activeUsers" }, { name: "sessions" }],
       orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
       limit: 8,
     }),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "deviceCategory" }],
       metrics: [{ name: "activeUsers" }, { name: "sessions" }],
       orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
       limit: 5,
     }),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "userAgeBracket" }, { name: "userGender" }],
       metrics: [{ name: "activeUsers" }],
       orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
       limit: 10,
     }).catch((error) => ({ rows: [], unavailableReason: error.message })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: yesterdayRange,
       dimensions: [{ name: "sessionDefaultChannelGroup" }],
       metrics: [{ name: "activeUsers" }, { name: "sessions" }],
@@ -197,40 +219,40 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
 
   const trackedPaths = TRACKED_PAGES.flatMap((p) => p.paths);
 
-  const [playLast30, playPrev30, countriesToday, dailyPlay, web7d, topPage7d, trackedToday, trackedYesterday] = await Promise.all([
-    runReport(accessToken, propertyId, {
+  const [playLast30, playPrev30, countriesToday, dailyPlay, web7d, topPage7d, trackedToday, trackedYesterday] = await runLimited(2, [
+    () => runReport(accessToken, propertyId, {
       dateRanges: last30,
       metrics: [{ name: "userEngagementDuration" }, { name: "activeUsers" }],
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: prev30,
       metrics: [{ name: "userEngagementDuration" }],
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: today,
       dimensions: [{ name: "country" }],
       metrics: [{ name: "activeUsers" }],
       limit: 250,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: last30,
       dimensions: [{ name: "date" }],
       metrics: [{ name: "userEngagementDuration" }],
       orderBys: [{ dimension: { dimensionName: "date" } }],
       limit: 30,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: last7,
       metrics: [{ name: "activeUsers" }, { name: "sessions" }, { name: "screenPageViews" }],
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: last7,
       dimensions: [{ name: "pagePath" }],
       metrics: [{ name: "screenPageViews" }],
       orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
       limit: 1,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: today,
       dimensions: [{ name: "pagePath" }],
       metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
@@ -239,7 +261,7 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
       },
       limit: 50,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: [{ startDate: "yesterday", endDate: "yesterday" }],
       dimensions: [{ name: "pagePath" }],
       metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
@@ -248,7 +270,6 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
       },
       limit: 50,
     }).catch(() => ({ rows: [] })),
-
   ]);
 
   const secondsLast30 = metricValue(playLast30.rows?.[0], 0);
@@ -322,8 +343,8 @@ async function getPageGroupAnalytics(accessToken: string, propertyId: string, pa
   const dateRanges = [{ startDate: "30daysAgo", endDate: "today" }];
   const filter = { filter: { fieldName: "pagePath", inListFilter: { values: paths } } };
 
-  const [summary, sources, countries, cities, devices] = await Promise.all([
-    runReport(accessToken, propertyId, {
+  const [summary, sources, countries, cities, devices] = await runLimited(2, [
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       metrics: [
         { name: "screenPageViews" },
@@ -335,7 +356,7 @@ async function getPageGroupAnalytics(accessToken: string, propertyId: string, pa
       ],
       dimensionFilter: filter,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "sessionDefaultChannelGroup" }],
       metrics: [{ name: "sessions" }, { name: "totalUsers" }],
@@ -343,7 +364,7 @@ async function getPageGroupAnalytics(accessToken: string, propertyId: string, pa
       orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
       limit: 6,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "country" }],
       metrics: [{ name: "totalUsers" }, { name: "sessions" }],
@@ -351,7 +372,7 @@ async function getPageGroupAnalytics(accessToken: string, propertyId: string, pa
       orderBys: [{ metric: { metricName: "totalUsers" }, desc: true }],
       limit: 6,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "city" }],
       metrics: [{ name: "totalUsers" }, { name: "sessions" }],
@@ -359,7 +380,7 @@ async function getPageGroupAnalytics(accessToken: string, propertyId: string, pa
       orderBys: [{ metric: { metricName: "totalUsers" }, desc: true }],
       limit: 6,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "deviceCategory" }],
       metrics: [{ name: "totalUsers" }, { name: "sessions" }],
@@ -390,10 +411,11 @@ async function getPageGroupAnalytics(accessToken: string, propertyId: string, pa
 
 async function getPagesAnalytics(accessToken: string, propertyId: string, groups: PageGroup[]) {
   const allPaths = Array.from(new Set(groups.flatMap((g) => g.paths)));
-  const [overall, ...perGroup] = await Promise.all([
-    getPageGroupAnalytics(accessToken, propertyId, allPaths),
-    ...groups.map((g) => getPageGroupAnalytics(accessToken, propertyId, g.paths)),
-  ]);
+  const overall = await getPageGroupAnalytics(accessToken, propertyId, allPaths);
+  const perGroup: any[] = [];
+  for (const g of groups) {
+    perGroup.push(await getPageGroupAnalytics(accessToken, propertyId, g.paths));
+  }
   return {
     dateRange: { startDate: "30daysAgo", endDate: "today" },
     overall,

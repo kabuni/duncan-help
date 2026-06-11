@@ -127,47 +127,47 @@ async function getDashboard(accessToken: string, propertyId: string) {
   const dateRanges = [{ startDate: "30daysAgo", endDate: "today" }];
   const yesterdayRange = [{ startDate: "yesterday", endDate: "today" }];
 
-  const [summary, pages, countries, cities, devices, demographics, sources] = await Promise.all([
-    runReport(accessToken, propertyId, {
+  const [summary, pages, countries, cities, devices, demographics, sources] = await runLimited(2, [
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       metrics: [{ name: "activeUsers" }, { name: "sessions" }, { name: "screenPageViews" }, { name: "engagementRate" }],
     }),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "pageTitle" }],
       metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
       orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
       limit: 8,
     }),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "country" }],
       metrics: [{ name: "activeUsers" }, { name: "sessions" }],
       orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
       limit: 8,
     }),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "city" }],
       metrics: [{ name: "activeUsers" }, { name: "sessions" }],
       orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
       limit: 8,
     }),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "deviceCategory" }],
       metrics: [{ name: "activeUsers" }, { name: "sessions" }],
       orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
       limit: 5,
     }),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "userAgeBracket" }, { name: "userGender" }],
       metrics: [{ name: "activeUsers" }],
       orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
       limit: 10,
     }).catch((error) => ({ rows: [], unavailableReason: error.message })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: yesterdayRange,
       dimensions: [{ name: "sessionDefaultChannelGroup" }],
       metrics: [{ name: "activeUsers" }, { name: "sessions" }],

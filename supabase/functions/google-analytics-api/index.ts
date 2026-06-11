@@ -219,40 +219,40 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
 
   const trackedPaths = TRACKED_PAGES.flatMap((p) => p.paths);
 
-  const [playLast30, playPrev30, countriesToday, dailyPlay, web7d, topPage7d, trackedToday, trackedYesterday] = await Promise.all([
-    runReport(accessToken, propertyId, {
+  const [playLast30, playPrev30, countriesToday, dailyPlay, web7d, topPage7d, trackedToday, trackedYesterday] = await runLimited(2, [
+    () => runReport(accessToken, propertyId, {
       dateRanges: last30,
       metrics: [{ name: "userEngagementDuration" }, { name: "activeUsers" }],
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: prev30,
       metrics: [{ name: "userEngagementDuration" }],
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: today,
       dimensions: [{ name: "country" }],
       metrics: [{ name: "activeUsers" }],
       limit: 250,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: last30,
       dimensions: [{ name: "date" }],
       metrics: [{ name: "userEngagementDuration" }],
       orderBys: [{ dimension: { dimensionName: "date" } }],
       limit: 30,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: last7,
       metrics: [{ name: "activeUsers" }, { name: "sessions" }, { name: "screenPageViews" }],
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: last7,
       dimensions: [{ name: "pagePath" }],
       metrics: [{ name: "screenPageViews" }],
       orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
       limit: 1,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: today,
       dimensions: [{ name: "pagePath" }],
       metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
@@ -261,7 +261,7 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
       },
       limit: 50,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges: [{ startDate: "yesterday", endDate: "yesterday" }],
       dimensions: [{ name: "pagePath" }],
       metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
@@ -270,7 +270,6 @@ async function getHomeSummary(accessToken: string, propertyId: string) {
       },
       limit: 50,
     }).catch(() => ({ rows: [] })),
-
   ]);
 
   const secondsLast30 = metricValue(playLast30.rows?.[0], 0);

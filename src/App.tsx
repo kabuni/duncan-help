@@ -41,6 +41,7 @@ import RegisterSchool from "./pages/RegisterSchool";
 import Registrations from "./pages/Registrations";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsAndConditions from "./pages/TermsAndConditions";
+import Integrations from "./pages/Integrations";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();

@@ -311,9 +311,9 @@ const Sidebar = ({
           Settings
         </button>
         <div className="flex items-center gap-2 px-2 pt-1 text-[10px] text-muted-foreground/70">
-          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Privacy</a>
+          <a href="https://duncan.help/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Privacy</a>
           <span aria-hidden>·</span>
-          <a href="/terms" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Terms</a>
+          <a href="https://duncan.help/terms" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Terms</a>
         </div>
 
       </div>

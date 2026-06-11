@@ -343,8 +343,8 @@ async function getPageGroupAnalytics(accessToken: string, propertyId: string, pa
   const dateRanges = [{ startDate: "30daysAgo", endDate: "today" }];
   const filter = { filter: { fieldName: "pagePath", inListFilter: { values: paths } } };
 
-  const [summary, sources, countries, cities, devices] = await Promise.all([
-    runReport(accessToken, propertyId, {
+  const [summary, sources, countries, cities, devices] = await runLimited(2, [
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       metrics: [
         { name: "screenPageViews" },
@@ -356,7 +356,7 @@ async function getPageGroupAnalytics(accessToken: string, propertyId: string, pa
       ],
       dimensionFilter: filter,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "sessionDefaultChannelGroup" }],
       metrics: [{ name: "sessions" }, { name: "totalUsers" }],
@@ -364,7 +364,7 @@ async function getPageGroupAnalytics(accessToken: string, propertyId: string, pa
       orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
       limit: 6,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "country" }],
       metrics: [{ name: "totalUsers" }, { name: "sessions" }],
@@ -372,7 +372,7 @@ async function getPageGroupAnalytics(accessToken: string, propertyId: string, pa
       orderBys: [{ metric: { metricName: "totalUsers" }, desc: true }],
       limit: 6,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "city" }],
       metrics: [{ name: "totalUsers" }, { name: "sessions" }],
@@ -380,7 +380,7 @@ async function getPageGroupAnalytics(accessToken: string, propertyId: string, pa
       orderBys: [{ metric: { metricName: "totalUsers" }, desc: true }],
       limit: 6,
     }).catch(() => ({ rows: [] })),
-    runReport(accessToken, propertyId, {
+    () => runReport(accessToken, propertyId, {
       dateRanges,
       dimensions: [{ name: "deviceCategory" }],
       metrics: [{ name: "totalUsers" }, { name: "sessions" }],

@@ -66,7 +66,7 @@ async function getProperty(accessToken: string, selectedPropertyId?: string | nu
   return firstProperty.name.replace("properties/", "") as string;
 }
 
-async function runReport(accessToken: string, propertyId: string, body: Record<string, unknown>) {
+async function runReport(accessToken: string, propertyId: string, body: Record<string, unknown>, attempt = 0): Promise<any> {
   const response = await fetch(`${ANALYTICS_DATA_API}/properties/${propertyId}:runReport`, {
     method: "POST",
     headers: {
@@ -76,12 +76,34 @@ async function runReport(accessToken: string, propertyId: string, body: Record<s
     body: JSON.stringify(body),
   });
 
+  if (response.status === 429 && attempt < 4) {
+    await response.text().catch(() => "");
+    const delay = Math.min(8000, 500 * Math.pow(2, attempt)) + Math.floor(Math.random() * 250);
+    await new Promise((r) => setTimeout(r, delay));
+    return runReport(accessToken, propertyId, body, attempt + 1);
+  }
+
   if (!response.ok) {
     const details = await response.text();
     throw new Error(`Google Analytics report failed (${response.status}): ${details}`);
   }
 
   return await response.json();
+}
+
+// Run async tasks with a max concurrency to avoid GA's per-property concurrent-request quota.
+async function runLimited<T>(limit: number, tasks: (() => Promise<T>)[]): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= tasks.length) return;
+      results[i] = await tasks[i]();
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 function metricValue(row: any, index: number) {

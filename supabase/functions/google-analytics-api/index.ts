@@ -411,10 +411,11 @@ async function getPageGroupAnalytics(accessToken: string, propertyId: string, pa
 
 async function getPagesAnalytics(accessToken: string, propertyId: string, groups: PageGroup[]) {
   const allPaths = Array.from(new Set(groups.flatMap((g) => g.paths)));
-  const [overall, ...perGroup] = await Promise.all([
-    getPageGroupAnalytics(accessToken, propertyId, allPaths),
-    ...groups.map((g) => getPageGroupAnalytics(accessToken, propertyId, g.paths)),
-  ]);
+  const overall = await getPageGroupAnalytics(accessToken, propertyId, allPaths);
+  const perGroup: any[] = [];
+  for (const g of groups) {
+    perGroup.push(await getPageGroupAnalytics(accessToken, propertyId, g.paths));
+  }
   return {
     dateRange: { startDate: "30daysAgo", endDate: "today" },
     overall,

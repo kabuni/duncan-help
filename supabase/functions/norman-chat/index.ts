@@ -6017,9 +6017,21 @@ Format as a natural, readable summary with clear sections. If a section has no d
       return /\bNDA\b|generate_nda/i.test(recentConversationText) &&
         /Receiving Party|Legal Entity|registered address|recipient email|NDA details captured|ready to generate|Generating the NDA|NDA — Summary/i.test(recentConversationText);
     })();
+    const isWorkstreamCreationConfirmationReply = (() => {
+      const normalized = latestUserText.trim().toLowerCase().replace(/[.!?]+$/g, "");
+      const isAffirmative = /^(create|create now|create it|yes create|yes|y|yeah|yep|ok|okay|sure|confirmed|confirm|go|go ahead|please do|do it|apply)$/i.test(normalized);
+      if (!isAffirmative) return false;
+      if (/verified=true|Card created \(id=|Workstreams — created|workstream card created/i.test(recentConversationText)) return false;
+      return /Workstreams\s+—\s+ready to create|card \+ tasks|Tasks \(grouped by owner/i.test(recentConversationText) &&
+        /create_workstream_card|Workstream|workstream|card/i.test(recentConversationText);
+    })();
     if (isNdaConfirmationReply) {
       shouldBypassTools = false;
       systemContent += `\n\n## CURRENT REQUEST OVERRIDE — NDA CONFIRMATION\nThe latest user reply is confirming a pending NDA generation. Do not answer with a promise. Immediately call \`generate_nda\` using the confirmed NDA fields from the conversation history. After the tool returns, share the actual download link from the tool result.`;
+    }
+    if (isWorkstreamCreationConfirmationReply) {
+      shouldBypassTools = false;
+      systemContent += `\n\n## CURRENT REQUEST OVERRIDE — WORKSTREAM CREATION CONFIRMATION\nThe latest user reply is explicitly confirming the most recent Workstreams preview. Do not answer with a promise and do not ask for another confirmation. Immediately call \`create_workstream_card\` using the card fields from the most recent assistant preview. Extract every listed task from that preview and pass them in \`pending_tasks\` in the same tool call. For a plain create/confirm reply, leave task assignees empty unless the preview already contains explicit user IDs. After the tool returns, only say it was created if the tool result has \`ok === true\` and \`verified === true\`; include the card id and task count.`;
     }
 
     if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {

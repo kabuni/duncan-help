@@ -2366,6 +2366,59 @@ async function executeWorkstreamTool(
 
 
     case "create_workstream_card": {
+      // Shared helper to insert pending_tasks atomically after card creation/dedup.
+      const insertPendingTasks = async (cardId: string, pendingTasks: any[]) => {
+        if (!Array.isArray(pendingTasks) || pendingTasks.length === 0) {
+          return { tasks_created: 0, tasks_skipped: 0, tasks: [], skipped: [] };
+        }
+        const { data: existingTasks } = await supabaseAdmin
+          .from("workstream_tasks")
+          .select("title")
+          .eq("card_id", cardId);
+        const existingTitles = new Set((existingTasks || []).map((t: any) => t.title.toLowerCase()));
+        const created: any[] = [];
+        const skipped: string[] = [];
+        for (let i = 0; i < pendingTasks.length; i++) {
+          const t = pendingTasks[i];
+          if (!t?.title) continue;
+          if (existingTitles.has(String(t.title).toLowerCase())) {
+            skipped.push(t.title);
+            continue;
+          }
+          const { data: task, error: taskErr } = await supabaseAdmin
+            .from("workstream_tasks")
+            .insert({
+              card_id: cardId,
+              title: t.title,
+              description: t.description || "",
+              due_date: t.due_date || null,
+              sort_order: i,
+              completed: false,
+            })
+            .select("id, title")
+            .single();
+          if (taskErr) {
+            console.error(`[create_workstream_card] task insert failed "${t.title}":`, taskErr.message);
+            continue;
+          }
+          if (Array.isArray(t.assignee_user_ids) && t.assignee_user_ids.length > 0) {
+            const rows = t.assignee_user_ids.map((uid: string) => ({ task_id: task.id, user_id: uid }));
+            await supabaseAdmin.from("workstream_task_assignees").insert(rows);
+          }
+          created.push({ id: task.id, title: task.title });
+          existingTitles.add(String(task.title).toLowerCase());
+        }
+        if (created.length > 0) {
+          await supabaseAdmin.from("workstream_activity").insert({
+            card_id: cardId,
+            user_id: userId,
+            action: "tasks_added",
+            details: { task_count: created.length, created_by_duncan: true, atomic_with_card: true },
+          });
+        }
+        return { tasks_created: created.length, tasks_skipped: skipped.length, tasks: created, skipped };
+      };
+
       // Deduplication: check if a card with the same title + project_tag already exists for this creator
       const dedupQuery = supabaseAdmin
         .from("workstream_cards")
@@ -2381,6 +2434,7 @@ async function executeWorkstreamTool(
       const { data: existing } = await dedupQuery.limit(1);
 
       if (existing && existing.length > 0) {
+        const taskResult = await insertPendingTasks(existing[0].id, args.pending_tasks || []);
         return {
           success: true,
           card_id: existing[0].id,
@@ -2389,8 +2443,8 @@ async function executeWorkstreamTool(
           project_tag: existing[0].project_tag,
           assigned_to: "creator (you)",
           already_existed: true,
-          message: `Card already exists (id=${existing[0].id}) — no duplicate created. NEXT STEP: if the user asked for tasks, IMMEDIATELY call add_tasks_to_card with this card_id in the same turn. Do NOT re-call create_workstream_card. Do NOT show another preview/confirmation — the card is live.`,
-          next_action: "call add_tasks_to_card with card_id if tasks pending",
+          ...taskResult,
+          message: `Card already exists (id=${existing[0].id}). ${taskResult.tasks_created} task(s) added, ${taskResult.tasks_skipped} skipped as duplicates.`,
         };
       }
 
@@ -2427,6 +2481,8 @@ async function executeWorkstreamTool(
         details: { title: card.title, created_by_duncan: true, auto_assigned_to_creator: true },
       });
 
+      const taskResult = await insertPendingTasks(card.id, args.pending_tasks || []);
+
       return {
         success: true,
         card_id: card.id,
@@ -2434,8 +2490,8 @@ async function executeWorkstreamTool(
         status: card.status,
         project_tag: card.project_tag,
         assigned_to: "creator (you)",
-        message: `Card created (id=${card.id}). NEXT STEP: if you previewed tasks for this card, IMMEDIATELY call add_tasks_to_card with this card_id in the same turn — no further confirmation needed.`,
-        next_action: "call add_tasks_to_card with card_id if tasks pending",
+        ...taskResult,
+        message: `Card created (id=${card.id}) with ${taskResult.tasks_created} task(s).`,
       };
     }
 

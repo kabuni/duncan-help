@@ -5811,27 +5811,26 @@ Format as a natural, readable summary with clear sections. If a section has no d
     };
 
     const formatLatestSourceMeetingNotes = async (source: "gemini" | "plaud") => {
-      if (source === "gemini") {
-        return await fetchLatestGeminiNotesFromUserGmail(userId);
-      }
-      // Plaud: keep DB-based fetch (Plaud notes are ingested centrally)
+      // Both Gemini and Plaud notes are ingested centrally (duncan@kabuni.com)
+      // into the meetings DB. Never read from the caller's personal Gmail.
       const { data, error } = await supabaseAdmin
         .from("meetings")
         .select("id, title, meeting_date, status, source, sender_email, summary, transcript, analysis, created_at")
-        .eq("source", "plaud")
-        .not("sender_email", "ilike", "%gemini-notes@google.com%")
+        .eq("source", source)
         .order("meeting_date", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(1);
-      if (error) throw new Error(`Failed to fetch latest Plaud meeting notes: ${error.message}`);
+      if (error) throw new Error(`Failed to fetch latest ${source} meeting notes: ${error.message}`);
       const meeting = Array.isArray(data) ? data[0] : null;
-      if (!meeting) return `I couldn't find any recent Plaud meeting notes.`;
+      const sourceLabel = source === "plaud" ? "Plaud" : "Google Meet (Gemini)";
+      if (!meeting) return `I couldn't find any recent ${sourceLabel} meeting notes in the meetings database.`;
       const date = meeting.meeting_date ? new Date(meeting.meeting_date).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Date unavailable";
       const analysis = meeting.analysis && typeof meeting.analysis === "object" ? meeting.analysis : null;
-      const notes = String(meeting.transcript || meeting.summary || analysis?.summary || "").trim();
+      const notes = String(meeting.transcript || meeting.summary || (analysis as any)?.summary || "").trim();
       const body = notes || "No transcript or notes content is available for this meeting yet.";
-      return `## ${meeting.title?.trim() || "Latest meeting notes"}\n\n- **Date:** ${date}\n- **Source:** Plaud\n\n${body.slice(0, 40000)}`;
+      return `## ${meeting.title?.trim() || "Latest meeting notes"}\n\n- **Date:** ${date}\n- **Source:** ${sourceLabel}\n\n${body.slice(0, 40000)}`;
     };
+
 
     // ===== Smart "latest meeting" router =====
     // For "latest/most recent/last/today's/yesterday's meeting" queries WITHOUT an

@@ -16,6 +16,7 @@ import { useIsAdmin } from "@/hooks/useUserRoles";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useProfile } from "@/hooks/useProfile";
+import { useSettingsPanel } from "@/hooks/SettingsPanelContext";
 
 
 
@@ -49,7 +50,7 @@ const Sidebar = ({
   const location = useLocation();
   const isProjectsRoute = location.pathname.startsWith("/projects");
   const isChatRoute = !isProjectsRoute;
-  const [showModal, setShowModal] = useState(false);
+  const { open: settingsOpen, closeSettings, section: settingsSection, openSettings } = useSettingsPanel();
   const { data: pendingApprovals = 0 } = useApprovalCount();
   const { isAdmin } = useIsAdmin();
 
@@ -318,7 +319,7 @@ const Sidebar = ({
           </div>
         )}
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => openSettings()}
           className="flex w-full items-center gap-2 rounded-md px-2 py-0.5 text-[10px] text-muted-foreground/70 hover:text-foreground hover:bg-sidebar-accent transition-colors"
         >
           <Settings className="h-3.5 w-3.5" />
@@ -358,7 +359,7 @@ const Sidebar = ({
       )}
 
       {/* Settings Panel */}
-      <SettingsPanel open={showModal} onClose={() => setShowModal(false)} />
+      <SettingsPanel open={settingsOpen} onClose={closeSettings} initialSection={settingsSection} />
     </>
   );
 };

@@ -6,9 +6,11 @@ import MeetDuncanTour from "@/components/onboarding/MeetDuncanTour";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSettingsPanel } from "@/hooks/SettingsPanelContext";
 
 export default function Learn() {
   const navigate = useNavigate();
+  const { openSettings } = useSettingsPanel();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [tourOpen, setTourOpen] = useState(false);
@@ -22,6 +24,16 @@ export default function Learn() {
       queryClient.invalidateQueries({ queryKey: ["profile", user.id] });
     }
     setTourOpen(true);
+  };
+
+  const handleModuleCta = (moduleId: string, to: string) => {
+    if (moduleId === "profile") {
+      openSettings("profile");
+    } else if (moduleId === "feedback") {
+      openSettings("request_feature");
+    } else {
+      navigate(to);
+    }
   };
 
   return (
@@ -80,7 +92,7 @@ export default function Learn() {
                 )}
                 {m.cta && (
                   <button
-                    onClick={() => navigate(m.cta!.to)}
+                    onClick={() => handleModuleCta(m.id, m.cta!.to)}
                     className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors self-start"
                   >
                     {m.cta.label} <ArrowRight className="h-3 w-3" />

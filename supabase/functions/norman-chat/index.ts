@@ -6878,7 +6878,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
           // tool_pending event so the UI can render a Confirm/Cancel card, and
           // return a synthetic "awaiting confirmation" tool result to the model
           // so it stops further tool calls and produces a user-facing summary.
-          if (WRITE_TOOLS.has(toolNameForEvent) && !bypassWriteConfirm) {
+          const confirmedWorkstreamCreate = isWorkstreamCreationConfirmationReply && toolNameForEvent === "create_workstream_card";
+          if (WRITE_TOOLS.has(toolNameForEvent) && !bypassWriteConfirm && !confirmedWorkstreamCreate) {
             try {
               const summary = summarizeWriteAction(toolNameForEvent, args);
               const idemSource = `${userId}:${toolNameForEvent}:${JSON.stringify(args ?? {})}`;

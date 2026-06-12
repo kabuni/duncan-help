@@ -2435,6 +2435,25 @@ async function executeWorkstreamTool(
       const { data: existing } = await dedupQuery.limit(1);
 
       if (existing && existing.length > 0) {
+        // Merge in any newly-specified card-level assignees (creator already assigned at original create).
+        const cardAssigneeIds: string[] = Array.isArray(args.assignee_user_ids)
+          ? args.assignee_user_ids.filter((u: any) => typeof u === "string" && u && u !== userId)
+          : [];
+        let cardAssigneesAdded = 0;
+        if (cardAssigneeIds.length > 0) {
+          const { data: existingAssignees } = await supabaseAdmin
+            .from("workstream_card_assignees")
+            .select("user_id")
+            .eq("card_id", existing[0].id);
+          const have = new Set((existingAssignees || []).map((r: any) => r.user_id));
+          const toAdd = cardAssigneeIds.filter((u) => !have.has(u));
+          if (toAdd.length > 0) {
+            await supabaseAdmin
+              .from("workstream_card_assignees")
+              .insert(toAdd.map((uid) => ({ card_id: existing[0].id, user_id: uid })));
+            cardAssigneesAdded = toAdd.length;
+          }
+        }
         const taskResult = await insertPendingTasks(existing[0].id, args.pending_tasks || []);
         return {
           success: true,
@@ -2442,10 +2461,11 @@ async function executeWorkstreamTool(
           title: existing[0].title,
           status: existing[0].status,
           project_tag: existing[0].project_tag,
-          assigned_to: "creator (you)",
+          assigned_to: cardAssigneesAdded > 0 ? `creator (you) + ${cardAssigneesAdded} added` : "creator (you)",
+          card_assignees_added: cardAssigneesAdded,
           already_existed: true,
           ...taskResult,
-          message: `Card already exists (id=${existing[0].id}). ${taskResult.tasks_created} task(s) added, ${taskResult.tasks_skipped} skipped as duplicates.`,
+          message: `Card already exists (id=${existing[0].id}). ${taskResult.tasks_created} task(s) added, ${taskResult.tasks_skipped} skipped as duplicates.${cardAssigneesAdded ? ` ${cardAssigneesAdded} new assignee(s) added.` : ""}`,
         };
       }
 

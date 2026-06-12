@@ -209,3 +209,6 @@ verify_jwt = false
 
 
 
+
+[functions.test-workspace-welcome]
+verify_jwt = false

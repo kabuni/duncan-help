@@ -44,6 +44,7 @@ const Sidebar = ({
 }) => {
   const chatOps = useGeneralChatsContext();
   const { user, signOut } = useAuth();
+  const { profile } = useProfile();
   const navigate = useNavigate();
   const location = useLocation();
   const isProjectsRoute = location.pathname.startsWith("/projects");

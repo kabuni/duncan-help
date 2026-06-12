@@ -55,6 +55,30 @@ export default function SettingsGeneral() {
 
       <Separator className="bg-border" />
 
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-foreground">Learn Duncan</h3>
+        <p className="text-xs text-muted-foreground">
+          Replay the product tour or browse the Learn hub.
+        </p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <button
+            onClick={replayTour}
+            className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3.5 py-2 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+          >
+            <PlayCircle className="h-3.5 w-3.5" />
+            Replay Meet Duncan tour
+          </button>
+          <button
+            onClick={() => navigate("/learn")}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-xs font-medium text-foreground hover:bg-secondary transition-colors"
+          >
+            Open Learn hub
+          </button>
+        </div>
+      </div>
+
+      <Separator className="bg-border" />
+
       <button
         onClick={signOut}
         className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors"

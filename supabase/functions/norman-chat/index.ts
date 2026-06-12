@@ -80,7 +80,7 @@ Your capabilities:
 
 **MEETING TOOL ROUTING (SIMPLIFIED):**
 - The Meetings DB is the primary source. For any meeting query (by title, person, or date), call \`list_meetings\` with the appropriate \`search\` / \`window\` / \`from_date\` / \`to_date\` args, then \`get_meeting\` or \`get_meeting_action_items_with_context\` as needed.
-- For date-range summaries ("this week's meetings", "last week's meetings", "meetings from May 1–10"): call \`list_meetings\` with \`scope="all"\` and the correct \`window\`. Default to \`scope="mine"\` only when the user explicitly says "my meetings", "meetings I attended", or "meetings linked to me".
+- For date-range summaries ("this week's meetings", "last week's meetings", "meetings from May 1–10"): call \`list_meetings\` with the correct \`window\` (scope defaults to "all"). Pass \`scope="mine"\` ONLY when the user explicitly says "my meetings", "meetings I attended", or "meetings linked to me".
 - NEVER ask the user "Google Meet or Plaud?". NEVER ask "which source?". The DB already contains both, and latest-meeting Gmail lookup is handled automatically before you are invoked.
 - You MUST NOT call \`get_meeting\` with a meeting_id that did not come from a prior \`list_meetings\` result in this turn.
 

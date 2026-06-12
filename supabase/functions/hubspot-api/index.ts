@@ -1234,9 +1234,10 @@ Deno.serve(async (req) => {
 
       const formKey = String(reqBody?.form_key || "").toLowerCase();
       const formIdOverride = reqBody?.form_id ? String(reqBody.form_id) : null;
+      const formNameOverride = typeof reqBody?.form_name === "string" ? reqBody.form_name.trim() : "";
       const limit = Math.min(Math.max(Number(reqBody?.limit) || 200, 1), 500);
-      if (!formIdOverride && formKey !== "newsletter" && formKey !== "scout") {
-        return json({ error: "form_key must be 'newsletter' or 'scout', or provide form_id" }, 400);
+      if (!formIdOverride && !formNameOverride && formKey !== "newsletter" && formKey !== "scout") {
+        return json({ error: "Provide form_key ('newsletter'|'scout'), form_name, or form_id" }, 400);
       }
 
       const resolved = await resolveTeamBriefingToken(HUBSPOT_API_KEY);
@@ -1246,15 +1247,21 @@ Deno.serve(async (req) => {
 
       let targetForm: any = null;
       if (formIdOverride) {
-        targetForm = { id: formIdOverride, name: null };
+        targetForm = { id: formIdOverride, name: formNameOverride || null };
       } else {
         const formsPayload = await hubspotApi("/marketing/v3/forms?limit=100&formTypes=all", resolved.token, "summary", resolved.source);
         const forms: any[] = Array.isArray(formsPayload?.results) ? formsPayload.results : [];
-        targetForm = formKey === "newsletter"
-          ? pickForm(forms, ["newsletter", "subscribe", "signup", "sign up"])
-          : pickForm(forms, ["scout"]);
+        if (formNameOverride) {
+          const lower = formNameOverride.toLowerCase();
+          targetForm = forms.find((f) => typeof f?.name === "string" && f.name.toLowerCase() === lower)
+            ?? pickForm(forms, [lower]);
+        } else {
+          targetForm = formKey === "newsletter"
+            ? pickForm(forms, ["newsletter", "subscribe", "signup", "sign up"])
+            : pickForm(forms, ["scout"]);
+        }
         if (!targetForm) {
-          return json({ status: "not_found", form_key: formKey, submissions: [], truncated: false }, 200);
+          return json({ status: "not_found", form_key: formKey, form_name: formNameOverride || null, submissions: [], truncated: false }, 200);
         }
       }
 

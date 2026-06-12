@@ -459,6 +459,11 @@ function ExternalSignalColumn({
                             ) : (
                               <div className="text-[10px] text-muted-foreground">Not found in connected portal</div>
                             )}
+                            <FormSubmissionsButton
+                              formName={list?.matched_name || list?.requested_name}
+                              label={list?.requested_name || "Form submissions"}
+                            />
+
 
                           </div>
                         );
@@ -1185,7 +1190,15 @@ interface FormSubmission {
   submitted_at: string | null;
 }
 
-function FormSubmissionsButton({ formKey, label }: { formKey: "newsletter" | "scout"; label: string }) {
+function FormSubmissionsButton({
+  formKey,
+  formName,
+  label,
+}: {
+  formKey?: "newsletter" | "scout";
+  formName?: string | null;
+  label: string;
+}) {
   const { user } = useAuth();
   const { isAdmin } = useIsAdmin();
   const canView = isCEO(user?.email) || isAdmin;
@@ -1194,7 +1207,7 @@ function FormSubmissionsButton({ formKey, label }: { formKey: "newsletter" | "sc
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<FormSubmission[]>([]);
   const [truncated, setTruncated] = useState(false);
-  const [formName, setFormName] = useState<string | null>(null);
+  const [formNameLoaded, setFormName] = useState<string | null>(null);
 
   if (!canView) return null;
 
@@ -1202,14 +1215,15 @@ function FormSubmissionsButton({ formKey, label }: { formKey: "newsletter" | "sc
     setLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase.functions.invoke("hubspot-api", {
-        body: { action: "form_submissions", form_key: formKey, limit: 200 },
-      });
+      const body: Record<string, unknown> = { action: "form_submissions", limit: 200 };
+      if (formKey) body.form_key = formKey;
+      if (formName) body.form_name = formName;
+      const { data, error } = await supabase.functions.invoke("hubspot-api", { body });
       if (error) throw new Error(error.message || "Failed to load submissions");
       if (data?.error) throw new Error(String(data.error));
       setRows(Array.isArray(data?.submissions) ? data.submissions : []);
       setTruncated(!!data?.truncated);
-      setFormName(data?.form_name ?? null);
+      setFormName(data?.form_name ?? formName ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setRows([]);
@@ -1238,7 +1252,7 @@ function FormSubmissionsButton({ formKey, label }: { formKey: "newsletter" | "sc
           <DialogHeader>
             <DialogTitle>{label}</DialogTitle>
             <DialogDescription>
-              {formName ? <>Form: <span className="font-mono">{formName}</span></> : "Submission history"}
+              {(formNameLoaded ?? formName) ? <>Form: <span className="font-mono">{formNameLoaded ?? formName}</span></> : "Submission history"}
             </DialogDescription>
           </DialogHeader>
 

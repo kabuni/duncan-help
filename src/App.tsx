@@ -42,6 +42,7 @@ import Registrations from "./pages/Registrations";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsAndConditions from "./pages/TermsAndConditions";
 import Integrations from "./pages/Integrations";
+import Learn from "./pages/Learn";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -97,6 +98,7 @@ const AppContent = () => {
             <Route path="/purchase-orders" element={<PurchaseOrders />} />
             <Route path="/ea-inbox" element={<EAInbox />} />
             <Route path="/knowledge-base" element={<KnowledgeBase />} />
+            <Route path="/learn" element={<Learn />} />
             <Route path="/registrations" element={<Registrations />} />
             <Route path="/school-registrations" element={<Navigate to="/registrations" replace />} />
             <Route path="/travel" element={<Navigate to="/purchase-orders?tab=travel" replace />} />

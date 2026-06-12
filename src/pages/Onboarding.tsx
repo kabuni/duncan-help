@@ -45,7 +45,7 @@ export default function Onboarding() {
       toast.error(error.message);
       return;
     }
-    navigate("/", { replace: true });
+    navigate("/?tour=meet-duncan", { replace: true });
   };
 
   if (authLoading || profileLoading) {

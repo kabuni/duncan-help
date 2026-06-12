@@ -3,15 +3,29 @@ import { useProfile } from "@/hooks/useProfile";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { LogOut, Megaphone } from "lucide-react";
+import { LogOut, Megaphone, PlayCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import AccountApprovals from "./AccountApprovals";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function SettingsGeneral() {
   const { user, signOut } = useAuth();
   const { profile } = useProfile();
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const replayTour = async () => {
+    if (user) {
+      await supabase
+        .from("profiles")
+        .update({ meet_duncan_tour_completed_at: null } as any)
+        .eq("user_id", user.id);
+      queryClient.invalidateQueries({ queryKey: ["profile", user.id] });
+    }
+    navigate("/?tour=meet-duncan");
+  };
 
   return (
     <div className="space-y-6">

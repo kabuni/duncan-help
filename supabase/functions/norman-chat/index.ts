@@ -67,7 +67,7 @@ Your capabilities:
 - **Document Search**: You have access to the company's document storage. You can search for documents, read their content, list folders, and answer questions based on them. Documents are organized in folders: documents/, ndas/, and templates/.
 
 
-- **Meeting Intelligence**: Use list_meetings to browse stored meetings (supports from_date/to_date and typo-tolerant search), get_meeting for a specific meeting's transcript/analysis, analyze_meetings to run AI analysis on meetings, and search_meeting_transcripts for cross-meeting topic search. **For ANY question about action items / tasks / follow-ups / to-dos / next steps from a specific meeting, you MUST call get_meeting_action_items_with_context (not get_meeting) after list_meetings — it returns the focus meeting's items plus a 7-day rollup of action items from surrounding meetings, and the answer MUST present both a "From this meeting" section and a "From the past 7 days" section.** **fetch_plaud_meetings is a SLOW sync (~20s) and must ONLY be called when the user EXPLICITLY asks to sync/refresh/import Plaud data** — i.e. the prompt contains keywords like "sync Plaud", "refresh Plaud", "pull new Plaud", "update Plaud meeting data", or "import from Plaud". **Never treat "fetch my latest meeting notes" as a sync request.** For summarization, analysis, search, or any question about existing meetings (including "today's", "yesterday's", "recent", "this week's", "summarize my meetings"): SKIP fetch_plaud_meetings. Go straight to the strict routing rules below. Note: meeting titles in the database may contain typos (e.g. "Lighting" instead of "Lightning") — the search is typo-tolerant, but always confirm the date matches what the user asked for before answering.
+- **Meeting Intelligence**: The **Meetings Database is the default source** for ALL meeting questions. Use \`list_meetings\` to find meetings (supports typo-tolerant title search and date filters), \`get_meeting\` for a specific meeting's transcript/analysis, \`analyze_meetings\` to run AI analysis, and \`search_meeting_transcripts\` for cross-meeting topic search. **For action items / tasks / follow-ups / to-dos / next steps from a specific meeting, call \`get_meeting_action_items_with_context\` after \`list_meetings\` — present both a "From this meeting" section and a "From the past 7 days" section.** Gmail Gemini notes are only consulted automatically when the user explicitly asks for the *newest* version of a meeting ("latest", "most recent", "today's", "yesterday's") — that routing happens before you are invoked, so you should never ask the user to pick a source. Never call \`fetch_plaud_meetings\` unless the user explicitly types "sync Plaud" / "refresh Plaud" / "import Plaud". Note: meeting titles may contain typos (e.g. "Lighting" instead of "Lightning") — the search is typo-tolerant.
 
 **DATE WINDOWS (HARD RULE):** When the user asks for "today", "this week", "last week", "next week", "this month", or "last month", you MUST pass the matching \`window\` value (\`today\` / \`this_week\` / \`last_week\` / \`next_week\` / \`this_month\` / \`last_month\`) to the meeting tools. NEVER compute ISO dates yourself when a window value exists — the server resolves them in the caller's timezone deterministically. \`from_date\` / \`to_date\` are only for custom ranges the user spells out (e.g. "from May 1 to May 10").
 
@@ -78,36 +78,15 @@ Your capabilities:
 - **Explicit date-range queries** (uses a \`window\` value OR explicit \`from_date\`/\`to_date\`, e.g. "summarize last week's meetings", "what happened in last week's meetings", "this week's meetings", "meetings from May 1–10"): analyze ALL meetings returned by \`list_meetings\` (up to a safety cap of 20). DO NOT discard older meetings to fit a 3–5 cap. For each meeting include the title, date, and a per-meeting summary, then end with an Overall Summary covering the whole period.
 - NEVER pass more than 20 meetings into \`analyze_meetings\` in one call; batch if necessary.
 
-**STRICT MEETING TOOL ROUTING (HARD RULE — NOT a suggestion):**
-- **SOURCE DISAMBIGUATION (ASK FIRST):** For source-ambiguous queries that are NOT "latest/most recent/last/today's/yesterday's" — e.g. generic "meeting notes", "recent meetings", "meeting summary" without a date anchor — if the user has NOT mentioned a source (Google Meet / Gemini / gemini-notes / Plaud), ask: "Which source should I use — **Google Meet** or **Plaud**?" Wait for the user's answer before calling any tool. **DO NOT ask this question for "latest / most recent / last / today's / yesterday's [topic?] meeting" queries** — those are routed automatically by the smart latest-meeting handler (personal Gmail first → meetings DB fallback) before the LLM is invoked, so the answer arrives without a clarifying turn.
-- **DATE-RANGE MEETING SUMMARIES:** For broad period questions like "what happened in last week's meetings", "summarize this week's meetings", "weekly summary of meetings and decisions" that do NOT explicitly say "my meetings", "meetings I attended", or "directly linked to me", call \`list_meetings\` with \`scope="all"\` and the correct \`window\`. Do NOT default to \`scope="mine"\` for company-wide period summaries.
-- **DATE-RANGE SOURCE FALLBACK:** If \`list_meetings(scope="all")\` returns no meetings for a period, say no meetings are currently ingested for that date range and suggest syncing/importing Plaud data. Do NOT reframe the failure as "not directly linked to you" unless the user explicitly asked for personal/linked meetings.
-- Once the user picks a source (or mentioned it up-front):
-  - **Gemini / Google Meet** → use the dedicated Google Meet shortcut. It reads the calling user's connected Gmail inbox for emails from gemini-notes@google.com. NEVER call \`list_meetings_by_source\` for Google Meet/Gemini notes.
-  - **Plaud** → use the dedicated Plaud shortcut. It fetches the latest centrally ingested Plaud note.
-- When the user asked for latest meeting notes and then chooses a source, fetch immediately. DO NOT ask whether they want a summary, full notes, paste, or a doc. Return the notes/transcript directly; if only a summary exists, say the full transcript is unavailable and show the summary.
-- Only when the user EXPLICITLY asks for "my meetings where I was a participant", "meetings I attended", "meetings linked to me" (i.e. ownership semantics, not source semantics):
-  1. Call list_meetings FIRST with scope="mine".
-  2. You MUST NOT call analyze_meetings, search_meeting_transcripts, get_meeting, or get_operational_summary BEFORE list_meetings has returned results in the current turn.
-  3. You MUST NOT call get_meeting with a meeting_id that did not come from a prior list_meetings/list_meetings_by_source result in this turn — invented IDs will be rejected by the server.
-- scope="all" requires explicit broad intent ("all meetings across the company", "everyone\'s meetings", or unqualified date-range summaries like "last week's meetings"). Never use it for explicitly personal queries.
+**MEETING TOOL ROUTING (SIMPLIFIED):**
+- The Meetings DB is the primary source. For any meeting query (by title, person, or date), call \`list_meetings\` with the appropriate \`search\` / \`window\` / \`from_date\` / \`to_date\` args, then \`get_meeting\` or \`get_meeting_action_items_with_context\` as needed.
+- For date-range summaries ("this week's meetings", "last week's meetings", "meetings from May 1–10"): call \`list_meetings\` with \`scope="all"\` and the correct \`window\`. Default to \`scope="mine"\` only when the user explicitly says "my meetings", "meetings I attended", or "meetings linked to me".
+- NEVER ask the user "Google Meet or Plaud?". NEVER ask "which source?". The DB already contains both, and latest-meeting Gmail lookup is handled automatically before you are invoked.
+- You MUST NOT call \`get_meeting\` with a meeting_id that did not come from a prior \`list_meetings\` result in this turn.
 
-**EMPTY RESULT HANDLING (HARD RULE):** If list_meetings returns \`empty: true\` or \`count: 0\`:
-  - DO NOT hallucinate, invent, or summarize any meeting.
-  - DO NOT call get_meeting, analyze_meetings, or search_meeting_transcripts to "try harder".
-  - Reply honestly with the tool's \`message\` field. If scope="all", say no meetings are currently ingested for that date range; if scope="mine", say no directly linked meetings were found.
-  - Then OFFER the fallback verbatim: "Would you like me to fetch recent meeting notes from Gemini or Plaud instead?" — DO NOT auto-run the fallback. Wait for the user to confirm OR for them to explicitly ask for "gemini notes" / "plaud notes" / "any recent meetings".
-  - Once confirmed (or the user's intent is broad like "any recent meetings"), call \`list_meetings_by_source\` with \`source="gemini"\` or \`"plaud"\`.
-  - When presenting fallback results, ALWAYS prefix with a clear disclosure such as: "These aren't linked to you directly — showing recent Gemini/Plaud notes as a fallback." NEVER call them "your meetings".
-  - NEVER mix fallback (source-based) results with "my meetings" results in the same list.
-  - If \`admin_recovery_available\` is true, you may also offer: "Want me to show all meetings instead?" (do NOT auto-run scope=all without confirmation).
+**EMPTY RESULT HANDLING:** If \`list_meetings\` returns \`empty: true\` or \`count: 0\`: reply honestly with the tool's \`message\`. DO NOT invent meetings. DO NOT call \`get_meeting\` / \`analyze_meetings\` to "try harder". Suggest broadening the title or date range.
 
-**FALLBACK MODE RULES:** When using \`list_meetings_by_source\`:
-  - Treat results as unattributed source notes, NOT user ownership.
-  - Do not claim the user attended, hosted, or owns them.
-  - Use phrasing like "Recent Gemini notes" or "Latest Plaud recordings".
-
-**TRANSPARENCY:** When presenting meetings from list_meetings, briefly note how each is linked using the \`match_reason\` field (host / participant / email). For Google Meet/Gemini source requests, say the notes were checked in the calling user's Gmail inbox, not a shared Duncan mailbox.
+**TRANSPARENCY:** When presenting meetings from \`list_meetings\`, briefly note how each is linked using the \`match_reason\` field (host / participant / email) when available.
 
 **Behavioral priority:** Speed and successful completion > completeness. A partial correct summary is ALWAYS better than a failed full summary. Prioritize recency over coverage.
 - **Xero Finance**: You have access to the company's Xero accounting system. You can list and search invoices (both payable and receivable), get invoice details, approve payment for invoices, **submit new invoices** (both bills/ACCPAY and sales invoices/ACCREC), and **record expenses** (Spend Money transactions). When users ask about invoices, bills, payments, expenses, or financial data from Xero, use these tools. For payment approval, invoices under £300 can be auto-approved; larger amounts require explicit confirmation. Always show invoice details (number, contact, amount, due date, status) before approving payment. When creating invoices, collect all details conversationally: contact name, invoice type (bill or sales invoice), line items (description, quantity, unit price, account code), due date, and reference. Search contacts first to find the correct Xero contact. Always confirm all details before submitting. When recording expenses: first list bank accounts to find the correct payment source, search for the contact, collect line items (description, amount, account code like '429' for General Expenses, '400' for Advertising, '404' for Cleaning, '461' for Printing, '310' for Insurance), then confirm and submit.
@@ -3629,67 +3608,10 @@ async function executeMeetingTool(
     intent_excerpt: intent.slice(0, 120),
   });
 
-  // GUARD 0 (NEW): If the user asked for "my/latest meeting(s)" but did NOT specify a
-  // source, do NOT run any meeting tool. Return an ASK_SOURCE payload so the model is
-  // forced to ask the user to choose Google Meet (Gemini) vs Plaud first.
-  if (
-    isMyMeetingsIntent &&
-    !userSpecifiedSource &&
-    !sourceArgProvided &&
-    meetingFlowState &&
-    meetingFlowState.listedIds.size === 0 &&
-    !(toolName === "fetch_plaud_meetings" && explicitPlaudSyncRequested) &&
-    toolName !== "get_action_items_for_range" &&
-    !(toolName === "list_meetings" && (args?.window || args?.from_date || args?.to_date))
-  ) {
-    console.log("[MEETING FLOW] ASK_SOURCE — blocking", toolName, "until user picks source");
-    return {
-      ask_source: true,
-      empty: true,
-      meetings: [],
-      message:
-        "Which source should I use — Google Meet or Plaud?",
-      instructions:
-        "Reply to the user with the message above verbatim and STOP. Do NOT call any meeting tool until they pick 'gemini' or 'plaud'. Once they answer, immediately call list_meetings_by_source with the chosen source and return the latest notes without asking summary/full/paste follow-ups.",
-      options: ["gemini", "plaud"],
-    };
-  }
+  // Source-disambiguation guards removed — Meetings DB is the canonical source
+  // and the smart "latest meeting" router (Gmail Gemini → DB fallback) runs
+  // before the LLM is invoked. No more "Google Meet or Plaud?" clarifying turn.
 
-  // GUARD 1: For "my meetings" intent WITH a specified source, the FIRST meeting tool call
-  // should be list_meetings_by_source (source-based retrieval).
-  if (
-    isMyMeetingsIntent &&
-    userSpecifiedSource &&
-    meetingFlowState &&
-    meetingFlowState.listedIds.size === 0 &&
-    toolName !== "list_meetings" &&
-    toolName !== "list_meetings_by_source" &&
-    toolName !== "fetch_plaud_meetings"
-  ) {
-    console.warn("[MEETING FLOW] AUTO-CORRECT — forcing list_meetings_by_source before", toolName);
-    corrected = true;
-    const inferredSource = /plaud/i.test(intent) ? "plaud" : "gemini";
-    const recovery = await executeMeetingTool(
-      "list_meetings_by_source",
-      { source: inferredSource, limit: 5 },
-      supabaseAdmin,
-      supabaseUser,
-      supabaseUrl,
-      authHeader,
-      userId,
-      meetingFlowState,
-      identity
-    );
-    if (toolName === "get_meeting" && !meetingFlowState.listedIds.has(args?.meeting_id)) {
-      console.log("[MEETING FLOW FINAL]", { user: userId, tool: toolName, args, corrected, action: "returned_list_instead" });
-      return {
-        ...recovery,
-        notice: `Auto-corrected: ran list_meetings_by_source(source='${inferredSource}') first. Pick an id from \`meetings\` and retry get_meeting.`,
-      };
-    }
-    // For analyze_meetings / search_meeting_transcripts, fall through and run the requested tool
-    // now that we have a scoped list available.
-  }
 
   switch (toolName) {
     case "fetch_plaud_meetings": {
@@ -5631,24 +5553,15 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const RECENT_TURN_WINDOW = 8;
     const recentMessages = messages.slice(-RECENT_TURN_WINDOW);
     const recentPriorUserMessages = recentMessages.filter((m: any) => m?.role === "user" && m !== latestUserMessage);
-    const sourceAlreadyChosen = recentMessages.some((m: any) => {
-      if (m?.role !== "user") return false;
-      const txt = extractPlainText(m?.content);
-      return MEETING_SOURCE_MENTIONED_RE.test(txt);
-    });
-    const sourceChosenForPendingMeeting =
-      MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
-      recentPriorUserMessages.some((m: any) => SOURCE_AMBIGUOUS_MEETING_RE.test(extractPlainText(m?.content)));
+    // Source disambiguation removed — the Meetings DB is the canonical source
+    // and the smart latest-meeting router (below) handles Gmail-only "latest"
+    // lookups. We keep these constants pinned to `false` to preserve the
+    // downstream `turn.*` readout shape without re-prompting the user.
+    const sourceAlreadyChosen = false;
+    const sourceChosenForPendingMeeting = false;
+    const mustAskMeetingSource = false;
+    const explicitSourceMeetingRequest = false;
 
-    const mustAskMeetingSource =
-      SOURCE_AMBIGUOUS_MEETING_RE.test(latestUserText) &&
-      !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
-      !EXPLICIT_OWNERSHIP_MEETING_RE.test(latestUserText) &&
-      !sourceAlreadyChosen;
-    const explicitSourceMeetingRequest =
-      SOURCE_AMBIGUOUS_MEETING_RE.test(latestUserText) &&
-      MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
-      !EXPLICIT_OWNERSHIP_MEETING_RE.test(latestUserText);
 
     const buildTextSseResponse = (content: string) => {
       const payload = `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\ndata: [DONE]\n\n`;
@@ -5814,9 +5727,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const RANGE_HINT_RE = /\b(this\s+week|last\s+week|next\s+week|this\s+month|last\s+month|from\s+\d|between\s+\d)\b/i;
     const isLatestMeetingIntent =
       LATEST_MEETING_RE.test(latestUserText) &&
-      !RANGE_HINT_RE.test(latestUserText) &&
-      !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
-      !sourceAlreadyChosen;
+      !RANGE_HINT_RE.test(latestUserText);
+
 
     function extractLatestTitleHint(text: string): string | null {
       const m = text.match(/\b(?:my\s+)?(?:latest|most\s+recent|last|today'?s|yesterday'?s)\s+(.{2,60}?)\s+(?:meeting|meetings|call|calls|notes?|transcript|standup|recap|recording)\b/i);
@@ -5979,47 +5891,11 @@ Format as a natural, readable summary with clear sections. If a section has no d
       }
     }
 
-    if (sourceChosenForPendingMeeting || explicitSourceMeetingRequest) {
-      const selectedSource: "gemini" | "plaud" = /plaud/i.test(latestUserText) ? "plaud" : "gemini";
-      const rawContent = await formatLatestSourceMeetingNotes(selectedSource);
+    // Source-selected reformat branch removed — the simplified meeting workflow
+    // routes "latest/most recent/today's/yesterday's" via the smart router above
+    // and everything else through the Meetings DB tools. There is no longer a
+    // "user picked Gemini or Plaud" follow-up turn to reformat.
 
-      // If the helper returned a soft error (no Gmail connected, no messages, etc.),
-      // surface it directly without sending to the LLM.
-      const isErrorMessage = /^(Your personal Gmail|I checked your Gmail|I couldn't|I found a Google Meet)/i.test(rawContent);
-      if (isErrorMessage) return buildTextSseResponse(rawContent);
-
-      const formattingSystem = selectedSource === "gemini"
-        ? `You are Duncan reformatting a raw Google Meet (Gemini) notes email into a clean, executive-ready briefing. STRICT RULES:
-- Preserve EVERY piece of substantive content — attendees, summary, discussion points, decisions, action items, owners, dates, times, links. Do NOT drop or paraphrase facts.
-- Remove ONLY noise: email signatures, "Open meeting notes" buttons, feedback prompts, Google LLC footers, repeated headings, raw URLs that duplicate link text, tracking junk.
-- Output structure (use these exact section headings, omit a section only if truly empty):
-  ## {Meeting title}
-  - **Date:** ...
-  - **Source:** Google Meet
-  ### Attendees
-  ### Summary
-  ### Discussion
-  ### Decisions
-  ### Action Items
-    - [ ] **Owner** — task (due date if given)
-  ### Next Steps
-- Use Markdown bullets, bold for owners/labels, and tight spacing. No preamble, no closing remarks. Begin directly with the H2 title.`
-        : `You are Duncan reformatting raw Plaud meeting notes into a clean, executive-ready briefing. Preserve all substantive content, remove transcription noise, and use the same Markdown structure (## title, Date, Source, Attendees, Summary, Discussion, Decisions, Action Items, Next Steps). Begin directly with the H2 title.`;
-
-      const formattingResponse = await fetchAIWithRetry({
-        messages: [
-          { role: "system", content: formattingSystem },
-          { role: "user", content: `Reformat the following meeting notes. Keep all facts, names, owners, dates and action items intact:\n\n${rawContent}` },
-        ],
-        temperature: 0.2,
-      });
-      if (!formattingResponse.ok || !formattingResponse.body) {
-        return buildTextSseResponse(rawContent);
-      }
-      return new Response(formattingResponse.body, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-      });
-    }
 
     // Persistent across all tool-call iterations in this request — tracks meeting IDs the LLM has actually been shown
     const meetingFlowState = { listedIds: new Set<string>(), sourceFallbackIds: new Set<string>(), userIntent: latestUserText };
@@ -6323,15 +6199,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
       }
     }
 
-    if (mustAskMeetingSource) {
-      requestBody.tools = undefined;
-      requestBody.tool_choice = undefined;
-      systemContent += `\n\n## CURRENT REQUEST OVERRIDE\nThe latest user request is a source-ambiguous meeting notes request. Reply exactly: "Which source should I use — **Google Meet** or **Plaud**?" Do not call tools.`;
-      requestBody.messages = [
-        { role: "system", content: systemContent },
-        ...messages,
-      ];
-    }
+    // Source-clarification override removed (mustAskMeetingSource is always false).
+
 
     // Helper to call LLM via the shared router (Claude primary, OpenAI fallback).
     // Returns a synthetic Response whose .body is OpenAI-shaped SSE so downstream parser

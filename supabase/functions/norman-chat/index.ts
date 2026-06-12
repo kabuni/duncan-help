@@ -3608,67 +3608,10 @@ async function executeMeetingTool(
     intent_excerpt: intent.slice(0, 120),
   });
 
-  // GUARD 0 (NEW): If the user asked for "my/latest meeting(s)" but did NOT specify a
-  // source, do NOT run any meeting tool. Return an ASK_SOURCE payload so the model is
-  // forced to ask the user to choose Google Meet (Gemini) vs Plaud first.
-  if (
-    isMyMeetingsIntent &&
-    !userSpecifiedSource &&
-    !sourceArgProvided &&
-    meetingFlowState &&
-    meetingFlowState.listedIds.size === 0 &&
-    !(toolName === "fetch_plaud_meetings" && explicitPlaudSyncRequested) &&
-    toolName !== "get_action_items_for_range" &&
-    !(toolName === "list_meetings" && (args?.window || args?.from_date || args?.to_date))
-  ) {
-    console.log("[MEETING FLOW] ASK_SOURCE — blocking", toolName, "until user picks source");
-    return {
-      ask_source: true,
-      empty: true,
-      meetings: [],
-      message:
-        "Which source should I use — Google Meet or Plaud?",
-      instructions:
-        "Reply to the user with the message above verbatim and STOP. Do NOT call any meeting tool until they pick 'gemini' or 'plaud'. Once they answer, immediately call list_meetings_by_source with the chosen source and return the latest notes without asking summary/full/paste follow-ups.",
-      options: ["gemini", "plaud"],
-    };
-  }
+  // Source-disambiguation guards removed — Meetings DB is the canonical source
+  // and the smart "latest meeting" router (Gmail Gemini → DB fallback) runs
+  // before the LLM is invoked. No more "Google Meet or Plaud?" clarifying turn.
 
-  // GUARD 1: For "my meetings" intent WITH a specified source, the FIRST meeting tool call
-  // should be list_meetings_by_source (source-based retrieval).
-  if (
-    isMyMeetingsIntent &&
-    userSpecifiedSource &&
-    meetingFlowState &&
-    meetingFlowState.listedIds.size === 0 &&
-    toolName !== "list_meetings" &&
-    toolName !== "list_meetings_by_source" &&
-    toolName !== "fetch_plaud_meetings"
-  ) {
-    console.warn("[MEETING FLOW] AUTO-CORRECT — forcing list_meetings_by_source before", toolName);
-    corrected = true;
-    const inferredSource = /plaud/i.test(intent) ? "plaud" : "gemini";
-    const recovery = await executeMeetingTool(
-      "list_meetings_by_source",
-      { source: inferredSource, limit: 5 },
-      supabaseAdmin,
-      supabaseUser,
-      supabaseUrl,
-      authHeader,
-      userId,
-      meetingFlowState,
-      identity
-    );
-    if (toolName === "get_meeting" && !meetingFlowState.listedIds.has(args?.meeting_id)) {
-      console.log("[MEETING FLOW FINAL]", { user: userId, tool: toolName, args, corrected, action: "returned_list_instead" });
-      return {
-        ...recovery,
-        notice: `Auto-corrected: ran list_meetings_by_source(source='${inferredSource}') first. Pick an id from \`meetings\` and retry get_meeting.`,
-      };
-    }
-    // For analyze_meetings / search_meeting_transcripts, fall through and run the requested tool
-    // now that we have a scoped list available.
-  }
 
   switch (toolName) {
     case "fetch_plaud_meetings": {

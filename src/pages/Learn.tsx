@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ArrowRight, PlayCircle } from "lucide-react";
 import { MODULES } from "@/components/onboarding/moduleContent";
 import MeetDuncanTour from "@/components/onboarding/MeetDuncanTour";
@@ -8,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSettingsPanel } from "@/hooks/SettingsPanelContext";
 
 export default function Learn() {
+  const navigate = useNavigate();
   const { openSettings } = useSettingsPanel();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -30,7 +32,7 @@ export default function Learn() {
     } else if (moduleId === "feedback") {
       openSettings("request_feature");
     } else {
-      window.location.href = to;
+      navigate(to);
     }
   };
 

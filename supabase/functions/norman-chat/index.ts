@@ -5811,27 +5811,26 @@ Format as a natural, readable summary with clear sections. If a section has no d
     };
 
     const formatLatestSourceMeetingNotes = async (source: "gemini" | "plaud") => {
-      if (source === "gemini") {
-        return await fetchLatestGeminiNotesFromUserGmail(userId);
-      }
-      // Plaud: keep DB-based fetch (Plaud notes are ingested centrally)
+      // Both Gemini and Plaud notes are ingested centrally (duncan@kabuni.com)
+      // into the meetings DB. Never read from the caller's personal Gmail.
       const { data, error } = await supabaseAdmin
         .from("meetings")
         .select("id, title, meeting_date, status, source, sender_email, summary, transcript, analysis, created_at")
-        .eq("source", "plaud")
-        .not("sender_email", "ilike", "%gemini-notes@google.com%")
+        .eq("source", source)
         .order("meeting_date", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(1);
-      if (error) throw new Error(`Failed to fetch latest Plaud meeting notes: ${error.message}`);
+      if (error) throw new Error(`Failed to fetch latest ${source} meeting notes: ${error.message}`);
       const meeting = Array.isArray(data) ? data[0] : null;
-      if (!meeting) return `I couldn't find any recent Plaud meeting notes.`;
+      const sourceLabel = source === "plaud" ? "Plaud" : "Google Meet (Gemini)";
+      if (!meeting) return `I couldn't find any recent ${sourceLabel} meeting notes in the meetings database.`;
       const date = meeting.meeting_date ? new Date(meeting.meeting_date).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Date unavailable";
       const analysis = meeting.analysis && typeof meeting.analysis === "object" ? meeting.analysis : null;
-      const notes = String(meeting.transcript || meeting.summary || analysis?.summary || "").trim();
+      const notes = String(meeting.transcript || meeting.summary || (analysis as any)?.summary || "").trim();
       const body = notes || "No transcript or notes content is available for this meeting yet.";
-      return `## ${meeting.title?.trim() || "Latest meeting notes"}\n\n- **Date:** ${date}\n- **Source:** Plaud\n\n${body.slice(0, 40000)}`;
+      return `## ${meeting.title?.trim() || "Latest meeting notes"}\n\n- **Date:** ${date}\n- **Source:** ${sourceLabel}\n\n${body.slice(0, 40000)}`;
     };
+
 
     // ===== Smart "latest meeting" router =====
     // For "latest/most recent/last/today's/yesterday's meeting" queries WITHOUT an
@@ -5984,29 +5983,22 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const hint = extractLatestTitleHint(latestUserText);
       console.log("[LATEST MEETING SMART]", { user: userId, hint, latestUserText });
       try {
-        const gmailResult = await fetchLatestMeetingFromUserGmail(userId, hint);
-        if (gmailResult.ok) {
-          return buildTextSseResponse(gmailResult.markdown);
-        }
-        // Gmail miss → DB fallback
+        // Centralized ingestion: Gemini + Plaud notes land in the meetings DB
+        // via duncan@kabuni.com. Never pull from the caller's personal Gmail.
         const dbMarkdown = await fetchLatestMeetingFromDb(hint);
         if (dbMarkdown) {
-          const prefix = gmailResult.reason === "no_gmail"
-            ? `> _Personal Gmail isn't connected — pulled from the meetings database instead._\n\n`
-            : hint
-              ? `> _No Gmail match for "${hint}" — pulled the best match from the meetings database._\n\n`
-              : `> _No recent meeting notes in your Gmail — pulled the latest from the meetings database._\n\n`;
-          return buildTextSseResponse(prefix + dbMarkdown);
+          return buildTextSseResponse(dbMarkdown);
         }
         const msg = hint
-          ? `I couldn't find any recent meeting notes matching "${hint}" in either your Gmail or the meetings database. Try broadening the title, or ask me to list recent meetings.`
-          : `I couldn't find any recent meeting notes in your Gmail or the meetings database. Try syncing Plaud, or ask me to list recent meetings.`;
+          ? `I couldn't find any recent meeting notes matching "${hint}" in the meetings database. Try broadening the title, or ask me to list recent meetings.`
+          : `I couldn't find any recent meeting notes in the meetings database. Try syncing Plaud, or ask me to list recent meetings.`;
         return buildTextSseResponse(msg);
       } catch (e: any) {
         console.error("[LATEST MEETING SMART] error", e);
         return buildTextSseResponse(`I hit an error trying to fetch your latest meeting: ${e?.message || "unknown error"}.`);
       }
     }
+
 
     // Source-selected reformat branch removed — the simplified meeting workflow
     // routes "latest/most recent/today's/yesterday's" via the smart router above

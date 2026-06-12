@@ -587,7 +587,7 @@ const MEETING_TOOLS = [
     type: "function",
     function: {
       name: "list_meetings",
-      description: "Lists ONLY meetings directly linked to the current user by verified host/email/participant data. Do NOT use for source-ambiguous requests like 'fetch my latest meeting notes' unless the user explicitly asks for meetings they attended/hosted/are linked to. Use scope='all' only when explicitly requested.",
+      description: "Lists meetings from the company-wide Meetings Database (default). Supports title/transcript search, date filters, and date windows. By default returns ALL ingested meetings (scope='all'); pass scope='mine' ONLY when the user explicitly asks for meetings they hosted/attended.",
       parameters: {
         type: "object",
         properties: {
@@ -596,8 +596,8 @@ const MEETING_TOOLS = [
           search: { type: "string", description: "Keyword(s) to match in title or transcript. Words are matched independently (OR), so partial / misspelled queries still work." },
           from_date: { type: "string", description: "Only return meetings on or after this date (YYYY-MM-DD). Ignored if 'window' is set." },
           to_date: { type: "string", description: "Only return meetings on or before this date (YYYY-MM-DD). Ignored if 'window' is set." },
-          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week", "last_week", "this_month", "last_month"], description: "Resolve a date window in the caller's timezone. ALWAYS prefer this over from_date/to_date for natural-language ranges like 'this week', 'last week', 'last month'. Do NOT compute dates yourself when a window value exists." },
-          scope: { type: "string", enum: ["mine", "all"], description: "'mine' (default) returns only the current user's meetings. 'all' requires admin and returns the full company list — use ONLY when the user explicitly asks for everyone's meetings." },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week", "last_week", "this_month", "last_month"], description: "Resolve a date window in the caller's timezone. ALWAYS prefer this over from_date/to_date for natural-language ranges." },
+          scope: { type: "string", enum: ["mine", "all"], description: "'all' (default) — searches the entire Meetings DB. 'mine' — restrict to meetings linked to the caller by host/email/participant. Use 'mine' ONLY when the user explicitly says 'my meetings', 'meetings I attended', or 'meetings linked to me'." },
         },
         required: [],
       },

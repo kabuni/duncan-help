@@ -5891,47 +5891,11 @@ Format as a natural, readable summary with clear sections. If a section has no d
       }
     }
 
-    if (sourceChosenForPendingMeeting || explicitSourceMeetingRequest) {
-      const selectedSource: "gemini" | "plaud" = /plaud/i.test(latestUserText) ? "plaud" : "gemini";
-      const rawContent = await formatLatestSourceMeetingNotes(selectedSource);
+    // Source-selected reformat branch removed — the simplified meeting workflow
+    // routes "latest/most recent/today's/yesterday's" via the smart router above
+    // and everything else through the Meetings DB tools. There is no longer a
+    // "user picked Gemini or Plaud" follow-up turn to reformat.
 
-      // If the helper returned a soft error (no Gmail connected, no messages, etc.),
-      // surface it directly without sending to the LLM.
-      const isErrorMessage = /^(Your personal Gmail|I checked your Gmail|I couldn't|I found a Google Meet)/i.test(rawContent);
-      if (isErrorMessage) return buildTextSseResponse(rawContent);
-
-      const formattingSystem = selectedSource === "gemini"
-        ? `You are Duncan reformatting a raw Google Meet (Gemini) notes email into a clean, executive-ready briefing. STRICT RULES:
-- Preserve EVERY piece of substantive content — attendees, summary, discussion points, decisions, action items, owners, dates, times, links. Do NOT drop or paraphrase facts.
-- Remove ONLY noise: email signatures, "Open meeting notes" buttons, feedback prompts, Google LLC footers, repeated headings, raw URLs that duplicate link text, tracking junk.
-- Output structure (use these exact section headings, omit a section only if truly empty):
-  ## {Meeting title}
-  - **Date:** ...
-  - **Source:** Google Meet
-  ### Attendees
-  ### Summary
-  ### Discussion
-  ### Decisions
-  ### Action Items
-    - [ ] **Owner** — task (due date if given)
-  ### Next Steps
-- Use Markdown bullets, bold for owners/labels, and tight spacing. No preamble, no closing remarks. Begin directly with the H2 title.`
-        : `You are Duncan reformatting raw Plaud meeting notes into a clean, executive-ready briefing. Preserve all substantive content, remove transcription noise, and use the same Markdown structure (## title, Date, Source, Attendees, Summary, Discussion, Decisions, Action Items, Next Steps). Begin directly with the H2 title.`;
-
-      const formattingResponse = await fetchAIWithRetry({
-        messages: [
-          { role: "system", content: formattingSystem },
-          { role: "user", content: `Reformat the following meeting notes. Keep all facts, names, owners, dates and action items intact:\n\n${rawContent}` },
-        ],
-        temperature: 0.2,
-      });
-      if (!formattingResponse.ok || !formattingResponse.body) {
-        return buildTextSseResponse(rawContent);
-      }
-      return new Response(formattingResponse.body, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-      });
-    }
 
     // Persistent across all tool-call iterations in this request — tracks meeting IDs the LLM has actually been shown
     const meetingFlowState = { listedIds: new Set<string>(), sourceFallbackIds: new Set<string>(), userIntent: latestUserText };

@@ -5727,9 +5727,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const RANGE_HINT_RE = /\b(this\s+week|last\s+week|next\s+week|this\s+month|last\s+month|from\s+\d|between\s+\d)\b/i;
     const isLatestMeetingIntent =
       LATEST_MEETING_RE.test(latestUserText) &&
-      !RANGE_HINT_RE.test(latestUserText) &&
-      !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
-      !sourceAlreadyChosen;
+      !RANGE_HINT_RE.test(latestUserText);
+
 
     function extractLatestTitleHint(text: string): string | null {
       const m = text.match(/\b(?:my\s+)?(?:latest|most\s+recent|last|today'?s|yesterday'?s)\s+(.{2,60}?)\s+(?:meeting|meetings|call|calls|notes?|transcript|standup|recap|recording)\b/i);

@@ -2482,16 +2482,28 @@ async function executeWorkstreamTool(
       });
 
       const taskResult = await insertPendingTasks(card.id, args.pending_tasks || []);
+      const { data: verifiedCard, error: verifyCardError } = await supabaseAdmin
+        .from("workstream_cards")
+        .select("id, title, status, project_tag")
+        .eq("id", card.id)
+        .maybeSingle();
+      if (verifyCardError || !verifiedCard) {
+        throw new Error(`Failed to verify created card: ${verifyCardError?.message || "not found"}`);
+      }
+      const expectedTaskCount = Array.isArray(args.pending_tasks) ? args.pending_tasks.filter((t: any) => !!t?.title).length : 0;
+      if (expectedTaskCount > 0 && taskResult.tasks_created + taskResult.tasks_skipped < expectedTaskCount) {
+        throw new Error(`Failed to verify all tasks: expected ${expectedTaskCount}, created ${taskResult.tasks_created}, skipped ${taskResult.tasks_skipped}`);
+      }
 
       return {
         success: true,
-        card_id: card.id,
-        title: card.title,
-        status: card.status,
-        project_tag: card.project_tag,
+        card_id: verifiedCard.id,
+        title: verifiedCard.title,
+        status: verifiedCard.status,
+        project_tag: verifiedCard.project_tag,
         assigned_to: "creator (you)",
         ...taskResult,
-        message: `Card created (id=${card.id}) with ${taskResult.tasks_created} task(s).`,
+        message: `Card created (id=${verifiedCard.id}) with ${taskResult.tasks_created} task(s).`,
       };
     }
 

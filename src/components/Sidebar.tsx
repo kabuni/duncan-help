@@ -289,17 +289,22 @@ const Sidebar = ({
       <div className="border-t border-border px-3 py-3 space-y-2">
         {user && (
           <div className="flex items-center gap-2">
-            <p className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">{user.email}</p>
+            <button
+              onClick={() => { signOut(); onMobileClose?.(); }}
+              className="group flex-1 min-w-0 text-left rounded-md px-1.5 py-1 hover:bg-sidebar-accent transition-colors"
+              title="Sign out"
+            >
+              <span className="block truncate text-xs font-medium text-foreground group-hover:hidden">
+                {user.email}
+              </span>
+              <span className="hidden group-hover:flex items-center gap-1.5 text-xs font-medium text-foreground">
+                <LogOut className="h-3.5 w-3.5" />
+                Sign out
+              </span>
+            </button>
             <div className="flex items-center gap-0.5 shrink-0">
               <NotificationsBell />
               <ThemeToggle />
-              <button
-                onClick={() => { signOut(); onMobileClose?.(); }}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
-                title="Sign out"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-              </button>
             </div>
           </div>
         )}
@@ -310,17 +315,18 @@ const Sidebar = ({
           <GraduationCap className="h-3.5 w-3.5" />
           Learn Duncan
         </button>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
-        >
-          <Settings className="h-3.5 w-3.5" />
-          Settings
-        </button>
         <div className="flex items-center gap-2 px-2 pt-1 text-[10px] text-muted-foreground/70">
           <a href="https://duncan.help/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Privacy</a>
           <span aria-hidden>·</span>
           <a href="https://duncan.help/terms" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Terms</a>
+          <button
+            onClick={() => setShowModal(true)}
+            className="ml-auto flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/70 hover:text-foreground hover:bg-sidebar-accent transition-colors"
+            title="Settings"
+            aria-label="Settings"
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </button>
         </div>
 
       </div>

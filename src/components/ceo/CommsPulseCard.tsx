@@ -283,6 +283,7 @@ function ExternalSignalColumn({
                             <span className="text-[10px] text-muted-foreground">last 30d</span>
                           </div>
                           {fm.form_name ? <div className="text-[10px] text-muted-foreground truncate mt-0.5">{fm.form_name}</div> : null}
+                          <FormSubmissionsButton formKey={key} label={label} />
                         </>
                       ) : (
                         <div className="text-[10px] text-muted-foreground mt-1">Form not found in connected portal</div>

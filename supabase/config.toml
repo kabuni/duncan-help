@@ -198,3 +198,14 @@ verify_jwt = false
 [functions.weekly-exec-summary-download]
 verify_jwt = false
 
+[functions.workspace-admin-auth]
+verify_jwt = false
+
+[functions.workspace-admin-callback]
+verify_jwt = false
+
+[functions.poll-workspace-new-users]
+verify_jwt = false
+
+
+

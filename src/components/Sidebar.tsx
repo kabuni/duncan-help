@@ -289,7 +289,7 @@ const Sidebar = ({
       </nav>
 
       {/* User */}
-      <div className="border-t border-border px-3 py-3 space-y-2">
+      <div className="border-t border-border px-3 py-2 space-y-1">
         {user && (
           <div className="flex items-center gap-2">
             <Avatar className="h-7 w-7 shrink-0">
@@ -319,7 +319,7 @@ const Sidebar = ({
         )}
         <button
           onClick={() => { navigate("/learn"); onMobileClose?.(); }}
-          className="flex w-full items-center rounded-md px-2 py-1 text-[10px] text-muted-foreground/70 hover:text-foreground hover:bg-sidebar-accent transition-colors"
+          className="flex w-full items-center rounded-md px-2 py-0.5 text-[10px] text-muted-foreground/70 hover:text-foreground hover:bg-sidebar-accent transition-colors"
         >
           Learn Duncan
         </button>
@@ -332,7 +332,7 @@ const Sidebar = ({
               <TooltipTrigger asChild>
                 <button
                   onClick={() => setShowModal(true)}
-                  className="ml-auto flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/70 hover:text-foreground hover:bg-sidebar-accent transition-colors"
+                  className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/70 hover:text-foreground hover:bg-sidebar-accent transition-colors"
                   aria-label="Settings"
                 >
                   <Settings className="h-3.5 w-3.5" />

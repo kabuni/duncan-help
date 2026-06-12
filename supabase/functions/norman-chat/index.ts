@@ -3629,27 +3629,38 @@ async function executeMeetingTool(
     }
 
     case "list_meetings": {
-      if ((args.window || args.from_date || args.to_date) && !isMyMeetingsIntent && identity?.is_admin) {
-        args.scope = "all";
-      }
-      // Force scope default — never allow undefined to fall through
-      const scope: "mine" | "all" = args.scope === "all" ? "all" : "mine";
+      // Simplified workflow: the Meetings DB is the canonical, company-wide source
+      // for meeting questions. Default to scope="all" so title/person/date searches
+      // hit every ingested meeting, not just ones the caller is email-linked to.
+      // scope="mine" is honoured only when the caller explicitly opts in.
+      const scope: "mine" | "all" = args.scope === "mine" ? "mine" : "all";
       args.scope = scope;
       const limit = args.limit || 20;
       console.log(`[list_meetings] user=${userId} scope=${scope} args=${JSON.stringify(args)}`);
 
-      // Use RPC to get the base scoped set (RLS-safe, deterministic ordering)
-      const { data: baseRows, error: rpcErr } = await supabaseUser.rpc("get_my_meetings", {
-        _limit: 500, // pull a wider set so we can filter client-side
-        _scope: scope,
-      });
+      let baseRows: any[] = [];
+      let rpcErr: any = null;
+      if (scope === "mine") {
+        const { data, error } = await supabaseUser.rpc("get_my_meetings", { _limit: 500, _scope: "mine" });
+        baseRows = (data || []) as any[];
+        rpcErr = error;
+      } else {
+        // Company-wide: bypass RLS via service-role client (no admin gate).
+        const { data, error } = await supabaseAdmin
+          .from("meetings")
+          .select("*")
+          .order("meeting_date", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .limit(500);
+        baseRows = (data || []) as any[];
+        rpcErr = error;
+      }
       if (rpcErr) {
-        console.error(`[list_meetings] RPC error for user=${userId}:`, rpcErr);
+        console.error(`[list_meetings] error for user=${userId}:`, rpcErr);
         throw new Error(`Failed to list meetings: ${rpcErr.message}`);
       }
-      console.log(`[list_meetings] user=${userId} rpc_rows=${(baseRows || []).length}`);
+      console.log(`[list_meetings] user=${userId} base_rows=${baseRows.length}`);
 
-      let rows = (baseRows || []) as any[];
 
       if (args.status) rows = rows.filter((r) => r.status === args.status);
       if (args.from_date) {

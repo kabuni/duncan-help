@@ -1,45 +1,30 @@
-# Plan: View submissions on Newsletter / Scout cards
+# Fix: "View submissions" button missing on Scout / Newsletter cards
 
-Add an admin/CEO-only "View submissions" button to the two form cards in the Team Briefing's `CommsPulseCard`. The existing totals stay visible to everyone; only authorised roles can drill into the per-person list (name, email, location, submitted date).
+The button + dialog + edge function action (`form_submissions`) are already implemented in:
+- `src/components/ceo/CommsPulseCard.tsx` (`FormSubmissionsButton`, rendered at line 286)
+- `supabase/functions/hubspot-api/index.ts` (`form_submissions` action + `fetchFormSubmissionsList`)
 
-## 1. Backend — new `form_submissions` action in `hubspot-api`
+So the button is wired up, but it isn't showing for you. There are three realistic causes — I'll address all of them in one pass.
 
-In `supabase/functions/hubspot-api/index.ts`:
+## Likely causes
 
-- Add a handler branch `action === "form_submissions"` (next to `team_briefing_summary`).
-- Input: `{ form_key: "newsletter" | "scout", limit?: number (default 100, max 500) }`. Optional `form_id` override.
-- **Authorisation (server-side, not just UI):**
-  - Require an authenticated user (existing `getUser(req)` path).
-  - Allow only if the caller is in `CEO_EMAILS` **or** has the `admin` role in `public.user_roles`. Otherwise return 403.
-- Resolve the HubSpot token via existing `resolveTeamBriefingToken`.
-- Reuse `pickForm` against `/marketing/v3/forms?limit=100&formTypes=all` with the same matchers already used by `buildHubspotFormMetrics` (`newsletter / subscribe / signup / sign up`, and `scout`).
-- Page through `/marketing/v3/forms/{formId}/submissions` (fallback to `/form-integrations/v1/submissions/forms/{formId}` on 404/410, mirroring `fetchHubspotForms`) until `limit` is reached or no more pages.
-- For each submission extract: `submittedAt`, contact id (`contact.vid` / `contactId`), and the `email`, `firstname`, `lastname` values from `sub.values`.
-- Batch-read contacts via existing `fetchContactsLocations` plus `firstname`/`lastname` properties to enrich `city`, `country`, and display name where missing.
-- Return `{ form_name, form_id, submissions: [{ name, email, city, country, submitted_at }], truncated: boolean }`.
+1. **Rendered only when `fm.found === true`.** Today the button sits inside the `fm?.found` branch (line 286). If HubSpot returns "form not found" for newsletter/scout in the persisted briefing payload, the card shows "Form not found in connected portal" and no button — even for a CEO/admin.
+2. **Role check.** `canView = isCEO(user?.email) || isAdmin`. `isCEO` only matches `nimesh@kabuni.com` / `palash@kabuni.com`. If you're signed in with a different email and don't have the `admin` row in `user_roles`, the button is correctly hidden — but you may expect to see it.
+3. **Role query still loading.** `useIsAdmin()` returns `isAdmin = false` while the query is in flight, so on first paint `canView` can be false and the button is skipped until the query resolves and the component re-renders. With the current code this self-heals, but it can look "missing".
 
-No DB schema changes; no new tables; no new secrets.
+## Changes
 
-## 2. Frontend — gated button + submissions dialog
+### 1. `src/components/ceo/CommsPulseCard.tsx`
+- Lift `FormSubmissionsButton` so it renders **regardless of `fm.found`** (next to the metric block, not inside it). When the form isn't found, the button is still shown to CEO/admin and the dialog will simply display "No submissions found" / the underlying API error — which is the diagnostic signal we actually want.
+- Keep the role gate exactly as-is (`isCEO(user?.email) || isAdmin`) so non-privileged users still see nothing.
+- Small a11y/clarity tweak: button label stays "View submissions", with `aria-label` including the form name.
 
-In `src/components/ceo/CommsPulseCard.tsx`:
-
-- Import `useAuth`, `useIsAdmin`, and `isCEO` from `@/lib/ceoAccess`.
-- Compute `canViewSubmissions = isCEO(user?.email) || isAdmin`.
-- For each of the two form cards (lines ~264–286), when `fm?.found && canViewSubmissions`, render a small `Button` ("View submissions") under the totals. Button is **not rendered at all** for other users.
-- On click, open a `Dialog` (using existing `@/components/ui/dialog`) that:
-  - Calls `supabase.functions.invoke("hubspot-api", { body: { action: "form_submissions", form_key: "newsletter" | "scout" } })`.
-  - Shows loading state, error state, and a `Table` with columns **Name · Email · Location · Submitted**.
-  - Location renders `city, country` (falls back to `—`); date formatted via existing `formatRelativeOrDate` helper or `Intl.DateTimeFormat`.
-  - If `truncated`, show a small footer note ("Showing first N submissions").
-
-## Files touched
-
-- `supabase/functions/hubspot-api/index.ts` — new action handler + small helper for submission listing/enrichment.
-- `src/components/ceo/CommsPulseCard.tsx` — role check, button per card, submissions dialog component (inline or co-located).
+### 2. Quick verification step (no code change)
+After the edit I'll:
+- Confirm your account either matches `CEO_EMAILS` or has an `admin` row in `user_roles` (via a read query). If neither is true, the button is intentionally hidden and we'll need to either add you to `user_roles` as admin or extend `CEO_EMAILS` — I'll surface that explicitly rather than silently widening access.
+- Hit `hubspot-api` with `{ action: "form_submissions", form_key: "newsletter" }` to confirm the backend path still returns rows end-to-end.
 
 ## Out of scope
-
-- No change to the existing totals / last-30d numbers or the location-breakdown table — those remain visible to all viewers.
-- No CSV export (can be added later if requested).
-- No caching layer; each open fetches fresh from HubSpot.
+- No changes to the totals / last-30d numbers visible to everyone.
+- No change to the edge function's auth gate (still CEO emails + `admin` role server-side).
+- No CSV export, no caching.

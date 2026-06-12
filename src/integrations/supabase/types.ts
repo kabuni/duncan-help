@@ -3801,6 +3801,90 @@ export type Database = {
           },
         ]
       }
+      workspace_admin_tokens: {
+        Row: {
+          access_token: string
+          created_at: string
+          customer_id: string | null
+          google_account_email: string
+          id: string
+          last_poll_error: string | null
+          last_poll_status: string | null
+          last_polled_at: string | null
+          refresh_token: string
+          scopes: string | null
+          token_expiry: string
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string
+          customer_id?: string | null
+          google_account_email: string
+          id?: string
+          last_poll_error?: string | null
+          last_poll_status?: string | null
+          last_polled_at?: string | null
+          refresh_token: string
+          scopes?: string | null
+          token_expiry: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          customer_id?: string | null
+          google_account_email?: string
+          id?: string
+          last_poll_error?: string | null
+          last_poll_status?: string | null
+          last_polled_at?: string | null
+          refresh_token?: string
+          scopes?: string | null
+          token_expiry?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      workspace_welcome_log: {
+        Row: {
+          created_at: string
+          email: string
+          error_message: string | null
+          full_name: string | null
+          gmail_message_id: string | null
+          google_user_id: string
+          id: string
+          send_status: string
+          welcome_sent_at: string
+          workspace_created_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          error_message?: string | null
+          full_name?: string | null
+          gmail_message_id?: string | null
+          google_user_id: string
+          id?: string
+          send_status?: string
+          welcome_sent_at?: string
+          workspace_created_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          error_message?: string | null
+          full_name?: string | null
+          gmail_message_id?: string | null
+          google_user_id?: string
+          id?: string
+          send_status?: string
+          welcome_sent_at?: string
+          workspace_created_at?: string | null
+        }
+        Relationships: []
+      }
       workstream_activity: {
         Row: {
           action: string

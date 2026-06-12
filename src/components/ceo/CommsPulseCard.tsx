@@ -310,7 +310,7 @@ function ExternalSignalColumn({
                       </tr>
                     </thead>
                     <tbody>
-                      {hubspotSignal.form_metrics.location_breakdown!.map((row, idx) => (
+                      {fmRoot!.location_breakdown!.map((row, idx) => (
                         <tr key={`${row.location}-${idx}`} className="border-b border-border last:border-0">
                           <td className="px-2.5 py-1.5 text-foreground">{row.location}</td>
                           <td className="px-2.5 py-1.5 text-right tabular-nums text-foreground">{row.newsletter_count.toLocaleString()}</td>
@@ -322,7 +322,8 @@ function ExternalSignalColumn({
                 </div>
               ) : null}
             </div>
-          ) : null}
+            );
+          })()}
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">

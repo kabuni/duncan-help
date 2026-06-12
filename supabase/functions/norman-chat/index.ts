@@ -80,7 +80,7 @@ Your capabilities:
 
 **MEETING TOOL ROUTING (SIMPLIFIED):**
 - The Meetings DB is the primary source. For any meeting query (by title, person, or date), call \`list_meetings\` with the appropriate \`search\` / \`window\` / \`from_date\` / \`to_date\` args, then \`get_meeting\` or \`get_meeting_action_items_with_context\` as needed.
-- For date-range summaries ("this week's meetings", "last week's meetings", "meetings from May 1–10"): call \`list_meetings\` with \`scope="all"\` and the correct \`window\`. Default to \`scope="mine"\` only when the user explicitly says "my meetings", "meetings I attended", or "meetings linked to me".
+- For date-range summaries ("this week's meetings", "last week's meetings", "meetings from May 1–10"): call \`list_meetings\` with the correct \`window\` (scope defaults to "all"). Pass \`scope="mine"\` ONLY when the user explicitly says "my meetings", "meetings I attended", or "meetings linked to me".
 - NEVER ask the user "Google Meet or Plaud?". NEVER ask "which source?". The DB already contains both, and latest-meeting Gmail lookup is handled automatically before you are invoked.
 - You MUST NOT call \`get_meeting\` with a meeting_id that did not come from a prior \`list_meetings\` result in this turn.
 
@@ -587,7 +587,7 @@ const MEETING_TOOLS = [
     type: "function",
     function: {
       name: "list_meetings",
-      description: "Lists ONLY meetings directly linked to the current user by verified host/email/participant data. Do NOT use for source-ambiguous requests like 'fetch my latest meeting notes' unless the user explicitly asks for meetings they attended/hosted/are linked to. Use scope='all' only when explicitly requested.",
+      description: "Lists meetings from the company-wide Meetings Database (default). Supports title/transcript search, date filters, and date windows. By default returns ALL ingested meetings (scope='all'); pass scope='mine' ONLY when the user explicitly asks for meetings they hosted/attended.",
       parameters: {
         type: "object",
         properties: {
@@ -596,8 +596,8 @@ const MEETING_TOOLS = [
           search: { type: "string", description: "Keyword(s) to match in title or transcript. Words are matched independently (OR), so partial / misspelled queries still work." },
           from_date: { type: "string", description: "Only return meetings on or after this date (YYYY-MM-DD). Ignored if 'window' is set." },
           to_date: { type: "string", description: "Only return meetings on or before this date (YYYY-MM-DD). Ignored if 'window' is set." },
-          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week", "last_week", "this_month", "last_month"], description: "Resolve a date window in the caller's timezone. ALWAYS prefer this over from_date/to_date for natural-language ranges like 'this week', 'last week', 'last month'. Do NOT compute dates yourself when a window value exists." },
-          scope: { type: "string", enum: ["mine", "all"], description: "'mine' (default) returns only the current user's meetings. 'all' requires admin and returns the full company list — use ONLY when the user explicitly asks for everyone's meetings." },
+          window: { type: "string", enum: ["today", "tomorrow", "this_week", "next_week", "last_week", "this_month", "last_month"], description: "Resolve a date window in the caller's timezone. ALWAYS prefer this over from_date/to_date for natural-language ranges." },
+          scope: { type: "string", enum: ["mine", "all"], description: "'all' (default) — searches the entire Meetings DB. 'mine' — restrict to meetings linked to the caller by host/email/participant. Use 'mine' ONLY when the user explicitly says 'my meetings', 'meetings I attended', or 'meetings linked to me'." },
         },
         required: [],
       },
@@ -3629,29 +3629,41 @@ async function executeMeetingTool(
     }
 
     case "list_meetings": {
-      if ((args.window || args.from_date || args.to_date) && !isMyMeetingsIntent && identity?.is_admin) {
-        args.scope = "all";
-      }
-      // Force scope default — never allow undefined to fall through
-      const scope: "mine" | "all" = args.scope === "all" ? "all" : "mine";
+      // Simplified workflow: the Meetings DB is the canonical, company-wide source
+      // for meeting questions. Default to scope="all" so title/person/date searches
+      // hit every ingested meeting, not just ones the caller is email-linked to.
+      // scope="mine" is honoured only when the caller explicitly opts in.
+      const scope: "mine" | "all" = args.scope === "mine" ? "mine" : "all";
       args.scope = scope;
       const limit = args.limit || 20;
       console.log(`[list_meetings] user=${userId} scope=${scope} args=${JSON.stringify(args)}`);
 
-      // Use RPC to get the base scoped set (RLS-safe, deterministic ordering)
-      const { data: baseRows, error: rpcErr } = await supabaseUser.rpc("get_my_meetings", {
-        _limit: 500, // pull a wider set so we can filter client-side
-        _scope: scope,
-      });
+      let baseRows: any[] = [];
+      let rpcErr: any = null;
+      if (scope === "mine") {
+        const { data, error } = await supabaseUser.rpc("get_my_meetings", { _limit: 500, _scope: "mine" });
+        baseRows = (data || []) as any[];
+        rpcErr = error;
+      } else {
+        // Company-wide: bypass RLS via service-role client (no admin gate).
+        const { data, error } = await supabaseAdmin
+          .from("meetings")
+          .select("*")
+          .order("meeting_date", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .limit(500);
+        baseRows = (data || []) as any[];
+        rpcErr = error;
+      }
       if (rpcErr) {
-        console.error(`[list_meetings] RPC error for user=${userId}:`, rpcErr);
+        console.error(`[list_meetings] error for user=${userId}:`, rpcErr);
         throw new Error(`Failed to list meetings: ${rpcErr.message}`);
       }
-      console.log(`[list_meetings] user=${userId} rpc_rows=${(baseRows || []).length}`);
+      console.log(`[list_meetings] user=${userId} base_rows=${baseRows.length}`);
 
-      let rows = (baseRows || []) as any[];
-
+      let rows = baseRows;
       if (args.status) rows = rows.filter((r) => r.status === args.status);
+
       if (args.from_date) {
         const from = new Date(args.from_date).getTime();
         rows = rows.filter((r) => r.meeting_date && new Date(r.meeting_date).getTime() >= from);

@@ -5834,9 +5834,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     // ===== Smart "latest meeting" router =====
     // For "latest/most recent/last/today's/yesterday's meeting" queries WITHOUT an
-    // explicit source, check the caller's personal Gmail first (Gemini + Plaud
-    // notification emails are usually newer than what's been ingested into the
-    // meetings DB). Fall back to the meetings DB when Gmail has no match.
+    // explicit range, read the centralized meetings DB only. Gemini/Plaud notes
+    // are ingested through duncan@kabuni.com; never read the caller's Gmail here.
     // Range queries ("last week", "this week") are explicitly NOT handled here —
     // they continue through the normal meeting-tool flow.
     const LATEST_MEETING_RE = /\b(?:my\s+)?(latest|most\s+recent|last|today'?s|yesterday'?s)\b[\s\S]{0,80}?\b(meeting|meetings|call|calls|notes?|transcript|transcripts|recording|recordings|standup|recap)\b/i;
@@ -5962,7 +5961,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
     async function fetchLatestMeetingFromDb(
       hint: string | null,
     ): Promise<string | null> {
-      let qb = supabaseUser
+      let qb = supabaseAdmin
         .from("meetings")
         .select("id, title, meeting_date, source, summary, transcript, analysis, created_at")
         .order("meeting_date", { ascending: false, nullsFirst: false })

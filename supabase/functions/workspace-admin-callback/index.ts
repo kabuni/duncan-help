@@ -85,7 +85,53 @@ serve(async (req) => {
       .delete()
       .neq("google_account_email", email);
 
+    // First-connect seed: mark all currently-existing users as already welcomed
+    // so we don't email the whole company on the first poll. Only seeds rows
+    // that don't already exist in the log.
+    try {
+      const { count: existingLog } = await admin
+        .from("workspace_welcome_log")
+        .select("id", { count: "exact", head: true });
+      if ((existingLog ?? 0) === 0) {
+        const PRIMARY_DOMAIN = "kabuni.com";
+        let pageToken: string | undefined;
+        const rows: any[] = [];
+        do {
+          const u = new URL("https://admin.googleapis.com/admin/directory/v1/users");
+          u.searchParams.set("domain", PRIMARY_DOMAIN);
+          u.searchParams.set("maxResults", "200");
+          u.searchParams.set("orderBy", "email");
+          u.searchParams.set("projection", "basic");
+          if (pageToken) u.searchParams.set("pageToken", pageToken);
+          const r = await fetch(u.toString(), {
+            headers: { Authorization: `Bearer ${tokens.access_token}` },
+          });
+          if (!r.ok) break;
+          const body = await r.json();
+          for (const usr of body.users ?? []) {
+            if (!usr.suspended && !usr.archived && typeof usr.primaryEmail === "string") {
+              rows.push({
+                google_user_id: usr.id,
+                email: usr.primaryEmail.toLowerCase(),
+                full_name: usr.name?.fullName ?? null,
+                workspace_created_at: usr.creationTime ?? null,
+                send_status: "seeded",
+                error_message: "Pre-existing at connect time; not emailed",
+              });
+            }
+          }
+          pageToken = body.nextPageToken;
+        } while (pageToken);
+        if (rows.length > 0) {
+          await admin.from("workspace_welcome_log").upsert(rows, { onConflict: "google_user_id" });
+        }
+      }
+    } catch (seedErr) {
+      console.error("workspace-admin-callback seed error:", seedErr);
+    }
+
     return Response.redirect(`${appUrl}/settings?workspace_admin_connected=true`, 302);
+
   } catch (e: any) {
     console.error("workspace-admin-callback error:", e);
     return Response.redirect(`${appUrl}/settings?workspace_admin_error=server`, 302);

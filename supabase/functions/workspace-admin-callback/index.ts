@@ -61,8 +61,27 @@ serve(async (req) => {
     );
     if (!verifyRes.ok) {
       const errBody = await verifyRes.text();
-      console.error("Directory verify failed:", errBody);
-      return Response.redirect(`${appUrl}/settings?workspace_admin_error=not_super_admin`, 302);
+      console.error("Directory verify failed:", verifyRes.status, errBody, "granted_scopes=", tokens.scope);
+      let reason = "not_super_admin";
+      try {
+        const j = JSON.parse(errBody);
+        const msg = (j?.error?.message || "").toString().toLowerCase();
+        const status = (j?.error?.status || "").toString().toUpperCase();
+        if (msg.includes("admin sdk") || msg.includes("has not been used") || msg.includes("disabled")) {
+          reason = "admin_sdk_disabled";
+        } else if (msg.includes("insufficient") || msg.includes("scope") || status === "PERMISSION_DENIED" && msg.includes("scope")) {
+          reason = "insufficient_scope";
+        } else if (verifyRes.status === 403) {
+          reason = "not_super_admin";
+        } else if (verifyRes.status === 401) {
+          reason = "unauthorized";
+        }
+      } catch (_) { /* ignore */ }
+      const detail = encodeURIComponent(errBody.slice(0, 300));
+      return Response.redirect(
+        `${appUrl}/settings?workspace_admin_error=${reason}&workspace_admin_status=${verifyRes.status}&workspace_admin_detail=${detail}`,
+        302,
+      );
     }
 
     const admin = createClient(supabaseUrl, serviceKey);

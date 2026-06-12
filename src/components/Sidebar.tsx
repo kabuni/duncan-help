@@ -318,31 +318,16 @@ const Sidebar = ({
           </div>
         )}
         <button
-          onClick={() => { navigate("/learn"); onMobileClose?.(); }}
-          className="flex w-full items-center rounded-md px-2 py-0.5 text-[10px] text-muted-foreground/70 hover:text-foreground hover:bg-sidebar-accent transition-colors"
+          onClick={() => setShowModal(true)}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-0.5 text-[10px] text-muted-foreground/70 hover:text-foreground hover:bg-sidebar-accent transition-colors"
         >
-          Learn Duncan
+          <Settings className="h-3.5 w-3.5" />
+          Settings
         </button>
         <div className="flex items-center gap-2 px-2 text-[10px] text-muted-foreground/70">
           <a href="https://duncan.help/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Privacy</a>
           <span aria-hidden>·</span>
           <a href="https://duncan.help/terms" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Terms</a>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/70 hover:text-foreground hover:bg-sidebar-accent transition-colors"
-                  aria-label="Settings"
-                >
-                  <Settings className="h-3.5 w-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                <p className="text-xs">Settings</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
         </div>
       </div>
     </aside>

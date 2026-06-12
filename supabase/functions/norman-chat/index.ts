@@ -6322,6 +6322,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
       requestBody.tools = filteredTools;
       if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {
         requestBody.tool_choice = { type: "function", function: { name: "generate_nda" } };
+      } else if (isWorkstreamCreationConfirmationReply) {
+        requestBody.tool_choice = { type: "function", function: { name: "create_workstream_card" } };
       } else if (isDataIntent && !isVoiceMode && !mustAskMeetingSource) {
         requestBody.tool_choice = "auto";
       }

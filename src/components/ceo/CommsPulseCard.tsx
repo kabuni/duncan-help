@@ -1247,7 +1247,7 @@ function FormSubmissionsButton({
           <DialogHeader>
             <DialogTitle>{label}</DialogTitle>
             <DialogDescription>
-              {formName ? <>Form: <span className="font-mono">{formName}</span></> : "Submission history"}
+              {(formNameLoaded ?? formName) ? <>Form: <span className="font-mono">{formNameLoaded ?? formName}</span></> : "Submission history"}
             </DialogDescription>
           </DialogHeader>
 

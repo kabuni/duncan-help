@@ -3661,8 +3661,9 @@ async function executeMeetingTool(
       }
       console.log(`[list_meetings] user=${userId} base_rows=${baseRows.length}`);
 
-
+      let rows = baseRows;
       if (args.status) rows = rows.filter((r) => r.status === args.status);
+
       if (args.from_date) {
         const from = new Date(args.from_date).getTime();
         rows = rows.filter((r) => r.meeting_date && new Date(r.meeting_date).getTime() >= from);

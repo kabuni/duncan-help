@@ -5713,7 +5713,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
     }
 
     function extractWorkstreamCreateArgsFromConversation(text: string, latestUserText: string): Record<string, any> | null {
-      const markers = ["## Creating Workstreams card", "Creating Workstreams card", "Workstreams — ready to create", "Workstreams - ready to create"];
+      const markers = ["## Creating Workstreams card", "Creating Workstreams card", "Workstreams — ready to create", "Workstreams - ready to create", "Create the card", "I will create", "I'm going to create", "I’m going to create", "I've prepared the Workstreams card", "I’ve prepared the Workstreams card"];
       let start = -1;
       for (const marker of markers) start = Math.max(start, text.lastIndexOf(marker));
       if (start < 0) start = text.lastIndexOf("- Title:");
@@ -5760,8 +5760,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
     }
 
     function looksLikeWorkstreamCreationPromise(text: string): boolean {
-      return /Creating Workstreams card|pending your confirmation|ready to create|I[’']ve prepared the Workstreams card/i.test(text) &&
-        /Pending tasks|tasks and due dates|Title:/i.test(text);
+      return /Creating Workstreams card|pending your confirmation|ready to create|I[’']ve prepared the Workstreams card|I[’']m going to create|I will create|Create the card/i.test(text) &&
+        /Pending tasks|tasks and due dates|Title:|workstream card|card/i.test(text);
     }
 
     const pendingNdaArgsFromHistory = extractNdaArgsFromConversation(recentConversationText);
@@ -6150,7 +6150,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const isAffirmative = /^(create|create now|create it|yes create|yes|y|yeah|yep|ok|okay|sure|confirmed|confirm|go|go ahead|please do|do it|apply)$/i.test(normalized);
       if (!isAffirmative) return false;
       if (/verified=true|Card created \(id=|Workstreams — created|workstream card created/i.test(recentConversationText)) return false;
-      return !!pendingWorkstreamArgsFromHistory || /Workstreams\s+—\s+ready to create|Creating Workstreams card|pending your confirmation|card \+ tasks|Tasks \(grouped by owner/i.test(recentConversationText) &&
+      return !!pendingWorkstreamArgsFromHistory || /Workstreams\s+—\s+ready to create|Creating Workstreams card|pending your confirmation|card \+ tasks|Tasks \(grouped by owner|I[’']m going to create|I will create|Create the card/i.test(recentConversationText) &&
         /create_workstream_card|Workstream|workstream|card/i.test(recentConversationText);
     })();
     if (isNdaConfirmationReply) {

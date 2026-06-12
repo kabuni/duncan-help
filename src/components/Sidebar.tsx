@@ -16,6 +16,7 @@ import { useIsAdmin } from "@/hooks/useUserRoles";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useProfile } from "@/hooks/useProfile";
+import { useSettingsPanel } from "@/hooks/SettingsPanelContext";
 
 
 

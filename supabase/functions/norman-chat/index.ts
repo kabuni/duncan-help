@@ -67,7 +67,7 @@ Your capabilities:
 - **Document Search**: You have access to the company's document storage. You can search for documents, read their content, list folders, and answer questions based on them. Documents are organized in folders: documents/, ndas/, and templates/.
 
 
-- **Meeting Intelligence**: The **Meetings Database is the default source** for ALL meeting questions. Use \`list_meetings\` to find meetings (supports typo-tolerant title search and date filters), \`get_meeting\` for a specific meeting's transcript/analysis, \`analyze_meetings\` to run AI analysis, and \`search_meeting_transcripts\` for cross-meeting topic search. **For action items / tasks / follow-ups / to-dos / next steps from a specific meeting, call \`get_meeting_action_items_with_context\` after \`list_meetings\` — present both a "From this meeting" section and a "From the past 7 days" section.** Gmail Gemini notes are only consulted automatically when the user explicitly asks for the *newest* version of a meeting ("latest", "most recent", "today's", "yesterday's") — that routing happens before you are invoked, so you should never ask the user to pick a source. Never call \`fetch_plaud_meetings\` unless the user explicitly types "sync Plaud" / "refresh Plaud" / "import Plaud". Note: meeting titles may contain typos (e.g. "Lighting" instead of "Lightning") — the search is typo-tolerant.
+- **Meeting Intelligence**: The **Meetings Database is the default source** for ALL meeting questions. Use \`list_meetings\` to find meetings (supports typo-tolerant title search and date filters), \`get_meeting\` for a specific meeting's transcript/analysis, \`analyze_meetings\` to run AI analysis, and \`search_meeting_transcripts\` for cross-meeting topic search. **For action items / tasks / follow-ups / to-dos / next steps from a specific meeting, call \`get_meeting_action_items_with_context\` after \`list_meetings\` — present both a "From this meeting" section and a "From the past 7 days" section.** Latest/newest meeting routing is served from the centralized Meetings Database before model tool-calling. Never call personal Gmail to fetch Gemini notes. Never call \`fetch_plaud_meetings\` unless the user explicitly types "sync Plaud" / "refresh Plaud" / "import Plaud". Note: meeting titles may contain typos (e.g. "Lighting" instead of "Lightning") — the search is typo-tolerant.
 
 **DATE WINDOWS (HARD RULE):** When the user asks for "today", "this week", "last week", "next week", "this month", or "last month", you MUST pass the matching \`window\` value (\`today\` / \`this_week\` / \`last_week\` / \`next_week\` / \`this_month\` / \`last_month\`) to the meeting tools. NEVER compute ISO dates yourself when a window value exists — the server resolves them in the caller's timezone deterministically. \`from_date\` / \`to_date\` are only for custom ranges the user spells out (e.g. "from May 1 to May 10").
 
@@ -81,7 +81,7 @@ Your capabilities:
 **MEETING TOOL ROUTING (SIMPLIFIED):**
 - The Meetings DB is the primary source. For any meeting query (by title, person, or date), call \`list_meetings\` with the appropriate \`search\` / \`window\` / \`from_date\` / \`to_date\` args, then \`get_meeting\` or \`get_meeting_action_items_with_context\` as needed.
 - For date-range summaries ("this week's meetings", "last week's meetings", "meetings from May 1–10"): call \`list_meetings\` with the correct \`window\` (scope defaults to "all"). Pass \`scope="mine"\` ONLY when the user explicitly says "my meetings", "meetings I attended", or "meetings linked to me".
-- NEVER ask the user "Google Meet or Plaud?". NEVER ask "which source?". The DB already contains both, and latest-meeting Gmail lookup is handled automatically before you are invoked.
+- NEVER ask the user "Google Meet or Plaud?". NEVER ask "which source?". The DB already contains both, and latest-meeting lookup is handled automatically from the Meetings Database before you are invoked.
 - You MUST NOT call \`get_meeting\` with a meeting_id that did not come from a prior \`list_meetings\` result in this turn.
 
 **EMPTY RESULT HANDLING:** If \`list_meetings\` returns \`empty: true\` or \`count: 0\`: reply honestly with the tool's \`message\`. DO NOT invent meetings. DO NOT call \`get_meeting\` / \`analyze_meetings\` to "try harder". Suggest broadening the title or date range.
@@ -5758,9 +5758,14 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     const stripGeminiBoilerplate = (notes: string): string => {
       let out = notes;
+      out = out
+        .replace(/^\s*Notes from ['"][^'"]+['"]\s*/i, "")
+        .replace(/^\s*These notes have been sent to[\s\S]*?Open meeting notes\s*/i, "")
+        .replace(/^\s*The content was auto-generated[\s\S]*?contain errors\.\s*/i, "");
       const footerPatterns = [
         /\n\s*Meeting records\s+Document\s+Notes by Gemini[\s\S]*$/i,
         /\n\s*Is the ['"]?Next steps['"]? section in this email helpful\?[\s\S]*$/i,
+        /\n\s*We've updated the Decisions section[\s\S]*$/i,
         /\n\s*Google LLC,[\s\S]*$/i,
         /\n\s*You have received this email because[\s\S]*$/i,
         /\n\s*The content was auto-generated[^\n]*\n?/i,
@@ -5834,9 +5839,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     // ===== Smart "latest meeting" router =====
     // For "latest/most recent/last/today's/yesterday's meeting" queries WITHOUT an
-    // explicit source, check the caller's personal Gmail first (Gemini + Plaud
-    // notification emails are usually newer than what's been ingested into the
-    // meetings DB). Fall back to the meetings DB when Gmail has no match.
+    // explicit range, read the centralized meetings DB only. Gemini/Plaud notes
+    // are ingested through duncan@kabuni.com; never read the caller's Gmail here.
     // Range queries ("last week", "this week") are explicitly NOT handled here —
     // they continue through the normal meeting-tool flow.
     const LATEST_MEETING_RE = /\b(?:my\s+)?(latest|most\s+recent|last|today'?s|yesterday'?s)\b[\s\S]{0,80}?\b(meeting|meetings|call|calls|notes?|transcript|transcripts|recording|recordings|standup|recap)\b/i;
@@ -5962,9 +5966,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
     async function fetchLatestMeetingFromDb(
       hint: string | null,
     ): Promise<string | null> {
-      let qb = supabaseUser
+      let qb = supabaseAdmin
         .from("meetings")
-        .select("id, title, meeting_date, source, summary, transcript, analysis, created_at")
+        .select("id, title, meeting_date, source, sender_email, summary, transcript, analysis, created_at")
         .order("meeting_date", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(1);
@@ -5974,8 +5978,11 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const m = data[0];
       const dateStr = m.meeting_date ? new Date(m.meeting_date).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Date unavailable";
       const analysis = m.analysis && typeof m.analysis === "object" ? m.analysis as any : null;
-      const notes = String(m.transcript || m.summary || analysis?.summary || "").trim() || "No transcript or notes content is available for this meeting yet.";
-      const srcLabel = m.source === "plaud" ? "Plaud" : m.source === "gemini" ? "Google Meet (Gemini)" : (m.source || "Meetings DB");
+      const rawNotes = String(m.transcript || m.summary || analysis?.summary || "").trim();
+      const isGoogleMeet = m.source === "gemini" || m.source === "google_meet" || /gemini-notes@google\.com/i.test(String(m.sender_email || ""));
+      const cleanedNotes = isGoogleMeet ? stripGeminiBoilerplate(rawNotes) : rawNotes;
+      const notes = cleanedNotes || "No transcript or notes content is available for this meeting yet.";
+      const srcLabel = m.source === "plaud" ? "Plaud" : isGoogleMeet ? "Google Meet (Gemini)" : (m.source || "Meetings DB");
       return `## ${m.title?.trim() || "Latest meeting"}\n\n- **Date:** ${dateStr}\n- **Source:** ${srcLabel} (from the meetings database)\n\n${notes.slice(0, 40000)}`;
     }
 

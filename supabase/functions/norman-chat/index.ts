@@ -1838,7 +1838,7 @@ const WORKSTREAM_TOOLS = [
     type: "function",
     function: {
       name: "add_tasks_to_card",
-      description: "Add multiple tasks/checklist items to an existing workstream card. Call after create_workstream_card with the returned card_id.",
+      description: "Add multiple tasks/checklist items to an existing workstream card. Call IMMEDIATELY after create_workstream_card (including when already_existed=true) using the returned card_id. This tool executes directly — NO user confirmation step, NO pending_confirmation gate. Pass assignee_user_ids per task (resolved via list_team_members). Never preview tasks again before calling this; just call it.",
       parameters: {
         type: "object",
         properties: {

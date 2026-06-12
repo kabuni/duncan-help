@@ -3,15 +3,29 @@ import { useProfile } from "@/hooks/useProfile";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { LogOut, Megaphone } from "lucide-react";
+import { LogOut, Megaphone, PlayCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import AccountApprovals from "./AccountApprovals";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function SettingsGeneral() {
   const { user, signOut } = useAuth();
   const { profile } = useProfile();
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const replayTour = async () => {
+    if (user) {
+      await supabase
+        .from("profiles")
+        .update({ meet_duncan_tour_completed_at: null } as any)
+        .eq("user_id", user.id);
+      queryClient.invalidateQueries({ queryKey: ["profile", user.id] });
+    }
+    navigate("/?tour=meet-duncan");
+  };
 
   return (
     <div className="space-y-6">
@@ -36,6 +50,30 @@ export default function SettingsGeneral() {
         <div>
           <Label className="text-xs text-muted-foreground">Role</Label>
           <p className="text-sm text-foreground mt-1">{profile?.role_title ?? "—"}</p>
+        </div>
+      </div>
+
+      <Separator className="bg-border" />
+
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-foreground">Learn Duncan</h3>
+        <p className="text-xs text-muted-foreground">
+          Replay the product tour or browse the Learn hub.
+        </p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <button
+            onClick={replayTour}
+            className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3.5 py-2 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+          >
+            <PlayCircle className="h-3.5 w-3.5" />
+            Replay Meet Duncan tour
+          </button>
+          <button
+            onClick={() => navigate("/learn")}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-xs font-medium text-foreground hover:bg-secondary transition-colors"
+          >
+            Open Learn hub
+          </button>
         </div>
       </div>
 

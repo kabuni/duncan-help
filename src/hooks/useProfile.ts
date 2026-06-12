@@ -15,6 +15,8 @@ export interface ProfileData {
   requested_role_title: string | null;
   onboarding_completed_at: string | null;
   onboarding_step: string;
+  meet_duncan_tour_completed_at: string | null;
+  dismissed_nudges: string[];
 }
 
 export function useProfile() {
@@ -27,7 +29,7 @@ export function useProfile() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("display_name, department, avatar_url, role_title, bio, norman_context, preferences, approval_status, requested_role_title, onboarding_completed_at, onboarding_step")
+        .select("display_name, department, avatar_url, role_title, bio, norman_context, preferences, approval_status, requested_role_title, onboarding_completed_at, onboarding_step, meet_duncan_tour_completed_at, dismissed_nudges")
         .eq("user_id", user!.id)
         .maybeSingle();
       if (error) throw error;

@@ -2517,8 +2517,10 @@ export type Database = {
           bio: string | null
           created_at: string
           department: string | null
+          dismissed_nudges: string[]
           display_name: string | null
           id: string
+          meet_duncan_tour_completed_at: string | null
           norman_context: string | null
           onboarding_completed_at: string | null
           onboarding_step: string
@@ -2534,8 +2536,10 @@ export type Database = {
           bio?: string | null
           created_at?: string
           department?: string | null
+          dismissed_nudges?: string[]
           display_name?: string | null
           id?: string
+          meet_duncan_tour_completed_at?: string | null
           norman_context?: string | null
           onboarding_completed_at?: string | null
           onboarding_step?: string
@@ -2551,8 +2555,10 @@ export type Database = {
           bio?: string | null
           created_at?: string
           department?: string | null
+          dismissed_nudges?: string[]
           display_name?: string | null
           id?: string
+          meet_duncan_tour_completed_at?: string | null
           norman_context?: string | null
           onboarding_completed_at?: string | null
           onboarding_step?: string

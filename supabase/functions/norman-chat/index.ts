@@ -2367,7 +2367,17 @@ async function executeWorkstreamTool(
       const { data: existing } = await dedupQuery.limit(1);
 
       if (existing && existing.length > 0) {
-        return { success: true, card_id: existing[0].id, title: existing[0].title, status: existing[0].status, project_tag: existing[0].project_tag, assigned_to: "creator (you)", already_existed: true, message: "Card already exists — skipped duplicate creation." };
+        return {
+          success: true,
+          card_id: existing[0].id,
+          title: existing[0].title,
+          status: existing[0].status,
+          project_tag: existing[0].project_tag,
+          assigned_to: "creator (you)",
+          already_existed: true,
+          message: `Card already exists (id=${existing[0].id}) — no duplicate created. NEXT STEP: if the user asked for tasks, IMMEDIATELY call add_tasks_to_card with this card_id in the same turn. Do NOT re-call create_workstream_card. Do NOT show another preview/confirmation — the card is live.`,
+          next_action: "call add_tasks_to_card with card_id if tasks pending",
+        };
       }
 
       const cardData: any = {
@@ -2403,7 +2413,16 @@ async function executeWorkstreamTool(
         details: { title: card.title, created_by_duncan: true, auto_assigned_to_creator: true },
       });
 
-      return { success: true, card_id: card.id, title: card.title, status: card.status, project_tag: card.project_tag, assigned_to: "creator (you)" };
+      return {
+        success: true,
+        card_id: card.id,
+        title: card.title,
+        status: card.status,
+        project_tag: card.project_tag,
+        assigned_to: "creator (you)",
+        message: `Card created (id=${card.id}). NEXT STEP: if you previewed tasks for this card, IMMEDIATELY call add_tasks_to_card with this card_id in the same turn — no further confirmation needed.`,
+        next_action: "call add_tasks_to_card with card_id if tasks pending",
+      };
     }
 
     case "add_tasks_to_card": {

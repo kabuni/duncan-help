@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LayoutDashboard, Home, Settings, LogOut, X, Mail, FileText, MessageSquare, Calendar, GitBranch, Menu, Layers, Megaphone, Crown, Inbox, Receipt, Users, School } from "lucide-react";
+import { LayoutDashboard, Home, Settings, LogOut, X, Mail, FileText, MessageSquare, Calendar, GitBranch, Menu, Layers, Megaphone, Crown, Inbox, Receipt, Users, School, GraduationCap } from "lucide-react";
 import { canViewBriefing } from "@/lib/ceoAccess";
 import ChatHistory from "@/components/ChatHistory";
 import { useGeneralChatsContext } from "@/hooks/GeneralChatsContext";
@@ -303,6 +303,13 @@ const Sidebar = ({
             </div>
           </div>
         )}
+        <button
+          onClick={() => { navigate("/learn"); onMobileClose?.(); }}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+        >
+          <GraduationCap className="h-3.5 w-3.5" />
+          Learn Duncan
+        </button>
         <button
           onClick={() => setShowModal(true)}
           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"

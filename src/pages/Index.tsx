@@ -432,6 +432,29 @@ const Index = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.key]);
 
+  // Open Meet Duncan tour: on first visit after onboarding, or via ?tour=meet-duncan
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const wantsTour = params.get("tour") === "meet-duncan";
+    if (wantsTour) {
+      setTourOpen(true);
+      params.delete("tour");
+      navigate(
+        { pathname: location.pathname, search: params.toString() ? `?${params}` : "" },
+        { replace: true }
+      );
+      return;
+    }
+    if (
+      profile?.onboarding_completed_at &&
+      !profile?.meet_duncan_tour_completed_at &&
+      !tourOpen
+    ) {
+      setTourOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.onboarding_completed_at, profile?.meet_duncan_tour_completed_at, location.search]);
+
   const handleClearChat = useCallback(() => {
     clearMessages();
     chatOps.startNewChat();

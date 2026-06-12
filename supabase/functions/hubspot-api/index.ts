@@ -1216,6 +1216,52 @@ Deno.serve(async (req) => {
   }
 
   try {
+    if (action === "form_submissions") {
+      const CEO_EMAILS = ["nimesh@kabuni.com", "palash@kabuni.com"];
+      const callerEmail = (callerUser?.email ?? "").toLowerCase();
+      let allowed = isTrustedInternalCall || CEO_EMAILS.includes(callerEmail);
+      if (!allowed && callerUser?.id && SUPABASE_SERVICE_ROLE_KEY) {
+        const adminClient = createClient(Deno.env.get("SUPABASE_URL")!, SUPABASE_SERVICE_ROLE_KEY);
+        const { data: roleRow } = await adminClient
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", callerUser.id)
+          .eq("role", "admin")
+          .maybeSingle();
+        if (roleRow) allowed = true;
+      }
+      if (!allowed) return json({ error: "Forbidden" }, 403);
+
+      const formKey = String(reqBody?.form_key || "").toLowerCase();
+      const formIdOverride = reqBody?.form_id ? String(reqBody.form_id) : null;
+      const limit = Math.min(Math.max(Number(reqBody?.limit) || 200, 1), 500);
+      if (!formIdOverride && formKey !== "newsletter" && formKey !== "scout") {
+        return json({ error: "form_key must be 'newsletter' or 'scout', or provide form_id" }, 400);
+      }
+
+      const resolved = await resolveTeamBriefingToken(HUBSPOT_API_KEY);
+      if (!resolved.token) {
+        return json({ status: "not_configured", error: "HubSpot is not connected", submissions: [] }, 200);
+      }
+
+      let targetForm: any = null;
+      if (formIdOverride) {
+        targetForm = { id: formIdOverride, name: null };
+      } else {
+        const formsPayload = await hubspotApi("/marketing/v3/forms?limit=100&formTypes=all", resolved.token, "summary", resolved.source);
+        const forms: any[] = Array.isArray(formsPayload?.results) ? formsPayload.results : [];
+        targetForm = formKey === "newsletter"
+          ? pickForm(forms, ["newsletter", "subscribe", "signup", "sign up"])
+          : pickForm(forms, ["scout"]);
+        if (!targetForm) {
+          return json({ status: "not_found", form_key: formKey, submissions: [], truncated: false }, 200);
+        }
+      }
+
+      const result = await fetchFormSubmissionsList(resolved.token, resolved.source, targetForm, limit);
+      return json({ status: "ok", form_key: formKey, ...result });
+    }
+
     if (action === "team_briefing_summary") {
       logHubspot("credential source", { source: "stored_token_preferred_for_team_briefing", connector_available: !!(LOVABLE_API_KEY && HUBSPOT_API_KEY), env_fallback_available: !!HUBSPOT_API_KEY });
       const resolved = await resolveTeamBriefingToken(HUBSPOT_API_KEY);

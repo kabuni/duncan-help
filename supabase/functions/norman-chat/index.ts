@@ -2488,18 +2488,22 @@ async function executeWorkstreamTool(
 
       if (error) throw new Error(`Failed to create card: ${error.message}`);
 
-      // Auto-assign only the creator
-      await supabaseAdmin.from("workstream_card_assignees").insert({
-        card_id: card.id,
-        user_id: userId,
-      });
+      // Auto-assign creator + any explicitly provided additional assignees (de-duped)
+      const additionalCardAssigneeIds: string[] = Array.isArray(args.assignee_user_ids)
+        ? Array.from(new Set(args.assignee_user_ids.filter((u: any) => typeof u === "string" && u && u !== userId)))
+        : [];
+      const cardAssigneeRows = [
+        { card_id: card.id, user_id: userId },
+        ...additionalCardAssigneeIds.map((uid) => ({ card_id: card.id, user_id: uid })),
+      ];
+      await supabaseAdmin.from("workstream_card_assignees").insert(cardAssigneeRows);
 
       // Log activity
       await supabaseAdmin.from("workstream_activity").insert({
         card_id: card.id,
         user_id: userId,
         action: "created",
-        details: { title: card.title, created_by_duncan: true, auto_assigned_to_creator: true },
+        details: { title: card.title, created_by_duncan: true, auto_assigned_to_creator: true, additional_assignees: additionalCardAssigneeIds.length },
       });
 
       const taskResult = await insertPendingTasks(card.id, args.pending_tasks || []);
@@ -2522,9 +2526,10 @@ async function executeWorkstreamTool(
         title: verifiedCard.title,
         status: verifiedCard.status,
         project_tag: verifiedCard.project_tag,
-        assigned_to: "creator (you)",
+        assigned_to: additionalCardAssigneeIds.length > 0 ? `creator (you) + ${additionalCardAssigneeIds.length} other(s)` : "creator (you)",
+        card_assignees_added: additionalCardAssigneeIds.length,
         ...taskResult,
-        message: `Card created (id=${verifiedCard.id}) with ${taskResult.tasks_created} task(s).`,
+        message: `Card created (id=${verifiedCard.id}) with ${taskResult.tasks_created} task(s)${additionalCardAssigneeIds.length ? ` and ${additionalCardAssigneeIds.length} additional assignee(s)` : ""}.`,
       };
     }
 

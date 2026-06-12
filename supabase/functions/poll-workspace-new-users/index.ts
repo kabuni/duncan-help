@@ -253,18 +253,37 @@ function base64url(s: string): string {
 
 function buildHtml(firstName: string): string {
   const greeting = firstName ? `Hi ${escapeHtml(firstName)},` : "Hi there,";
+  const body = "font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  const p = "margin:0 0 14px;font-size:15px;line-height:1.65;color:hsl(215,15%,30%)";
+  const stepTitle = "margin:0 0 4px;font-size:15px;line-height:1.5;color:hsl(220,20%,12%);font-weight:600";
+  const stepDesc = "margin:0 0 6px;font-size:14px;line-height:1.6;color:hsl(215,12%,44%)";
+  const stepLink = "font-size:14px;color:hsl(174,72%,36%);text-decoration:none;font-weight:500";
   return `
-<div style="font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;background:#ffffff;color:#1f2937">
+<div style="${body};max-width:600px;margin:0 auto;padding:32px 24px;background:#ffffff;color:#1f2937">
   <div style="margin-bottom:24px">
     <div style="display:inline-block;padding:6px 12px;border-radius:999px;background:hsl(174,50%,92%);color:hsl(174,60%,28%);font-size:12px;font-weight:600;letter-spacing:0.02em">Kabuni</div>
   </div>
-  <h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:hsl(220,20%,12%)">Welcome to Kabuni</h1>
-  <p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:hsl(215,12%,44%)">${greeting}</p>
-  <p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:hsl(215,12%,44%)">Your Kabuni Google Workspace account is live. You can now sign in to your @kabuni.com email and the rest of the workspace tools.</p>
-  <p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:hsl(215,12%,44%)">When you're ready, head to Duncan — our internal operating system — to access company knowledge, projects, and workflows in one place.</p>
-  <a href="https://duncan.help" style="display:inline-block;margin-top:8px;padding:12px 20px;border-radius:8px;background:hsl(174,72%,40%);color:#ffffff;text-decoration:none;font-size:14px;font-weight:600">Open Duncan</a>
-  <p style="margin:24px 0 0;font-size:12px;line-height:1.6;color:hsl(215,12%,44%)">If you have any questions, just reply to this email.</p>
-  <p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:hsl(220,20%,12%)">— The Kabuni team</p>
+  <h1 style="margin:0 0 20px;font-size:28px;line-height:1.2;color:hsl(220,20%,12%)">Welcome to Kabuni!</h1>
+  <p style="${p}">${greeting}</p>
+  <p style="${p}">We're building the future of sports technology — connecting fans, clubs, and athletes through innovative digital experiences. We're a fast-moving, ambitious team and we're genuinely thrilled to have you with us.</p>
+  <p style="${p}">To get you up and running, here are a few things to complete as part of your onboarding:</p>
+
+  <div style="margin:20px 0 18px">
+    <p style="${stepTitle}">1. Duncan, our AI office assistant</p>
+    <p style="${stepDesc}">Your go-to for workplace queries, documents, and day-to-day support.</p>
+    <p style="margin:0">👉 <a href="https://duncan.help" style="${stepLink}">duncan.help</a></p>
+  </div>
+
+  <div style="margin:0 0 22px">
+    <p style="${stepTitle}">2. Slack, our team communication hub</p>
+    <p style="${stepDesc}">This is where the magic happens — join your relevant channels and say hello!</p>
+    <p style="margin:0">👉 <a href="https://kabuni.slack.com" style="${stepLink}">kabuni.slack.com</a></p>
+  </div>
+
+  <p style="${p}">We move fast, collaborate openly, and back each other up.</p>
+  <p style="${p}">We're so excited to have you on board and can't wait to see what you bring to the team. Don't hesitate to reach out if you need anything as you settle in.</p>
+
+  <p style="margin:24px 0 0;font-size:14px;line-height:1.6;color:hsl(220,20%,12%)">— The Kabuni team</p>
 </div>`;
 }
 

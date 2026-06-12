@@ -1171,3 +1171,119 @@ export default function CommsPulseCard({ emailPulse, slackPulse, hubspotSignal, 
     </TooltipProvider>
   );
 }
+
+interface FormSubmission {
+  name: string | null;
+  email: string | null;
+  city: string | null;
+  country: string | null;
+  submitted_at: string | null;
+}
+
+function FormSubmissionsButton({ formKey, label }: { formKey: "newsletter" | "scout"; label: string }) {
+  const { user } = useAuth();
+  const { isAdmin } = useIsAdmin();
+  const canView = isCEO(user?.email) || isAdmin;
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [rows, setRows] = useState<FormSubmission[]>([]);
+  const [truncated, setTruncated] = useState(false);
+  const [formName, setFormName] = useState<string | null>(null);
+
+  if (!canView) return null;
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("hubspot-api", {
+        body: { action: "form_submissions", form_key: formKey, limit: 200 },
+      });
+      if (error) throw new Error(error.message || "Failed to load submissions");
+      if (data?.error) throw new Error(String(data.error));
+      setRows(Array.isArray(data?.submissions) ? data.submissions : []);
+      setTruncated(!!data?.truncated);
+      setFormName(data?.form_name ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="mt-2 h-7 text-[10px] px-2"
+        onClick={() => {
+          setOpen(true);
+          if (rows.length === 0) void load();
+        }}
+      >
+        View submissions
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{label}</DialogTitle>
+            <DialogDescription>
+              {formName ? <>Form: <span className="font-mono">{formName}</span></> : "Submission history"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-auto border border-border rounded">
+            {loading ? (
+              <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading submissions…
+              </div>
+            ) : error ? (
+              <div className="p-4 text-sm text-destructive">{error}</div>
+            ) : rows.length === 0 ? (
+              <div className="p-4 text-sm text-muted-foreground">No submissions found.</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Submitted</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((r, i) => {
+                    const loc = [r.city, r.country].filter(Boolean).join(", ") || "—";
+                    const submitted = r.submitted_at
+                      ? new Date(r.submitted_at).toLocaleString()
+                      : "—";
+                    return (
+                      <TableRow key={`${r.email ?? "row"}-${i}`}>
+                        <TableCell>{r.name || "—"}</TableCell>
+                        <TableCell className="font-mono text-xs">{r.email || "—"}</TableCell>
+                        <TableCell>{loc}</TableCell>
+                        <TableCell className="whitespace-nowrap text-xs">{submitted}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <div>{rows.length > 0 ? `${rows.length} ${rows.length === 1 ? "submission" : "submissions"}` : ""}</div>
+            <div>
+              {truncated ? "Showing the most recent results (capped at 200)." : null}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

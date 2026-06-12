@@ -459,6 +459,11 @@ function ExternalSignalColumn({
                             ) : (
                               <div className="text-[10px] text-muted-foreground">Not found in connected portal</div>
                             )}
+                            <FormSubmissionsButton
+                              formName={list?.matched_name || list?.requested_name}
+                              label={list?.requested_name || "Form submissions"}
+                            />
+
 
                           </div>
                         );

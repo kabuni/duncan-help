@@ -49,12 +49,22 @@ export default function WorkspaceWelcomeAutomation() {
     }
     const err = searchParams.get("workspace_admin_error");
     if (err) {
-      const msg =
+      const status = searchParams.get("workspace_admin_status");
+      const detail = searchParams.get("workspace_admin_detail");
+      const base =
         err === "not_super_admin"
-          ? "That Google account isn't a Workspace Super Admin."
+          ? "That Google account isn't a Workspace Super Admin (Directory API returned 403)."
+          : err === "admin_sdk_disabled"
+          ? "Admin SDK API is not enabled in the Google Cloud project that owns this OAuth client. Enable it at console.cloud.google.com → APIs & Services → Library → Admin SDK API."
+          : err === "insufficient_scope"
+          ? "OAuth token is missing admin.directory.user.readonly. Re-add the scope to the OAuth consent screen and reconnect."
+          : err === "unauthorized"
+          ? "Google rejected the token (401)."
           : `Connection failed (${err}).`;
-      toast.error(msg);
+      toast.error(base, { description: detail ? `HTTP ${status}: ${decodeURIComponent(detail)}` : undefined, duration: 12000 });
       searchParams.delete("workspace_admin_error");
+      searchParams.delete("workspace_admin_status");
+      searchParams.delete("workspace_admin_detail");
       setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);

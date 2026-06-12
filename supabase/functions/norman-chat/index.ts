@@ -5224,7 +5224,11 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode, userProfile, voiceMode, executeWriteId } = await req.json();
+    const { messages: rawMessages, mode, userProfile, voiceMode, executeWriteId } = await req.json();
+    // When confirm-chat-write invokes us with only { executeWriteId }, `messages` is absent.
+    // Default to an empty array so all the message-shaped helpers between here and the
+    // executeWriteId handler below don't blow up with "messages is not iterable".
+    const messages: any[] = Array.isArray(rawMessages) ? rawMessages : [];
     const isVoiceMode = voiceMode === true;
     const CHAT_MODEL = isVoiceMode ? "gpt-4o-mini" : "gpt-4o";
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");

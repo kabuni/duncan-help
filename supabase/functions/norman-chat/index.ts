@@ -5758,9 +5758,14 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     const stripGeminiBoilerplate = (notes: string): string => {
       let out = notes;
+      out = out
+        .replace(/^\s*Notes from ['"][^'"]+['"]\s*/i, "")
+        .replace(/^\s*These notes have been sent to[\s\S]*?Open meeting notes\s*/i, "")
+        .replace(/^\s*The content was auto-generated[\s\S]*?contain errors\.\s*/i, "");
       const footerPatterns = [
         /\n\s*Meeting records\s+Document\s+Notes by Gemini[\s\S]*$/i,
         /\n\s*Is the ['"]?Next steps['"]? section in this email helpful\?[\s\S]*$/i,
+        /\n\s*We've updated the Decisions section[\s\S]*$/i,
         /\n\s*Google LLC,[\s\S]*$/i,
         /\n\s*You have received this email because[\s\S]*$/i,
         /\n\s*The content was auto-generated[^\n]*\n?/i,

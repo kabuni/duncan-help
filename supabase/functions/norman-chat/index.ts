@@ -6199,15 +6199,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
       }
     }
 
-    if (mustAskMeetingSource) {
-      requestBody.tools = undefined;
-      requestBody.tool_choice = undefined;
-      systemContent += `\n\n## CURRENT REQUEST OVERRIDE\nThe latest user request is a source-ambiguous meeting notes request. Reply exactly: "Which source should I use — **Google Meet** or **Plaud**?" Do not call tools.`;
-      requestBody.messages = [
-        { role: "system", content: systemContent },
-        ...messages,
-      ];
-    }
+    // Source-clarification override removed (mustAskMeetingSource is always false).
+
 
     // Helper to call LLM via the shared router (Claude primary, OpenAI fallback).
     // Returns a synthetic Response whose .body is OpenAI-shaped SSE so downstream parser

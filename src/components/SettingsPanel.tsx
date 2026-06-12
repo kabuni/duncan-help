@@ -24,17 +24,18 @@ type SectionId = "general" | "profile" | "appearance" | "integrations" | "reques
 interface SettingsPanelProps {
   open: boolean;
   onClose: () => void;
+  initialSection?: SectionId;
 }
 
-export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
+export default function SettingsPanel({ open, onClose, initialSection }: SettingsPanelProps) {
   const [active, setActive] = useState<SectionId>("profile");
   const sections = baseSections;
 
   useEffect(() => {
     if (open) {
-      setActive("profile");
+      setActive(initialSection ?? "profile");
     }
-  }, [open]);
+  }, [open, initialSection]);
 
   if (!open) return null;
 

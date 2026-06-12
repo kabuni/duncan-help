@@ -2482,16 +2482,28 @@ async function executeWorkstreamTool(
       });
 
       const taskResult = await insertPendingTasks(card.id, args.pending_tasks || []);
+      const { data: verifiedCard, error: verifyCardError } = await supabaseAdmin
+        .from("workstream_cards")
+        .select("id, title, status, project_tag")
+        .eq("id", card.id)
+        .maybeSingle();
+      if (verifyCardError || !verifiedCard) {
+        throw new Error(`Failed to verify created card: ${verifyCardError?.message || "not found"}`);
+      }
+      const expectedTaskCount = Array.isArray(args.pending_tasks) ? args.pending_tasks.filter((t: any) => !!t?.title).length : 0;
+      if (expectedTaskCount > 0 && taskResult.tasks_created + taskResult.tasks_skipped < expectedTaskCount) {
+        throw new Error(`Failed to verify all tasks: expected ${expectedTaskCount}, created ${taskResult.tasks_created}, skipped ${taskResult.tasks_skipped}`);
+      }
 
       return {
         success: true,
-        card_id: card.id,
-        title: card.title,
-        status: card.status,
-        project_tag: card.project_tag,
+        card_id: verifiedCard.id,
+        title: verifiedCard.title,
+        status: verifiedCard.status,
+        project_tag: verifiedCard.project_tag,
         assigned_to: "creator (you)",
         ...taskResult,
-        message: `Card created (id=${card.id}) with ${taskResult.tasks_created} task(s).`,
+        message: `Card created (id=${verifiedCard.id}) with ${taskResult.tasks_created} task(s).`,
       };
     }
 
@@ -6017,9 +6029,21 @@ Format as a natural, readable summary with clear sections. If a section has no d
       return /\bNDA\b|generate_nda/i.test(recentConversationText) &&
         /Receiving Party|Legal Entity|registered address|recipient email|NDA details captured|ready to generate|Generating the NDA|NDA — Summary/i.test(recentConversationText);
     })();
+    const isWorkstreamCreationConfirmationReply = (() => {
+      const normalized = latestUserText.trim().toLowerCase().replace(/[.!?]+$/g, "");
+      const isAffirmative = /^(create|create now|create it|yes create|yes|y|yeah|yep|ok|okay|sure|confirmed|confirm|go|go ahead|please do|do it|apply)$/i.test(normalized);
+      if (!isAffirmative) return false;
+      if (/verified=true|Card created \(id=|Workstreams — created|workstream card created/i.test(recentConversationText)) return false;
+      return /Workstreams\s+—\s+ready to create|card \+ tasks|Tasks \(grouped by owner/i.test(recentConversationText) &&
+        /create_workstream_card|Workstream|workstream|card/i.test(recentConversationText);
+    })();
     if (isNdaConfirmationReply) {
       shouldBypassTools = false;
       systemContent += `\n\n## CURRENT REQUEST OVERRIDE — NDA CONFIRMATION\nThe latest user reply is confirming a pending NDA generation. Do not answer with a promise. Immediately call \`generate_nda\` using the confirmed NDA fields from the conversation history. After the tool returns, share the actual download link from the tool result.`;
+    }
+    if (isWorkstreamCreationConfirmationReply) {
+      shouldBypassTools = false;
+      systemContent += `\n\n## CURRENT REQUEST OVERRIDE — WORKSTREAM CREATION CONFIRMATION\nThe latest user reply is explicitly confirming the most recent Workstreams preview. Do not answer with a promise and do not ask for another confirmation. Immediately call \`create_workstream_card\` using the card fields from the most recent assistant preview. Extract every listed task from that preview and pass them in \`pending_tasks\` in the same tool call. For a plain create/confirm reply, leave task assignees empty unless the preview already contains explicit user IDs. After the tool returns, only say it was created if the tool result has \`ok === true\` and \`verified === true\`; include the card id and task count.`;
     }
 
     if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {
@@ -6252,10 +6276,21 @@ Format as a natural, readable summary with clear sections. If a section has no d
         console.log(`[intent-filter] matched=${intentMatched} tools=${filteredTools.length}/${tools.length}`);
       }
     }
+    if (isWorkstreamCreationConfirmationReply) {
+      const seen = new Set<string>();
+      filteredTools = [...ALWAYS_ON_TOOLS, ...WORKSTREAM_TOOLS].filter((t: any) => {
+        const name = t?.function?.name;
+        if (!name || seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      });
+      intentMatched = true;
+      console.log(`[intent-filter] workstream confirmation override tools=${filteredTools.length}/${tools.length}`);
+    }
 
     // Tool-first guardrail signal: data-bound intents must ground their answer in tools.
     const DATA_INTENT_RE = /\b(meeting|email|inbox|calendar|event|workstream|task|planner|kpi|metric|invoice|xero|devops|work item|drive|document|slack|candidate|recruit|brief|status|summary|report)\b/i;
-    const isDataIntent = intentMatched || DATA_INTENT_RE.test(latestUserText);
+    const isDataIntent = intentMatched || isWorkstreamCreationConfirmationReply || DATA_INTENT_RE.test(latestUserText);
 
     // Phase 4: backfill the unified `turn` readout now that all signals are computed.
     turn.intentMatched = intentMatched;
@@ -6299,6 +6334,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
       requestBody.tools = filteredTools;
       if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {
         requestBody.tool_choice = { type: "function", function: { name: "generate_nda" } };
+      } else if (isWorkstreamCreationConfirmationReply) {
+        requestBody.tool_choice = { type: "function", function: { name: "create_workstream_card" } };
       } else if (isDataIntent && !isVoiceMode && !mustAskMeetingSource) {
         requestBody.tool_choice = "auto";
       }
@@ -6841,7 +6878,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
           // tool_pending event so the UI can render a Confirm/Cancel card, and
           // return a synthetic "awaiting confirmation" tool result to the model
           // so it stops further tool calls and produces a user-facing summary.
-          if (WRITE_TOOLS.has(toolNameForEvent) && !bypassWriteConfirm) {
+          const confirmedWorkstreamCreate = isWorkstreamCreationConfirmationReply && toolNameForEvent === "create_workstream_card";
+          if (WRITE_TOOLS.has(toolNameForEvent) && !bypassWriteConfirm && !confirmedWorkstreamCreate) {
             try {
               const summary = summarizeWriteAction(toolNameForEvent, args);
               const idemSource = `${userId}:${toolNameForEvent}:${JSON.stringify(args ?? {})}`;
@@ -7292,20 +7330,62 @@ Format as a natural, readable summary with clear sections. If a section has no d
         // hard_error / partial / no envelope = not verified.
         const envelopeOk = parsed?.ok === true && parsed?.verified === true;
         const status = parsed?.status ?? (envelopeOk ? "success" : "hard_error");
+        let verifiedAfter = parsed?.after ?? null;
+        let verificationError: string | null = null;
+
+        if (row.tool_name === "create_workstream_card" && envelopeOk) {
+          const cardId = parsed?.card_id || parsed?.data?.card_id || parsed?.result?.card_id;
+          if (!cardId) {
+            verificationError = "Workstream card creation returned no card ID.";
+          } else {
+            const { data: verifiedCard, error: verifyCardErr } = await supabaseAdmin
+              .from("workstream_cards")
+              .select("id, title, status, project_tag, created_by")
+              .eq("id", cardId)
+              .maybeSingle();
+            if (verifyCardErr || !verifiedCard) {
+              verificationError = "Workstream card was not found after creation.";
+            } else {
+              const expectedTasks = Array.isArray(row.tool_args?.pending_tasks) ? row.tool_args.pending_tasks : [];
+              const expectedTitles = expectedTasks
+                .map((t: any) => String(t?.title || "").trim())
+                .filter(Boolean);
+              let taskVerification: any = { expected: expectedTitles.length, actual: 0, missing: [] };
+              if (expectedTitles.length > 0) {
+                const { data: taskRows, error: taskVerifyErr } = await supabaseAdmin
+                  .from("workstream_tasks")
+                  .select("id, title")
+                  .eq("card_id", cardId);
+                if (taskVerifyErr) {
+                  verificationError = `Workstream tasks could not be verified: ${taskVerifyErr.message}`;
+                } else {
+                  const actualTitles = new Set((taskRows || []).map((t: any) => String(t.title || "").trim().toLowerCase()));
+                  const missing = expectedTitles.filter((title: string) => !actualTitles.has(title.toLowerCase()));
+                  taskVerification = { expected: expectedTitles.length, actual: taskRows?.length || 0, missing };
+                  if (missing.length > 0) {
+                    verificationError = `Workstream card was created, but ${missing.length} task(s) did not verify.`;
+                  }
+                }
+              }
+              verifiedAfter = { ...verifiedCard, tasks: taskVerification };
+            }
+          }
+        }
+        const finalOk = envelopeOk && !verificationError;
 
         return new Response(JSON.stringify({
-          ok: envelopeOk,
-          verified: parsed?.verified === true,
-          status,
+          ok: finalOk,
+          verified: finalOk,
+          status: finalOk ? status : "hard_error",
           source: parsed?.source ?? null,
           tool: row.tool_name,
           summary: row.summary ?? null,
           before: parsed?.before ?? null,
-          after: parsed?.after ?? null,
-          error: parsed?.error ?? null,
+          after: verifiedAfter,
+          error: verificationError ?? parsed?.error ?? null,
           result: parsed,
         }), {
-          status: envelopeOk ? 200 : 502,
+          status: finalOk ? 200 : 502,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } catch (e: any) {

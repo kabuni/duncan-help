@@ -264,11 +264,13 @@ function ExternalSignalColumn({
 
       {hubspotSignal ? (
         <div className="space-y-3 border-t border-border/70 pt-3">
-          {hubspotSignal.form_metrics ? (
+          {(() => {
+            const fmRoot = hubspotSignal.form_metrics ?? null;
+            return (
             <div className="space-y-2">
               <div className="grid grid-cols-2 gap-2">
                 {(["newsletter", "scout"] as const).map((key) => {
-                  const fm = hubspotSignal.form_metrics?.[key];
+                  const fm = fmRoot?.[key];
                   const label = key === "newsletter" ? "Newsletter signups" : "Scout submissions";
                   return (
                     <div key={key} className="rounded border border-border bg-background/60 p-2.5">
@@ -285,14 +287,16 @@ function ExternalSignalColumn({
                           {fm.form_name ? <div className="text-[10px] text-muted-foreground truncate mt-0.5">{fm.form_name}</div> : null}
                         </>
                       ) : (
-                        <div className="text-[10px] text-muted-foreground mt-1">Form not found in connected portal</div>
+                        <div className="text-[10px] text-muted-foreground mt-1">
+                          {fmRoot ? "Form not found in connected portal" : "No counts in this briefing payload"}
+                        </div>
                       )}
                       <FormSubmissionsButton formKey={key} label={label} />
                     </div>
                   );
                 })}
               </div>
-              {(hubspotSignal.form_metrics.location_breakdown?.length ?? 0) > 0 ? (
+              {(fmRoot?.location_breakdown?.length ?? 0) > 0 ? (
                 <div className="rounded border border-border bg-background/60 overflow-hidden">
                   <div className="px-2.5 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border">
                     Location breakdown (last 30d)
@@ -306,7 +310,7 @@ function ExternalSignalColumn({
                       </tr>
                     </thead>
                     <tbody>
-                      {hubspotSignal.form_metrics.location_breakdown!.map((row, idx) => (
+                      {fmRoot!.location_breakdown!.map((row, idx) => (
                         <tr key={`${row.location}-${idx}`} className="border-b border-border last:border-0">
                           <td className="px-2.5 py-1.5 text-foreground">{row.location}</td>
                           <td className="px-2.5 py-1.5 text-right tabular-nums text-foreground">{row.newsletter_count.toLocaleString()}</td>
@@ -318,7 +322,8 @@ function ExternalSignalColumn({
                 </div>
               ) : null}
             </div>
-          ) : null}
+            );
+          })()}
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">

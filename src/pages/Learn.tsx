@@ -1,14 +1,14 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { ArrowRight, PlayCircle } from "lucide-react";
 import { MODULES } from "@/components/onboarding/moduleContent";
 import MeetDuncanTour from "@/components/onboarding/MeetDuncanTour";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSettingsPanel } from "@/hooks/SettingsPanelContext";
 
 export default function Learn() {
-  const navigate = useNavigate();
+  const { openSettings } = useSettingsPanel();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [tourOpen, setTourOpen] = useState(false);
@@ -22,6 +22,16 @@ export default function Learn() {
       queryClient.invalidateQueries({ queryKey: ["profile", user.id] });
     }
     setTourOpen(true);
+  };
+
+  const handleModuleCta = (moduleId: string, to: string) => {
+    if (moduleId === "profile") {
+      openSettings("profile");
+    } else if (moduleId === "feedback") {
+      openSettings("request_feature");
+    } else {
+      window.location.href = to;
+    }
   };
 
   return (

@@ -1801,7 +1801,7 @@ const WORKSTREAM_TOOLS = [
     type: "function",
     function: {
       name: "create_workstream_card",
-      description: "Create a new workstream card. The card is automatically assigned ONLY to the creator (current user). To assign to others, use update_workstream_card after creation. Returns the created card ID for chaining with add_tasks_to_card.",
+      description: "Create a new workstream card, optionally with its initial tasks in the same call. The card is automatically assigned ONLY to the creator. IMPORTANT: when the user has described tasks/action items for this card, ALWAYS pass them in `pending_tasks` so they are created atomically when the user confirms the card. This avoids a second confirmation step and a separate add_tasks_to_card round-trip. To assign the card to others, use update_workstream_card after creation.",
       parameters: {
         type: "object",
         properties: {
@@ -1811,6 +1811,20 @@ const WORKSTREAM_TOOLS = [
           project_tag: { type: "string", enum: ["Lightning Strike Event", "Website", "K10 App", "School Integrations"], description: "Project tag" },
           priority: { type: "string", enum: ["low", "medium", "high", "urgent"], description: "Priority (default: medium)" },
           due_date: { type: "string", description: "Due date in YYYY-MM-DD format" },
+          pending_tasks: {
+            type: "array",
+            description: "Optional initial tasks to create together with the card (atomically after user confirmation). Use this whenever the user has described tasks/action items — do NOT split into a separate add_tasks_to_card call.",
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string", description: "Task title" },
+                description: { type: "string", description: "Task description" },
+                due_date: { type: "string", description: "Due date in YYYY-MM-DD" },
+                assignee_user_ids: { type: "array", items: { type: "string" }, description: "User IDs to assign (resolve via list_team_members)" },
+              },
+              required: ["title"],
+            },
+          },
         },
         required: ["title"],
       },

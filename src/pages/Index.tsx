@@ -612,6 +612,8 @@ const Index = () => {
           send: (text: string) => handleChatSubmit(text, []),
         }}
       />
+
+      <MeetDuncanTour open={tourOpen} onClose={() => setTourOpen(false)} />
     </div>
   );
 };

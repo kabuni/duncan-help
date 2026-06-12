@@ -5984,29 +5984,22 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const hint = extractLatestTitleHint(latestUserText);
       console.log("[LATEST MEETING SMART]", { user: userId, hint, latestUserText });
       try {
-        const gmailResult = await fetchLatestMeetingFromUserGmail(userId, hint);
-        if (gmailResult.ok) {
-          return buildTextSseResponse(gmailResult.markdown);
-        }
-        // Gmail miss → DB fallback
+        // Centralized ingestion: Gemini + Plaud notes land in the meetings DB
+        // via duncan@kabuni.com. Never pull from the caller's personal Gmail.
         const dbMarkdown = await fetchLatestMeetingFromDb(hint);
         if (dbMarkdown) {
-          const prefix = gmailResult.reason === "no_gmail"
-            ? `> _Personal Gmail isn't connected — pulled from the meetings database instead._\n\n`
-            : hint
-              ? `> _No Gmail match for "${hint}" — pulled the best match from the meetings database._\n\n`
-              : `> _No recent meeting notes in your Gmail — pulled the latest from the meetings database._\n\n`;
-          return buildTextSseResponse(prefix + dbMarkdown);
+          return buildTextSseResponse(dbMarkdown);
         }
         const msg = hint
-          ? `I couldn't find any recent meeting notes matching "${hint}" in either your Gmail or the meetings database. Try broadening the title, or ask me to list recent meetings.`
-          : `I couldn't find any recent meeting notes in your Gmail or the meetings database. Try syncing Plaud, or ask me to list recent meetings.`;
+          ? `I couldn't find any recent meeting notes matching "${hint}" in the meetings database. Try broadening the title, or ask me to list recent meetings.`
+          : `I couldn't find any recent meeting notes in the meetings database. Try syncing Plaud, or ask me to list recent meetings.`;
         return buildTextSseResponse(msg);
       } catch (e: any) {
         console.error("[LATEST MEETING SMART] error", e);
         return buildTextSseResponse(`I hit an error trying to fetch your latest meeting: ${e?.message || "unknown error"}.`);
       }
     }
+
 
     // Source-selected reformat branch removed — the simplified meeting workflow
     // routes "latest/most recent/today's/yesterday's" via the smart router above

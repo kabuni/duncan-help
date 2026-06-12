@@ -1801,7 +1801,7 @@ const WORKSTREAM_TOOLS = [
     type: "function",
     function: {
       name: "create_workstream_card",
-      description: "Create a new workstream card, optionally with its initial tasks in the same call. The card is automatically assigned ONLY to the creator. IMPORTANT: when the user has described tasks/action items for this card, ALWAYS pass them in `pending_tasks` so they are created atomically when the user confirms the card. This avoids a second confirmation step and a separate add_tasks_to_card round-trip. To assign the card to others, use update_workstream_card after creation.",
+      description: "Create a new workstream card, optionally with its initial tasks and assignees in the same call. The creator is always added as an assignee. Pass `assignee_user_ids` for additional card-level assignees, and `assignee_user_ids` per item in `pending_tasks` for task-level assignees (resolve names via list_team_members FIRST). IMPORTANT: when the user has described tasks/action items for this card, ALWAYS pass them in `pending_tasks` so they are created atomically when the user confirms the card.",
       parameters: {
         type: "object",
         properties: {
@@ -1811,6 +1811,7 @@ const WORKSTREAM_TOOLS = [
           project_tag: { type: "string", enum: ["Lightning Strike Event", "Website", "K10 App", "School Integrations"], description: "Project tag" },
           priority: { type: "string", enum: ["low", "medium", "high", "urgent"], description: "Priority (default: medium)" },
           due_date: { type: "string", description: "Due date in YYYY-MM-DD format" },
+          assignee_user_ids: { type: "array", items: { type: "string" }, description: "Additional card-level assignee user IDs (resolve via list_team_members). The creator is auto-added; do not include the creator's own ID here." },
           pending_tasks: {
             type: "array",
             description: "Optional initial tasks to create together with the card (atomically after user confirmation). Use this whenever the user has described tasks/action items — do NOT split into a separate add_tasks_to_card call.",

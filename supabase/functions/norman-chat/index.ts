@@ -6124,7 +6124,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const isAffirmative = /^(create|create now|create it|yes create|yes|y|yeah|yep|ok|okay|sure|confirmed|confirm|go|go ahead|please do|do it|apply)$/i.test(normalized);
       if (!isAffirmative) return false;
       if (/verified=true|Card created \(id=|Workstreams — created|workstream card created/i.test(recentConversationText)) return false;
-      return /Workstreams\s+—\s+ready to create|card \+ tasks|Tasks \(grouped by owner/i.test(recentConversationText) &&
+      return !!pendingWorkstreamArgsFromHistory || /Workstreams\s+—\s+ready to create|Creating Workstreams card|pending your confirmation|card \+ tasks|Tasks \(grouped by owner/i.test(recentConversationText) &&
         /create_workstream_card|Workstream|workstream|card/i.test(recentConversationText);
     })();
     if (isNdaConfirmationReply) {
@@ -7632,6 +7632,16 @@ Format as a natural, readable summary with clear sections. If a section has no d
                       function: {
                         name: "generate_nda",
                         arguments: JSON.stringify(pendingNdaArgsFromHistory),
+                      },
+                    };
+                  }
+                  if (pendingWorkstreamArgsFromHistory && (isWorkstreamCreationConfirmationReply || looksLikeWorkstreamCreationPromise(fullContent))) {
+                    return {
+                      id: `recovered_workstream_${Date.now().toString(36)}`,
+                      type: "function",
+                      function: {
+                        name: "create_workstream_card",
+                        arguments: JSON.stringify(pendingWorkstreamArgsFromHistory),
                       },
                     };
                   }

@@ -1082,9 +1082,10 @@ Deno.serve(async (req) => {
     }
   }
 
+  let callerUser: { id: string; email?: string | null } | null = null;
   if (!isTrustedInternalCall) {
-    const user = await getUser(req);
-    if (!user) return json({ error: "Unauthorized" }, 401);
+    callerUser = (await getUser(req)) as any;
+    if (!callerUser) return json({ error: "Unauthorized" }, 401);
   } else {
     logHubspot("trusted internal auth accepted", { action, mode: "service_role_bypass" });
   }

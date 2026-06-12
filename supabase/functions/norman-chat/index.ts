@@ -5648,7 +5648,98 @@ Format as a natural, readable summary with clear sections. If a section has no d
         /download link|as soon as|once (?:the document is )?ready|share (?:the )?link/i.test(text);
     }
 
+    function normalizeWorkstreamDueDate(value: string | null | undefined): string | undefined {
+      if (!value) return undefined;
+      const cleaned = value.replace(/[.,;\s]+$/g, "").trim();
+      const iso = cleaned.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+      if (iso) return iso[1];
+      const monthMap: Record<string, string> = {
+        jan: "01", january: "01", feb: "02", february: "02", mar: "03", march: "03",
+        apr: "04", april: "04", may: "05", jun: "06", june: "06", jul: "07", july: "07",
+        aug: "08", august: "08", sep: "09", sept: "09", september: "09", oct: "10", october: "10",
+        nov: "11", november: "11", dec: "12", december: "12",
+      };
+      const dmy = cleaned.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\s+(\d{4})\b/i);
+      if (!dmy) return undefined;
+      const month = monthMap[dmy[2].toLowerCase()];
+      if (!month) return undefined;
+      return `${dmy[3]}-${month}-${dmy[1].padStart(2, "0")}`;
+    }
+
+    function cleanWorkstreamValue(value: string | null | undefined): string | undefined {
+      if (!value) return undefined;
+      const cleaned = value
+        .replace(/^[-*\s]+/, "")
+        .replace(/[“”]/g, '"')
+        .replace(/^['"`]+|['"`]+$/g, "")
+        .trim();
+      return cleaned.length > 0 ? cleaned : undefined;
+    }
+
+    function readWorkstreamLabel(text: string, labels: string[]): string | undefined {
+      for (const label of labels) {
+        const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const re = new RegExp(`(?:^|\\n)\\s*[-*]?\\s*(?:\\*\\*)?${escaped}(?:\\*\\*)?\\s*[:：]\\s*([^\\n]+)`, "i");
+        const value = cleanWorkstreamValue(text.match(re)?.[1]);
+        if (value) return value;
+      }
+      return undefined;
+    }
+
+    function extractWorkstreamCreateArgsFromConversation(text: string, latestUserText: string): Record<string, any> | null {
+      const markers = ["## Creating Workstreams card", "Creating Workstreams card", "Workstreams — ready to create", "Workstreams - ready to create"];
+      let start = -1;
+      for (const marker of markers) start = Math.max(start, text.lastIndexOf(marker));
+      if (start < 0) start = text.lastIndexOf("- Title:");
+      if (start < 0) return null;
+      const block = text.slice(start);
+      const headingTitle = cleanWorkstreamValue(block.match(/Creating Workstreams card:\s*[“\"]?([^”\"\n]+)[”\"]?/i)?.[1]);
+      const title = readWorkstreamLabel(block, ["Title", "Card title"]) || headingTitle;
+      if (!title) return null;
+
+      const args: Record<string, any> = { title };
+      const description = readWorkstreamLabel(block, ["Description", "Card description"]);
+      if (description) args.description = description;
+
+      const status = readWorkstreamLabel(block, ["Status"]);
+      if (status && /^(red|amber|green|done)$/i.test(status)) args.status = status.toLowerCase();
+      const priority = readWorkstreamLabel(block, ["Priority"]);
+      if (priority && /^(low|medium|high|urgent)$/i.test(priority)) args.priority = priority.toLowerCase();
+      const cardDue = normalizeWorkstreamDueDate(readWorkstreamLabel(block, ["Due date", "Card due date"]));
+      if (cardDue) args.due_date = cardDue;
+
+      const projectTags = ["Lightning Strike Event", "Website", "K10 App", "School Integrations"];
+      const tagHaystack = `${latestUserText}\n${readWorkstreamLabel(block, ["Project tag", "Tag"]) || ""}`.toLowerCase();
+      const tag = projectTags.find((t) => tagHaystack.includes(t.toLowerCase()) || (t === "Website" && /\b(site|web site)\b/i.test(tagHaystack)));
+      if (tag && !/\b(no|without)\s+(?:a\s+)?(?:project\s+)?tag\b|\buntagged\b/i.test(`${latestUserText}\n${block}`)) args.project_tag = tag;
+
+      const taskMarker = block.match(/(?:Pending tasks[^\n]*:|tasks and due dates:|card with these tasks[^\n]*:)/i);
+      const taskBlock = taskMarker ? block.slice((taskMarker.index || 0) + taskMarker[0].length) : block;
+      const pending_tasks: any[] = [];
+      for (const line of taskBlock.split("\n")) {
+        const numbered = line.match(/^\s*\d+[.)]\s+(.+?)\s*$/);
+        if (!numbered) continue;
+        let raw = numbered[1].trim();
+        const dueMatch = raw.match(/\s+[—–-]\s*Due\s+(.+)$/i) || raw.match(/\s+\(due\s+(.+?)\)\s*$/i);
+        let due_date: string | undefined;
+        if (dueMatch?.[1]) {
+          due_date = normalizeWorkstreamDueDate(dueMatch[1]);
+          raw = raw.slice(0, dueMatch.index).trim();
+        }
+        const taskTitle = cleanWorkstreamValue(raw);
+        if (taskTitle) pending_tasks.push({ title: taskTitle, ...(due_date ? { due_date } : {}) });
+      }
+      if (pending_tasks.length > 0) args.pending_tasks = pending_tasks;
+      return args;
+    }
+
+    function looksLikeWorkstreamCreationPromise(text: string): boolean {
+      return /Creating Workstreams card|pending your confirmation|ready to create|I[’']ve prepared the Workstreams card/i.test(text) &&
+        /Pending tasks|tasks and due dates|Title:/i.test(text);
+    }
+
     const pendingNdaArgsFromHistory = extractNdaArgsFromConversation(recentConversationText);
+    const pendingWorkstreamArgsFromHistory = extractWorkstreamCreateArgsFromConversation(recentConversationText, latestUserText);
 
     // Phase 5: raise the tool-call ceiling to 6 rounds so multi-step
     // operational sequences (resolve entity → list → fetch detail → mutate →
@@ -6033,7 +6124,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const isAffirmative = /^(create|create now|create it|yes create|yes|y|yeah|yep|ok|okay|sure|confirmed|confirm|go|go ahead|please do|do it|apply)$/i.test(normalized);
       if (!isAffirmative) return false;
       if (/verified=true|Card created \(id=|Workstreams — created|workstream card created/i.test(recentConversationText)) return false;
-      return /Workstreams\s+—\s+ready to create|card \+ tasks|Tasks \(grouped by owner/i.test(recentConversationText) &&
+      return !!pendingWorkstreamArgsFromHistory || /Workstreams\s+—\s+ready to create|Creating Workstreams card|pending your confirmation|card \+ tasks|Tasks \(grouped by owner/i.test(recentConversationText) &&
         /create_workstream_card|Workstream|workstream|card/i.test(recentConversationText);
     })();
     if (isNdaConfirmationReply) {
@@ -7541,6 +7632,16 @@ Format as a natural, readable summary with clear sections. If a section has no d
                       function: {
                         name: "generate_nda",
                         arguments: JSON.stringify(pendingNdaArgsFromHistory),
+                      },
+                    };
+                  }
+                  if (round === 0 && pendingWorkstreamArgsFromHistory && (isWorkstreamCreationConfirmationReply || looksLikeWorkstreamCreationPromise(fullContent))) {
+                    return {
+                      id: `recovered_workstream_${Date.now().toString(36)}`,
+                      type: "function",
+                      function: {
+                        name: "create_workstream_card",
+                        arguments: JSON.stringify(pendingWorkstreamArgsFromHistory),
                       },
                     };
                   }

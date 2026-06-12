@@ -1,8 +1,14 @@
-import { Mail, Hash, AlertTriangle, MessageSquareWarning, Inbox, MailMinus, Info, Slack, Database, GitBranch } from "lucide-react";
+import { Mail, Hash, AlertTriangle, MessageSquareWarning, Inbox, MailMinus, Info, Slack, Database, GitBranch, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useIsAdmin } from "@/hooks/useUserRoles";
+import { isCEO } from "@/lib/ceoAccess";
 import type { EmailPulseSummary, LeadershipStatusEntry } from "./EmailPulseCard";
 
 export interface SlackPulseSummary {

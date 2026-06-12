@@ -44,9 +44,24 @@ export function createStructuredToolResult(
       ? { ...result }
       : { data: result };
 
-  // status: caller-provided result.status wins; otherwise use the hint.
+  const TOOL_RESULT_STATUSES = new Set<ToolResultStatus>([
+    "success",
+    "no_data",
+    "partial",
+    "pending_confirmation",
+    "hard_error",
+    "error",
+    "timeout",
+    "circuit_open",
+  ]);
+
+  // status: caller-provided result.status wins only when it is a tool-envelope
+  // status. Domain statuses like workstream "amber" must not make verified
+  // writes look failed.
   const status: ToolResultStatus =
-    (typeof payload.status === "string" ? payload.status : statusHint) as ToolResultStatus;
+    (typeof payload.status === "string" && TOOL_RESULT_STATUSES.has(payload.status as ToolResultStatus)
+      ? payload.status
+      : statusHint) as ToolResultStatus;
 
   // Derived defaults — only applied if the underlying tool didn't already set
   // them. Write tools (reschedule_event, etc.) return their own ok/verified.

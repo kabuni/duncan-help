@@ -289,7 +289,7 @@ const Sidebar = ({
       </nav>
 
       {/* User */}
-      <div className="border-t border-border px-3 py-2 space-y-1">
+      <div className="border-t border-border px-3 py-2 space-y-2">
         {user && (
           <div className="flex items-center gap-2">
             <Avatar className="h-7 w-7 shrink-0">

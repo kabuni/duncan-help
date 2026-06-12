@@ -7635,7 +7635,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
                       },
                     };
                   }
-                  if (pendingWorkstreamArgsFromHistory && (isWorkstreamCreationConfirmationReply || looksLikeWorkstreamCreationPromise(fullContent))) {
+                  if (round === 0 && pendingWorkstreamArgsFromHistory && (isWorkstreamCreationConfirmationReply || looksLikeWorkstreamCreationPromise(fullContent))) {
                     return {
                       id: `recovered_workstream_${Date.now().toString(36)}`,
                       type: "function",

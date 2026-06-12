@@ -5963,7 +5963,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
     ): Promise<string | null> {
       let qb = supabaseAdmin
         .from("meetings")
-        .select("id, title, meeting_date, source, summary, transcript, analysis, created_at")
+        .select("id, title, meeting_date, source, sender_email, summary, transcript, analysis, created_at")
         .order("meeting_date", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(1);
@@ -5973,8 +5973,11 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const m = data[0];
       const dateStr = m.meeting_date ? new Date(m.meeting_date).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Date unavailable";
       const analysis = m.analysis && typeof m.analysis === "object" ? m.analysis as any : null;
-      const notes = String(m.transcript || m.summary || analysis?.summary || "").trim() || "No transcript or notes content is available for this meeting yet.";
-      const srcLabel = m.source === "plaud" ? "Plaud" : m.source === "gemini" ? "Google Meet (Gemini)" : (m.source || "Meetings DB");
+      const rawNotes = String(m.transcript || m.summary || analysis?.summary || "").trim();
+      const isGoogleMeet = m.source === "gemini" || m.source === "google_meet" || /gemini-notes@google\.com/i.test(String(m.sender_email || ""));
+      const cleanedNotes = isGoogleMeet ? stripGeminiBoilerplate(rawNotes) : rawNotes;
+      const notes = cleanedNotes || "No transcript or notes content is available for this meeting yet.";
+      const srcLabel = m.source === "plaud" ? "Plaud" : isGoogleMeet ? "Google Meet (Gemini)" : (m.source || "Meetings DB");
       return `## ${m.title?.trim() || "Latest meeting"}\n\n- **Date:** ${dateStr}\n- **Source:** ${srcLabel} (from the meetings database)\n\n${notes.slice(0, 40000)}`;
     }
 

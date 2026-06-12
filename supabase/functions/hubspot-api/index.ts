@@ -1051,6 +1051,131 @@ function buildTeamBriefingSummary(companiesPayload: any, dealsPayload: any, cont
   });
 }
 
+async function fetchFormSubmissionsList(
+  token: string,
+  source: CredentialSource,
+  form: any,
+  limit: number,
+) {
+  const formId = form?.id ?? form?.guid;
+  if (!formId) {
+    return { form_name: form?.name ?? null, form_id: null, submissions: [], truncated: false };
+  }
+  type SubRow = {
+    contact_id: string | null;
+    email: string | null;
+    first: string | null;
+    last: string | null;
+    submitted_at: string | null;
+  };
+  const rows: SubRow[] = [];
+  let after: string | null = null;
+  let usedFallback = false;
+  let pages = 0;
+  const MAX_PAGES = 40;
+  let truncated = false;
+
+  outer: while (pages < MAX_PAGES && rows.length < limit) {
+    pages++;
+    const v3 = `/marketing/v3/forms/${formId}/submissions?limit=50${after ? `&after=${encodeURIComponent(after)}` : ""}`;
+    const v1 = `/form-integrations/v1/submissions/forms/${formId}?limit=50${after ? `&after=${encodeURIComponent(after)}` : ""}`;
+    const path = usedFallback ? v1 : v3;
+    let resp: any;
+    try {
+      resp = await hubspotApi(path, token, "summary", source);
+    } catch (err) {
+      const status = err instanceof ProviderRequestError ? err.status : 0;
+      if (!usedFallback && pages === 1 && (status === 404 || status === 410 || status === 400)) {
+        usedFallback = true;
+        pages = 0;
+        after = null;
+        continue;
+      }
+      throw err;
+    }
+    const results: any[] = Array.isArray(resp?.results) ? resp.results : [];
+    for (const sub of results) {
+      const tsRaw = sub?.submittedAt;
+      const ts = typeof tsRaw === "number"
+        ? new Date(tsRaw).toISOString()
+        : typeof tsRaw === "string"
+        ? tsRaw
+        : null;
+      const vid = sub?.contact?.vid ?? sub?.contactId ?? null;
+      const values: any[] = Array.isArray(sub?.values) ? sub.values : [];
+      const getVal = (name: string) => {
+        const f = values.find((v) => typeof v?.name === "string" && v.name.toLowerCase() === name);
+        return f?.value != null ? String(f.value) : null;
+      };
+      rows.push({
+        contact_id: vid ? String(vid) : null,
+        email: getVal("email")?.toLowerCase() ?? null,
+        first: getVal("firstname"),
+        last: getVal("lastname"),
+        submitted_at: ts,
+      });
+      if (rows.length >= limit) {
+        truncated = true;
+        break outer;
+      }
+    }
+    const next = resp?.paging?.next?.after ?? null;
+    if (!next) break;
+    after = next;
+  }
+
+  const ids = [...new Set(rows.map((r) => r.contact_id).filter(Boolean) as string[])];
+  const emails = [...new Set(rows.map((r) => r.email).filter(Boolean) as string[])];
+  const props = ["firstname", "lastname", "email", "city", "country"];
+  type Enrich = { first: string | null; last: string | null; email: string | null; city: string | null; country: string | null };
+  const map = new Map<string, Enrich>();
+
+  async function batchRead(values: string[], idProperty?: string) {
+    for (let i = 0; i < values.length; i += 100) {
+      const inputs = values.slice(i, i + 100).map((v) => ({ id: v }));
+      try {
+        const body: any = { properties: props, inputs };
+        if (idProperty) body.idProperty = idProperty;
+        const resp = await hubspotApiPost("/crm/v3/objects/contacts/batch/read", body, token, "summary", source);
+        const out: any[] = Array.isArray(resp?.results) ? resp.results : [];
+        for (const c of out) {
+          const id = String(c?.id ?? "");
+          const p = c?.properties ?? {};
+          const entry: Enrich = {
+            first: p.firstname || null,
+            last: p.lastname || null,
+            email: p.email ? String(p.email).toLowerCase() : null,
+            city: p.city || null,
+            country: p.country || null,
+          };
+          if (id) map.set(id, entry);
+          if (entry.email) map.set(`email:${entry.email}`, entry);
+        }
+      } catch (err) {
+        logHubspot("form_submissions enrich failed", { count: inputs.length, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  }
+  if (ids.length) await batchRead(ids);
+  if (emails.length) await batchRead(emails, "email");
+
+  const submissions = rows.map((r) => {
+    const enrich = (r.contact_id && map.get(r.contact_id)) || (r.email && map.get(`email:${r.email}`)) || null;
+    const first = r.first || enrich?.first || null;
+    const last = r.last || enrich?.last || null;
+    const name = [first, last].filter(Boolean).join(" ").trim() || null;
+    return {
+      name,
+      email: r.email || enrich?.email || null,
+      city: enrich?.city || null,
+      country: enrich?.country || null,
+      submitted_at: r.submitted_at,
+    };
+  });
+
+  return { form_name: form?.name ?? null, form_id: String(formId), submissions, truncated };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 

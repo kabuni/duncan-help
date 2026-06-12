@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Settings as SettingsIcon, User, UserCheck, Users } from "lucide-react";
+import { Settings as SettingsIcon, User, UserCheck, Users, Mail } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useIsAdmin } from "@/hooks/useUserRoles";
@@ -8,6 +8,9 @@ import { Separator } from "@/components/ui/separator";
 import { LogOut } from "lucide-react";
 import AccountApprovals from "@/components/settings/AccountApprovals";
 import AdminUserManagement from "@/components/settings/AdminUserManagement";
+import WorkspaceWelcomeAutomation from "@/components/settings/WorkspaceWelcomeAutomation";
+
+
 
 
 const Settings = () => {
@@ -63,6 +66,26 @@ const Settings = () => {
               <AdminUserManagement />
             </motion.section>
           )}
+
+          {/* Admin: Workspace Welcome Automation */}
+          {isAdmin && (
+            <motion.section
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.08 }}
+              className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-6"
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Mail className="h-4 w-4 text-primary" />
+                <h3 className="text-sm font-semibold text-foreground">Workspace Welcome Emails</h3>
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Automatically email new Google Workspace users when their account is created.
+              </p>
+              <WorkspaceWelcomeAutomation />
+            </motion.section>
+          )}
+
 
 
           {/* Account Section */}

@@ -7317,20 +7317,62 @@ Format as a natural, readable summary with clear sections. If a section has no d
         // hard_error / partial / no envelope = not verified.
         const envelopeOk = parsed?.ok === true && parsed?.verified === true;
         const status = parsed?.status ?? (envelopeOk ? "success" : "hard_error");
+        let verifiedAfter = parsed?.after ?? null;
+        let verificationError: string | null = null;
+
+        if (row.tool_name === "create_workstream_card" && envelopeOk) {
+          const cardId = parsed?.card_id || parsed?.data?.card_id || parsed?.result?.card_id;
+          if (!cardId) {
+            verificationError = "Workstream card creation returned no card ID.";
+          } else {
+            const { data: verifiedCard, error: verifyCardErr } = await supabaseAdmin
+              .from("workstream_cards")
+              .select("id, title, status, project_tag, created_by")
+              .eq("id", cardId)
+              .maybeSingle();
+            if (verifyCardErr || !verifiedCard) {
+              verificationError = "Workstream card was not found after creation.";
+            } else {
+              const expectedTasks = Array.isArray(row.tool_args?.pending_tasks) ? row.tool_args.pending_tasks : [];
+              const expectedTitles = expectedTasks
+                .map((t: any) => String(t?.title || "").trim())
+                .filter(Boolean);
+              let taskVerification: any = { expected: expectedTitles.length, actual: 0, missing: [] };
+              if (expectedTitles.length > 0) {
+                const { data: taskRows, error: taskVerifyErr } = await supabaseAdmin
+                  .from("workstream_tasks")
+                  .select("id, title")
+                  .eq("card_id", cardId);
+                if (taskVerifyErr) {
+                  verificationError = `Workstream tasks could not be verified: ${taskVerifyErr.message}`;
+                } else {
+                  const actualTitles = new Set((taskRows || []).map((t: any) => String(t.title || "").trim().toLowerCase()));
+                  const missing = expectedTitles.filter((title: string) => !actualTitles.has(title.toLowerCase()));
+                  taskVerification = { expected: expectedTitles.length, actual: taskRows?.length || 0, missing };
+                  if (missing.length > 0) {
+                    verificationError = `Workstream card was created, but ${missing.length} task(s) did not verify.`;
+                  }
+                }
+              }
+              verifiedAfter = { ...verifiedCard, tasks: taskVerification };
+            }
+          }
+        }
+        const finalOk = envelopeOk && !verificationError;
 
         return new Response(JSON.stringify({
-          ok: envelopeOk,
-          verified: parsed?.verified === true,
-          status,
+          ok: finalOk,
+          verified: finalOk,
+          status: finalOk ? status : "hard_error",
           source: parsed?.source ?? null,
           tool: row.tool_name,
           summary: row.summary ?? null,
           before: parsed?.before ?? null,
-          after: parsed?.after ?? null,
-          error: parsed?.error ?? null,
+          after: verifiedAfter,
+          error: verificationError ?? parsed?.error ?? null,
           result: parsed,
         }), {
-          status: envelopeOk ? 200 : 502,
+          status: finalOk ? 200 : 502,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } catch (e: any) {

@@ -153,6 +153,7 @@ const Index = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const savingRef = useRef(false);
   const skipInitialHydrationChatIdRef = useRef<string | null>(null);

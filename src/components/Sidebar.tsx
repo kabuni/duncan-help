@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LayoutDashboard, Home, Settings, LogOut, X, Mail, FileText, MessageSquare, Calendar, GitBranch, Menu, Layers, Megaphone, Crown, Inbox, Receipt, Users, School, GraduationCap } from "lucide-react";
+import { LayoutDashboard, Home, Settings, LogOut, X, Mail, FileText, MessageSquare, Calendar, GitBranch, Menu, Layers, Megaphone, Crown, Inbox, Receipt, Users, School } from "lucide-react";
 import { canViewBriefing } from "@/lib/ceoAccess";
 import ChatHistory from "@/components/ChatHistory";
 import { useGeneralChatsContext } from "@/hooks/GeneralChatsContext";
@@ -14,6 +14,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useApprovalCount } from "@/hooks/useApprovals";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { useProfile } from "@/hooks/useProfile";
 
 
 
@@ -42,6 +44,7 @@ const Sidebar = ({
 }) => {
   const chatOps = useGeneralChatsContext();
   const { user, signOut } = useAuth();
+  const { profile } = useProfile();
   const navigate = useNavigate();
   const location = useLocation();
   const isProjectsRoute = location.pathname.startsWith("/projects");
@@ -289,6 +292,12 @@ const Sidebar = ({
       <div className="border-t border-border px-3 py-3 space-y-2">
         {user && (
           <div className="flex items-center gap-2">
+            <Avatar className="h-7 w-7 shrink-0">
+              <AvatarImage src={profile?.avatar_url || user?.user_metadata?.avatar_url || ""} alt="Profile" />
+              <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
+                {(profile?.display_name || user?.email || "?").charAt(0).toUpperCase() || "?"}
+              </AvatarFallback>
+            </Avatar>
             <button
               onClick={() => { signOut(); onMobileClose?.(); }}
               className="group flex-1 min-w-0 text-left rounded-md px-1.5 py-1 hover:bg-sidebar-accent transition-colors"
@@ -310,25 +319,31 @@ const Sidebar = ({
         )}
         <button
           onClick={() => { navigate("/learn"); onMobileClose?.(); }}
-          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+          className="flex w-full items-center rounded-md px-2 py-1 text-[10px] text-muted-foreground/70 hover:text-foreground hover:bg-sidebar-accent transition-colors"
         >
-          <GraduationCap className="h-3.5 w-3.5" />
           Learn Duncan
         </button>
-        <div className="flex items-center gap-2 px-2 pt-1 text-[10px] text-muted-foreground/70">
+        <div className="flex items-center gap-2 px-2 text-[10px] text-muted-foreground/70">
           <a href="https://duncan.help/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Privacy</a>
           <span aria-hidden>·</span>
           <a href="https://duncan.help/terms" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Terms</a>
-          <button
-            onClick={() => setShowModal(true)}
-            className="ml-auto flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/70 hover:text-foreground hover:bg-sidebar-accent transition-colors"
-            title="Settings"
-            aria-label="Settings"
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="ml-auto flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/70 hover:text-foreground hover:bg-sidebar-accent transition-colors"
+                  aria-label="Settings"
+                >
+                  <Settings className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p className="text-xs">Settings</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
-
       </div>
     </aside>
   );

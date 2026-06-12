@@ -6264,10 +6264,21 @@ Format as a natural, readable summary with clear sections. If a section has no d
         console.log(`[intent-filter] matched=${intentMatched} tools=${filteredTools.length}/${tools.length}`);
       }
     }
+    if (isWorkstreamCreationConfirmationReply) {
+      const seen = new Set<string>();
+      filteredTools = [...ALWAYS_ON_TOOLS, ...WORKSTREAM_TOOLS].filter((t: any) => {
+        const name = t?.function?.name;
+        if (!name || seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      });
+      intentMatched = true;
+      console.log(`[intent-filter] workstream confirmation override tools=${filteredTools.length}/${tools.length}`);
+    }
 
     // Tool-first guardrail signal: data-bound intents must ground their answer in tools.
     const DATA_INTENT_RE = /\b(meeting|email|inbox|calendar|event|workstream|task|planner|kpi|metric|invoice|xero|devops|work item|drive|document|slack|candidate|recruit|brief|status|summary|report)\b/i;
-    const isDataIntent = intentMatched || DATA_INTENT_RE.test(latestUserText);
+    const isDataIntent = intentMatched || isWorkstreamCreationConfirmationReply || DATA_INTENT_RE.test(latestUserText);
 
     // Phase 4: backfill the unified `turn` readout now that all signals are computed.
     turn.intentMatched = intentMatched;

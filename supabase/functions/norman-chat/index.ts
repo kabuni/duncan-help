@@ -5553,24 +5553,15 @@ Format as a natural, readable summary with clear sections. If a section has no d
     const RECENT_TURN_WINDOW = 8;
     const recentMessages = messages.slice(-RECENT_TURN_WINDOW);
     const recentPriorUserMessages = recentMessages.filter((m: any) => m?.role === "user" && m !== latestUserMessage);
-    const sourceAlreadyChosen = recentMessages.some((m: any) => {
-      if (m?.role !== "user") return false;
-      const txt = extractPlainText(m?.content);
-      return MEETING_SOURCE_MENTIONED_RE.test(txt);
-    });
-    const sourceChosenForPendingMeeting =
-      MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
-      recentPriorUserMessages.some((m: any) => SOURCE_AMBIGUOUS_MEETING_RE.test(extractPlainText(m?.content)));
+    // Source disambiguation removed — the Meetings DB is the canonical source
+    // and the smart latest-meeting router (below) handles Gmail-only "latest"
+    // lookups. We keep these constants pinned to `false` to preserve the
+    // downstream `turn.*` readout shape without re-prompting the user.
+    const sourceAlreadyChosen = false;
+    const sourceChosenForPendingMeeting = false;
+    const mustAskMeetingSource = false;
+    const explicitSourceMeetingRequest = false;
 
-    const mustAskMeetingSource =
-      SOURCE_AMBIGUOUS_MEETING_RE.test(latestUserText) &&
-      !MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
-      !EXPLICIT_OWNERSHIP_MEETING_RE.test(latestUserText) &&
-      !sourceAlreadyChosen;
-    const explicitSourceMeetingRequest =
-      SOURCE_AMBIGUOUS_MEETING_RE.test(latestUserText) &&
-      MEETING_SOURCE_MENTIONED_RE.test(latestUserText) &&
-      !EXPLICIT_OWNERSHIP_MEETING_RE.test(latestUserText);
 
     const buildTextSseResponse = (content: string) => {
       const payload = `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\ndata: [DONE]\n\n`;

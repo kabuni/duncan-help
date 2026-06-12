@@ -112,7 +112,7 @@ Your capabilities:
    • **Internal usage stats** — workstream cards/tasks (RYG), recruitment pipeline, purchase orders, meetings, issues, team activity (use get_workstream_analytics, get_recruitment_analytics, get_team_activity_analytics, get_operational_summary).
    • **Website analytics (GA4)** — active users, sessions, page views, engagement rate, top pages, countries, cities, devices, demographics, traffic sources (use get_google_analytics_dashboard).
    When the user asks anything analytics-related ("how are we doing", "performance", "traffic", "pipeline", "what's the status", "report"), call the relevant tools — combine multiple sources when the question spans domains. Default time window is **last 7 days** unless the user specifies otherwise. Always respond as an **executive summary**: 3–5 headline metrics first, RYG status indicator, one short narrative paragraph, then a brief "What to watch" line. Only expand into full tables if the user explicitly asks for a breakdown. Never dump raw JSON.
-- **Workstream Management (Agentic)**: You can CREATE, UPDATE, and manage workstream cards and tasks directly. When a user describes a workflow, project plan, or set of tasks, proactively break it down into workstream cards with tasks. IMPORTANT: When creating cards, they are ALWAYS auto-assigned to the creator only. Do NOT try to assign cards to others during creation. If the user wants to assign cards to other team members, use update_workstream_card AFTER creation. Use list_team_members to resolve names to user IDs. When assigning tasks to people, use check_team_availability first to look at their calendars and find suitable time slots. Suggest specific times based on their availability. Available project tags: 'Lightning Strike Event', 'Website', 'K10 App', 'School Integrations'. Default status is 'amber' (Yellow) for new cards. When the user says "create", "set up", or "build the workflow", execute directly. Otherwise, present the plan first and ask for confirmation before creating. DEDUPLICATION: The create_workstream_card tool automatically prevents duplicates — if a card with the same title and project_tag already exists for the user, it returns the existing card instead of creating a new one. NEVER call create_workstream_card more than once for the same card title in a single conversation. **TASK CREATION RULE (MANDATORY):** add_tasks_to_card does NOT require user confirmation — it executes immediately. After ANY successful create_workstream_card result (whether newly created OR already_existed=true), if you have tasks to add, you MUST immediately call add_tasks_to_card in the SAME turn with the returned card_id. Do NOT respond with another preview/"awaiting confirmation" message — the card is already confirmed. Do NOT call create_workstream_card again. Resolve assignee names via list_team_members and pass assignee_user_ids per task. If the user explicitly says "add the tasks" / "add tasks as well" / "go ahead with tasks", call add_tasks_to_card directly — no further preview, no confirmation step.
+- **Workstream Management (Agentic)**: You can CREATE, UPDATE, and manage workstream cards and tasks directly. When a user describes a workflow, project plan, or set of tasks, proactively break it down into a workstream card WITH its tasks. IMPORTANT: When creating cards, they are ALWAYS auto-assigned to the creator only. Do NOT try to assign cards to others during creation. If the user wants to assign cards to other team members, use update_workstream_card AFTER creation. Use list_team_members to resolve names to user IDs. Available project tags: 'Lightning Strike Event', 'Website', 'K10 App', 'School Integrations'. Default status is 'amber' (Yellow) for new cards. Always present the plan first (card title + tasks) and ask for confirmation before creating. **ATOMIC CARD+TASKS RULE (MANDATORY):** When the user has described tasks/action items for a card, ALWAYS pass them via the pending_tasks parameter on create_workstream_card in the SAME call. The executor will create the card and all its tasks atomically when the user confirms — there is no follow-up turn after confirmation. NEVER preview a card without its tasks and then plan to call add_tasks_to_card afterwards; the model will not be invoked again. Only use add_tasks_to_card to ADD MORE tasks to a card that already exists from an earlier turn. DEDUPLICATION: create_workstream_card prevents duplicate cards by title+project_tag; if the card already exists, its pending_tasks are still added (with per-title dedup). NEVER call create_workstream_card more than once for the same card title in a single conversation.
 - **Planner / Key Events Diary (Agentic)**: You can READ and UPDATE the Planner. Use list_planner_events to surface upcoming events (it returns calendar_id, google_event_id, start_tz and source_type so you can route correctly). Use update_planner_event_meta to set Duncan metadata. **For ANY date/time change — "move", "reschedule", "postpone", "push to tomorrow", "change time" — ALWAYS use reschedule_event. Do NOT use update_calendar_event for reschedules; it cannot mutate local Planner rows and does not verify success.** reschedule_event is routing-aware (planner vs Google) and returns the canonical envelope with \`before\` / \`after\` payload. The global Mutation Truth Rule at the top of this prompt applies — only claim a reschedule succeeded when \`ok === true && verified === true\`. Always show a brief preview ("I will move Lightning Strike to tomorrow 14:00–15:00 BST — confirm?") before any write.
 - **Google Forms**: You can fill and submit pre-configured Google Forms on behalf of the user. You can also parse a Google Form URL to automatically extract its fields and save it as a new pre-configured form. When a user asks to fill a form, first list available forms, then ask each required field ONE AT A TIME as a conversational question. Wait for the user to answer each question before asking the next. After collecting all answers, confirm the details and submit. When a user provides a Google Form URL, use parse_google_form to extract the fields, show the parsed result to the user for confirmation, then save it with save_parsed_google_form.
 
@@ -1801,7 +1801,7 @@ const WORKSTREAM_TOOLS = [
     type: "function",
     function: {
       name: "create_workstream_card",
-      description: "Create a new workstream card. The card is automatically assigned ONLY to the creator (current user). To assign to others, use update_workstream_card after creation. Returns the created card ID for chaining with add_tasks_to_card.",
+      description: "Create a new workstream card, optionally with its initial tasks in the same call. The card is automatically assigned ONLY to the creator. IMPORTANT: when the user has described tasks/action items for this card, ALWAYS pass them in `pending_tasks` so they are created atomically when the user confirms the card. This avoids a second confirmation step and a separate add_tasks_to_card round-trip. To assign the card to others, use update_workstream_card after creation.",
       parameters: {
         type: "object",
         properties: {
@@ -1811,6 +1811,20 @@ const WORKSTREAM_TOOLS = [
           project_tag: { type: "string", enum: ["Lightning Strike Event", "Website", "K10 App", "School Integrations"], description: "Project tag" },
           priority: { type: "string", enum: ["low", "medium", "high", "urgent"], description: "Priority (default: medium)" },
           due_date: { type: "string", description: "Due date in YYYY-MM-DD format" },
+          pending_tasks: {
+            type: "array",
+            description: "Optional initial tasks to create together with the card (atomically after user confirmation). Use this whenever the user has described tasks/action items — do NOT split into a separate add_tasks_to_card call.",
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string", description: "Task title" },
+                description: { type: "string", description: "Task description" },
+                due_date: { type: "string", description: "Due date in YYYY-MM-DD" },
+                assignee_user_ids: { type: "array", items: { type: "string" }, description: "User IDs to assign (resolve via list_team_members)" },
+              },
+              required: ["title"],
+            },
+          },
         },
         required: ["title"],
       },
@@ -2352,6 +2366,59 @@ async function executeWorkstreamTool(
 
 
     case "create_workstream_card": {
+      // Shared helper to insert pending_tasks atomically after card creation/dedup.
+      const insertPendingTasks = async (cardId: string, pendingTasks: any[]) => {
+        if (!Array.isArray(pendingTasks) || pendingTasks.length === 0) {
+          return { tasks_created: 0, tasks_skipped: 0, tasks: [], skipped: [] };
+        }
+        const { data: existingTasks } = await supabaseAdmin
+          .from("workstream_tasks")
+          .select("title")
+          .eq("card_id", cardId);
+        const existingTitles = new Set((existingTasks || []).map((t: any) => t.title.toLowerCase()));
+        const created: any[] = [];
+        const skipped: string[] = [];
+        for (let i = 0; i < pendingTasks.length; i++) {
+          const t = pendingTasks[i];
+          if (!t?.title) continue;
+          if (existingTitles.has(String(t.title).toLowerCase())) {
+            skipped.push(t.title);
+            continue;
+          }
+          const { data: task, error: taskErr } = await supabaseAdmin
+            .from("workstream_tasks")
+            .insert({
+              card_id: cardId,
+              title: t.title,
+              description: t.description || "",
+              due_date: t.due_date || null,
+              sort_order: i,
+              completed: false,
+            })
+            .select("id, title")
+            .single();
+          if (taskErr) {
+            console.error(`[create_workstream_card] task insert failed "${t.title}":`, taskErr.message);
+            continue;
+          }
+          if (Array.isArray(t.assignee_user_ids) && t.assignee_user_ids.length > 0) {
+            const rows = t.assignee_user_ids.map((uid: string) => ({ task_id: task.id, user_id: uid }));
+            await supabaseAdmin.from("workstream_task_assignees").insert(rows);
+          }
+          created.push({ id: task.id, title: task.title });
+          existingTitles.add(String(task.title).toLowerCase());
+        }
+        if (created.length > 0) {
+          await supabaseAdmin.from("workstream_activity").insert({
+            card_id: cardId,
+            user_id: userId,
+            action: "tasks_added",
+            details: { task_count: created.length, created_by_duncan: true, atomic_with_card: true },
+          });
+        }
+        return { tasks_created: created.length, tasks_skipped: skipped.length, tasks: created, skipped };
+      };
+
       // Deduplication: check if a card with the same title + project_tag already exists for this creator
       const dedupQuery = supabaseAdmin
         .from("workstream_cards")
@@ -2367,6 +2434,7 @@ async function executeWorkstreamTool(
       const { data: existing } = await dedupQuery.limit(1);
 
       if (existing && existing.length > 0) {
+        const taskResult = await insertPendingTasks(existing[0].id, args.pending_tasks || []);
         return {
           success: true,
           card_id: existing[0].id,
@@ -2375,8 +2443,8 @@ async function executeWorkstreamTool(
           project_tag: existing[0].project_tag,
           assigned_to: "creator (you)",
           already_existed: true,
-          message: `Card already exists (id=${existing[0].id}) — no duplicate created. NEXT STEP: if the user asked for tasks, IMMEDIATELY call add_tasks_to_card with this card_id in the same turn. Do NOT re-call create_workstream_card. Do NOT show another preview/confirmation — the card is live.`,
-          next_action: "call add_tasks_to_card with card_id if tasks pending",
+          ...taskResult,
+          message: `Card already exists (id=${existing[0].id}). ${taskResult.tasks_created} task(s) added, ${taskResult.tasks_skipped} skipped as duplicates.`,
         };
       }
 
@@ -2413,6 +2481,8 @@ async function executeWorkstreamTool(
         details: { title: card.title, created_by_duncan: true, auto_assigned_to_creator: true },
       });
 
+      const taskResult = await insertPendingTasks(card.id, args.pending_tasks || []);
+
       return {
         success: true,
         card_id: card.id,
@@ -2420,8 +2490,8 @@ async function executeWorkstreamTool(
         status: card.status,
         project_tag: card.project_tag,
         assigned_to: "creator (you)",
-        message: `Card created (id=${card.id}). NEXT STEP: if you previewed tasks for this card, IMMEDIATELY call add_tasks_to_card with this card_id in the same turn — no further confirmation needed.`,
-        next_action: "call add_tasks_to_card with card_id if tasks pending",
+        ...taskResult,
+        message: `Card created (id=${card.id}) with ${taskResult.tasks_created} task(s).`,
       };
     }
 

@@ -90,7 +90,7 @@ export default function Learn() {
                 )}
                 {m.cta && (
                   <button
-                    onClick={() => navigate(m.cta!.to)}
+                    onClick={() => handleModuleCta(m.id, m.cta!.to)}
                     className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors self-start"
                   >
                     {m.cta.label} <ArrowRight className="h-3 w-3" />

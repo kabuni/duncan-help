@@ -151,11 +151,14 @@ When filling Google Forms:
 - NEVER ask a question that doesn't correspond to a field in the form data. If you find yourself about to ask something not in the fields list, STOP.
 
 When working with calendar:
-- Use the calendar tools to fetch, create, update, or delete events
-- Always confirm destructive actions before executing
-- Format dates and times clearly for the user
-- If creating events, ask for confirmation of the details before creating
-- **Cancelling / deleting events**: ALWAYS call \`delete_calendar_event\` to action the cancellation. The tool automatically uses Duncan's organizer identity when Duncan (duncan@kabuni.com) is the organizer, so the cancellation propagates to ALL attendees via \`sendUpdates=all\`. DO NOT tell the user "this only cancels it for you" or "Duncan needs to cancel it company-wide" or add any caveat about partial cancellation — that is factually wrong. After the user confirms, just call the tool and report the result. If the tool returns an error, surface the actual error message verbatim; do not invent a fallback narrative.
+- Use the calendar tools to fetch, create, update, or delete events.
+- Format dates and times clearly for the user.
+- **CALENDAR INTENT ROUTING (HARD RULE):** Phrases like "book a meeting", "schedule a meeting", "set up a meeting", "create an event", "send a calendar invite", "arrange a call", "put X on my calendar", "block time", "find time with…" ALWAYS map to \`create_calendar_event\` (or \`list_calendar_events\` / \`check_team_availability\` if the user is asking about availability first). They NEVER map to \`create_workstream_card\`. A "meeting" is a calendar event, not a workstream task — only route to \`create_workstream_card\` if the user explicitly says "task", "to-do", "action item", "workstream", "card", or "follow-up to track".
+- **CREATING EVENTS — NO PROSE CONFIRMATION.** Do NOT write a text-only preview such as "I'll book Alex tomorrow at 14:00 — confirm?". Call \`create_calendar_event\` DIRECTLY with the parsed summary, startDateTime, endDateTime, attendees, location, and description. The write-confirmation interceptor will store the pending action in \`chat_write_pending\` and render the real Confirm/Cancel card in the chat UI — the user clicks the button, not a "confirm" message. This is identical to how \`create_workstream_card\` works.
+- If a required detail is genuinely missing (e.g. no date, no attendee, no duration) and cannot be reasonably inferred, ask ONE concise clarifying question for ONLY the missing field — never wrap the full event in a prose "confirm?" preview.
+- **Updates / reschedules:** for date/time changes on Planner events use \`reschedule_event\` (see Planner section). For pure Google Calendar events, call \`update_calendar_event\` directly — same interceptor, same UI confirm card, no prose preview.
+- **Cancelling / deleting events**: ALWAYS call \`delete_calendar_event\` directly — the interceptor will render the Confirm/Cancel card. The tool automatically uses Duncan's organizer identity when Duncan (duncan@kabuni.com) is the organizer, so the cancellation propagates to ALL attendees via \`sendUpdates=all\`. DO NOT tell the user "this only cancels it for you" or "Duncan needs to cancel it company-wide" or add any caveat about partial cancellation — that is factually wrong. If the tool returns an error, surface the actual error message verbatim; do not invent a fallback narrative.
+- **POST-CREATE REPLY RULE:** After \`create_calendar_event\` returns \`pending_confirmation\`, say only that the event is queued and awaiting the user's click in the chat UI. After it returns \`ok === true && verified === true\`, confirm in PAST tense in one short message (e.g. "Booked **Lightning Strike sync** with Alex for Fri 14:00–15:00."). Never use future-tense promises like "I'll book it now" or "let you know once done".
 
 When working with documents and answering ANY informational/knowledge question:
 - **KNOWLEDGE BASE FIRST — ALWAYS.** Before any other retrieval tool (Google Drive, Azure Blob, Gmail search, web search, generic reasoning), call \`search_knowledge_base\` with a descriptive natural-language query. The Knowledge Base is the canonical RAG store of company documents (handbooks, policies, brochures, playbooks, lists, reports) uploaded via the Knowledge Base UI.
@@ -232,7 +235,7 @@ const CALENDAR_TOOLS = [
     type: "function",
     function: {
       name: "create_calendar_event",
-      description: "Create a new calendar event. Use this when the user wants to schedule a meeting or add an event.",
+      description: "Create a new Google Calendar event. Use this whenever the user wants to book, schedule, set up, or arrange a meeting/call/event, or put time on the calendar. Call this DIRECTLY with the parsed details — do NOT write a text-only 'confirm?' preview first. The write-confirmation interceptor renders the Confirm/Cancel UI card automatically.",
       parameters: {
         type: "object",
         properties: {
@@ -6150,6 +6153,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const isAffirmative = /^(create|create now|create it|yes create|yes|y|yeah|yep|ok|okay|sure|confirmed|confirm|go|go ahead|please do|do it|apply)$/i.test(normalized);
       if (!isAffirmative) return false;
       if (/verified=true|Card created \(id=|Workstreams — created|workstream card created/i.test(recentConversationText)) return false;
+      // Do not hijack calendar/meeting previews into workstream cards.
+      if (/\b(book|schedule|calendar|meeting|invite|reschedul|event)\b/i.test(recentConversationText) &&
+          !/\b(workstream|task|to-?do|action item|card)\b/i.test(recentConversationText)) return false;
       return !!pendingWorkstreamArgsFromHistory || /Workstreams\s+—\s+ready to create|Creating Workstreams card|pending your confirmation|card \+ tasks|Tasks \(grouped by owner|I[’']m going to create|I will create|Create the card/i.test(recentConversationText) &&
         /create_workstream_card|Workstream|workstream|card/i.test(recentConversationText);
     })();
@@ -6160,6 +6166,22 @@ Format as a natural, readable summary with clear sections. If a section has no d
     if (isWorkstreamCreationConfirmationReply) {
       shouldBypassTools = false;
       systemContent += `\n\n## CURRENT REQUEST OVERRIDE — WORKSTREAM CREATION CONFIRMATION\nThe latest user reply is explicitly confirming the most recent Workstreams preview. Do not answer with a promise and do not ask for another confirmation. Immediately call \`create_workstream_card\` using the card fields from the most recent assistant preview. Extract every listed task from that preview and pass them in \`pending_tasks\` in the same tool call. **Assignees:** if the preview lists named card-level or task-level assignees, include them as user IDs in \`assignee_user_ids\` (card) and per-task \`assignee_user_ids\` — resolve names against the most recent \`list_team_members\` tool result in this conversation. If no list_team_members result is available and assignees are named, call \`list_team_members\` first, then immediately call \`create_workstream_card\` with the resolved IDs. **Reply rule:** NEVER say "I'll confirm once it's done", "creating now", "let you know" or any future-tense promise. After the tool returns, only say it was created if the tool result has \`ok === true\` and \`verified === true\`, in PAST tense, including the card id, task count, and assignee names (or "just you" if only the creator).`;
+    }
+    const isCalendarConfirmationReply = (() => {
+      const normalized = latestUserText.trim().toLowerCase().replace(/[.!?]+$/g, "");
+      const isAffirmative = /^(book|book it|schedule|schedule it|create|create it|yes|y|yeah|yep|ok|okay|sure|confirmed|confirm|go|go ahead|please do|do it|send it)$/i.test(normalized);
+      if (!isAffirmative) return false;
+      // A recent assistant turn previewed a calendar event, and it isn't already booked.
+      if (/Event created|event booked|Calendar event created|verified=true.*calendar/i.test(recentConversationText)) return false;
+      const hasCalendarPreview = /\b(book|schedule|invite|calendar|meeting|event)\b/i.test(recentConversationText) &&
+        /\b(\d{1,2}:\d{2}|am\b|pm\b|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2})\b/i.test(recentConversationText);
+      const looksLikeWorkstream = /\b(workstream|task|to-?do|action item|card|pending_tasks)\b/i.test(recentConversationText) &&
+        !/\bmeeting\b|\bcalendar\b|\binvite\b/i.test(recentConversationText);
+      return hasCalendarPreview && !looksLikeWorkstream;
+    })();
+    if (isCalendarConfirmationReply) {
+      shouldBypassTools = false;
+      systemContent += `\n\n## CURRENT REQUEST OVERRIDE — CALENDAR EVENT CONFIRMATION\nThe latest user reply is confirming a calendar event previewed in the most recent assistant turn. You MUST immediately call \`create_calendar_event\` (or \`update_calendar_event\` / \`reschedule_event\` if the preview was a change) using the summary, startDateTime, endDateTime, attendees, location, and description from that preview. **NEVER call \`create_workstream_card\` for this turn — "book a meeting" is a calendar action, not a workstream task.** Do not write another prose "confirm?" preview. The write-confirmation interceptor will store the pending action and render the Confirm/Cancel UI card; tell the user briefly that the event is queued for their click in the chat UI.`;
     }
 
     if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {

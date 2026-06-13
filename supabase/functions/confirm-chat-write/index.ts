@@ -72,7 +72,19 @@ Deno.serve(async (req) => {
 
     // Already executed? short-circuit idempotently.
     if (row.status === "executed") {
-      return json({ status: "executed", result: row.result, alreadyExecuted: true }, 200);
+      const prior = (row.result ?? {}) as any;
+      return json({
+        status: "executed",
+        ok: true,
+        verified: true,
+        alreadyExecuted: true,
+        tool: row.tool_name,
+        summary: row.summary ?? prior.summary ?? null,
+        source: prior.source ?? row.tool_name,
+        before: prior.before ?? null,
+        after: prior.after ?? null,
+        result: row.result,
+      }, 200);
     }
     if (row.status === "cancelled" || row.status === "expired" || row.status === "failed") {
       return json({ error: `Cannot confirm: action is ${row.status}` }, 409);

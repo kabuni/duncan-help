@@ -6167,6 +6167,22 @@ Format as a natural, readable summary with clear sections. If a section has no d
       shouldBypassTools = false;
       systemContent += `\n\n## CURRENT REQUEST OVERRIDE — WORKSTREAM CREATION CONFIRMATION\nThe latest user reply is explicitly confirming the most recent Workstreams preview. Do not answer with a promise and do not ask for another confirmation. Immediately call \`create_workstream_card\` using the card fields from the most recent assistant preview. Extract every listed task from that preview and pass them in \`pending_tasks\` in the same tool call. **Assignees:** if the preview lists named card-level or task-level assignees, include them as user IDs in \`assignee_user_ids\` (card) and per-task \`assignee_user_ids\` — resolve names against the most recent \`list_team_members\` tool result in this conversation. If no list_team_members result is available and assignees are named, call \`list_team_members\` first, then immediately call \`create_workstream_card\` with the resolved IDs. **Reply rule:** NEVER say "I'll confirm once it's done", "creating now", "let you know" or any future-tense promise. After the tool returns, only say it was created if the tool result has \`ok === true\` and \`verified === true\`, in PAST tense, including the card id, task count, and assignee names (or "just you" if only the creator).`;
     }
+    const isCalendarConfirmationReply = (() => {
+      const normalized = latestUserText.trim().toLowerCase().replace(/[.!?]+$/g, "");
+      const isAffirmative = /^(book|book it|schedule|schedule it|create|create it|yes|y|yeah|yep|ok|okay|sure|confirmed|confirm|go|go ahead|please do|do it|send it)$/i.test(normalized);
+      if (!isAffirmative) return false;
+      // A recent assistant turn previewed a calendar event, and it isn't already booked.
+      if (/Event created|event booked|Calendar event created|verified=true.*calendar/i.test(recentConversationText)) return false;
+      const hasCalendarPreview = /\b(book|schedule|invite|calendar|meeting|event)\b/i.test(recentConversationText) &&
+        /\b(\d{1,2}:\d{2}|am\b|pm\b|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2})\b/i.test(recentConversationText);
+      const looksLikeWorkstream = /\b(workstream|task|to-?do|action item|card|pending_tasks)\b/i.test(recentConversationText) &&
+        !/\bmeeting\b|\bcalendar\b|\binvite\b/i.test(recentConversationText);
+      return hasCalendarPreview && !looksLikeWorkstream;
+    })();
+    if (isCalendarConfirmationReply) {
+      shouldBypassTools = false;
+      systemContent += `\n\n## CURRENT REQUEST OVERRIDE — CALENDAR EVENT CONFIRMATION\nThe latest user reply is confirming a calendar event previewed in the most recent assistant turn. You MUST immediately call \`create_calendar_event\` (or \`update_calendar_event\` / \`reschedule_event\` if the preview was a change) using the summary, startDateTime, endDateTime, attendees, location, and description from that preview. **NEVER call \`create_workstream_card\` for this turn — "book a meeting" is a calendar action, not a workstream task.** Do not write another prose "confirm?" preview. The write-confirmation interceptor will store the pending action and render the Confirm/Cancel UI card; tell the user briefly that the event is queued for their click in the chat UI.`;
+    }
 
     if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {
       try {

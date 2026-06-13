@@ -468,6 +468,7 @@ export function useNormanChat() {
 
   const confirmWrite = useCallback(
     async (pendingId: string) => {
+      const pendingSnapshot = pendingWrites.find((p) => p.pendingId === pendingId);
       setPendingWrites((prev) => prev.map((p) => (p.pendingId === pendingId ? { ...p, state: "confirming" } : p)));
       try {
         const data = await callConfirmEndpoint(pendingId, "confirm");
@@ -478,12 +479,23 @@ export function useNormanChat() {
           );
           const where = data?.source === "google" ? "Google Calendar" : data?.source === "planner" ? "Planner" : null;
           toast.success(where ? `Verified — change applied in ${where}.` : "Verified — change applied.");
+
+          // Append a past-tense completion message so prior "queued / awaiting confirmation"
+          // wording is superseded by an explicit success message.
+          const toolName = pendingSnapshot?.toolName || data?.tool;
+          const args = pendingSnapshot?.args || {};
+          const after = data?.after || data?.result?.after || {};
+          const successText = buildPostExecutionMessage(toolName, args, after, where);
+          if (successText) {
+            setMessages((prev) => [...prev, { role: "assistant", content: successText }]);
+          }
         } else {
           const errMsg = data?.error || "The write did not verify. Nothing was persisted.";
           setPendingWrites((prev) =>
             prev.map((p) => (p.pendingId === pendingId ? { ...p, state: "failed", error: errMsg, result: data?.result ?? data } : p))
           );
           toast.error(errMsg);
+          setMessages((prev) => [...prev, { role: "assistant", content: `That action did not complete: ${errMsg}` }]);
         }
       } catch (e: any) {
         const msg = e?.message || "Confirmation failed";
@@ -493,7 +505,7 @@ export function useNormanChat() {
         toast.error(msg);
       }
     },
-    [callConfirmEndpoint]
+    [callConfirmEndpoint, pendingWrites]
   );
 
   const cancelWrite = useCallback(

@@ -5163,6 +5163,12 @@ async function executeCalendarTool(
     }
 
     case "create_calendar_event": {
+      // Meeting bookings ALWAYS create in the authenticated user's primary
+      // Google Calendar so they are the organiser and invites come from them.
+      // We deliberately do NOT use the Duncan | Planner shortcut here.
+      if (!accessToken) {
+        throw new Error("Please connect your Google Calendar in Integrations before scheduling meetings.");
+      }
       const event = {
         summary: args.summary,
         description: args.description,
@@ -5172,10 +5178,10 @@ async function executeCalendarTool(
         attendees: args.attendees?.map((email: string) => ({ email })),
       };
 
-      const url = `${GOOGLE_CALENDAR_API}/calendars/${writeCalendarId}/events?sendUpdates=all`;
+      const url = `${GOOGLE_CALENDAR_API}/calendars/primary/events?sendUpdates=all`;
       const response = await fetch(url, {
         method: "POST",
-        headers: writeHeaders,
+        headers,
         body: JSON.stringify(event),
       });
 
@@ -5184,7 +5190,7 @@ async function executeCalendarTool(
         throw new Error(`Failed to create event: ${error}`);
       }
       const created = await response.json();
-      return { ...created, _organised_by: duncan ? "duncan@kabuni.com" : "personal" };
+      return { ...created, _organised_by: "personal" };
     }
 
     case "update_calendar_event": {
@@ -7121,12 +7127,14 @@ Format as a natural, readable summary with clear sections. If a section has no d
           } else if (calendarToolNames.includes(tc.function.name)) {
             const writeTools = new Set(["create_calendar_event", "update_calendar_event", "delete_calendar_event"]);
             const isWrite = writeTools.has(tc.function.name);
-            // Admins can write via Duncan even without a personal calendar connection.
-            // Reads still require the user's personal token.
-            if (!calendarAccessToken && !(isWrite && duncanCalendar)) {
-              result = { error: "Google Calendar is not connected. Please connect it via the Integrations page." };
+            // Meeting creation always uses the user's personal calendar — no Duncan fallback.
+            // Update/delete may still fall back to Duncan for legacy Duncan-hosted events.
+            const allowDuncanFallback = isWrite && tc.function.name !== "create_calendar_event" && !!duncanCalendar;
+            if (!calendarAccessToken && !allowDuncanFallback) {
+              result = { error: "Please connect your Google Calendar in Integrations before scheduling meetings." };
             } else {
-              result = await withToolTimeout(tc.function.name, executeCalendarTool(tc.function.name, args, calendarAccessToken || "", resolvedIdentity, duncanCalendar));
+              const duncanArg = tc.function.name === "create_calendar_event" ? null : duncanCalendar;
+              result = await withToolTimeout(tc.function.name, executeCalendarTool(tc.function.name, args, calendarAccessToken || "", resolvedIdentity, duncanArg));
             }
 
           } else if (documentToolNames.includes(tc.function.name)) {

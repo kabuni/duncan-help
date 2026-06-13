@@ -37,6 +37,49 @@ export interface ToolStatus {
   error?: string;
 }
 
+/** Build a past-tense completion message after a verified write executes. */
+function buildPostExecutionMessage(
+  toolName: string | undefined,
+  args: any,
+  after: any,
+  where: string | null,
+): string {
+  const a = args || {};
+  const af = after || {};
+  const fmtWhen = (iso?: string) => {
+    if (!iso) return null;
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString(undefined, {
+        weekday: "short", day: "numeric", month: "short",
+        hour: "2-digit", minute: "2-digit",
+      });
+    } catch { return null; }
+  };
+  switch (toolName) {
+    case "create_calendar_event": {
+      const title = af.summary || a.summary || "event";
+      const when = fmtWhen(af.start?.dateTime || a.startDateTime);
+      const attendees = Array.isArray(a.attendees) && a.attendees.length
+        ? ` Invite sent to ${a.attendees.join(", ")}.` : "";
+      const loc = where ? ` in your ${where}` : "";
+      return `Booked **${title}**${when ? ` for ${when}` : ""}${loc}.${attendees}`;
+    }
+    case "update_calendar_event":
+      return `Updated **${af.summary || a.summary || "the event"}**.`;
+    case "send_gmail_email":
+      return `Sent the email${a.to ? ` to ${Array.isArray(a.to) ? a.to.join(", ") : a.to}` : ""}.`;
+    case "send_slack_message":
+      return `Posted the Slack message${a.channel ? ` to ${a.channel}` : ""}.`;
+    case "create_workstream_card":
+      return `Created **${a.title || "the workstream card"}**.`;
+    case "update_workstream_card":
+      return `Updated **${a.title || "the workstream card"}**.`;
+    default:
+      return `Done — change applied${where ? ` in ${where}` : ""}.`;
+  }
+}
+
 const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const normalizedSupabaseUrl =
   rawSupabaseUrl && rawSupabaseUrl !== "undefined" && rawSupabaseUrl !== "null"

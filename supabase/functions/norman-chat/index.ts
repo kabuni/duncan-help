@@ -158,7 +158,7 @@ When working with calendar:
 - If a required detail is genuinely missing (e.g. no date, no attendee, no duration) and cannot be reasonably inferred, ask ONE concise clarifying question for ONLY the missing field — never wrap the full event in a prose "confirm?" preview.
 - **Updates / reschedules:** for date/time changes on Planner events use \`reschedule_event\` (see Planner section). For pure Google Calendar events, call \`update_calendar_event\` directly — same interceptor, same UI confirm card, no prose preview.
 - **Cancelling / deleting events**: ALWAYS call \`delete_calendar_event\` directly — the interceptor will render the Confirm/Cancel card. The tool automatically uses Duncan's organizer identity when Duncan (duncan@kabuni.com) is the organizer, so the cancellation propagates to ALL attendees via \`sendUpdates=all\`. DO NOT tell the user "this only cancels it for you" or "Duncan needs to cancel it company-wide" or add any caveat about partial cancellation — that is factually wrong. If the tool returns an error, surface the actual error message verbatim; do not invent a fallback narrative.
-- **POST-CREATE REPLY RULE:** After \`create_calendar_event\` returns \`pending_confirmation\`, say only that the event is queued and awaiting the user's click in the chat UI. After it returns \`ok === true && verified === true\`, confirm in PAST tense in one short message (e.g. "Booked **Lightning Strike sync** with Alex for Fri 14:00–15:00."). Never use future-tense promises like "I'll book it now" or "let you know once done".
+- **POST-CREATE REPLY RULE:** After \`create_calendar_event\` returns \`ok === true && verified === true\`, confirm in PAST tense in one short message (e.g. "Booked **Lightning Strike sync** with Alex for Fri 14:00–15:00. Invite sent. Added to your Google Calendar."). If it returns \`pending_confirmation\`, say only that it's ready for the user to confirm in the chat UI — never imply it has been booked. Never use future-tense promises like "I'll book it now" or "let you know once done", and never say "queued / awaiting / click confirm / pending approval" after a verified success.
 
 When working with documents and answering ANY informational/knowledge question:
 - **KNOWLEDGE BASE FIRST — ALWAYS.** Before any other retrieval tool (Google Drive, Azure Blob, Gmail search, web search, generic reasoning), call \`search_knowledge_base\` with a descriptive natural-language query. The Knowledge Base is the canonical RAG store of company documents (handbooks, policies, brochures, playbooks, lists, reports) uploaded via the Knowledge Base UI.
@@ -6187,7 +6187,92 @@ Format as a natural, readable summary with clear sections. If a section has no d
     })();
     if (isCalendarConfirmationReply) {
       shouldBypassTools = false;
-      systemContent += `\n\n## CURRENT REQUEST OVERRIDE — CALENDAR EVENT CONFIRMATION\nThe latest user reply is confirming a calendar event previewed in the most recent assistant turn. You MUST immediately call \`create_calendar_event\` (or \`update_calendar_event\` / \`reschedule_event\` if the preview was a change) using the summary, startDateTime, endDateTime, attendees, location, and description from that preview. **NEVER call \`create_workstream_card\` for this turn — "book a meeting" is a calendar action, not a workstream task.** Do not write another prose "confirm?" preview. The write-confirmation interceptor will store the pending action and render the Confirm/Cancel UI card; tell the user briefly that the event is queued for their click in the chat UI.`;
+      systemContent += `\n\n## CURRENT REQUEST OVERRIDE — CALENDAR EVENT CONFIRMATION\nThe latest user reply is confirming a calendar event previewed in the most recent assistant turn. You MUST immediately call \`create_calendar_event\` (or \`update_calendar_event\` / \`reschedule_event\` if the preview was a change) using the summary, startDateTime, endDateTime, attendees, location, and description from that preview. **NEVER call \`create_workstream_card\` for this turn — "book a meeting" is a calendar action, not a workstream task.** Do not write another prose "confirm?" preview. After the tool returns with \`ok === true\` and \`verified === true\`, reply in ONE short PAST-tense message confirming the event was booked, the invite was sent, and it has been added to the user's Google Calendar. NEVER say the event is "queued", "awaiting", "pending", or that the user needs to click anything — by the time you reply, the event already exists in Google Calendar.`;
+    }
+
+    // Direct-execution shortcut: when the user typed an affirmative reply to a
+    // calendar preview AND a pending create_calendar_event row already exists
+    // for this user, execute it immediately and stream a past-tense success
+    // message — bypassing the model so it cannot regress into the stale
+    // "queued / awaiting your click" prose.
+    if (isCalendarConfirmationReply && calendarAccessToken) {
+      try {
+        const { data: pendingRow } = await supabaseAdmin
+          .from("chat_write_pending")
+          .select("*")
+          .eq("user_id", userId)
+          .in("tool_name", ["create_calendar_event", "update_calendar_event", "reschedule_event"])
+          .eq("status", "pending")
+          .gt("expires_at", new Date().toISOString())
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (pendingRow) {
+          const args = (pendingRow.tool_args ?? {}) as any;
+          const created = await executeCalendarTool(
+            pendingRow.tool_name,
+            args,
+            calendarAccessToken,
+            resolvedIdentity,
+            pendingRow.tool_name === "create_calendar_event" ? null : duncanCalendar,
+          );
+
+          const successResult = {
+            ok: true,
+            verified: true,
+            status: "success",
+            tool: pendingRow.tool_name,
+            source: pendingRow.tool_name,
+            after: created,
+            event_id: created?.id ?? null,
+            htmlLink: created?.htmlLink ?? null,
+          };
+
+          await supabaseAdmin
+            .from("chat_write_pending")
+            .update({
+              status: "executed",
+              result: successResult,
+              executed_at: new Date().toISOString(),
+            })
+            .eq("id", pendingRow.id);
+
+          // Build a clean past-tense confirmation.
+          const title = args?.summary || args?.title || "Meeting";
+          const tz = resolvedIdentity?.timezone || "UTC";
+          const fmt = (iso?: string) => {
+            if (!iso) return "";
+            try {
+              return new Intl.DateTimeFormat("en-GB", {
+                weekday: "short", day: "numeric", month: "short",
+                hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz,
+              }).format(new Date(iso));
+            } catch { return iso; }
+          };
+          const startStr = fmt(args?.startDateTime);
+          const endStr = (() => {
+            if (!args?.endDateTime) return "";
+            try {
+              return new Intl.DateTimeFormat("en-GB", {
+                hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz,
+              }).format(new Date(args.endDateTime));
+            } catch { return args.endDateTime; }
+          })();
+          const attendees: string[] = Array.isArray(args?.attendees) ? args.attendees : [];
+          const inviteLine = attendees.length > 0
+            ? `\nInvite sent to: ${attendees.join(", ")}`
+            : "";
+          const link = created?.htmlLink ? `\n[Open in Google Calendar](${created.htmlLink})` : "";
+          const content = `✅ **Meeting booked.**\n\n**${title}**\n${startStr}${endStr ? ` – ${endStr}` : ""}${inviteLine}\n\nThe event has been added to your Google Calendar.${link}`;
+          return buildTextSseResponse(content);
+        }
+      } catch (e: any) {
+        console.error("[calendar-confirm] direct execution failed:", e);
+        return buildTextSseResponse(
+          `I tried to book the event but it failed: ${e?.message || "unknown error"}. Please try again.`,
+        );
+      }
     }
 
     if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {

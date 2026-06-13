@@ -235,7 +235,7 @@ const CALENDAR_TOOLS = [
     type: "function",
     function: {
       name: "create_calendar_event",
-      description: "Create a new calendar event. Use this when the user wants to schedule a meeting or add an event.",
+      description: "Create a new Google Calendar event. Use this whenever the user wants to book, schedule, set up, or arrange a meeting/call/event, or put time on the calendar. Call this DIRECTLY with the parsed details — do NOT write a text-only 'confirm?' preview first. The write-confirmation interceptor renders the Confirm/Cancel UI card automatically.",
       parameters: {
         type: "object",
         properties: {

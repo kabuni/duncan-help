@@ -6153,6 +6153,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const isAffirmative = /^(create|create now|create it|yes create|yes|y|yeah|yep|ok|okay|sure|confirmed|confirm|go|go ahead|please do|do it|apply)$/i.test(normalized);
       if (!isAffirmative) return false;
       if (/verified=true|Card created \(id=|Workstreams — created|workstream card created/i.test(recentConversationText)) return false;
+      // Do not hijack calendar/meeting previews into workstream cards.
+      if (/\b(book|schedule|calendar|meeting|invite|reschedul|event)\b/i.test(recentConversationText) &&
+          !/\b(workstream|task|to-?do|action item|card)\b/i.test(recentConversationText)) return false;
       return !!pendingWorkstreamArgsFromHistory || /Workstreams\s+—\s+ready to create|Creating Workstreams card|pending your confirmation|card \+ tasks|Tasks \(grouped by owner|I[’']m going to create|I will create|Create the card/i.test(recentConversationText) &&
         /create_workstream_card|Workstream|workstream|card/i.test(recentConversationText);
     })();

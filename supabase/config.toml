@@ -212,3 +212,6 @@ verify_jwt = false
 
 [functions.test-workspace-welcome]
 verify_jwt = false
+
+[functions.duncan-calendar-delete-one]
+verify_jwt = false

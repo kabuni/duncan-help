@@ -37,6 +37,49 @@ export interface ToolStatus {
   error?: string;
 }
 
+/** Build a past-tense completion message after a verified write executes. */
+function buildPostExecutionMessage(
+  toolName: string | undefined,
+  args: any,
+  after: any,
+  where: string | null,
+): string {
+  const a = args || {};
+  const af = after || {};
+  const fmtWhen = (iso?: string) => {
+    if (!iso) return null;
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString(undefined, {
+        weekday: "short", day: "numeric", month: "short",
+        hour: "2-digit", minute: "2-digit",
+      });
+    } catch { return null; }
+  };
+  switch (toolName) {
+    case "create_calendar_event": {
+      const title = af.summary || a.summary || "event";
+      const when = fmtWhen(af.start?.dateTime || a.startDateTime);
+      const attendees = Array.isArray(a.attendees) && a.attendees.length
+        ? ` Invite sent to ${a.attendees.join(", ")}.` : "";
+      const loc = where ? ` in your ${where}` : "";
+      return `Booked **${title}**${when ? ` for ${when}` : ""}${loc}.${attendees}`;
+    }
+    case "update_calendar_event":
+      return `Updated **${af.summary || a.summary || "the event"}**.`;
+    case "send_gmail_email":
+      return `Sent the email${a.to ? ` to ${Array.isArray(a.to) ? a.to.join(", ") : a.to}` : ""}.`;
+    case "send_slack_message":
+      return `Posted the Slack message${a.channel ? ` to ${a.channel}` : ""}.`;
+    case "create_workstream_card":
+      return `Created **${a.title || "the workstream card"}**.`;
+    case "update_workstream_card":
+      return `Updated **${a.title || "the workstream card"}**.`;
+    default:
+      return `Done — change applied${where ? ` in ${where}` : ""}.`;
+  }
+}
+
 const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const normalizedSupabaseUrl =
   rawSupabaseUrl && rawSupabaseUrl !== "undefined" && rawSupabaseUrl !== "null"
@@ -468,6 +511,7 @@ export function useNormanChat() {
 
   const confirmWrite = useCallback(
     async (pendingId: string) => {
+      const pendingSnapshot = pendingWrites.find((p) => p.pendingId === pendingId);
       setPendingWrites((prev) => prev.map((p) => (p.pendingId === pendingId ? { ...p, state: "confirming" } : p)));
       try {
         const data = await callConfirmEndpoint(pendingId, "confirm");
@@ -478,12 +522,23 @@ export function useNormanChat() {
           );
           const where = data?.source === "google" ? "Google Calendar" : data?.source === "planner" ? "Planner" : null;
           toast.success(where ? `Verified — change applied in ${where}.` : "Verified — change applied.");
+
+          // Append a past-tense completion message so prior "queued / awaiting confirmation"
+          // wording is superseded by an explicit success message.
+          const toolName = pendingSnapshot?.toolName || data?.tool;
+          const args = pendingSnapshot?.args || {};
+          const after = data?.after || data?.result?.after || {};
+          const successText = buildPostExecutionMessage(toolName, args, after, where);
+          if (successText) {
+            setMessages((prev) => [...prev, { role: "assistant", content: successText }]);
+          }
         } else {
           const errMsg = data?.error || "The write did not verify. Nothing was persisted.";
           setPendingWrites((prev) =>
             prev.map((p) => (p.pendingId === pendingId ? { ...p, state: "failed", error: errMsg, result: data?.result ?? data } : p))
           );
           toast.error(errMsg);
+          setMessages((prev) => [...prev, { role: "assistant", content: `That action did not complete: ${errMsg}` }]);
         }
       } catch (e: any) {
         const msg = e?.message || "Confirmation failed";
@@ -493,7 +548,7 @@ export function useNormanChat() {
         toast.error(msg);
       }
     },
-    [callConfirmEndpoint]
+    [callConfirmEndpoint, pendingWrites]
   );
 
   const cancelWrite = useCallback(

@@ -5163,6 +5163,12 @@ async function executeCalendarTool(
     }
 
     case "create_calendar_event": {
+      // Meeting bookings ALWAYS create in the authenticated user's primary
+      // Google Calendar so they are the organiser and invites come from them.
+      // We deliberately do NOT use the Duncan | Planner shortcut here.
+      if (!accessToken) {
+        throw new Error("Please connect your Google Calendar in Integrations before scheduling meetings.");
+      }
       const event = {
         summary: args.summary,
         description: args.description,
@@ -5172,10 +5178,10 @@ async function executeCalendarTool(
         attendees: args.attendees?.map((email: string) => ({ email })),
       };
 
-      const url = `${GOOGLE_CALENDAR_API}/calendars/${writeCalendarId}/events?sendUpdates=all`;
+      const url = `${GOOGLE_CALENDAR_API}/calendars/primary/events?sendUpdates=all`;
       const response = await fetch(url, {
         method: "POST",
-        headers: writeHeaders,
+        headers,
         body: JSON.stringify(event),
       });
 
@@ -5184,7 +5190,7 @@ async function executeCalendarTool(
         throw new Error(`Failed to create event: ${error}`);
       }
       const created = await response.json();
-      return { ...created, _organised_by: duncan ? "duncan@kabuni.com" : "personal" };
+      return { ...created, _organised_by: "personal" };
     }
 
     case "update_calendar_event": {

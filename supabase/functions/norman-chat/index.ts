@@ -7025,11 +7025,35 @@ Format as a natural, readable summary with clear sections. If a section has no d
               // Reuse existing pending row if same logical action is already queued.
               const { data: existing } = await supabaseAdmin
                 .from("chat_write_pending")
-                .select("id, status, expires_at")
+                .select("id, status, expires_at, result")
                 .eq("user_id", userId)
                 .eq("idempotency_key", idempotency_key)
                 .in("status", ["pending", "confirmed", "executed"])
                 .maybeSingle();
+
+              // If an identical write was already executed, do NOT render a new
+              // Confirm card — return an "already done" stub so the model just
+              // confirms in past tense. Re-queuing an executed row caused the
+              // UI's "Confirm" click to short-circuit without ok/verified, which
+              // read as "write did not verify".
+              if (existing?.status === "executed") {
+                emit({ duncan_event: "tool_end", id: tc?.id, name: toolNameForEvent, status: "success" });
+                const stub = createStructuredToolResult(toolNameForEvent, {
+                  status: "success",
+                  ok: true,
+                  verified: true,
+                  already_executed: true,
+                  pending_id: existing.id,
+                  summary: summary,
+                  message: "This exact write was already executed earlier in this conversation. Confirm to the user in PAST tense (e.g. 'Already booked …'). Do NOT re-queue or call this tool again.",
+                  result: existing.result ?? null,
+                }, "success");
+                const finalContent = JSON.stringify(stub);
+                if (provider === "anthropic") {
+                  return { role: "user", content: [{ type: "tool_result", tool_use_id: tc?.id, content: finalContent }] };
+                }
+                return { role: "tool", tool_call_id: tc?.id, content: finalContent };
+              }
 
               let pendingId: string | null = existing?.id ?? null;
 

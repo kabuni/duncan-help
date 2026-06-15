@@ -262,7 +262,11 @@ const CALENDAR_TOOLS = [
           attendees: {
             type: "array",
             items: { type: "string" },
-            description: "List of attendee email addresses",
+            description: "List of attendees. Prefer email addresses (e.g. 'alex@kabuni.com'). First names or full names from the Duncan profile directory are also accepted and will be resolved to emails server-side. Do NOT invent emails — pass the name if you don't know the email.",
+          },
+          addGoogleMeet: {
+            type: "boolean",
+            description: "Set true to attach a Google Meet video link to the event. Use this whenever the user asks for a Google Meet / Meet link / video call.",
           },
         },
         required: ["summary", "startDateTime", "endDateTime"],

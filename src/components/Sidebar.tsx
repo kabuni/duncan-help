@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useAuth } from "@/hooks/useAuth";
 import { useApprovalCount } from "@/hooks/useApprovals";
 import { useIsAdmin } from "@/hooks/useUserRoles";
+import { canAccessRegistrations } from "@/lib/registrationsAccess";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useProfile } from "@/hooks/useProfile";

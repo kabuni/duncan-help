@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/hooks/useUserRoles";
+import { useAuth } from "@/hooks/useAuth";
+import { canAccessRegistrations } from "@/lib/registrationsAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -140,6 +142,8 @@ const ALL_PAGE_GROUPS: PageGroup[] = [...SCHOOLS_PAGE_GROUPS, ...KPL_PAGE_GROUPS
 
 export default function SchoolRegistrations() {
   const { isAdmin, isLoading: loadingRole } = useIsAdmin();
+  const { user } = useAuth();
+  const hasAccess = canAccessRegistrations({ isAdmin, userId: user?.id });
   const [rows, setRows] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<CategoryKey>("schools");
@@ -297,8 +301,8 @@ export default function SchoolRegistrations() {
   };
 
   useEffect(() => {
-    if (isAdmin) loadEvents();
-  }, [isAdmin]);
+    if (hasAccess) loadEvents();
+  }, [hasAccess]);
 
   const eventsThisWeek = useMemo(() => {
     const since = Date.now() - 7 * 86400000;
@@ -338,8 +342,8 @@ export default function SchoolRegistrations() {
   };
 
   useEffect(() => {
-    if (isAdmin) load();
-  }, [isAdmin]);
+    if (hasAccess) load();
+  }, [hasAccess]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this registration?")) return;
@@ -396,7 +400,7 @@ export default function SchoolRegistrations() {
     );
   }
 
-  if (!isAdmin) return <Navigate to="/" replace />;
+  if (!hasAccess) return <Navigate to="/" replace />;
 
   return (
     <div className="container mx-auto p-6 max-w-6xl">

@@ -134,10 +134,22 @@ function buildHtml(firstName: string): string {
     <p style="margin:0">👉 <a href="https://duncan.help" style="${stepLink}">duncan.help</a></p>
   </div>
 
-  <div style="margin:0 0 22px">
+  <div style="margin:0 0 18px">
     <p style="${stepTitle}">2. Slack, our team communication hub</p>
     <p style="${stepDesc}">This is where the magic happens — join your relevant channels and say hello!</p>
     <p style="margin:0">👉 <a href="https://kabuni.slack.com" style="${stepLink}">kabuni.slack.com</a></p>
+  </div>
+
+  <div style="margin:0 0 18px">
+    <p style="${stepTitle}">3. Payroll — Deel</p>
+    <p style="${stepDesc}">Access your payslips, contracts, and payment details.</p>
+    <p style="margin:0">👉 <a href="https://app.deel.com" style="${stepLink}">app.deel.com</a></p>
+  </div>
+
+  <div style="margin:0 0 22px">
+    <p style="${stepTitle}">4. Our Company Values</p>
+    <p style="${stepDesc}">Read the values that guide how we work and make decisions.</p>
+    <p style="margin:0">👉 <a href="https://drive.google.com/file/d/1r53VS99sPLj3pUSpaqn7alNuF5QsuKPl/view?usp=sharing" style="${stepLink}">Kabuni Company Values</a></p>
   </div>
 
   <p style="${p}">We move fast, collaborate openly, and back each other up.</p>

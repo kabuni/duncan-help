@@ -156,8 +156,8 @@ When working with calendar:
 - **CALENDAR INTENT ROUTING (HARD RULE):** Phrases like "book a meeting", "schedule a meeting", "set up a meeting", "create an event", "send a calendar invite", "arrange a call", "put X on my calendar", "block time", "find time with…" ALWAYS map to \`create_calendar_event\` (or \`list_calendar_events\` / \`check_team_availability\` if the user is asking about availability first). They NEVER map to \`create_workstream_card\`. A "meeting" is a calendar event, not a workstream task — only route to \`create_workstream_card\` if the user explicitly says "task", "to-do", "action item", "workstream", "card", or "follow-up to track".
 - **CREATING EVENTS — NO PROSE CONFIRMATION.** Do NOT write a text-only preview such as "I'll book Alex tomorrow at 14:00 — confirm?". Call \`create_calendar_event\` DIRECTLY with the parsed summary, startDateTime, endDateTime, attendees, location, and description. The write-confirmation interceptor will store the pending action in \`chat_write_pending\` and render the real Confirm/Cancel card in the chat UI — the user clicks the button, not a "confirm" message. This is identical to how \`create_workstream_card\` works.
 - If a required detail is genuinely missing (e.g. no date, no duration) and cannot be reasonably inferred, ask ONE concise clarifying question for ONLY the missing field — never wrap the full event in a prose "confirm?" preview.
-- **ATTENDEES — DO NOT ASK FOR EMAILS.** When the user names internal teammates ("Ashish", "Balkrishna", "Adit", "Palash", etc.), pass those names directly in the \`attendees\` array. The server resolves names → emails from the Duncan profile directory automatically. Only ask the user for an email address when the tool comes back with `Could not resolve attendee` for that specific name, or when the attendee is clearly external (not a Kabuni teammate).
-- **GOOGLE MEET.** When the user asks for a Google Meet / Meet link / video call, set `addGoogleMeet: true` on the `create_calendar_event` call. Do not ask the user to confirm the Meet link separately.
+- **ATTENDEES — NEVER ASK INTERNAL USERS FOR EMAILS.** When the user names internal teammates ("Ashish", "Balkrishna", "Adit", "Palash", etc.), call \`create_calendar_event\` directly and pass those names in the \`attendees\` array. The server resolves names → emails from the Duncan team directory automatically. Do NOT ask "what is their email?" for anyone who may be a Duncan/Kabuni teammate. Only ask for an email after the tool itself returns \`Could not resolve attendee\` for that specific name, or when the attendee is clearly external.
+- **GOOGLE MEET.** When the user asks for a Google Meet / Meet link / video call, set \`addGoogleMeet: true\` on the \`create_calendar_event\` call. Do not ask the user to confirm the Meet link separately.
 - **Updates / reschedules:** for date/time changes on Planner events use \`reschedule_event\` (see Planner section). For pure Google Calendar events, call \`update_calendar_event\` directly — same interceptor, same UI confirm card, no prose preview.
 - **Cancelling / deleting events**: ALWAYS call \`delete_calendar_event\` directly — the interceptor will render the Confirm/Cancel card. The tool automatically uses Duncan's organizer identity when Duncan (duncan@kabuni.com) is the organizer, so the cancellation propagates to ALL attendees via \`sendUpdates=all\`. DO NOT tell the user "this only cancels it for you" or "Duncan needs to cancel it company-wide" or add any caveat about partial cancellation — that is factually wrong. If the tool returns an error, surface the actual error message verbatim; do not invent a fallback narrative.
 - **POST-CREATE REPLY RULE:** After \`create_calendar_event\` returns \`pending_confirmation\`, say only that the event is queued and awaiting the user's click in the chat UI. After it returns \`ok === true && verified === true\`, confirm in PAST tense in one short message (e.g. "Booked **Lightning Strike sync** with Alex for Fri 14:00–15:00."). Never use future-tense promises like "I'll book it now" or "let you know once done".
@@ -264,7 +264,7 @@ const CALENDAR_TOOLS = [
           attendees: {
             type: "array",
             items: { type: "string" },
-            description: "List of attendees. Prefer email addresses (e.g. 'alex@kabuni.com'). First names or full names from the Duncan profile directory are also accepted and will be resolved to emails server-side. Do NOT invent emails — pass the name if you don't know the email.",
+            description: "List of attendees. For Duncan/Kabuni teammates, pass their first name or full display name directly (e.g. 'Adit', 'Ashish', 'Balkrishna'); the server resolves names to emails. Do NOT ask the user for internal teammates' emails. Use email addresses only when already supplied or clearly external.",
           },
           addGoogleMeet: {
             type: "boolean",
@@ -5097,6 +5097,7 @@ async function executeCalendarTool(
   identity?: ResolvedIdentity,
   duncan?: { accessToken: string; calendarId: string } | null,
   supabaseAdmin?: any,
+  teamDirectory: TeamDirectoryEntry[] = [],
 ): Promise<any> {
   const headers = {
     Authorization: `Bearer ${accessToken}`,
@@ -5177,32 +5178,20 @@ async function executeCalendarTool(
         throw new Error("Please connect your Google Calendar in Integrations before scheduling meetings.");
       }
 
-      // Resolve attendee names → emails from the profiles directory.
+      // Resolve attendee names → emails from the preloaded Duncan directory.
       const rawAttendees: string[] = Array.isArray(args.attendees) ? args.attendees : [];
       const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       const resolvedAttendees: { email: string }[] = [];
       const unresolved: string[] = [];
       const needsLookup = rawAttendees.filter((a) => typeof a === "string" && !emailRe.test(a.trim()));
-      let dir: any[] = [];
-      if (needsLookup.length > 0 && supabaseAdmin) {
-        const { data } = await supabaseAdmin
-          .from("profiles")
-          .select("id, full_name, display_name, email")
-          .not("email", "is", null);
-        dir = data || [];
-      }
-      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
+      const dir = needsLookup.length > 0 && teamDirectory.length === 0 && supabaseAdmin
+        ? await loadTeamDirectory(supabaseAdmin)
+        : teamDirectory;
       for (const a of rawAttendees) {
         if (typeof a !== "string") continue;
         const v = a.trim();
         if (emailRe.test(v)) { resolvedAttendees.push({ email: v }); continue; }
-        const nv = norm(v);
-        const hit = dir.find((p: any) => {
-          const fn = norm(p.full_name || "");
-          const dn = norm(p.display_name || "");
-          const first = fn.split(" ")[0];
-          return fn === nv || dn === nv || first === nv || fn.startsWith(nv + " ");
-        });
+        const hit = resolveDirectoryAttendee(v, dir);
         if (hit?.email) resolvedAttendees.push({ email: hit.email });
         else unresolved.push(v);
       }
@@ -5342,6 +5331,94 @@ const WRITE_TOOL_LABELS: Record<string, string> = {
   reschedule_event: "Reschedule event (planner or Google Calendar)",
   send_pdf_for_signature: "Send PDF for e-signature (DocuSign)",
 };
+
+type TeamDirectoryEntry = {
+  profile_id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  role_title?: string | null;
+  department?: string | null;
+  aliases: string[];
+};
+
+function normalizeDirectoryName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/<[^>]+>/g, " ")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function loadTeamDirectory(supabaseAdmin: any): Promise<TeamDirectoryEntry[]> {
+  const { data: profiles, error: profilesError } = await supabaseAdmin
+    .from("profiles")
+    .select("id, user_id, display_name, role_title, department")
+    .not("user_id", "is", null)
+    .order("display_name", { ascending: true });
+
+  if (profilesError) {
+    console.error("[team-directory] profiles lookup failed", profilesError);
+    return [];
+  }
+
+  const emailByUserId = new Map<string, string>();
+  try {
+    let page = 1;
+    const perPage = 1000;
+    while (page <= 10) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+      if (error) throw error;
+      const users = data?.users || [];
+      for (const u of users) {
+        if (u?.id && u?.email) emailByUserId.set(u.id, u.email);
+      }
+      if (users.length < perPage) break;
+      page += 1;
+    }
+  } catch (err) {
+    console.error("[team-directory] auth user lookup failed", err);
+  }
+
+  return (profiles || [])
+    .map((p: any) => {
+      const email = emailByUserId.get(p.user_id) || "";
+      const name = p.display_name || email;
+      const emailLocal = email.includes("@") ? email.split("@")[0].replace(/[._-]+/g, " ") : "";
+      const aliases = [name, email, emailLocal].filter(Boolean);
+      return {
+        profile_id: p.id,
+        user_id: p.user_id,
+        name,
+        email,
+        role_title: p.role_title,
+        department: p.department,
+        aliases,
+      } as TeamDirectoryEntry;
+    })
+    .filter((entry: TeamDirectoryEntry) => !!entry.email && !!entry.name);
+}
+
+function resolveDirectoryAttendee(input: string, directory: TeamDirectoryEntry[]): TeamDirectoryEntry | null {
+  const target = normalizeDirectoryName(input);
+  if (!target) return null;
+
+  const aliasMatches = directory.filter((entry) =>
+    entry.aliases.some((alias) => normalizeDirectoryName(alias) === target)
+  );
+  if (aliasMatches.length === 1) return aliasMatches[0];
+
+  const fullNameMatches = directory.filter((entry) => normalizeDirectoryName(entry.name).startsWith(`${target} `));
+  if (fullNameMatches.length === 1) return fullNameMatches[0];
+
+  if (target.length >= 3) {
+    const firstNameMatches = directory.filter((entry) => normalizeDirectoryName(entry.name).split(" ")[0] === target);
+    if (firstNameMatches.length === 1) return firstNameMatches[0];
+  }
+
+  return null;
+}
 
 function summarizeWriteAction(toolName: string, args: any): string {
   const label = WRITE_TOOL_LABELS[toolName] || toolName;
@@ -5510,6 +5587,7 @@ serve(async (req) => {
     azureStorageAvailable = !!getAzureStorageConfig();
     const googleForms = formsResult?.data;
     const duncanCalendar = duncanCalendarResult;
+    const teamDirectory = await loadTeamDirectory(supabaseAdmin);
 
 
     // Adjust system prompt based on mode and integration availability
@@ -5526,25 +5604,19 @@ serve(async (req) => {
     // the user for a teammate's email. Pass these names (or their emails)
     // directly in `create_calendar_event.attendees`.
     try {
-      const { data: team } = await supabaseAdmin
-        .from("profiles")
-        .select("full_name, display_name, email, role_title, department")
-        .not("email", "is", null)
-        .order("full_name", { ascending: true });
-      if (team && team.length > 0) {
-        const lines = team
-          .map((p: any) => {
-            const name = p.full_name || p.display_name || p.email;
+      if (teamDirectory.length > 0) {
+        const lines = teamDirectory
+          .map((p) => {
             const role = [p.role_title, p.department].filter(Boolean).join(" · ");
-            return `- ${name} <${p.email}>${role ? ` — ${role}` : ""}`;
+            return `- ${p.name} <${p.email}>${role ? ` — ${role}` : ""}`;
           })
           .join("\n");
         systemContent +=
           `\n\n## TEAM DIRECTORY (canonical — use for attendee resolution)\n` +
           `These are all active Duncan / Kabuni teammates. When the user names any of them ` +
-          `("Ashish", "Adit", "Balkrishna", "Palash", etc.), pass either the email below OR the name itself ` +
-          `directly into \`create_calendar_event.attendees\` — the server resolves names → emails automatically. ` +
-          `**Never ask the user for a teammate's email** when the name appears in this list.\n` +
+          `("Ashish", "Adit", "Balkrishna", "Palash", etc.), you MUST call \`create_calendar_event\` directly and pass either the email below OR the name itself ` +
+          `directly into \`create_calendar_event.attendees\`. ` +
+          `**Never ask the user for a teammate's email** when the person is internal or appears in this list.\n` +
           lines;
       }
     } catch (_dirErr) {
@@ -7220,7 +7292,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = { error: "Please connect your Google Calendar in Integrations before scheduling meetings." };
             } else {
               const duncanArg = tc.function.name === "create_calendar_event" ? null : duncanCalendar;
-              result = await withToolTimeout(tc.function.name, executeCalendarTool(tc.function.name, args, calendarAccessToken || "", resolvedIdentity, duncanArg, supabaseAdmin));
+              result = await withToolTimeout(tc.function.name, executeCalendarTool(tc.function.name, args, calendarAccessToken || "", resolvedIdentity, duncanArg, supabaseAdmin, teamDirectory));
             }
 
           } else if (documentToolNames.includes(tc.function.name)) {

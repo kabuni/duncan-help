@@ -256,11 +256,14 @@ serve(async (req) => {
       const parsedDesc = parseDescription(ev.description || null);
       const parsed: ParsedEvent = { category, event_name, ...parsedDesc };
 
-      const missing = MANDATORY.filter((f) => {
-        const v = (parsed as any)[f];
-        if (Array.isArray(v)) return v.length === 0;
-        return !v;
-      });
+      const isNonStrategic = parsed.category ? NON_STRATEGIC_CATEGORIES.has(parsed.category) : false;
+      const missing = isNonStrategic
+        ? []
+        : MANDATORY.filter((f) => {
+            const v = (parsed as any)[f];
+            if (Array.isArray(v)) return v.length === 0;
+            return !v;
+          });
       const isComplete = missing.length === 0;
 
       const startStr = ev.start?.dateTime || ev.start?.date || null;
@@ -268,7 +271,9 @@ serve(async (req) => {
       const allDay = !!ev.start?.date;
       const startAt = startStr ? new Date(startStr) : null;
 
-      const { risk_level, risk_reason } = deriveRisk(parsed, missing, startAt);
+      const { risk_level, risk_reason } = isNonStrategic
+        ? { risk_level: "green", risk_reason: null }
+        : deriveRisk(parsed, missing, startAt);
       if (risk_level !== "green") flagged++;
 
       const linkedGoalIds = linkGoals(parsed, title, goals || []);

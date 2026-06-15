@@ -8,6 +8,8 @@ const corsHeaders = {
 
 const TARGET_CALENDAR_NAME = "Duncan | Planner";
 const MANDATORY = ["owner", "objective", "success_metric", "decision_needed", "linked_docs", "risks", "next_action"];
+// Categories that are informational only — no strategic fields required, always green.
+const NON_STRATEGIC_CATEGORIES = new Set(["Holiday", "Travel"]);
 
 interface ParsedEvent {
   category: string | null;

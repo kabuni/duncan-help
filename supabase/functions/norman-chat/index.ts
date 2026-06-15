@@ -5587,6 +5587,7 @@ serve(async (req) => {
     azureStorageAvailable = !!getAzureStorageConfig();
     const googleForms = formsResult?.data;
     const duncanCalendar = duncanCalendarResult;
+    const teamDirectory = await loadTeamDirectory(supabaseAdmin);
 
 
     // Adjust system prompt based on mode and integration availability
@@ -5603,25 +5604,19 @@ serve(async (req) => {
     // the user for a teammate's email. Pass these names (or their emails)
     // directly in `create_calendar_event.attendees`.
     try {
-      const { data: team } = await supabaseAdmin
-        .from("profiles")
-        .select("full_name, display_name, email, role_title, department")
-        .not("email", "is", null)
-        .order("full_name", { ascending: true });
-      if (team && team.length > 0) {
-        const lines = team
-          .map((p: any) => {
-            const name = p.full_name || p.display_name || p.email;
+      if (teamDirectory.length > 0) {
+        const lines = teamDirectory
+          .map((p) => {
             const role = [p.role_title, p.department].filter(Boolean).join(" · ");
-            return `- ${name} <${p.email}>${role ? ` — ${role}` : ""}`;
+            return `- ${p.name} <${p.email}>${role ? ` — ${role}` : ""}`;
           })
           .join("\n");
         systemContent +=
           `\n\n## TEAM DIRECTORY (canonical — use for attendee resolution)\n` +
           `These are all active Duncan / Kabuni teammates. When the user names any of them ` +
-          `("Ashish", "Adit", "Balkrishna", "Palash", etc.), pass either the email below OR the name itself ` +
-          `directly into \`create_calendar_event.attendees\` — the server resolves names → emails automatically. ` +
-          `**Never ask the user for a teammate's email** when the name appears in this list.\n` +
+          `("Ashish", "Adit", "Balkrishna", "Palash", etc.), you MUST call \`create_calendar_event\` directly and pass either the email below OR the name itself ` +
+          `directly into \`create_calendar_event.attendees\`. ` +
+          `**Never ask the user for a teammate's email** when the person is internal or appears in this list.\n` +
           lines;
       }
     } catch (_dirErr) {

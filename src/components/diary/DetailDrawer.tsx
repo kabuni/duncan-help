@@ -569,7 +569,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
 
                 <EventAttachments eventId={event.id} />
 
-                <EventRsvps eventId={event.id} />
+                
 
                 <EventApprovals eventId={event.id} />
 

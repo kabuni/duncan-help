@@ -62,8 +62,10 @@ function buildPostExecutionMessage(
       const when = fmtWhen(af.start?.dateTime || a.startDateTime);
       const attendees = Array.isArray(a.attendees) && a.attendees.length
         ? ` Invite sent to ${a.attendees.join(", ")}.` : "";
+      const meetLink = af.hangoutLink || af.conferenceData?.entryPoints?.find?.((e: any) => e?.entryPointType === "video")?.uri;
+      const meet = meetLink ? ` Google Meet: ${meetLink}` : "";
       const loc = where ? ` in your ${where}` : "";
-      return `Booked **${title}**${when ? ` for ${when}` : ""}${loc}.${attendees}`;
+      return `Booked **${title}**${when ? ` for ${when}` : ""}${loc}.${attendees}${meet}`;
     }
     case "update_calendar_event":
       return `Updated **${af.summary || a.summary || "the event"}**.`;
@@ -520,14 +522,14 @@ export function useNormanChat() {
           setPendingWrites((prev) =>
             prev.map((p) => (p.pendingId === pendingId ? { ...p, state: "executed", result: data?.result ?? data } : p))
           );
-          const where = data?.source === "google" ? "Google Calendar" : data?.source === "planner" ? "Planner" : null;
+          const where = data?.source === "google" || data?.source === "google_calendar" ? "Google Calendar" : data?.source === "planner" ? "Planner" : null;
           toast.success(where ? `Verified — change applied in ${where}.` : "Verified — change applied.");
 
           // Append a past-tense completion message so prior "queued / awaiting confirmation"
           // wording is superseded by an explicit success message.
           const toolName = pendingSnapshot?.toolName || data?.tool;
           const args = pendingSnapshot?.args || {};
-          const after = data?.after || data?.result?.after || {};
+          const after = data?.after || data?.result?.after || data?.result?.result || {};
           const successText = buildPostExecutionMessage(toolName, args, after, where);
           if (successText) {
             setMessages((prev) => [...prev, { role: "assistant", content: successText }]);

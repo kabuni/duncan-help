@@ -5201,10 +5201,19 @@ async function executeCalendarTool(
         );
       }
 
-      const wantsMeet =
+      const explicitlyNoMeet =
+        args.addGoogleMeet === false ||
+        args.googleMeet === false ||
+        /\b(no|without|skip|don'?t add|do not add)\s+(a\s+)?(google\s*)?meet\s*(link)?\b|\bin[- ]person only\b/i.test(`${args.location ?? ""} ${args.description ?? ""} ${args.summary ?? ""}`);
+      const looksLikeMeeting =
+        resolvedAttendees.length > 0 ||
+        /\b(meeting|meet|call|sync|invite|discussion|catch\s*up|check[- ]?in)\b/i.test(`${args.location ?? ""} ${args.description ?? ""} ${args.summary ?? ""}`);
+      const wantsMeet = !explicitlyNoMeet && (
         args.addGoogleMeet === true ||
         args.googleMeet === true ||
-        /google\s*meet|meet link/i.test(`${args.location ?? ""} ${args.description ?? ""} ${args.summary ?? ""}`);
+        looksLikeMeeting ||
+        /google\s*meet|meet link|video call/i.test(`${args.location ?? ""} ${args.description ?? ""} ${args.summary ?? ""}`)
+      );
 
       const event: any = {
         summary: args.summary,
@@ -5234,8 +5243,50 @@ async function executeCalendarTool(
         const error = await response.text();
         throw new Error(`Failed to create event: ${error}`);
       }
-      const created = await response.json();
-      return { ...created, _organised_by: "personal" };
+      let created = await response.json();
+
+      if (wantsMeet && !created.hangoutLink && !created.conferenceData?.entryPoints?.some((e: any) => e?.entryPointType === "video" && e?.uri)) {
+        const patchBody = {
+          conferenceData: {
+            createRequest: {
+              requestId: crypto.randomUUID(),
+              conferenceSolutionKey: { type: "hangoutsMeet" },
+            },
+          },
+        };
+        const patchResp = await fetch(
+          `${GOOGLE_CALENDAR_API}/calendars/primary/events/${encodeURIComponent(created.id)}?sendUpdates=all&conferenceDataVersion=1`,
+          { method: "PATCH", headers, body: JSON.stringify(patchBody) },
+        );
+        if (patchResp.ok) created = await patchResp.json();
+      }
+
+      if (created?.id) {
+        for (let i = 0; i < 3; i++) {
+          const verifyResp = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events/${encodeURIComponent(created.id)}`, { headers });
+          if (verifyResp.ok) {
+            const verifiedEvent = await verifyResp.json();
+            created = { ...created, ...verifiedEvent };
+            const hasMeet = !!verifiedEvent.hangoutLink || verifiedEvent.conferenceData?.entryPoints?.some((e: any) => e?.entryPointType === "video" && e?.uri);
+            if (!wantsMeet || hasMeet) break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+
+      const meetLink = created.hangoutLink || created.conferenceData?.entryPoints?.find((e: any) => e?.entryPointType === "video")?.uri || null;
+      if (wantsMeet && !meetLink) {
+        return {
+          ...created,
+          _organised_by: "personal",
+          source: "google_calendar",
+          ok: false,
+          verified: false,
+          error: "Google Calendar created the event but did not return a Google Meet link after verification.",
+        };
+      }
+
+      return { ...created, hangoutLink: meetLink ?? created.hangoutLink, _organised_by: "personal", source: "google_calendar", ok: true, verified: true };
     }
 
     case "update_calendar_event": {

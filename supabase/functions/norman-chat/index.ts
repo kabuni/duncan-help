@@ -7292,7 +7292,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = { error: "Please connect your Google Calendar in Integrations before scheduling meetings." };
             } else {
               const duncanArg = tc.function.name === "create_calendar_event" ? null : duncanCalendar;
-              result = await withToolTimeout(tc.function.name, executeCalendarTool(tc.function.name, args, calendarAccessToken || "", resolvedIdentity, duncanArg, supabaseAdmin));
+              result = await withToolTimeout(tc.function.name, executeCalendarTool(tc.function.name, args, calendarAccessToken || "", resolvedIdentity, duncanArg, supabaseAdmin, teamDirectory));
             }
 
           } else if (documentToolNames.includes(tc.function.name)) {

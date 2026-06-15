@@ -6364,8 +6364,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
     // ============================================================
     const INTENT_RULES: Array<{ groups: any[][]; re: RegExp }> = [
       { groups: [GMAIL_TOOLS], re: /\b(gmail|email|emails|inbox|draft|drafts|reply|forward|unread|sender|recipient|cc'?d|bcc'?d)\b/i },
-      { groups: [CALENDAR_TOOLS], re: /\b(calendar|diary|schedule|availability|free\/busy|free busy|book\b|meeting room|reschedule|invite|invites|event|events|appointment)\b/i },
-      { groups: [MEETING_TOOLS], re: /\b(meeting notes?|meetings?\b|recap|action items?|transcript|plaud|gemini|google\s*meet|recording|summary of (the|my|our)\b|minutes\b)\b/i },
+      { groups: [CALENDAR_TOOLS], re: /\b(calendar|diary|schedule|scheduling|availability|free\/busy|free busy|book\b|booking|meeting|meetings|meeting room|reschedule|invite|invites|event|events|appointment|catch[- ]?up|1:1|one[- ]?on[- ]?one|set\s+(?:up\s+)?(?:a|an|the)?\s*(?:meeting|call|catch[- ]?up|sync|chat)|arrange\s+(?:a|an|the)?\s*(?:meeting|call|catch[- ]?up|sync)|put\s+.+?\s+on\s+(?:my|the|our)\s+calendar|block\s+(?:time|out)|find\s+time|google\s*meet|meet\s+link|zoom\s+link|teams\s+link)\b/i },
+      { groups: [MEETING_TOOLS], re: /\b(meeting notes?|recap|action items?|transcript|plaud|gemini|recording|summary of (the|my|our)\b|minutes\b)\b/i },
       { groups: [WORKSTREAM_TOOLS], re: /\b(workstream|workstreams|kanban|card|cards|ryg|amber|red\/yellow|status update|owner of|pending action|pending actions|action items?|open tasks?|my tasks?|to[- ]?dos?|on my plate|overdue|csv|download|spreadsheet|excel|google sheet|export)\b/i },
       { groups: [PLANNER_TOOLS, CALENDAR_TOOLS], re: /\b(planner|plan\b|roadmap|milestone|sprint plan|backlog|to-do list|reschedule|postpone|move (it|this|the meeting|to tomorrow)|push (back|forward) (the|my)|change (the )?(date|time))\b/i },
       { groups: [ANALYTICS_TOOLS], re: /\b(analytic|analytics|metric|metrics|kpi|dashboard|trend|report|reporting|chart|graph)\b/i },

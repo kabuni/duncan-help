@@ -6399,6 +6399,30 @@ Format as a natural, readable summary with clear sections. If a section has no d
       systemContent += `\n\n## CURRENT REQUEST OVERRIDE — CALENDAR EVENT CONFIRMATION\nThe latest user reply is confirming a calendar event previewed in the most recent assistant turn. You MUST immediately call \`create_calendar_event\` (or \`update_calendar_event\` / \`reschedule_event\` if the preview was a change) using the summary, startDateTime, endDateTime, attendees, location, and description from that preview. **NEVER call \`create_workstream_card\` for this turn — "book a meeting" is a calendar action, not a workstream task.** Do not write another prose "confirm?" preview. The write-confirmation interceptor will store the pending action and render the Confirm/Cancel UI card; tell the user briefly that the event is queued for their click in the chat UI.`;
     }
 
+    // Mid-flow calendar scheduling: if the most recent assistant turn was
+    // gathering meeting parameters (duration, time, attendees, etc.) the
+    // user's short follow-up ("30 mins is fine", "yes do it", "3pm works")
+    // MUST still allow tools — otherwise the model promises a confirmation
+    // card it can never actually create. This sits OUTSIDE the strict
+    // confirmation-reply branch above because the user isn't confirming yet,
+    // they're answering a clarifying question.
+    try {
+      const lastAssistantMsg = [...messages].reverse().find((m: any) => m?.role === "assistant");
+      const lastAssistantText = lastAssistantMsg
+        ? (typeof lastAssistantMsg.content === "string"
+            ? lastAssistantMsg.content
+            : JSON.stringify(lastAssistantMsg.content ?? ""))
+        : "";
+      const assistantIsSchedulingFlow =
+        /\b(meeting|calendar|invite|google meet|event|catch[- ]?up|sync|schedul|book)\b/i.test(lastAssistantText) &&
+        /\b(\d{1,2}\s*(?:am|pm|:\d{2})|how long|duration|minutes?|hour|today|tomorrow|attendees?|title|subject|when should|what time|which day|how many)\b/i.test(lastAssistantText) &&
+        !/Event created|event booked|Calendar event created|Booked \*\*|verified=true/i.test(lastAssistantText);
+      if (assistantIsSchedulingFlow && shouldBypassTools) {
+        shouldBypassTools = false;
+        systemContent += `\n\n## CURRENT REQUEST OVERRIDE — CALENDAR SCHEDULING IN PROGRESS\nThe previous assistant turn was clarifying meeting parameters. The user's latest short reply is supplying the missing info. You MUST call \`create_calendar_event\` this turn using the combined details from the recent conversation (title, attendees, date/time, duration). Do NOT write another prose "confirm?" preview — the write-confirmation interceptor will render the Confirm/Cancel card automatically. If a critical field is still missing, ask ONE concise question instead of promising action.`;
+      }
+    } catch { /* non-fatal */ }
+
     if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {
       try {
         const result = await executeNdaTool("generate_nda", pendingNdaArgsFromHistory, supabaseAdmin, userId, userEmail, authHeader);

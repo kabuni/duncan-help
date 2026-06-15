@@ -5097,6 +5097,7 @@ async function executeCalendarTool(
   identity?: ResolvedIdentity,
   duncan?: { accessToken: string; calendarId: string } | null,
   supabaseAdmin?: any,
+  teamDirectory: TeamDirectoryEntry[] = [],
 ): Promise<any> {
   const headers = {
     Authorization: `Bearer ${accessToken}`,
@@ -5177,32 +5178,20 @@ async function executeCalendarTool(
         throw new Error("Please connect your Google Calendar in Integrations before scheduling meetings.");
       }
 
-      // Resolve attendee names → emails from the profiles directory.
+      // Resolve attendee names → emails from the preloaded Duncan directory.
       const rawAttendees: string[] = Array.isArray(args.attendees) ? args.attendees : [];
       const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       const resolvedAttendees: { email: string }[] = [];
       const unresolved: string[] = [];
       const needsLookup = rawAttendees.filter((a) => typeof a === "string" && !emailRe.test(a.trim()));
-      let dir: any[] = [];
-      if (needsLookup.length > 0 && supabaseAdmin) {
-        const { data } = await supabaseAdmin
-          .from("profiles")
-          .select("id, full_name, display_name, email")
-          .not("email", "is", null);
-        dir = data || [];
-      }
-      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
+      const dir = needsLookup.length > 0 && teamDirectory.length === 0 && supabaseAdmin
+        ? await loadTeamDirectory(supabaseAdmin)
+        : teamDirectory;
       for (const a of rawAttendees) {
         if (typeof a !== "string") continue;
         const v = a.trim();
         if (emailRe.test(v)) { resolvedAttendees.push({ email: v }); continue; }
-        const nv = norm(v);
-        const hit = dir.find((p: any) => {
-          const fn = norm(p.full_name || "");
-          const dn = norm(p.display_name || "");
-          const first = fn.split(" ")[0];
-          return fn === nv || dn === nv || first === nv || fn.startsWith(nv + " ");
-        });
+        const hit = resolveDirectoryAttendee(v, dir);
         if (hit?.email) resolvedAttendees.push({ email: hit.email });
         else unresolved.push(v);
       }

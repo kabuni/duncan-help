@@ -292,24 +292,6 @@ export default function KeyEventsDiary() {
     setDrawerOpen(true);
   }
 
-  async function scanRsvps() {
-    setScanningRsvps(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("process-rsvp-emails");
-      if (error) throw error;
-      const summary = data as { scanned?: number; rsvps?: number; skipped?: number; errors?: string[] } | null;
-      if (summary?.errors && summary.errors.length > 0) {
-        toast.warning(`RSVP scan completed with ${summary.errors.length} error(s)`);
-        console.warn("RSVP scan errors:", summary.errors);
-      } else {
-        toast.success(`RSVP scan complete — ${summary?.rsvps ?? 0} new, ${summary?.skipped ?? 0} skipped`);
-      }
-    } catch (err: any) {
-      toast.error(err?.message || "RSVP scan failed");
-    } finally {
-      setScanningRsvps(false);
-    }
-  }
 
   const eventPropGetter = (item: CalItem) => {
     const ev = item.resource.data;

@@ -5521,6 +5521,36 @@ serve(async (req) => {
       + formatIdentityForPrompt(resolvedIdentity)
       + `\n\nWhen the user says "today" / "tomorrow" / "this week", interpret them in the caller's timezone above, NOT UTC.`;
 
+    // ===== TEAM DIRECTORY — used for resolving attendee names → emails =====
+    // Inject the full Duncan team directory so the model never has to ask
+    // the user for a teammate's email. Pass these names (or their emails)
+    // directly in `create_calendar_event.attendees`.
+    try {
+      const { data: team } = await supabaseAdmin
+        .from("profiles")
+        .select("full_name, display_name, email, role_title, department")
+        .not("email", "is", null)
+        .order("full_name", { ascending: true });
+      if (team && team.length > 0) {
+        const lines = team
+          .map((p: any) => {
+            const name = p.full_name || p.display_name || p.email;
+            const role = [p.role_title, p.department].filter(Boolean).join(" · ");
+            return `- ${name} <${p.email}>${role ? ` — ${role}` : ""}`;
+          })
+          .join("\n");
+        systemContent +=
+          `\n\n## TEAM DIRECTORY (canonical — use for attendee resolution)\n` +
+          `These are all active Duncan / Kabuni teammates. When the user names any of them ` +
+          `("Ashish", "Adit", "Balkrishna", "Palash", etc.), pass either the email below OR the name itself ` +
+          `directly into \`create_calendar_event.attendees\` — the server resolves names → emails automatically. ` +
+          `**Never ask the user for a teammate's email** when the name appears in this list.\n` +
+          lines;
+      }
+    } catch (_dirErr) {
+      // Non-fatal — directory injection is best-effort.
+    }
+
     // Always inject available forms into the system prompt so the model has field data across all turns
     if (googleForms && googleForms.length > 0) {
       let formsContext = "\n\n## AVAILABLE GOOGLE FORMS (PRE-LOADED — DO NOT CALL list_google_forms)\nThe following forms are available. Use ONLY these exact fields when asking questions:\n";

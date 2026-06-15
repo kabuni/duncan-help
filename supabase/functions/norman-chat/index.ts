@@ -5170,16 +5170,65 @@ async function executeCalendarTool(
       if (!accessToken) {
         throw new Error("Please connect your Google Calendar in Integrations before scheduling meetings.");
       }
-      const event = {
+
+      // Resolve attendee names → emails from the profiles directory.
+      const rawAttendees: string[] = Array.isArray(args.attendees) ? args.attendees : [];
+      const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const resolvedAttendees: { email: string }[] = [];
+      const unresolved: string[] = [];
+      const needsLookup = rawAttendees.filter((a) => typeof a === "string" && !emailRe.test(a.trim()));
+      let dir: any[] = [];
+      if (needsLookup.length > 0 && supabaseAdmin) {
+        const { data } = await supabaseAdmin
+          .from("profiles")
+          .select("id, full_name, display_name, email")
+          .not("email", "is", null);
+        dir = data || [];
+      }
+      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
+      for (const a of rawAttendees) {
+        if (typeof a !== "string") continue;
+        const v = a.trim();
+        if (emailRe.test(v)) { resolvedAttendees.push({ email: v }); continue; }
+        const nv = norm(v);
+        const hit = dir.find((p: any) => {
+          const fn = norm(p.full_name || "");
+          const dn = norm(p.display_name || "");
+          const first = fn.split(" ")[0];
+          return fn === nv || dn === nv || first === nv || fn.startsWith(nv + " ");
+        });
+        if (hit?.email) resolvedAttendees.push({ email: hit.email });
+        else unresolved.push(v);
+      }
+      if (unresolved.length > 0) {
+        throw new Error(
+          `Could not resolve attendee${unresolved.length > 1 ? "s" : ""} to email: ${unresolved.join(", ")}. Ask the user for the email address(es) or use a name that matches a Duncan profile.`,
+        );
+      }
+
+      const wantsMeet =
+        args.addGoogleMeet === true ||
+        args.googleMeet === true ||
+        /google\s*meet|meet link/i.test(`${args.location ?? ""} ${args.description ?? ""} ${args.summary ?? ""}`);
+
+      const event: any = {
         summary: args.summary,
         description: args.description,
-        start: { dateTime: args.startDateTime, timeZone: "UTC" },
-        end: { dateTime: args.endDateTime, timeZone: "UTC" },
+        start: { dateTime: args.startDateTime, timeZone: identity?.timezone || "UTC" },
+        end: { dateTime: args.endDateTime, timeZone: identity?.timezone || "UTC" },
         location: args.location,
-        attendees: args.attendees?.map((email: string) => ({ email })),
+        attendees: resolvedAttendees.length > 0 ? resolvedAttendees : undefined,
       };
+      if (wantsMeet) {
+        event.conferenceData = {
+          createRequest: {
+            requestId: crypto.randomUUID(),
+            conferenceSolutionKey: { type: "hangoutsMeet" },
+          },
+        };
+      }
 
-      const url = `${GOOGLE_CALENDAR_API}/calendars/primary/events?sendUpdates=all`;
+      const url = `${GOOGLE_CALENDAR_API}/calendars/primary/events?sendUpdates=all${wantsMeet ? "&conferenceDataVersion=1" : ""}`;
       const response = await fetch(url, {
         method: "POST",
         headers,

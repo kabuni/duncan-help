@@ -419,18 +419,6 @@ export default function KeyEventsDiary() {
                   {syncing ? "Syncing…" : "Sync"}
                 </Button>
               )}
-              {isAdmin && (
-                <Button
-                  className="flex-1 sm:flex-none whitespace-nowrap"
-                  variant="outline"
-                  size="sm"
-                  onClick={scanRsvps}
-                  disabled={scanningRsvps}
-                >
-                  <Mail className={cn("h-3.5 w-3.5 mr-1.5", scanningRsvps && "animate-pulse")} />
-                  {scanningRsvps ? "Scanning RSVPs…" : "Scan RSVPs"}
-                </Button>
-              )}
               <Button className="flex-1 sm:flex-none whitespace-nowrap" size="sm" variant="outline" onClick={() => { setAddDate(new Date()); setAddOpen(true); }}>
                 <Plus className="h-3.5 w-3.5 mr-1.5" /> Add event
               </Button>

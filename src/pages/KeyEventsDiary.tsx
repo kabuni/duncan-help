@@ -198,7 +198,9 @@ export default function KeyEventsDiary() {
   const [date, setDate] = useState<Date>(new Date());
   const [riskFilter, setRiskFilter] = useState<"all" | "atrisk">("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
+    () => new Set(["Holiday", "Travel", "Releases", "Launch"]),
+  );
   const toggleCategory = (key: string) => {
     setSelectedCategories((prev) => {
       const next = new Set(prev);

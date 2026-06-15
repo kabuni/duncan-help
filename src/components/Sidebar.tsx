@@ -221,7 +221,7 @@ const Sidebar = ({
           )}
         </RouterNavLink>
 
-        {isAdmin && (
+        {canAccessRegistrations({ isAdmin, userId: user?.id }) && (
           <RouterNavLink
             to="/registrations"
             onClick={() => onMobileClose?.()}

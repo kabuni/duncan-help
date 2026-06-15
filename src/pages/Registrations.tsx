@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/hooks/useUserRoles";
+import { useAuth } from "@/hooks/useAuth";
+import { canAccessRegistrations } from "@/lib/registrationsAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -140,6 +142,8 @@ const ALL_PAGE_GROUPS: PageGroup[] = [...SCHOOLS_PAGE_GROUPS, ...KPL_PAGE_GROUPS
 
 export default function SchoolRegistrations() {
   const { isAdmin, isLoading: loadingRole } = useIsAdmin();
+  const { user } = useAuth();
+  const hasAccess = canAccessRegistrations({ isAdmin, userId: user?.id });
   const [rows, setRows] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<CategoryKey>("schools");

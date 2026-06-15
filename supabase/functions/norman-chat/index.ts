@@ -157,7 +157,7 @@ When working with calendar:
 - **CREATING EVENTS — NO PROSE CONFIRMATION.** Do NOT write a text-only preview such as "I'll book Alex tomorrow at 14:00 — confirm?". Call \`create_calendar_event\` DIRECTLY with the parsed summary, startDateTime, endDateTime, attendees, location, and description. The write-confirmation interceptor will store the pending action in \`chat_write_pending\` and render the real Confirm/Cancel card in the chat UI — the user clicks the button, not a "confirm" message. This is identical to how \`create_workstream_card\` works.
 - If a required detail is genuinely missing (e.g. no date, no duration) and cannot be reasonably inferred, ask ONE concise clarifying question for ONLY the missing field — never wrap the full event in a prose "confirm?" preview.
 - **ATTENDEES — NEVER ASK INTERNAL USERS FOR EMAILS.** When the user names internal teammates ("Ashish", "Balkrishna", "Adit", "Palash", etc.), call \`create_calendar_event\` directly and pass those names in the \`attendees\` array. The server resolves names → emails from the Duncan team directory automatically. Do NOT ask "what is their email?" for anyone who may be a Duncan/Kabuni teammate. Only ask for an email after the tool itself returns \`Could not resolve attendee\` for that specific name, or when the attendee is clearly external.
-- **GOOGLE MEET.** When the user asks for a Google Meet / Meet link / video call, set \`addGoogleMeet: true\` on the \`create_calendar_event\` call. Do not ask the user to confirm the Meet link separately.
+- **GOOGLE MEET DEFAULT.** For any scheduled meeting/call/sync/invite with attendees, set \`addGoogleMeet: true\` on \`create_calendar_event\` by default. Only set it false if the user explicitly says no Meet link / in-person only. Do not ask the user to confirm the Meet link separately.
 - **Updates / reschedules:** for date/time changes on Planner events use \`reschedule_event\` (see Planner section). For pure Google Calendar events, call \`update_calendar_event\` directly — same interceptor, same UI confirm card, no prose preview.
 - **Cancelling / deleting events**: ALWAYS call \`delete_calendar_event\` directly — the interceptor will render the Confirm/Cancel card. The tool automatically uses Duncan's organizer identity when Duncan (duncan@kabuni.com) is the organizer, so the cancellation propagates to ALL attendees via \`sendUpdates=all\`. DO NOT tell the user "this only cancels it for you" or "Duncan needs to cancel it company-wide" or add any caveat about partial cancellation — that is factually wrong. If the tool returns an error, surface the actual error message verbatim; do not invent a fallback narrative.
 - **POST-CREATE REPLY RULE:** After \`create_calendar_event\` returns \`pending_confirmation\`, say only that the event is queued and awaiting the user's click in the chat UI. After it returns \`ok === true && verified === true\`, confirm in PAST tense in one short message (e.g. "Booked **Lightning Strike sync** with Alex for Fri 14:00–15:00."). Never use future-tense promises like "I'll book it now" or "let you know once done".
@@ -268,7 +268,7 @@ const CALENDAR_TOOLS = [
           },
           addGoogleMeet: {
             type: "boolean",
-            description: "Set true to attach a Google Meet video link to the event. Use this whenever the user asks for a Google Meet / Meet link / video call.",
+            description: "Set true to attach a Google Meet video link to the event. Default to true for meetings, calls, syncs, invites, or events with attendees. Set false only when the user explicitly asks for no Meet link or in-person only.",
           },
         },
         required: ["summary", "startDateTime", "endDateTime"],
@@ -5201,10 +5201,19 @@ async function executeCalendarTool(
         );
       }
 
-      const wantsMeet =
+      const explicitlyNoMeet =
+        args.addGoogleMeet === false ||
+        args.googleMeet === false ||
+        /\b(no|without|skip|don'?t add|do not add)\s+(a\s+)?(google\s*)?meet\s*(link)?\b|\bin[- ]person only\b/i.test(`${args.location ?? ""} ${args.description ?? ""} ${args.summary ?? ""}`);
+      const looksLikeMeeting =
+        resolvedAttendees.length > 0 ||
+        /\b(meeting|meet|call|sync|invite|discussion|catch\s*up|check[- ]?in)\b/i.test(`${args.location ?? ""} ${args.description ?? ""} ${args.summary ?? ""}`);
+      const wantsMeet = !explicitlyNoMeet && (
         args.addGoogleMeet === true ||
         args.googleMeet === true ||
-        /google\s*meet|meet link/i.test(`${args.location ?? ""} ${args.description ?? ""} ${args.summary ?? ""}`);
+        looksLikeMeeting ||
+        /google\s*meet|meet link|video call/i.test(`${args.location ?? ""} ${args.description ?? ""} ${args.summary ?? ""}`)
+      );
 
       const event: any = {
         summary: args.summary,
@@ -5234,8 +5243,50 @@ async function executeCalendarTool(
         const error = await response.text();
         throw new Error(`Failed to create event: ${error}`);
       }
-      const created = await response.json();
-      return { ...created, _organised_by: "personal" };
+      let created = await response.json();
+
+      if (wantsMeet && !created.hangoutLink && !created.conferenceData?.entryPoints?.some((e: any) => e?.entryPointType === "video" && e?.uri)) {
+        const patchBody = {
+          conferenceData: {
+            createRequest: {
+              requestId: crypto.randomUUID(),
+              conferenceSolutionKey: { type: "hangoutsMeet" },
+            },
+          },
+        };
+        const patchResp = await fetch(
+          `${GOOGLE_CALENDAR_API}/calendars/primary/events/${encodeURIComponent(created.id)}?sendUpdates=all&conferenceDataVersion=1`,
+          { method: "PATCH", headers, body: JSON.stringify(patchBody) },
+        );
+        if (patchResp.ok) created = await patchResp.json();
+      }
+
+      if (created?.id) {
+        for (let i = 0; i < 3; i++) {
+          const verifyResp = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events/${encodeURIComponent(created.id)}`, { headers });
+          if (verifyResp.ok) {
+            const verifiedEvent = await verifyResp.json();
+            created = { ...created, ...verifiedEvent };
+            const hasMeet = !!verifiedEvent.hangoutLink || verifiedEvent.conferenceData?.entryPoints?.some((e: any) => e?.entryPointType === "video" && e?.uri);
+            if (!wantsMeet || hasMeet) break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+
+      const meetLink = created.hangoutLink || created.conferenceData?.entryPoints?.find((e: any) => e?.entryPointType === "video")?.uri || null;
+      if (wantsMeet && !meetLink) {
+        return {
+          ...created,
+          _organised_by: "personal",
+          source: "google_calendar",
+          ok: false,
+          verified: false,
+          error: "Google Calendar created the event but did not return a Google Meet link after verification.",
+        };
+      }
+
+      return { ...created, hangoutLink: meetLink ?? created.hangoutLink, _organised_by: "personal", source: "google_calendar", ok: true, verified: true };
     }
 
     case "update_calendar_event": {
@@ -5429,7 +5480,7 @@ function summarizeWriteAction(toolName: string, args: any): string {
       case "send_slack_message":
         return `${label} in #${args?.channel || args?.channel_id || "?"}: "${String(args?.text || "").slice(0, 120)}"`;
       case "create_calendar_event":
-        return `${label}: "${args?.summary || args?.title || "(untitled)"}" at ${args?.start || args?.start_time || "?"}`;
+        return `${label}: "${args?.summary || args?.title || "(untitled)"}" at ${args?.startDateTime || args?.start || args?.start_time || "?"}${args?.addGoogleMeet === false ? " (no Meet link)" : " (Google Meet included)"}`;
       case "update_calendar_event":
         return `${label} ${args?.event_id || args?.eventId || "?"}`;
       case "create_xero_invoice":

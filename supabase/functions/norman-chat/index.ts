@@ -5090,6 +5090,7 @@ async function executeCalendarTool(
   accessToken: string,
   identity?: ResolvedIdentity,
   duncan?: { accessToken: string; calendarId: string } | null,
+  supabaseAdmin?: any,
 ): Promise<any> {
   const headers = {
     Authorization: `Bearer ${accessToken}`,

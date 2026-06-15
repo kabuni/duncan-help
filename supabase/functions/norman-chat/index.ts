@@ -5480,7 +5480,7 @@ function summarizeWriteAction(toolName: string, args: any): string {
       case "send_slack_message":
         return `${label} in #${args?.channel || args?.channel_id || "?"}: "${String(args?.text || "").slice(0, 120)}"`;
       case "create_calendar_event":
-        return `${label}: "${args?.summary || args?.title || "(untitled)"}" at ${args?.start || args?.start_time || "?"}`;
+        return `${label}: "${args?.summary || args?.title || "(untitled)"}" at ${args?.startDateTime || args?.start || args?.start_time || "?"}${args?.addGoogleMeet === false ? " (no Meet link)" : " (Google Meet included)"}`;
       case "update_calendar_event":
         return `${label} ${args?.event_id || args?.eventId || "?"}`;
       case "create_xero_invoice":

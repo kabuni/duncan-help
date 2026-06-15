@@ -301,8 +301,8 @@ export default function SchoolRegistrations() {
   };
 
   useEffect(() => {
-    if (isAdmin) loadEvents();
-  }, [isAdmin]);
+    if (hasAccess) loadEvents();
+  }, [hasAccess]);
 
   const eventsThisWeek = useMemo(() => {
     const since = Date.now() - 7 * 86400000;
@@ -342,8 +342,8 @@ export default function SchoolRegistrations() {
   };
 
   useEffect(() => {
-    if (isAdmin) load();
-  }, [isAdmin]);
+    if (hasAccess) load();
+  }, [hasAccess]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this registration?")) return;
@@ -400,7 +400,7 @@ export default function SchoolRegistrations() {
     );
   }
 
-  if (!isAdmin) return <Navigate to="/" replace />;
+  if (!hasAccess) return <Navigate to="/" replace />;
 
   return (
     <div className="container mx-auto p-6 max-w-6xl">

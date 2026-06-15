@@ -5343,6 +5343,94 @@ const WRITE_TOOL_LABELS: Record<string, string> = {
   send_pdf_for_signature: "Send PDF for e-signature (DocuSign)",
 };
 
+type TeamDirectoryEntry = {
+  profile_id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  role_title?: string | null;
+  department?: string | null;
+  aliases: string[];
+};
+
+function normalizeDirectoryName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/<[^>]+>/g, " ")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function loadTeamDirectory(supabaseAdmin: any): Promise<TeamDirectoryEntry[]> {
+  const { data: profiles, error: profilesError } = await supabaseAdmin
+    .from("profiles")
+    .select("id, user_id, display_name, role_title, department")
+    .not("user_id", "is", null)
+    .order("display_name", { ascending: true });
+
+  if (profilesError) {
+    console.error("[team-directory] profiles lookup failed", profilesError);
+    return [];
+  }
+
+  const emailByUserId = new Map<string, string>();
+  try {
+    let page = 1;
+    const perPage = 1000;
+    while (page <= 10) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+      if (error) throw error;
+      const users = data?.users || [];
+      for (const u of users) {
+        if (u?.id && u?.email) emailByUserId.set(u.id, u.email);
+      }
+      if (users.length < perPage) break;
+      page += 1;
+    }
+  } catch (err) {
+    console.error("[team-directory] auth user lookup failed", err);
+  }
+
+  return (profiles || [])
+    .map((p: any) => {
+      const email = emailByUserId.get(p.user_id) || "";
+      const name = p.display_name || email;
+      const emailLocal = email.includes("@") ? email.split("@")[0].replace(/[._-]+/g, " ") : "";
+      const aliases = [name, email, emailLocal].filter(Boolean);
+      return {
+        profile_id: p.id,
+        user_id: p.user_id,
+        name,
+        email,
+        role_title: p.role_title,
+        department: p.department,
+        aliases,
+      } as TeamDirectoryEntry;
+    })
+    .filter((entry: TeamDirectoryEntry) => !!entry.email && !!entry.name);
+}
+
+function resolveDirectoryAttendee(input: string, directory: TeamDirectoryEntry[]): TeamDirectoryEntry | null {
+  const target = normalizeDirectoryName(input);
+  if (!target) return null;
+
+  const aliasMatches = directory.filter((entry) =>
+    entry.aliases.some((alias) => normalizeDirectoryName(alias) === target)
+  );
+  if (aliasMatches.length === 1) return aliasMatches[0];
+
+  const fullNameMatches = directory.filter((entry) => normalizeDirectoryName(entry.name).startsWith(`${target} `));
+  if (fullNameMatches.length === 1) return fullNameMatches[0];
+
+  if (target.length >= 3) {
+    const firstNameMatches = directory.filter((entry) => normalizeDirectoryName(entry.name).split(" ")[0] === target);
+    if (firstNameMatches.length === 1) return firstNameMatches[0];
+  }
+
+  return null;
+}
+
 function summarizeWriteAction(toolName: string, args: any): string {
   const label = WRITE_TOOL_LABELS[toolName] || toolName;
   try {

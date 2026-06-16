@@ -36,6 +36,7 @@ import PurchaseOrders from "./pages/PurchaseOrders";
 import EAInbox from "./pages/EAInbox";
 
 import SlackCallback from "./pages/SlackCallback";
+import InstagramCallback from "./pages/InstagramCallback";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import RegisterSchool from "./pages/RegisterSchool";
 import Registrations from "./pages/Registrations";

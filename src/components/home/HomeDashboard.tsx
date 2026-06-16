@@ -292,6 +292,42 @@ function GbpInrRateTile() {
   );
 }
 
+function InstagramTile() {
+  const { data, isLoading } = useInstagramInsights();
+  const fmt = (n: number | null | undefined) =>
+    n == null ? "—" : new Intl.NumberFormat("en-US").format(Math.round(n));
+  return (
+    <TileShell delay={0.12}>
+      <TileHeader
+        icon={Instagram}
+        label={`Instagram · @kabuni.india${data?.captured_at ? ` · synced ${new Date(data.captured_at).toLocaleDateString()}` : ""}`}
+      />
+      {isLoading ? (
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      ) : !data ? (
+        <p className="text-xs text-muted-foreground">
+          Instagram is not connected yet. An admin can link the Kabuni.India account from Settings → Integrations.
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Stat
+            label="Followers"
+            value={fmt(data.followers_count)}
+            hint={
+              data.followers_gained_28d != null
+                ? `${data.followers_gained_28d >= 0 ? "+" : ""}${fmt(data.followers_gained_28d)} since last sync`
+                : undefined
+            }
+          />
+          <Stat label="Reach · 28d" value={fmt(data.reach_28d)} hint={`${fmt(data.reach_7d)} · 7d`} />
+          <Stat label="Impressions · 28d" value={fmt(data.impressions_28d)} hint={`${fmt(data.impressions_7d)} · 7d`} />
+          <Stat label="Profile views · 28d" value={fmt(data.profile_views_28d)} hint={`${fmt(data.media_count)} posts`} />
+        </div>
+      )}
+    </TileShell>
+  );
+}
+
 export const HomeDashboard = ({ userName }: { userName: string }) => {
   const navigate = useNavigate();
   const ga = useGAHomeSummary();

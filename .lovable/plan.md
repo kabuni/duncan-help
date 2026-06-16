@@ -1,30 +1,31 @@
-# Fix: "View submissions" button missing on Scout / Newsletter cards
+## Problem
 
-The button + dialog + edge function action (`form_submissions`) are already implemented in:
-- `src/components/ceo/CommsPulseCard.tsx` (`FormSubmissionsButton`, rendered at line 286)
-- `supabase/functions/hubspot-api/index.ts` (`form_submissions` action + `fetchFormSubmissionsList`)
+When Duncan books a meeting via `create_calendar_event` (norman-chat), the event is created on the prompter's primary Google Calendar so they are the implicit organiser — but they are NOT added to the explicit `attendees` list. Google therefore shows "1 guest" (only the named attendee, e.g. Palash) with no row for the organiser, and tools that count attendees / send RSVP emails treat the prompter as absent. The user wants themselves to appear as an attendee on every meeting Duncan books for them.
 
-So the button is wired up, but it isn't showing for you. There are three realistic causes — I'll address all of them in one pass.
+## Fix
 
-## Likely causes
+In `supabase/functions/norman-chat/index.ts`, inside the `create_calendar_event` tool handler (around lines 5181–5224):
 
-1. **Rendered only when `fm.found === true`.** Today the button sits inside the `fm?.found` branch (line 286). If HubSpot returns "form not found" for newsletter/scout in the persisted briefing payload, the card shows "Form not found in connected portal" and no button — even for a CEO/admin.
-2. **Role check.** `canView = isCEO(user?.email) || isAdmin`. `isCEO` only matches `nimesh@kabuni.com` / `palash@kabuni.com`. If you're signed in with a different email and don't have the `admin` row in `user_roles`, the button is correctly hidden — but you may expect to see it.
-3. **Role query still loading.** `useIsAdmin()` returns `isAdmin = false` while the query is in flight, so on first paint `canView` can be false and the button is skipped until the query resolves and the component re-renders. With the current code this self-heals, but it can look "missing".
+1. After resolving `resolvedAttendees` from the user-supplied names/emails, also push the caller's own email (`identity?.email`) into the attendee list, marked as `organizer: true` and `responseStatus: "accepted"` so Google shows them as the confirmed organiser-guest.
+2. De-duplicate by lowercased email so we never add the prompter twice if the model already included them.
+3. Only add the self-attendee when `identity?.email` exists (skip silently if unknown — falls back to current behaviour).
+4. Keep the existing `resolvedAttendees.length > 0 ? … : undefined` guard semantics: if no other attendees AND no identity email, still send `undefined` (solo blocker event stays attendee-less).
 
-## Changes
+No prompt/system-message changes needed — the model keeps passing only the *other* attendees; the server silently ensures the prompter is on the invite.
 
-### 1. `src/components/ceo/CommsPulseCard.tsx`
-- Lift `FormSubmissionsButton` so it renders **regardless of `fm.found`** (next to the metric block, not inside it). When the form isn't found, the button is still shown to CEO/admin and the dialog will simply display "No submissions found" / the underlying API error — which is the diagnostic signal we actually want.
-- Keep the role gate exactly as-is (`isCEO(user?.email) || isAdmin`) so non-privileged users still see nothing.
-- Small a11y/clarity tweak: button label stays "View submissions", with `aria-label` including the form name.
+## Test
 
-### 2. Quick verification step (no code change)
-After the edit I'll:
-- Confirm your account either matches `CEO_EMAILS` or has an `admin` row in `user_roles` (via a read query). If neither is true, the button is intentionally hidden and we'll need to either add you to `user_roles` as admin or extend `CEO_EMAILS` — I'll surface that explicitly rather than silently widening access.
-- Hit `hubspot-api` with `{ action: "form_submissions", form_key: "newsletter" }` to confirm the backend path still returns rows end-to-end.
+After the edit:
+1. Deploy `norman-chat` via `supabase--deploy_edge_functions`.
+2. In the live preview (logged in as adit@kabuni.com), send a chat like: *"Book a 15 min test meeting with Palash today at 12:30, call it Duncan Self-Attendee Test"* and confirm the pending-write card.
+3. Pull `supabase--edge_function_logs` for `norman-chat` to verify the outbound Google payload includes both `palash@…` and `adit@kabuni.com` in `attendees`.
+4. Query `key_events` / re-list via `list_calendar_events` for that day and confirm both attendees are returned by Google.
+5. Visually verify in the screenshot-style Google Calendar popup that the event now shows 2 guests (Adit + Palash) instead of 1.
 
-## Out of scope
-- No changes to the totals / last-30d numbers visible to everyone.
-- No change to the edge function's auth gate (still CEO emails + `admin` role server-side).
-- No CSV export, no caching.
+If verification fails (e.g. Google strips the organiser entry), fall back to including `self: true` on the organiser attendee object, which Google preserves.
+
+## Scope
+
+- Edit: `supabase/functions/norman-chat/index.ts` only (single block inside `create_calendar_event`).
+- No DB migrations, no client changes, no prompt changes.
+- `update_calendar_event` / `reschedule_event` are out of scope — they don't rebuild the attendee list.

@@ -5201,6 +5201,25 @@ async function executeCalendarTool(
         );
       }
 
+      // Always include the prompter (organiser) as an explicit attendee so they
+      // appear as a guest on the event in Google Calendar. Dedupe by lowercased
+      // email. Skip silently if identity email is unknown.
+      const callerEmail = identity?.email?.trim();
+      if (callerEmail && emailRe.test(callerEmail)) {
+        const already = resolvedAttendees.some(
+          (a) => a.email.toLowerCase() === callerEmail.toLowerCase(),
+        );
+        if (!already) {
+          resolvedAttendees.push({
+            email: callerEmail,
+            // @ts-ignore — Google Calendar accepts these extra fields
+            organizer: true,
+            responseStatus: "accepted",
+            self: true,
+          } as any);
+        }
+      }
+
       const explicitlyNoMeet =
         args.addGoogleMeet === false ||
         args.googleMeet === false ||

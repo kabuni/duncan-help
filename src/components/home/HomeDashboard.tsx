@@ -9,6 +9,8 @@ import {
   useGAHomeSummary, useHiresStats, useWorkstreamsStats, useProjectsStats, useSocialStats, useMyPendingTasks,
   useHubSpotSocialFeed,
 } from "@/hooks/useHomeDashboard";
+import { useInstagramInsights } from "@/hooks/useInstagramInsights";
+import { Instagram } from "lucide-react";
 
 const formatNumber = (n: number | undefined | null) => {
   if (n == null || Number.isNaN(n)) return "—";

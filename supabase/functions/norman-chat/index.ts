@@ -1953,6 +1953,32 @@ const PLANNER_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "list_school_registrations",
+      description: "List submissions from the public School Registration form (`school_registrations` table). Use when the user asks about school sign-ups, registrations, the registrations tab, who has registered, recent registrations, or filtering registrations by role/school. Access is restricted to admins and authorized users; the tool returns an error for everyone else.",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: { type: "number", description: "Max rows to return (default 50, max 500)" },
+          search: { type: "string", description: "Case-insensitive substring match on school_name, contact_name or email" },
+          role: { type: "string", enum: ["Owner", "Principal", "Educator"], description: "Filter by contact role" },
+          since_days: { type: "number", description: "Only return registrations created within the last N days" },
+          order: { type: "string", enum: ["newest", "oldest"], description: "Sort order (default newest)" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_school_registrations_summary",
+      description: "Return aggregate stats for school registrations: total count, count by role, count in the last 7 / 30 days, total number_of_schools represented, and the most recent submission. Use when the user asks for a summary, overview, or KPI snapshot of registrations.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
 ];
 
 async function executePlannerTool(

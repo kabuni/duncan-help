@@ -7791,6 +7791,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       fetch_plaud_meetings: "Plaud Meetings", list_meetings: "Meetings", get_meeting: "Meetings", get_meeting_action_items_with_context: "Meetings",
       list_workstream_cards: "Workstreams", get_workstream_card: "Workstreams", create_workstream_card: "Workstreams", update_workstream_card: "Workstreams",
       list_planner_items: "Planner", create_planner_item: "Planner", update_planner_item: "Planner",
+      list_school_registrations: "Registrations", get_school_registrations_summary: "Registrations",
       list_drive_files: "Google Drive", read_drive_file: "Google Drive", search_drive: "Google Drive",
       list_documents: "Documents", read_document: "Documents", search_documents: "Documents",
       list_slack_channels: "Slack", read_slack_messages: "Slack", post_slack_message: "Slack",

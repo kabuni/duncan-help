@@ -7542,6 +7542,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = await withToolTimeout(tc.function.name, executeWorkstreamTool(tc.function.name, args, supabaseAdmin, userId || "", resolvedIdentity, identityCache));
           } else if (plannerToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executePlannerTool(tc.function.name, args, supabaseAdmin));
+          } else if (registrationsToolNames.includes(tc.function.name)) {
+              result = await withToolTimeout(tc.function.name, executeRegistrationsTool(tc.function.name, args, supabaseAdmin, userId || ""));
           } else if (execSummaryToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeExecSummaryTool(tc.function.name, args, supabaseUrl, authHeader || ""));
           } else if (releaseToolNames.includes(tc.function.name)) {

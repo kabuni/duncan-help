@@ -57,6 +57,7 @@ export default function SettingsIntegrations({ onNavigate: _onNavigate }: Props)
     if (r.id === "google-calendar") return calConnected ? "connected" : "disconnected";
     if (r.id === "slack") return slack.isConnected ? "connected" : "disconnected";
     if (r.id === "gmail") return gmailStatus.data?.connected ? "connected" : "disconnected";
+    if (r.id === "instagram") return igConnection.data ? "connected" : "disconnected";
     const pool = r.scope === "company" ? companyInts : userInts;
     const found = pool.find((p: any) => p.integration_id === r.id);
     return found?.status === "connected" ? "connected" : "disconnected";

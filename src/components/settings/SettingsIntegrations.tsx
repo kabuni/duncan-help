@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Mail, MessageSquare, Calendar, HardDrive, GitBranch, Database,
-  FolderOpen, Loader2, Lock, CheckCircle2, Shield, ExternalLink, X
+  FolderOpen, Loader2, Lock, CheckCircle2, Shield, ExternalLink, X, Instagram, RefreshCw,
 } from "lucide-react";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { useCompanyIntegrations } from "@/hooks/useCompanyIntegrations";
@@ -9,6 +9,7 @@ import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { useSlackConnection } from "@/hooks/useSlackConnection";
 import { useGmailStatus, useGmailConnect, useGmailDisconnect } from "@/hooks/useGmailIntegration";
 import { useIsAdmin } from "@/hooks/useUserRoles";
+import { useInstagramConnectionStatus, useSyncInstagram, startInstagramConnect } from "@/hooks/useInstagramInsights";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import SettingsGmail from "./SettingsGmail";
@@ -23,6 +24,7 @@ type Row = {
 };
 
 const rows: Row[] = [
+  { id: "instagram", name: "Instagram", icon: Instagram, category: "Social", scope: "company", description: "Shared Kabuni.India Instagram Business account. Powers the Instagram metrics tile on the home dashboard." },
   { id: "gmail", name: "Gmail", icon: Mail, category: "Productivity", scope: "user", description: "Read and compose email from your personal mailbox inside Duncan." },
   { id: "slack", name: "Slack", icon: MessageSquare, category: "Communication", scope: "user", description: "Send direct messages and notifications to your Slack account." },
   { id: "google-calendar", name: "Google Calendar", icon: Calendar, category: "Productivity", scope: "user", description: "Read, create and modify events on your calendars." },
@@ -45,6 +47,8 @@ export default function SettingsIntegrations({ onNavigate: _onNavigate }: Props)
   const gmailConnect = useGmailConnect();
   const gmailDisconnect = useGmailDisconnect();
   const { isAdmin } = useIsAdmin();
+  const igConnection = useInstagramConnectionStatus();
+  const igSync = useSyncInstagram();
   const [openRow, setOpenRow] = useState<Row | null>(null);
 
   const isLoading = userLoading || companyLoading;
@@ -53,6 +57,7 @@ export default function SettingsIntegrations({ onNavigate: _onNavigate }: Props)
     if (r.id === "google-calendar") return calConnected ? "connected" : "disconnected";
     if (r.id === "slack") return slack.isConnected ? "connected" : "disconnected";
     if (r.id === "gmail") return gmailStatus.data?.connected ? "connected" : "disconnected";
+    if (r.id === "instagram") return igConnection.data ? "connected" : "disconnected";
     const pool = r.scope === "company" ? companyInts : userInts;
     const found = pool.find((p: any) => p.integration_id === r.id);
     return found?.status === "connected" ? "connected" : "disconnected";
@@ -90,6 +95,38 @@ export default function SettingsIntegrations({ onNavigate: _onNavigate }: Props)
         </Button>
       ) : (
         <Button size="sm" onClick={() => slack.connect()}>Connect Slack</Button>
+      );
+    }
+
+    if (r.id === "instagram") {
+      if (!isAdmin) {
+        return (
+          <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+            <Shield className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>Instagram is connected once by an admin. Metrics are visible to everyone on the home dashboard.</span>
+          </div>
+        );
+      }
+      const handle = igConnection.data?.ig_username;
+      return (
+        <div className="space-y-2">
+          {handle && (
+            <p className="text-xs text-muted-foreground">
+              Connected as <span className="text-foreground font-medium">@{handle}</span>
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => startInstagramConnect()}>
+              {connected ? "Reconnect" : "Connect Instagram"}
+            </Button>
+            {connected && (
+              <Button size="sm" variant="secondary" onClick={() => igSync.mutate()} disabled={igSync.isPending}>
+                <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", igSync.isPending && "animate-spin")} />
+                {igSync.isPending ? "Syncing…" : "Sync now"}
+              </Button>
+            )}
+          </div>
+        </div>
       );
     }
 

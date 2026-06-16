@@ -1643,6 +1643,99 @@ export type Database = {
         }
         Relationships: []
       }
+      instagram_insights_snapshots: {
+        Row: {
+          captured_at: string
+          created_at: string
+          followers_count: number | null
+          followers_gained_28d: number | null
+          follows_count: number | null
+          id: string
+          ig_business_id: string
+          impressions_28d: number | null
+          impressions_7d: number | null
+          media_count: number | null
+          profile_views_28d: number | null
+          raw: Json | null
+          reach_28d: number | null
+          reach_7d: number | null
+          website_clicks_28d: number | null
+        }
+        Insert: {
+          captured_at?: string
+          created_at?: string
+          followers_count?: number | null
+          followers_gained_28d?: number | null
+          follows_count?: number | null
+          id?: string
+          ig_business_id: string
+          impressions_28d?: number | null
+          impressions_7d?: number | null
+          media_count?: number | null
+          profile_views_28d?: number | null
+          raw?: Json | null
+          reach_28d?: number | null
+          reach_7d?: number | null
+          website_clicks_28d?: number | null
+        }
+        Update: {
+          captured_at?: string
+          created_at?: string
+          followers_count?: number | null
+          followers_gained_28d?: number | null
+          follows_count?: number | null
+          id?: string
+          ig_business_id?: string
+          impressions_28d?: number | null
+          impressions_7d?: number | null
+          media_count?: number | null
+          profile_views_28d?: number | null
+          raw?: Json | null
+          reach_28d?: number | null
+          reach_7d?: number | null
+          website_clicks_28d?: number | null
+        }
+        Relationships: []
+      }
+      instagram_tokens: {
+        Row: {
+          connected_by: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          ig_business_id: string
+          ig_username: string | null
+          page_access_token: string
+          page_id: string
+          scope: string | null
+          updated_at: string
+        }
+        Insert: {
+          connected_by?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          ig_business_id: string
+          ig_username?: string | null
+          page_access_token: string
+          page_id: string
+          scope?: string | null
+          updated_at?: string
+        }
+        Update: {
+          connected_by?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          ig_business_id?: string
+          ig_username?: string | null
+          page_access_token?: string
+          page_id?: string
+          scope?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       integration_audit_logs: {
         Row: {
           action: string

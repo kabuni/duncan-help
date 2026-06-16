@@ -36,6 +36,7 @@ import PurchaseOrders from "./pages/PurchaseOrders";
 import EAInbox from "./pages/EAInbox";
 
 import SlackCallback from "./pages/SlackCallback";
+import InstagramCallback from "./pages/InstagramCallback";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import RegisterSchool from "./pages/RegisterSchool";
 import Registrations from "./pages/Registrations";
@@ -75,6 +76,7 @@ const AppContent = () => {
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsAndConditions />} />
           <Route path="/auth/slack/callback" element={<ProtectedRoute><SlackCallback /></ProtectedRoute>} />
+          <Route path="/auth/instagram/callback" element={<ProtectedRoute><InstagramCallback /></ProtectedRoute>} />
 
           {/* Shared layout for all authenticated app routes */}
           <Route element={<ProtectedShell />}>

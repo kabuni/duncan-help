@@ -67,24 +67,14 @@ export function useSyncInstagram() {
   });
 }
 
-export function startInstagramConnect() {
-  const APP_ID = import.meta.env.VITE_META_APP_ID as string | undefined;
-  if (!APP_ID) {
-    toast.error("Instagram App ID not configured. Set VITE_META_APP_ID.");
+export async function startInstagramConnect() {
+  const redirectUri = `${window.location.origin}/auth/instagram/callback`;
+  const { data, error } = await supabase.functions.invoke("instagram-oauth-start", {
+    body: { redirect_uri: redirectUri },
+  });
+  if (error || (data as any)?.error) {
+    toast.error((data as any)?.error || error?.message || "Failed to start OAuth");
     return;
   }
-  const redirectUri = `${window.location.origin}/auth/instagram/callback`;
-  const scopes = [
-    "instagram_basic",
-    "instagram_manage_insights",
-    "pages_show_list",
-    "pages_read_engagement",
-    "business_management",
-  ].join(",");
-  const url = new URL("https://www.facebook.com/v21.0/dialog/oauth");
-  url.searchParams.set("client_id", APP_ID);
-  url.searchParams.set("redirect_uri", redirectUri);
-  url.searchParams.set("scope", scopes);
-  url.searchParams.set("response_type", "code");
-  window.location.href = url.toString();
+  window.location.href = (data as { url: string }).url;
 }

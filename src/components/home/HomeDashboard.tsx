@@ -457,6 +457,9 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
         </TileShell>
       </div>
 
+      {/* INSTAGRAM INSIGHTS */}
+      <InstagramTile />
+
       {/* HUBSPOT SOCIAL FEED — temporarily hidden */}
       {false && <HubSpotSocialFeedTile />}
 

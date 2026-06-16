@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Mail, MessageSquare, Calendar, HardDrive, GitBranch, Database,
-  FolderOpen, Loader2, Lock, CheckCircle2, Shield, ExternalLink, X
+  FolderOpen, Loader2, Lock, CheckCircle2, Shield, ExternalLink, X, Instagram, RefreshCw,
 } from "lucide-react";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { useCompanyIntegrations } from "@/hooks/useCompanyIntegrations";
@@ -9,6 +9,7 @@ import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { useSlackConnection } from "@/hooks/useSlackConnection";
 import { useGmailStatus, useGmailConnect, useGmailDisconnect } from "@/hooks/useGmailIntegration";
 import { useIsAdmin } from "@/hooks/useUserRoles";
+import { useInstagramConnectionStatus, useSyncInstagram, startInstagramConnect } from "@/hooks/useInstagramInsights";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import SettingsGmail from "./SettingsGmail";

@@ -2064,6 +2064,87 @@ async function executePlannerTool(
   }
 }
 
+const REGISTRATIONS_ALLOWED_USER_IDS = new Set<string>([
+  "3b8d4435-6d70-4c95-8b0b-272d8c458bbb", // Pratik
+]);
+
+async function canAccessRegistrations(supabaseAdmin: any, userId: string): Promise<boolean> {
+  if (!userId) return false;
+  if (REGISTRATIONS_ALLOWED_USER_IDS.has(userId)) return true;
+  const { data } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+  return !!data;
+}
+
+async function executeRegistrationsTool(
+  toolName: string,
+  args: any,
+  supabaseAdmin: any,
+  userId: string,
+): Promise<any> {
+  const allowed = await canAccessRegistrations(supabaseAdmin, userId);
+  if (!allowed) {
+    return { error: "Access denied: school registrations are restricted to admins and authorized users." };
+  }
+
+  switch (toolName) {
+    case "list_school_registrations": {
+      const limit = Math.min(Math.max(Number(args.limit) || 50, 1), 500);
+      let q = supabaseAdmin
+        .from("school_registrations")
+        .select("id, school_name, contact_name, role, number_of_schools, email, phone, notes, created_at");
+
+      if (args.role) q = q.eq("role", args.role);
+      if (args.since_days && Number(args.since_days) > 0) {
+        const since = new Date(Date.now() - Number(args.since_days) * 86_400_000).toISOString();
+        q = q.gte("created_at", since);
+      }
+      if (args.search && typeof args.search === "string") {
+        const s = args.search.replace(/[%,]/g, " ").trim();
+        if (s) q = q.or(`school_name.ilike.%${s}%,contact_name.ilike.%${s}%,email.ilike.%${s}%`);
+      }
+      q = q.order("created_at", { ascending: args.order === "oldest" }).limit(limit);
+
+      const { data, error } = await q;
+      if (error) throw new Error(`Failed to list registrations: ${error.message}`);
+      return { registrations: data || [], count: (data || []).length };
+    }
+
+    case "get_school_registrations_summary": {
+      const { data, error } = await supabaseAdmin
+        .from("school_registrations")
+        .select("id, role, number_of_schools, created_at, school_name, contact_name, email")
+        .order("created_at", { ascending: false });
+      if (error) throw new Error(`Failed to summarize registrations: ${error.message}`);
+      const rows = data || [];
+      const now = Date.now();
+      const within = (days: number) => rows.filter((r: any) => (now - new Date(r.created_at).getTime()) <= days * 86_400_000).length;
+      const byRole: Record<string, number> = {};
+      let totalSchools = 0;
+      for (const r of rows) {
+        const role = r.role || "Unspecified";
+        byRole[role] = (byRole[role] || 0) + 1;
+        totalSchools += Number(r.number_of_schools) || 0;
+      }
+      return {
+        total: rows.length,
+        by_role: byRole,
+        last_7_days: within(7),
+        last_30_days: within(30),
+        total_schools_represented: totalSchools,
+        most_recent: rows[0] || null,
+      };
+    }
+
+    default:
+      throw new Error(`Unknown registrations tool: ${toolName}`);
+  }
+}
+
 async function executeWorkstreamTool(
   toolName: string,
   args: any,

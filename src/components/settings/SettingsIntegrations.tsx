@@ -98,6 +98,38 @@ export default function SettingsIntegrations({ onNavigate: _onNavigate }: Props)
       );
     }
 
+    if (r.id === "instagram") {
+      if (!isAdmin) {
+        return (
+          <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+            <Shield className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>Instagram is connected once by an admin. Metrics are visible to everyone on the home dashboard.</span>
+          </div>
+        );
+      }
+      const handle = igConnection.data?.ig_username;
+      return (
+        <div className="space-y-2">
+          {handle && (
+            <p className="text-xs text-muted-foreground">
+              Connected as <span className="text-foreground font-medium">@{handle}</span>
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => startInstagramConnect()}>
+              {connected ? "Reconnect" : "Connect Instagram"}
+            </Button>
+            {connected && (
+              <Button size="sm" variant="secondary" onClick={() => igSync.mutate()} disabled={igSync.isPending}>
+                <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", igSync.isPending && "animate-spin")} />
+                {igSync.isPending ? "Syncing…" : "Sync now"}
+              </Button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     // Company-scoped integrations
     if (!isAdmin) {
       return (

@@ -24,6 +24,7 @@ type Row = {
 };
 
 const rows: Row[] = [
+  { id: "instagram", name: "Instagram", icon: Instagram, category: "Social", scope: "company", description: "Shared Kabuni.India Instagram Business account. Powers the Instagram metrics tile on the home dashboard." },
   { id: "gmail", name: "Gmail", icon: Mail, category: "Productivity", scope: "user", description: "Read and compose email from your personal mailbox inside Duncan." },
   { id: "slack", name: "Slack", icon: MessageSquare, category: "Communication", scope: "user", description: "Send direct messages and notifications to your Slack account." },
   { id: "google-calendar", name: "Google Calendar", icon: Calendar, category: "Productivity", scope: "user", description: "Read, create and modify events on your calendars." },

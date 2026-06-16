@@ -7308,6 +7308,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const analyticsToolNames = ["get_workstream_analytics", "get_recruitment_analytics", "get_team_activity_analytics", "get_operational_summary", "get_google_analytics_dashboard"];
       const workstreamMgmtToolNames = ["list_team_members", "list_workstream_cards", "create_workstream_card", "add_tasks_to_card", "update_workstream_card", "check_team_availability"];
       const plannerToolNames = ["list_planner_events", "update_planner_event_meta"];
+      const registrationsToolNames = ["list_school_registrations", "get_school_registrations_summary"];
       const execSummaryToolNames = ["generate_exec_summary_document"];
       const releaseToolNames = ["log_release_change"];
       const lovableContribToolNames = ["update_lovable_contributors"];

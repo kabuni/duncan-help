@@ -47,6 +47,8 @@ export default function SettingsIntegrations({ onNavigate: _onNavigate }: Props)
   const gmailConnect = useGmailConnect();
   const gmailDisconnect = useGmailDisconnect();
   const { isAdmin } = useIsAdmin();
+  const igConnection = useInstagramConnectionStatus();
+  const igSync = useSyncInstagram();
   const [openRow, setOpenRow] = useState<Row | null>(null);
 
   const isLoading = userLoading || companyLoading;

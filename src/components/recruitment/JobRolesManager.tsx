@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Briefcase, Plus, Loader2, Trash2, Upload, FileText, Sparkles, Download, RotateCcw, AlertTriangle, XCircle } from "lucide-react";
+import { Briefcase, Plus, Loader2, Trash2, Upload, FileText, Sparkles, Download, RotateCcw, AlertTriangle, XCircle, CheckCircle2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 const sanitizeStorageFileName = (fileName: string) => {
@@ -338,6 +338,25 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
     }
   };
 
+  const handleToggleStatus = async (id: string, roleTitle: string, currentStatus: string) => {
+    const nextStatus = currentStatus === "closed" ? "active" : "closed";
+    try {
+      const { error } = await supabase
+        .from("job_roles")
+        .update({ status: nextStatus })
+        .eq("id", id);
+      if (error) throw error;
+      toast.success(
+        nextStatus === "closed"
+          ? `"${roleTitle}" marked as closed (candidate hired)`
+          : `"${roleTitle}" reopened`
+      );
+      queryClient.invalidateQueries({ queryKey: ["job-roles"] });
+    } catch (err: any) {
+      toast.error("Failed to update role status: " + err.message);
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -555,9 +574,30 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
                       {new Date(role.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(role.id, role.title, role.hireflix_position_id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7"
+                                onClick={() => handleToggleStatus(role.id, role.title, role.status)}
+                              >
+                                {role.status === "closed"
+                                  ? <Undo2 className="h-3.5 w-3.5" />
+                                  : <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">
+                              {role.status === "closed" ? "Reopen role" : "Mark as closed (candidate hired)"}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(role.id, role.title, role.hireflix_position_id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

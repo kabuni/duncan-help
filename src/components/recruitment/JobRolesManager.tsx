@@ -338,6 +338,25 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
     }
   };
 
+  const handleToggleStatus = async (id: string, roleTitle: string, currentStatus: string) => {
+    const nextStatus = currentStatus === "closed" ? "active" : "closed";
+    try {
+      const { error } = await supabase
+        .from("job_roles")
+        .update({ status: nextStatus })
+        .eq("id", id);
+      if (error) throw error;
+      toast.success(
+        nextStatus === "closed"
+          ? `"${roleTitle}" marked as closed (candidate hired)`
+          : `"${roleTitle}" reopened`
+      );
+      queryClient.invalidateQueries({ queryKey: ["job-roles"] });
+    } catch (err: any) {
+      toast.error("Failed to update role status: " + err.message);
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

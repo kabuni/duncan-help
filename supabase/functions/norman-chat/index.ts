@@ -1845,7 +1845,7 @@ const WORKSTREAM_TOOLS = [
     type: "function",
     function: {
       name: "check_team_availability",
-      description: "Check Google Calendar availability for one or more team members to find free time slots for scheduling tasks. Use this when assigning work to find when people are free. Requires the team member's user_id (get from list_team_members). Returns busy periods and suggested free slots.",
+      description: "Check Google Calendar availability AND list upcoming events for one or more *other* team members. This is the ONLY way to see another user's calendar — `list_calendar_events` is caller-only. Use this whenever the user asks about a teammate's schedule, free time, busy periods, or what's on their calendar in a given window. Resolve names to user_id UUIDs via list_team_members first. Returns busy_events (title, start, end), free_slots, and a suggested_slot per user. Also use it when finding time to assign work.",
       parameters: {
         type: "object",
         properties: {

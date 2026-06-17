@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Briefcase, Plus, Loader2, Trash2, Upload, FileText, Sparkles, Download, RotateCcw, AlertTriangle, XCircle } from "lucide-react";
+import { Briefcase, Plus, Loader2, Trash2, Upload, FileText, Sparkles, Download, RotateCcw, AlertTriangle, XCircle, CheckCircle2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 const sanitizeStorageFileName = (fileName: string) => {

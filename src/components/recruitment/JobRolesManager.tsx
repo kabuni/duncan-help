@@ -574,9 +574,30 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
                       {new Date(role.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(role.id, role.title, role.hireflix_position_id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7"
+                                onClick={() => handleToggleStatus(role.id, role.title, role.status)}
+                              >
+                                {role.status === "closed"
+                                  ? <Undo2 className="h-3.5 w-3.5" />
+                                  : <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">
+                              {role.status === "closed" ? "Reopen role" : "Mark as closed (candidate hired)"}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(role.id, role.title, role.hireflix_position_id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

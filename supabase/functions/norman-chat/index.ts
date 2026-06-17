@@ -1776,7 +1776,7 @@ const WORKSTREAM_TOOLS = [
     type: "function",
     function: {
       name: "list_team_members",
-      description: "Look up available team members. Returns profile IDs, display names, departments, and roles. Use this FIRST to resolve names to user IDs before assigning cards or tasks.",
+      description: "Look up available team members. Returns profile IDs, display names, departments, and roles. Use this FIRST to resolve names to user IDs before assigning cards/tasks OR before checking another user's calendar availability.",
       parameters: {
         type: "object",
         properties: {
@@ -6722,9 +6722,13 @@ Format as a natural, readable summary with clear sections. If a section has no d
     // Always-on groups (Forms, NDA, Exec Summary, Release, Lovable Contributors)
     // remain available because they're either tiny or admin-gated.
     // ============================================================
+    const TEAM_CALENDAR_AVAILABILITY_TOOLS = WORKSTREAM_TOOLS.filter((t: any) =>
+      ["list_team_members", "check_team_availability"].includes(t?.function?.name)
+    );
+
     const INTENT_RULES: Array<{ groups: any[][]; re: RegExp }> = [
       { groups: [GMAIL_TOOLS], re: /\b(gmail|email|emails|inbox|draft|drafts|reply|forward|unread|sender|recipient|cc'?d|bcc'?d)\b/i },
-      { groups: [CALENDAR_TOOLS], re: /\b(calendar|diary|schedule|scheduling|availability|free\/busy|free busy|book\b|booking|meeting|meetings|meeting room|reschedule|invite|invites|event|events|appointment|catch[- ]?up|1:1|one[- ]?on[- ]?one|set\s+(?:up\s+)?(?:a|an|the)?\s*(?:meeting|call|catch[- ]?up|sync|chat)|arrange\s+(?:a|an|the)?\s*(?:meeting|call|catch[- ]?up|sync)|put\s+.+?\s+on\s+(?:my|the|our)\s+calendar|block\s+(?:time|out)|find\s+time|google\s*meet|meet\s+link|zoom\s+link|teams\s+link)\b/i },
+      { groups: [CALENDAR_TOOLS, TEAM_CALENDAR_AVAILABILITY_TOOLS], re: /\b(calendar|diary|schedule|scheduling|availability|free\/busy|free busy|book\b|booking|meeting|meetings|meeting room|reschedule|invite|invites|event|events|appointment|catch[- ]?up|1:1|one[- ]?on[- ]?one|set\s+(?:up\s+)?(?:a|an|the)?\s*(?:meeting|call|catch[- ]?up|sync|chat)|arrange\s+(?:a|an|the)?\s*(?:meeting|call|catch[- ]?up|sync)|put\s+.+?\s+on\s+(?:my|the|our)\s+calendar|block\s+(?:time|out)|find\s+time|google\s*meet|meet\s+link|zoom\s+link|teams\s+link)\b/i },
       { groups: [MEETING_TOOLS], re: /\b(meeting notes?|recap|action items?|transcript|plaud|gemini|recording|summary of (the|my|our)\b|minutes\b)\b/i },
       { groups: [WORKSTREAM_TOOLS], re: /\b(workstream|workstreams|kanban|card|cards|ryg|amber|red\/yellow|status update|owner of|pending action|pending actions|action items?|open tasks?|my tasks?|to[- ]?dos?|on my plate|overdue|csv|download|spreadsheet|excel|google sheet|export)\b/i },
       { groups: [PLANNER_TOOLS, CALENDAR_TOOLS], re: /\b(planner|plan\b|roadmap|milestone|sprint plan|backlog|to-do list|reschedule|postpone|move (it|this|the meeting|to tomorrow)|push (back|forward) (the|my)|change (the )?(date|time))\b/i },
@@ -8206,6 +8210,67 @@ Format as a natural, readable summary with clear sections. If a section has no d
               aggregatedContent += ndaResponse;
               forcedRecoveryContent = ndaResponse;
               enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: ndaResponse } }] })}\n\n`);
+              break;
+            }
+
+            const availabilityResult = (() => {
+              if (!toolCalls.some((tc: any) => tc?.function?.name === "check_team_availability")) return null;
+              for (const msg of toolResults || []) {
+                const raw = msg?.content;
+                let parsed: any = null;
+                if (typeof raw === "string") {
+                  try { parsed = JSON.parse(raw); } catch { parsed = null; }
+                } else if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+                  parsed = raw;
+                }
+                if (parsed?.tool === "check_team_availability" && Array.isArray(parsed?.availability)) {
+                  return parsed;
+                }
+              }
+              return null;
+            })();
+            if (availabilityResult) {
+              const fmt = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", {
+                timeZone: availabilityResult.caller_timezone || "Europe/London",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+              });
+              const durationMs = Math.max(1, Number(availabilityResult.task_duration_minutes || 30)) * 60_000;
+              const connected = availabilityResult.availability.filter((m: any) => m?.calendar_connected === true && Array.isArray(m?.free_slots));
+              const disconnected = availabilityResult.availability.filter((m: any) => m?.calendar_connected === false);
+              const intersections = connected.reduce((acc: any[], member: any, index: number) => {
+                const slots = member.free_slots.map((s: any) => ({
+                  start: new Date(s.start).getTime(),
+                  end: new Date(s.end).getTime(),
+                })).filter((s: any) => Number.isFinite(s.start) && Number.isFinite(s.end) && s.end - s.start >= durationMs);
+                if (index === 0) return slots;
+                const next: any[] = [];
+                for (const a of acc) {
+                  for (const b of slots) {
+                    const start = Math.max(a.start, b.start);
+                    const end = Math.min(a.end, b.end);
+                    if (end - start >= durationMs) next.push({ start, end });
+                  }
+                }
+                return next;
+              }, [] as any[]).sort((a: any, b: any) => a.start - b.start);
+              const names = availabilityResult.availability.map((m: any) => `**${m.name || m.user_id}**`).join(" and ");
+              const lines = intersections.slice(0, 5).map((s: any) => `- ${fmt(new Date(s.start).toISOString())}–${fmt(new Date(Math.min(s.start + durationMs, s.end)).toISOString())}`);
+              const busyLines = connected.flatMap((m: any) => (m.busy_events || []).slice(0, 3).map((e: any) => `- **${m.name}:** ${fmt(e.start)}–${fmt(e.end)} — ${e.title || "Busy"}`));
+              const availabilityResponse = [
+                `## Availability check — ${availabilityResult.window || "requested window"}`,
+                "",
+                lines.length > 0
+                  ? `I found ${names} free for **${availabilityResult.task_duration_minutes || 30} minutes** at: \n${lines.join("\n")}`
+                  : `I couldn’t find a shared ${availabilityResult.task_duration_minutes || 30}-minute free slot for ${names} in that window.`,
+                disconnected.length > 0 ? `\nCalendars not connected: ${disconnected.map((m: any) => `**${m.name || m.user_id}**`).join(", ")}.` : "",
+                busyLines.length > 0 ? `\n### Busy blocks checked\n${busyLines.join("\n")}` : "",
+              ].filter(Boolean).join("\n");
+              lastFullContent = availabilityResponse;
+              aggregatedContent += availabilityResponse;
+              forcedRecoveryContent = availabilityResponse;
+              enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: availabilityResponse } }] })}\n\n`);
               break;
             }
             const toolResultsString = JSON.stringify(toolResults);

@@ -1,31 +1,34 @@
-## Problem
+## Goal
+Arzoo (`arzoo@kabuni.com`) should have admin powers **only within recruitment** — not global admin (no user approvals, no integrations management, no purchase orders, no CEO briefing, etc.).
 
-When Duncan books a meeting via `create_calendar_event` (norman-chat), the event is created on the prompter's primary Google Calendar so they are the implicit organiser — but they are NOT added to the explicit `attendees` list. Google therefore shows "1 guest" (only the named attendee, e.g. Palash) with no row for the organiser, and tools that count attendees / send RSVP emails treat the prompter as absent. The user wants themselves to appear as an attendee on every meeting Duncan books for them.
+## Current state
+She was granted the global `admin` role in `user_roles`, which gates everything via `has_role(uid, 'admin')` across the whole app (Settings → User Management, Integrations, POs, deletions, etc.). That's too broad.
 
-## Fix
+## Approach
+Introduce a **recruitment-scoped admin** capability without giving global admin.
 
-In `supabase/functions/norman-chat/index.ts`, inside the `create_calendar_event` tool handler (around lines 5181–5224):
+### 1. Database
+- Remove Arzoo's `admin` row from `user_roles`.
+- Add a new value `'recruitment_admin'` to the `app_role` enum.
+- Insert `('arzoo-uid', 'recruitment_admin')` into `user_roles`.
+- Update RLS on recruitment tables so both `admin` and `recruitment_admin` qualify:
+  - `job_roles` — "Admins can manage job roles" policy → `has_role(uid,'admin') OR has_role(uid,'recruitment_admin')`
+  - `candidates` — "Admins can delete candidates" policy → same OR
+  - `hireflix_retry_queue` admin-gated policies (if any) → same OR
+- Leave every other table's `has_role(uid,'admin')` policy untouched, so she cannot manage users, integrations, POs, etc.
 
-1. After resolving `resolvedAttendees` from the user-supplied names/emails, also push the caller's own email (`identity?.email`) into the attendee list, marked as `organizer: true` and `responseStatus: "accepted"` so Google shows them as the confirmed organiser-guest.
-2. De-duplicate by lowercased email so we never add the prompter twice if the model already included them.
-3. Only add the self-attendee when `identity?.email` exists (skip silently if unknown — falls back to current behaviour).
-4. Keep the existing `resolvedAttendees.length > 0 ? … : undefined` guard semantics: if no other attendees AND no identity email, still send `undefined` (solo blocker event stays attendee-less).
+### 2. Frontend
+- Add a `useIsRecruitmentAdmin()` hook (mirrors `useIsAdmin`) querying `user_roles` for `recruitment_admin` OR global `admin`.
+- No other UI changes required — the Recruitment page is already visible to all authenticated users, and the destructive actions (delete role, delete candidate, close role) are guarded by RLS, which will now permit her.
+- Confirm Settings → Account Approvals / User Management / Workspace Welcome remain hidden for her (they check `useIsAdmin`, which will return false).
 
-No prompt/system-message changes needed — the model keeps passing only the *other* attendees; the server silently ensures the prompter is on the invite.
+### 3. Memory
+Save a project memory noting the new `recruitment_admin` scoped role and that Arzoo holds it (not global admin), so future RBAC work doesn't accidentally elevate her.
 
-## Test
+## Out of scope
+- No changes to the recruitment UI itself (close/reopen toggle already shipped).
+- No changes to other scoped roles (we're only introducing `recruitment_admin` for now).
 
-After the edit:
-1. Deploy `norman-chat` via `supabase--deploy_edge_functions`.
-2. In the live preview (logged in as adit@kabuni.com), send a chat like: *"Book a 15 min test meeting with Palash today at 12:30, call it Duncan Self-Attendee Test"* and confirm the pending-write card.
-3. Pull `supabase--edge_function_logs` for `norman-chat` to verify the outbound Google payload includes both `palash@…` and `adit@kabuni.com` in `attendees`.
-4. Query `key_events` / re-list via `list_calendar_events` for that day and confirm both attendees are returned by Google.
-5. Visually verify in the screenshot-style Google Calendar popup that the event now shows 2 guests (Adit + Palash) instead of 1.
-
-If verification fails (e.g. Google strips the organiser entry), fall back to including `self: true` on the organiser attendee object, which Google preserves.
-
-## Scope
-
-- Edit: `supabase/functions/norman-chat/index.ts` only (single block inside `create_calendar_event`).
-- No DB migrations, no client changes, no prompt changes.
-- `update_calendar_event` / `reschedule_event` are out of scope — they don't rebuild the attendee list.
+## Confirm before I build
+1. OK to add a new enum value `recruitment_admin` (vs. e.g. a separate `recruitment_permissions` table)?
+2. Should `recruitment_admin` also be able to **delete candidates** and **delete job roles**, or only close/reopen + manage CVs/invites?

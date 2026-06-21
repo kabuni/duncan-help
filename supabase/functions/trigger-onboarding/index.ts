@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
     // Load candidate + role
     const { data: candidate, error: cErr } = await admin
       .from("candidates")
-      .select("*, job_roles!inner(id, title, department, jd_text, jd_storage_path)")
+      .select("*, job_roles!inner(id, title, description, jd_storage_path)")
       .eq("id", body.candidate_id)
       .maybeSingle();
     if (cErr || !candidate) {
@@ -108,7 +108,16 @@ Deno.serve(async (req) => {
     }
 
     const role = candidate.job_roles;
-    const department = role?.department || "Operations";
+    // Infer department from role title (no department column on job_roles)
+    const titleLc = (role?.title || "").toLowerCase();
+    const department =
+      /engineer|developer|software|backend|frontend|devops|sre|qa/.test(titleLc) ? "Engineering" :
+      /sales|account exec|bdr|sdr/.test(titleLc) ? "Sales" :
+      /market|growth|content|seo|brand/.test(titleLc) ? "Marketing" :
+      /product manager|product owner|pm\b/.test(titleLc) ? "Product" :
+      /people|hr|recruit|talent/.test(titleLc) ? "People" :
+      "Operations";
+    const jdText = role?.description || "";
     const roleTitle = role?.title || "New Hire";
     const fullName = candidate.preferred_name || body.preferred_name || candidate.name || "New Hire";
     const startDate = body.start_date || candidate.start_date || ymd(addDays(new Date(), 14));

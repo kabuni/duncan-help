@@ -667,13 +667,34 @@ const Recruitment = () => {
 
                           {/* Status */}
                           <TableCell>
-                            <Badge
-                              variant={c.status === "scored" ? "default" : c.status === "unmatched" ? "destructive" : "secondary"}
-                              className="text-[11px]"
-                            >
-                              {c.status}
-                            </Badge>
+                            <div className="flex flex-col items-start gap-1">
+                              <Badge
+                                variant={c.status === "hired" ? "default" : c.status === "scored" ? "default" : c.status === "unmatched" ? "destructive" : "secondary"}
+                                className={`text-[11px] ${c.status === "hired" ? "bg-primary/15 text-primary border-primary/30" : ""}`}
+                              >
+                                {c.status}
+                              </Badge>
+                              {c.status !== "hired" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 px-2 text-[10px] gap-1"
+                                  onClick={() => setHireCandidate(c)}
+                                >
+                                  <UserCheck className="h-3 w-3" /> Hire
+                                </Button>
+                              )}
+                              {c.status === "hired" && c.onboarding_card_id && (
+                                <a
+                                  href={`/workstreams?card=${c.onboarding_card_id}`}
+                                  className="text-[10px] text-primary underline inline-flex items-center gap-1"
+                                >
+                                  <ExternalLink className="h-3 w-3" /> Onboarding
+                                </a>
+                              )}
+                            </div>
                           </TableCell>
+
 
                           {/* CV Download */}
                           <TableCell className="text-center">

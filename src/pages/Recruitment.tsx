@@ -129,6 +129,7 @@ const Recruitment = () => {
   const [validatingPosition, setValidatingPosition] = useState(false);
   const [assigningRole, setAssigningRole] = useState<string | null>(null);
   const [loadingPlaybackId, setLoadingPlaybackId] = useState<string | null>(null);
+  const [hireCandidate, setHireCandidate] = useState<any>(null);
 
   const handleWatchInterview = async (candidate: any) => {
     const isCompleted = candidate.hireflix_status === "completed";

@@ -402,7 +402,7 @@ The Team`;
         title: `Onboarding started for ${fullName}`,
         body: `Card created with ${taskRows.length} tasks. Welcome email ${emailResult.sent ? "sent" : "not sent"}. ${calendarEvents.filter((e) => e.id).length} calendar events created.`,
         link: `/workstreams?card=${card.id}`,
-        type: "onboarding",
+        kind: "onboarding",
       });
     } catch (e) { console.warn("notification insert failed", e); }
 

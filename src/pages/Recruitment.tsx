@@ -10,9 +10,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Mail, RefreshCw, Users, Briefcase, Loader2, CheckCircle, AlertCircle, Star, Target, FileText, Video, ExternalLink, Trophy, AlertTriangle, XCircle, RotateCcw } from "lucide-react";
+import { Mail, RefreshCw, Users, Briefcase, Loader2, CheckCircle, AlertCircle, Star, Target, FileText, Video, ExternalLink, Trophy, AlertTriangle, XCircle, RotateCcw, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { JobRolesManager } from "@/components/recruitment/JobRolesManager";
+import { MarkAsHiredDialog } from "@/components/recruitment/MarkAsHiredDialog";
 
 const VALUE_LABELS = [
   { key: "sweat_the_detail", label: "Detail", emoji: "🔍" },
@@ -128,6 +129,7 @@ const Recruitment = () => {
   const [validatingPosition, setValidatingPosition] = useState(false);
   const [assigningRole, setAssigningRole] = useState<string | null>(null);
   const [loadingPlaybackId, setLoadingPlaybackId] = useState<string | null>(null);
+  const [hireCandidate, setHireCandidate] = useState<any>(null);
 
   const handleWatchInterview = async (candidate: any) => {
     const isCompleted = candidate.hireflix_status === "completed";
@@ -665,13 +667,34 @@ const Recruitment = () => {
 
                           {/* Status */}
                           <TableCell>
-                            <Badge
-                              variant={c.status === "scored" ? "default" : c.status === "unmatched" ? "destructive" : "secondary"}
-                              className="text-[11px]"
-                            >
-                              {c.status}
-                            </Badge>
+                            <div className="flex flex-col items-start gap-1">
+                              <Badge
+                                variant={c.status === "hired" ? "default" : c.status === "scored" ? "default" : c.status === "unmatched" ? "destructive" : "secondary"}
+                                className={`text-[11px] ${c.status === "hired" ? "bg-primary/15 text-primary border-primary/30" : ""}`}
+                              >
+                                {c.status}
+                              </Badge>
+                              {c.status !== "hired" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 px-2 text-[10px] gap-1"
+                                  onClick={() => setHireCandidate(c)}
+                                >
+                                  <UserCheck className="h-3 w-3" /> Hire
+                                </Button>
+                              )}
+                              {c.status === "hired" && c.onboarding_card_id && (
+                                <a
+                                  href={`/workstreams?card=${c.onboarding_card_id}`}
+                                  className="text-[10px] text-primary underline inline-flex items-center gap-1"
+                                >
+                                  <ExternalLink className="h-3 w-3" /> Onboarding
+                                </a>
+                              )}
+                            </div>
                           </TableCell>
+
 
                           {/* CV Download */}
                           <TableCell className="text-center">
@@ -966,6 +989,13 @@ const Recruitment = () => {
             )}
           </DialogContent>
         </Dialog>
+
+        <MarkAsHiredDialog
+          candidate={hireCandidate}
+          open={!!hireCandidate}
+          onOpenChange={(v) => { if (!v) setHireCandidate(null); }}
+          onCompleted={() => { /* react-query will refetch on focus */ }}
+        />
       </main>
     </>
   );

@@ -10,9 +10,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Mail, RefreshCw, Users, Briefcase, Loader2, CheckCircle, AlertCircle, Star, Target, FileText, Video, ExternalLink, Trophy, AlertTriangle, XCircle, RotateCcw } from "lucide-react";
+import { Mail, RefreshCw, Users, Briefcase, Loader2, CheckCircle, AlertCircle, Star, Target, FileText, Video, ExternalLink, Trophy, AlertTriangle, XCircle, RotateCcw, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { JobRolesManager } from "@/components/recruitment/JobRolesManager";
+import { MarkAsHiredDialog } from "@/components/recruitment/MarkAsHiredDialog";
 
 const VALUE_LABELS = [
   { key: "sweat_the_detail", label: "Detail", emoji: "🔍" },

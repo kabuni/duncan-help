@@ -989,6 +989,13 @@ const Recruitment = () => {
             )}
           </DialogContent>
         </Dialog>
+
+        <MarkAsHiredDialog
+          candidate={hireCandidate}
+          open={!!hireCandidate}
+          onOpenChange={(v) => { if (!v) setHireCandidate(null); }}
+          onCompleted={() => { /* react-query will refetch on focus */ }}
+        />
       </main>
     </>
   );

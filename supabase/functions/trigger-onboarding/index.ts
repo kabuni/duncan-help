@@ -159,11 +159,11 @@ Deno.serve(async (req) => {
       provisioningTools = defaults.tools as string[];
     }
     // Augment with AI suggestions based on JD
-    if (role?.jd_text && Deno.env.get("OPENAI_API_KEY")) {
+    if (jdText && Deno.env.get("OPENAI_API_KEY")) {
       try {
         const ai = await callOpenAI([
           { role: "system", content: "Suggest 3-6 additional tools/accounts a new hire likely needs based on their job description. Return JSON only." },
-          { role: "user", content: `Role: ${roleTitle}\nDepartment: ${department}\nJD excerpt:\n${role.jd_text.slice(0, 2000)}\n\nReturn JSON: {"extra_tools": ["..."]}` },
+          { role: "user", content: `Role: ${roleTitle}\nDepartment: ${department}\nJD excerpt:\n${jdText.slice(0, 2000)}\n\nReturn JSON: {"extra_tools": ["..."]}` },
         ]);
         const txt = ai?.choices?.[0]?.message?.content || "";
         const m = txt.match(/\{[\s\S]*\}/);
@@ -379,7 +379,7 @@ The Team`;
         const ai = await callOpenAI([
           { role: "system", content: "You draft thoughtful 30/60/90-day onboarding plans for new hires. Output strict JSON only — no prose." },
           { role: "user", content:
-            `Draft a 30/60/90-day plan for a new hire.\nRole: ${roleTitle}\nDepartment: ${department}\nJob description:\n${(role?.jd_text || "").slice(0, 3000)}\n\nReturn JSON shape:\n{\n  "days_30": {"learning_goals":[],"intros":[],"first_deliverable":""},\n  "days_60": {"ownership_areas":[],"kpis":[],"stakeholders":[]},\n  "days_90": {"ownership_areas":[],"kpis":[],"stakeholders":[],"probation_criteria":[]}\n}`,
+            `Draft a 30/60/90-day plan for a new hire.\nRole: ${roleTitle}\nDepartment: ${department}\nJob description:\n${(jdText).slice(0, 3000)}\n\nReturn JSON shape:\n{\n  "days_30": {"learning_goals":[],"intros":[],"first_deliverable":""},\n  "days_60": {"ownership_areas":[],"kpis":[],"stakeholders":[]},\n  "days_90": {"ownership_areas":[],"kpis":[],"stakeholders":[],"probation_criteria":[]}\n}`,
           },
         ]);
         const txt = ai?.choices?.[0]?.message?.content || "";

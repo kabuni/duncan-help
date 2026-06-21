@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
-interface Profile { id: string; full_name: string | null; email: string | null }
+interface Profile { user_id: string; display_name: string | null }
 
 export function MarkAsHiredDialog({
   candidate,

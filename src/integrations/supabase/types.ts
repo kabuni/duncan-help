@@ -332,14 +332,17 @@ export type Database = {
           cv_text: string | null
           email: string | null
           email_subject: string | null
+          employment_type: string | null
           failure_reason: string | null
           gmail_message_id: string | null
+          hired_at: string | null
           hireflix_candidate_id: string | null
           hireflix_interview_id: string | null
           hireflix_interview_url: string | null
           hireflix_invited_at: string | null
           hireflix_playback_url: string | null
           hireflix_status: string | null
+          hiring_manager_id: string | null
           id: string
           interview_final_score: number | null
           interview_scored_at: string | null
@@ -348,11 +351,15 @@ export type Database = {
           is_score_locked: boolean
           job_role_id: string | null
           name: string
+          onboarding_card_id: string | null
+          preferred_name: string | null
           scoring_details: Json | null
+          start_date: string | null
           status: string
           total_score: number | null
           updated_at: string
           values_score: number | null
+          work_location: string | null
         }
         Insert: {
           attachment_filename?: string | null
@@ -363,14 +370,17 @@ export type Database = {
           cv_text?: string | null
           email?: string | null
           email_subject?: string | null
+          employment_type?: string | null
           failure_reason?: string | null
           gmail_message_id?: string | null
+          hired_at?: string | null
           hireflix_candidate_id?: string | null
           hireflix_interview_id?: string | null
           hireflix_interview_url?: string | null
           hireflix_invited_at?: string | null
           hireflix_playback_url?: string | null
           hireflix_status?: string | null
+          hiring_manager_id?: string | null
           id?: string
           interview_final_score?: number | null
           interview_scored_at?: string | null
@@ -379,11 +389,15 @@ export type Database = {
           is_score_locked?: boolean
           job_role_id?: string | null
           name: string
+          onboarding_card_id?: string | null
+          preferred_name?: string | null
           scoring_details?: Json | null
+          start_date?: string | null
           status?: string
           total_score?: number | null
           updated_at?: string
           values_score?: number | null
+          work_location?: string | null
         }
         Update: {
           attachment_filename?: string | null
@@ -394,14 +408,17 @@ export type Database = {
           cv_text?: string | null
           email?: string | null
           email_subject?: string | null
+          employment_type?: string | null
           failure_reason?: string | null
           gmail_message_id?: string | null
+          hired_at?: string | null
           hireflix_candidate_id?: string | null
           hireflix_interview_id?: string | null
           hireflix_interview_url?: string | null
           hireflix_invited_at?: string | null
           hireflix_playback_url?: string | null
           hireflix_status?: string | null
+          hiring_manager_id?: string | null
           id?: string
           interview_final_score?: number | null
           interview_scored_at?: string | null
@@ -410,11 +427,15 @@ export type Database = {
           is_score_locked?: boolean
           job_role_id?: string | null
           name?: string
+          onboarding_card_id?: string | null
+          preferred_name?: string | null
           scoring_details?: Json | null
+          start_date?: string | null
           status?: string
           total_score?: number | null
           updated_at?: string
           values_score?: number | null
+          work_location?: string | null
         }
         Relationships: [
           {
@@ -2603,6 +2624,53 @@ export type Database = {
         }
         Relationships: []
       }
+      onboarding_runs: {
+        Row: {
+          candidate_id: string
+          card_id: string | null
+          created_at: string
+          error: string | null
+          id: string
+          plan_30_60_90: Json | null
+          stages: Json
+          status: string
+          triggered_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          candidate_id: string
+          card_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          plan_30_60_90?: Json | null
+          stages?: Json
+          status?: string
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          candidate_id?: string
+          card_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          plan_30_60_90?: Json | null
+          stages?: Json
+          status?: string
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_runs_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: true
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           approval_status: string
@@ -3209,6 +3277,36 @@ export type Database = {
           title?: string
           updated_at?: string
           version?: string
+        }
+        Relationships: []
+      }
+      role_access_defaults: {
+        Row: {
+          created_at: string
+          department: string
+          id: string
+          notes: string | null
+          role_title: string | null
+          tools: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          department: string
+          id?: string
+          notes?: string | null
+          role_title?: string | null
+          tools?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          department?: string
+          id?: string
+          notes?: string | null
+          role_title?: string | null
+          tools?: Json
+          updated_at?: string
         }
         Relationships: []
       }

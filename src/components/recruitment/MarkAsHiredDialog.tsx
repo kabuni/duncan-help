@@ -38,11 +38,10 @@ export function MarkAsHiredDialog({
     setPreferredName(candidate?.preferred_name || candidate?.name || "");
     supabase
       .from("profiles")
-      .select("id, full_name, email")
-      .order("full_name", { ascending: true })
+      .select("user_id, display_name")
+      .order("display_name", { ascending: true })
       .then(({ data }) => {
-        setProfiles((data as Profile[]) || []);
-        // Default hiring manager to current user
+        setProfiles(((data as any[]) || []).filter((p) => p.user_id) as Profile[]);
         supabase.auth.getUser().then(({ data: u }) => {
           if (u.user?.id) setHiringManagerId(u.user.id);
         });

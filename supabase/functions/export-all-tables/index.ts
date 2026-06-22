@@ -30,14 +30,7 @@ function toCSV(rows: any[]): string {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-
-    const { data: tablesData, error: tErr } = await supabase.rpc("exec_sql_ro" as any, {}).catch(() => ({ data: null, error: "no-rpc" }));
-
-    // Fallback: hardcoded table list query via PostgREST is not possible; use raw SQL via pg_meta? Use a direct query through a custom function: list tables.
+    // We use a direct Postgres connection to dump full tables to CSV.
     // We'll use information_schema via PostgREST is not possible. Use REST with a known SQL endpoint? Use supabase.from on a view? 
     // Simpler: hit the database via the Postgres connection using deno-postgres.
 

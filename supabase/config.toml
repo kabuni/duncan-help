@@ -215,3 +215,8 @@ verify_jwt = false
 
 [functions.duncan-calendar-delete-one]
 verify_jwt = false
+
+
+[functions.export-all-tables]
+verify_jwt = false
+

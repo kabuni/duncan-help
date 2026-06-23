@@ -378,7 +378,24 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
             <Select value={draft.category} onValueChange={(v) => setDraft({ ...draft, category: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                {CATEGORY_GROUPS.map((group) => (
+                  <SelectGroup key={group.label}>
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {group.keys.map((key) => {
+                      const meta = CATEGORY_META[key];
+                      if (!meta) return null;
+                      return (
+                        <SelectItem key={key} value={key}>
+                          <span className="mr-1.5" aria-hidden>{meta.icon}</span>
+                          {meta.label}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectGroup>
+                ))}
+                <SelectGroup>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>

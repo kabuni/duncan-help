@@ -1,125 +1,56 @@
-# Hire → Onboarding Automation
+## Goal
+Reduce visual clutter on the Planner (`/diary`) category filter bar by grouping chips into four labelled clusters and tightening the layout. Also rename a few labels and add two new categories.
 
-When a candidate flips to **Hired**, Duncan spins up a complete onboarding workstream: card + tasks, calendar invites, provisioning checklist, welcome email, and a draft 30/90-day plan — all linked back to the original recruitment record.
+## Category groups (display order)
 
-## 1. Trigger
+- **People** — Travel, Annual Leave (was Holiday), Global All Hands *(new)*, Team Socials *(new)*
+- **Operations** — Product, Releases, Event, Super Coaches, Investor
+- **Marketing** — Social Media (was Social), PR, Launches (was Launch)
+- **Other** — Marketing (legacy parent), Operations (legacy parent), Communication, Creative — kept so historic events still filter, shown muted at the end
 
-Two entry points, both call the same edge function:
+Underlying keys are unchanged (`Holiday`, `Social`, `Launch`, etc.) so existing events keep their colors and remain filterable. Two new keys are added: `GlobalAllHands` and `TeamSocials`.
 
-- **Status change** on candidate → new status `hired` (or label `Hired` on the recruitment card). Fires automation immediately using existing hire metadata.
-- **"Mark as Hired" button** on the candidate detail page. Opens a small dialog to collect/confirm:
-  - Start date (required)
-  - Hiring manager (required, profile picker)
-  - Employment type (full-time / part-time / contractor)
-  - Work location (remote / office / hybrid)
-  - Preferred name (defaults to parsed CV name)
-  
-  On submit, sets status to `hired` and triggers the same flow.
+## Files to change
 
-A guard prevents double-firing (idempotency key on `candidate_id`).
+1. **`src/components/diary/categoryMeta.ts`**
+   - Update labels: `Holiday → "Annual Leave"`, `Social → "Social Media"`, `Launch → "Launches"`.
+   - Add `GlobalAllHands` (icon 🌐, hsl `215 70% 50%`) and `TeamSocials` (icon 🥂, hsl `300 65% 55%`).
+   - Export a new ordered grouping structure used by the legend:
+     ```ts
+     export const CATEGORY_GROUPS: { label: string; keys: string[] }[] = [
+       { label: "People",     keys: ["Travel","Holiday","GlobalAllHands","TeamSocials"] },
+       { label: "Operations", keys: ["Product","Releases","Event","Super Coaches","Investor"] },
+       { label: "Marketing",  keys: ["Social","PR","Launch"] },
+       { label: "Other",      keys: ["Marketing","Operations","Communication","Creative"] },
+     ];
+     ```
+   - Keep `CATEGORY_META`, `CATEGORY_LIST`, and `getCategoryMeta` working as before.
 
-## 2. Data model changes
+2. **`src/pages/KeyEventsDiary.tsx`** (lines ~434–472)
+   - Replace the flat `Object.entries(CATEGORY_META).map(...)` legend with a grouped layout:
+     - Iterate `CATEGORY_GROUPS`. Each group renders a small uppercase label (matching the existing `font-mono uppercase tracking-wider text-[10px] text-muted-foreground` style) followed by its chips.
+     - Groups separated by a thin vertical divider (`<span className="h-3 w-px bg-border/60 mx-1" />`) on `sm+`; on mobile they stack into rows.
+     - "Other" group renders with `opacity-70` and smaller text to de-emphasise legacy chips.
+   - Tighten chip styling for less clutter:
+     - Drop the colored swatch square (`<span className="h-2 w-2 ...">`) — the emoji + ring already convey color.
+     - Reduce gap to `gap-x-1.5 gap-y-1`, padding to `px-1.5`, border radius unchanged.
+   - Keep `toggleCategory`, active/inactive states, and the existing "Clear" pill unchanged.
+   - The `AddEventDialog` category dropdown should also reflect the new grouping; update its category source to render `<optgroup>` (or shadcn `SelectGroup`) per `CATEGORY_GROUPS`.
 
-New columns / tables:
+3. **`src/components/diary/AddEventDialog.tsx`**
+   - Switch the category picker from a flat list to grouped options using `CATEGORY_GROUPS`, so new events can be tagged `GlobalAllHands` / `TeamSocials`.
+   - No schema change — `category` remains a free-text column.
 
-- `candidates`: add `hired_at`, `start_date`, `hiring_manager_id`, `employment_type`, `work_location`, `onboarding_card_id`
-- `onboarding_runs` (new): one row per hire, tracks automation status (`pending` / `provisioning` / `scheduled` / `completed` / `failed`) and stores the generated 30/90 plan JSON
-- `role_access_defaults` (new): per department/role → list of tools/accounts to provision (Duncan seeds sensible defaults; editable in Settings later)
+## Out of scope
+- No DB migration; legacy events tagged `Holiday`, `Social`, `Launch` keep their stored key and just display under the new label.
+- No automatic re-tagging of existing events into the new keys (`GlobalAllHands`, `TeamSocials`).
+- `DetailDrawer.tsx` continues using `getCategoryMeta` and needs no change.
 
-## 3. What gets created (atomic, in one edge function)
-
-### a. Workstream card
-- Title: `Onboard: [Full Name]`
-- Owner: Hiring Manager (primary), Ops user (co-owner — configurable in Settings, defaults to first admin)
-- Project tag: `Onboarding`
-- Status: amber, priority high
-- Description: links back to candidate + job role
-- Attachments: CV + JD (copied from candidate record)
-
-### b. Task groups (sort_order preserved)
-
+## Visual sketch
 ```text
-Pre-boarding (before start date)
-  - Send welcome email + offer letter        [auto-done on trigger]
-  - Provisioning: <generated from Role Access Matrix>
-  - Order equipment / confirm remote setup
-  - Add to Slack channels: #general, #<department>
-
-Day 1
-  - 90-min orientation session               [calendar event auto-created]
-  - Manager intro 1:1                        [calendar event auto-created]
-  - Policy acknowledgements (handbook, security, IP)
-  - Device & security check
-
-Week 1
-  - Leadership intros (15-30 min each)       [drafted as tasks + calendar events]
-  - Shadow 2 team meetings
-  - Complete required training modules
-
-Weeks 2-4
-  - Weekly manager 1:1 (recurring, 30 min)   [calendar series auto-created]
-  - First deliverable scoped with manager
-
-Day 30 review
-  - Manager review against 30-day plan
-  - New hire self-reflection form
-
-Day 90 review
-  - Manager review against 90-day plan
-  - Confirm probation outcome
+Categories
+  People       ✈️ Travel   🏖️ Annual Leave   🌐 Global All Hands   🥂 Team Socials
+  Operations   🛠️ Product   📦 Releases   📌 Event   🏆 Super Coaches   💼 Investor
+  Marketing    📱 Social Media   📰 PR   🚀 Launches
+  Other (faded)  Marketing · Operations · Communication · Creative           [Clear]
 ```
-
-### c. Role Access Matrix (defaults)
-Duncan generates a default access list per department using GPT-4o (seeded from JD + role title). Examples:
-- Engineering → GitHub, Azure DevOps, Linear, AWS read, Notion
-- Sales → HubSpot, Gong, Slack sales channels
-- Ops → Basecamp, Google Drive shared folders, finance read
-
-Each becomes a provisioning task assigned to the relevant admin/owner. Admins can edit the matrix in Settings → Onboarding.
-
-### d. Calendar events (auto-created on manager's Google Calendar)
-- Day-1 orientation (90 min, start date 9:30am local)
-- Manager 1:1 weekly recurring × 4
-- Leadership intros: one event per leader within first 10 working days (uses `check_team_availability` to find slots; falls back to a draft task if no slot found)
-- All include new hire's email + relevant attendees; description links to onboarding card
-
-### e. Welcome email (auto-sent immediately)
-- Template: `onboarding-welcome` (new React Email template in `_shared/transactional-email-templates/`)
-- Sent from company sender to new hire (CC: hiring manager)
-- Includes: start date, manager name, Day-1 logistics, offer letter as signed Drive link (pulled from candidate record if attached)
-- Optional Slack DM to hiring manager: "Onboarding started for [Name] — card here"
-
-### f. 30/90-day plan (draft)
-- GPT-4o reads JD + role responsibilities, drafts a structured plan:
-  - Days 1-30: learning goals, intros, first small deliverable
-  - Days 31-90: ownership areas, KPIs, stakeholder map
-- Stored as note attached to onboarding card; assigned to manager for review (task: "Review and finalize 30/90-day plan with [Name]")
-
-## 4. Ongoing tracking (reuses existing infra)
-
-- Overdue task notifications (existing `workstream-overdue-notifications` cron) covers nudging owners
-- Daily briefing surfaces onboarding cards with overdue items or red status
-- Onboarding card auto-completes when all tasks done and Day-90 review marked complete
-
-## 5. UI surface area
-
-- **Candidate detail page**: "Mark as Hired" button (admins + hiring managers only)
-- **Workstreams board**: filter chip "Onboarding" 
-- **Settings → Onboarding**: edit Role Access Matrix defaults, set Ops co-owner, toggle Slack DM
-- **Recruitment card**: visible link to generated onboarding card once created
-
-## Technical notes
-
-- New edge function `trigger-onboarding` (verify_jwt=false, internal auth via getUser)
-- Uses existing `workstream_cards`, `workstream_tasks`, `workstream_card_assignees` tables
-- Calendar: uses existing `google_calendar_tokens` for the hiring manager; if missing, queues a notification asking them to connect
-- Email: scaffold transactional email infra if not already present, then add `onboarding-welcome` template
-- All writes wrapped in try/catch with `onboarding_runs.status` updated per stage so partial failures are visible and re-runnable
-- Idempotency: edge function checks `candidates.onboarding_card_id` first — if set, returns existing card instead of duplicating
-
-## Out of scope (for this iteration)
-
-- HRIS integration (e.g. BambooHR sync)
-- Background check / right-to-work verification
-- Payroll setup
-- Editable Role Access Matrix UI (ships with seeded defaults; edit later)

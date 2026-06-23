@@ -214,13 +214,7 @@ export default function KeyEventsDiary() {
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<Date | null>(null);
   
-  const [viewTz, setViewTzState] = useState<ViewTz>(() => {
-    if (typeof window === "undefined") return "Europe/London";
-    return (localStorage.getItem(VIEW_TZ_KEY) as ViewTz | null) || detectDefaultViewTz();
-  });
-  const setViewTz = (v: ViewTz) => {
-    setViewTzState(v);
-    try { localStorage.setItem(VIEW_TZ_KEY, v); } catch {}
+  const viewTz: ViewTz = "Europe/London";
   };
 
   useEffect(() => {

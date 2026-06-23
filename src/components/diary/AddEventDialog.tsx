@@ -57,7 +57,7 @@ const sanitizeFileName = (fileName: string) => {
   return ext ? `${safe}.${ext}` : safe;
 };
 
-const CATEGORIES = [...CATEGORY_LIST, "Other"];
+
 
 interface Props {
   open: boolean;

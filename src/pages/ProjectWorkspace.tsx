@@ -744,7 +744,7 @@ export default function ProjectWorkspace() {
                   type="file"
                   multiple
                   className="hidden"
-                  accept=".pdf,.docx,.txt,.md,.csv,.json,.xml,.yaml,.yml"
+                  accept=".pdf,.docx,.txt,.md,.csv,.json,.xml,.yaml,.yml,.jpg,.jpeg,.png,.webp,.gif"
                   onChange={handleFileUpload}
                   disabled={isUploading}
                 />

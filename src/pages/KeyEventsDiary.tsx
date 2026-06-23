@@ -214,14 +214,7 @@ export default function KeyEventsDiary() {
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<Date | null>(null);
   
-  const [viewTz, setViewTzState] = useState<ViewTz>(() => {
-    if (typeof window === "undefined") return "Europe/London";
-    return (localStorage.getItem(VIEW_TZ_KEY) as ViewTz | null) || detectDefaultViewTz();
-  });
-  const setViewTz = (v: ViewTz) => {
-    setViewTzState(v);
-    try { localStorage.setItem(VIEW_TZ_KEY, v); } catch {}
-  };
+  const viewTz = "Europe/London" as ViewTz;
 
   useEffect(() => {
     const flag = params.get("duncan_calendar");
@@ -383,24 +376,8 @@ export default function KeyEventsDiary() {
                 </div>
               </div>
             </div>
-             <div className="flex items-stretch gap-2 flex-wrap w-full min-w-0 lg:w-auto lg:justify-end">
-              <ToggleGroup
-                type="single"
-                size="sm"
-                value={viewTz}
-                onValueChange={(v) => v && setViewTz(v as ViewTz)}
-                className="h-8 w-full min-w-0 sm:w-auto border border-border rounded-md p-0.5"
-              >
-                <ToggleGroupItem value="Europe/London" className="h-7 flex-1 sm:flex-none px-2 text-xs gap-1" aria-label="View in UK time">
-                  <span aria-hidden>🇬🇧</span> UK
-                </ToggleGroupItem>
-                <ToggleGroupItem value="Asia/Kolkata" className="h-7 flex-1 sm:flex-none px-2 text-xs gap-1" aria-label="View in India time">
-                  <span aria-hidden>🇮🇳</span> IN
-                </ToggleGroupItem>
-                <ToggleGroupItem value="both" className="h-7 flex-1 sm:flex-none px-2 text-xs" aria-label="View both time zones">
-                  Both
-                </ToggleGroupItem>
-              </ToggleGroup>
+              <div className="flex items-stretch gap-2 flex-wrap w-full min-w-0 lg:w-auto lg:justify-end">
+
               <div className="w-full sm:w-[160px]">
                 <Select value={ownerFilter} onValueChange={setOwnerFilter}>
                   <SelectTrigger className="h-8 w-full text-xs">

@@ -431,65 +431,78 @@ export default function KeyEventsDiary() {
           </div>
         </Card>
 
-        <div className="shrink-0 min-w-0 overflow-hidden lg:px-1">
-          <div className="flex items-start gap-x-3 gap-y-1.5 text-[10px] sm:text-[11px] text-muted-foreground overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible lg:pb-0 scrollbar-thin">
-            {CATEGORY_GROUPS.map((group, gi) => (
-              <div
-                key={group.label}
-                className={cn(
-                  "flex items-center gap-x-1.5 gap-y-1 flex-wrap shrink-0",
-                  group.label === "Other" && "opacity-60",
-                )}
-              >
-                <span className="font-mono uppercase tracking-wider text-[10px] shrink-0 mr-0.5">
-                  {group.label}
-                </span>
-                {group.keys.map((key) => {
-                  const meta = CATEGORY_META[key];
-                  if (!meta) return null;
-                  const active = selectedCategories.has(key);
-                  return (
+        <div className="shrink-0 min-w-0">
+          <div className="flex items-center flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+            <span className="font-mono uppercase tracking-wider text-[10px] mr-1">Filter</span>
+            {CATEGORY_GROUPS.map((group) => {
+              const activeInGroup = group.keys.filter((k) => selectedCategories.has(k));
+              const count = activeInGroup.length;
+              return (
+                <Popover key={group.label}>
+                  <PopoverTrigger asChild>
                     <button
-                      key={key}
                       type="button"
-                      onClick={() => toggleCategory(key)}
-                      aria-pressed={active}
                       className={cn(
-                        "inline-flex items-center gap-1 shrink-0 rounded-full border px-1.5 py-0.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        active
-                          ? "border-transparent text-foreground font-medium shadow-sm"
+                        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        count > 0
+                          ? "border-primary/50 bg-primary/10 text-foreground font-medium"
                           : "border-border/60 hover:border-border hover:bg-accent/40",
+                        group.label === "Other" && "opacity-70",
                       )}
-                      style={
-                        active
-                          ? {
-                              background: `hsl(${meta.hsl} / 0.18)`,
-                              boxShadow: `0 0 0 1px hsl(${meta.hsl} / 0.55), 0 0 8px hsl(${meta.hsl} / 0.25)`,
-                            }
-                          : undefined
-                      }
                     >
-                      <span aria-hidden>{meta.icon}</span>
-                      <span>{meta.label}</span>
+                      <span>{group.label}</span>
+                      {count > 0 && (
+                        <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary/20 text-primary px-1 text-[10px] font-semibold">
+                          {count}
+                        </span>
+                      )}
+                      <ChevronDown className="h-3 w-3 opacity-60" />
                     </button>
-                  );
-                })}
-                {gi < CATEGORY_GROUPS.length - 1 && (
-                  <span aria-hidden className="hidden sm:inline-block h-3 w-px bg-border/60 ml-1" />
-                )}
-              </div>
-            ))}
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-56 p-1.5">
+                    <div className="space-y-0.5">
+                      {group.keys.map((key) => {
+                        const meta = CATEGORY_META[key];
+                        if (!meta) return null;
+                        const active = selectedCategories.has(key);
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => toggleCategory(key)}
+                            className={cn(
+                              "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left transition-colors",
+                              active ? "bg-accent text-foreground font-medium" : "hover:bg-accent/60",
+                            )}
+                          >
+                            <span
+                              aria-hidden
+                              className="inline-block h-2.5 w-2.5 rounded-sm shrink-0"
+                              style={{ background: `hsl(${meta.hsl})` }}
+                            />
+                            <span aria-hidden>{meta.icon}</span>
+                            <span className="flex-1 truncate">{meta.label}</span>
+                            {active && <Check className="h-3 w-3 text-primary" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              );
+            })}
             {selectedCategories.size > 0 && (
               <button
                 type="button"
                 onClick={() => setSelectedCategories(new Set())}
-                className="ml-1 shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-[10px] uppercase tracking-wider hover:bg-accent"
+                className="ml-1 rounded-full border border-border/60 px-2 py-0.5 text-[10px] uppercase tracking-wider hover:bg-accent"
               >
                 Clear
               </button>
             )}
           </div>
         </div>
+
 
         <Card className="p-2 sm:p-3 shrink-0 min-w-0 flex flex-col overflow-visible">
           {loading ? (

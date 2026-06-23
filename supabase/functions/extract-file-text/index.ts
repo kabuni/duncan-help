@@ -207,6 +207,47 @@ Deno.serve(async (req) => {
           .replace(/\n{3,}/g, "\n\n")
           .trim();
       }
+    } else if (/\.(jpg|jpeg|png|webp|gif)$/i.test(fileName)) {
+      // --- IMAGE EXTRACTION (OCR + visual description via vision model) ---
+      const arrayBuffer = await fileData.arrayBuffer();
+      const MAX_IMG_SIZE = 20 * 1024 * 1024;
+      if (arrayBuffer.byteLength > MAX_IMG_SIZE) {
+        return new Response(JSON.stringify({
+          error: `Image too large (${(arrayBuffer.byteLength / 1024 / 1024).toFixed(1)}MB). Maximum is 20MB.`,
+        }), { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const ext = fileName.split(".").pop() || "jpeg";
+      const mime = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
+      const base64 = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+      );
+      try {
+        const aiData = await callLLMWithFallback({
+          workflow: "extract-file-text",
+          force_provider: "openai",
+          max_tokens: 4000,
+          messages: [
+            {
+              role: "system",
+              content: "You are an OCR + image-description engine. Given an image, return: (1) any text visible in the image transcribed verbatim, then (2) a detailed factual description of the image — objects, people, layout, colors, charts, diagrams. Be thorough so this can be used as retrieval context later. Plain text only.",
+            },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: `Extract text and describe this image (${fileRecord.file_name}).` },
+                { type: "image_url", image_url: { url: `data:${mime};base64,${base64}`, detail: "high" } },
+              ],
+            },
+          ],
+        });
+        extractedText = aiData.choices?.[0]?.message?.content || "";
+      } catch (aiErr: any) {
+        console.error("Image extraction error:", aiErr?.status, aiErr?.message);
+        return new Response(JSON.stringify({ error: "Failed to analyze image" }), {
+          status: 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     } else if (
       /\.(txt|md|csv|json|xml|yaml|yml|log)$/i.test(fileName)
     ) {

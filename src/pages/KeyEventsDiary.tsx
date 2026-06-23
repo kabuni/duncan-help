@@ -214,7 +214,7 @@ export default function KeyEventsDiary() {
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<Date | null>(null);
   
-  const viewTz: ViewTz = "Europe/London";
+  const viewTz = "Europe/London" as ViewTz;
 
   useEffect(() => {
     const flag = params.get("duncan_calendar");

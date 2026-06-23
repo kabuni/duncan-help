@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { Paperclip, X, Plus, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { TimezonePicker, zonedDateTimeToISO } from "./TimezonePicker";
-import { CATEGORY_LIST } from "./categoryMeta";
+import { CATEGORY_META, CATEGORY_GROUPS } from "./categoryMeta";
 
 const DEFAULT_TZ = (() => {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London"; } catch { return "Europe/London"; }

@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     }
 
     // Validate file type
-    const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".txt", ".md", ".csv", ".json", ".xml", ".yaml", ".yml", ".log"];
+    const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".txt", ".md", ".csv", ".json", ".xml", ".yaml", ".yml", ".log", ".jpg", ".jpeg", ".png", ".webp", ".gif"];
     const fileExt = "." + (file.name.split(".").pop() || "").toLowerCase();
     if (!ALLOWED_EXTENSIONS.includes(fileExt)) {
       return new Response(JSON.stringify({ error: `File type not allowed: ${fileExt}. Allowed: ${ALLOWED_EXTENSIONS.join(", ")}` }), {

@@ -4,14 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Paperclip, X, Plus, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { TimezonePicker, zonedDateTimeToISO } from "./TimezonePicker";
-import { CATEGORY_LIST } from "./categoryMeta";
+import { CATEGORY_META, CATEGORY_GROUPS } from "./categoryMeta";
 
 const DEFAULT_TZ = (() => {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London"; } catch { return "Europe/London"; }
@@ -57,7 +57,7 @@ const sanitizeFileName = (fileName: string) => {
   return ext ? `${safe}.${ext}` : safe;
 };
 
-const CATEGORIES = [...CATEGORY_LIST, "Other"];
+
 
 interface Props {
   open: boolean;
@@ -378,7 +378,24 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
             <Select value={draft.category} onValueChange={(v) => setDraft({ ...draft, category: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                {CATEGORY_GROUPS.map((group) => (
+                  <SelectGroup key={group.label}>
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {group.keys.map((key) => {
+                      const meta = CATEGORY_META[key];
+                      if (!meta) return null;
+                      return (
+                        <SelectItem key={key} value={key}>
+                          <span className="mr-1.5" aria-hidden>{meta.icon}</span>
+                          {meta.label}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectGroup>
+                ))}
+                <SelectGroup>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>

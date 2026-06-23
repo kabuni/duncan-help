@@ -11,21 +11,30 @@ export type CategoryMeta = {
 };
 
 export const CATEGORY_META: Record<string, CategoryMeta> = {
-  Travel:     { label: "Travel",     icon: "✈️", hsl: "210 85% 55%" },
-  Holiday:    { label: "Holiday",    icon: "🏖️", hsl: "180 65% 45%" },
-  Marketing:  { label: "Marketing",  icon: "📣", hsl: "330 75% 55%" },
-  Launch:     { label: "Launch",     icon: "🚀", hsl: "12 85% 55%"  },
-  Investor:   { label: "Investor",   icon: "💼", hsl: "260 60% 55%" },
-  Product:    { label: "Product",    icon: "🛠️", hsl: "200 75% 50%" },
-  Operations: { label: "Operations", icon: "⚙️", hsl: "220 15% 45%" },
-  Releases:   { label: "Releases",   icon: "📦", hsl: "30 85% 50%"  },
-  Communication: { label: "Communication", icon: "💬", hsl: "150 60% 45%" },
-  Social:     { label: "Social",     icon: "📱", hsl: "290 70% 55%" },
-  Creative:   { label: "Creative",   icon: "🎨", hsl: "45 90% 55%"  },
-  Event:      { label: "Event",      icon: "📌", hsl: "240 10% 50%" },
+  Travel:     { label: "Travel",       icon: "✈️", hsl: "210 85% 55%" },
+  Holiday:    { label: "Annual Leave", icon: "🏖️", hsl: "180 65% 45%" },
+  GlobalAllHands: { label: "Global All Hands", icon: "🌐", hsl: "215 70% 50%" },
+  TeamSocials: { label: "Team Socials", icon: "🥂", hsl: "300 65% 55%" },
+  Product:    { label: "Product",      icon: "🛠️", hsl: "200 75% 50%" },
+  Releases:   { label: "Releases",     icon: "📦", hsl: "30 85% 50%"  },
+  Event:      { label: "Event",        icon: "📌", hsl: "240 10% 50%" },
   "Super Coaches": { label: "Super Coaches", icon: "🏆", hsl: "165 70% 40%" },
-  PR:         { label: "PR",         icon: "📰", hsl: "20 80% 50%"  },
+  Investor:   { label: "Investor",     icon: "💼", hsl: "260 60% 55%" },
+  Social:     { label: "Social Media", icon: "📱", hsl: "290 70% 55%" },
+  PR:         { label: "PR",           icon: "📰", hsl: "20 80% 50%"  },
+  Launch:     { label: "Launches",     icon: "🚀", hsl: "12 85% 55%"  },
+  Marketing:  { label: "Marketing",    icon: "📣", hsl: "330 75% 55%" },
+  Operations: { label: "Operations",   icon: "⚙️", hsl: "220 15% 45%" },
+  Communication: { label: "Communication", icon: "💬", hsl: "150 60% 45%" },
+  Creative:   { label: "Creative",     icon: "🎨", hsl: "45 90% 55%"  },
 };
+
+export const CATEGORY_GROUPS: { label: string; keys: string[] }[] = [
+  { label: "People",     keys: ["Travel", "Holiday", "GlobalAllHands", "TeamSocials"] },
+  { label: "Operations", keys: ["Product", "Releases", "Event", "Super Coaches", "Investor"] },
+  { label: "Marketing",  keys: ["Social", "PR", "Launch"] },
+  { label: "Other",      keys: ["Marketing", "Operations", "Communication", "Creative"] },
+];
 
 const FALLBACK: CategoryMeta = { label: "Other", icon: "📌", hsl: "240 10% 50%" };
 

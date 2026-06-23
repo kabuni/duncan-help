@@ -14,8 +14,9 @@ import { useIsAdmin } from "@/hooks/useUserRoles";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { RefreshCw, Plus, ChevronLeft, ChevronRight, Mail, CalendarDays } from "lucide-react";
+import { RefreshCw, Plus, ChevronLeft, ChevronRight, Mail, CalendarDays, ChevronDown, Check } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 import { DetailDrawer } from "@/components/diary/DetailDrawer";

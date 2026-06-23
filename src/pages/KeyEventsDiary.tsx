@@ -432,37 +432,53 @@ export default function KeyEventsDiary() {
         </Card>
 
         <div className="shrink-0 min-w-0 overflow-hidden lg:px-1">
-          <div className="flex items-center gap-x-2 gap-y-1.5 text-[10px] sm:text-[11px] text-muted-foreground overflow-x-auto pb-1 whitespace-nowrap scrollbar-thin lg:flex-wrap lg:overflow-visible lg:pb-0 lg:whitespace-normal">
-            <span className="font-mono uppercase tracking-wider text-[10px] shrink-0">Categories</span>
-            {Object.entries(CATEGORY_META).map(([key, meta]) => {
-              const active = selectedCategories.has(key);
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => toggleCategory(key)}
-                  aria-pressed={active}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 shrink-0 rounded-full border px-2 py-0.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    active
-                      ? "border-transparent text-foreground font-medium shadow-sm"
-                      : "border-border/60 hover:border-border hover:bg-accent/40",
-                  )}
-                  style={
-                    active
-                      ? {
-                          background: `hsl(${meta.hsl} / 0.18)`,
-                          boxShadow: `0 0 0 1px hsl(${meta.hsl} / 0.55), 0 0 8px hsl(${meta.hsl} / 0.25)`,
-                        }
-                      : undefined
-                  }
-                >
-                  <span aria-hidden className="inline-block h-2 w-2 rounded-sm" style={{ background: `hsl(${meta.hsl})` }} />
-                  <span aria-hidden>{meta.icon}</span>
-                  <span>{meta.label}</span>
-                </button>
-              );
-            })}
+          <div className="flex items-start gap-x-3 gap-y-1.5 text-[10px] sm:text-[11px] text-muted-foreground overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible lg:pb-0 scrollbar-thin">
+            {CATEGORY_GROUPS.map((group, gi) => (
+              <div
+                key={group.label}
+                className={cn(
+                  "flex items-center gap-x-1.5 gap-y-1 flex-wrap shrink-0",
+                  group.label === "Other" && "opacity-60",
+                )}
+              >
+                <span className="font-mono uppercase tracking-wider text-[10px] shrink-0 mr-0.5">
+                  {group.label}
+                </span>
+                {group.keys.map((key) => {
+                  const meta = CATEGORY_META[key];
+                  if (!meta) return null;
+                  const active = selectedCategories.has(key);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => toggleCategory(key)}
+                      aria-pressed={active}
+                      className={cn(
+                        "inline-flex items-center gap-1 shrink-0 rounded-full border px-1.5 py-0.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        active
+                          ? "border-transparent text-foreground font-medium shadow-sm"
+                          : "border-border/60 hover:border-border hover:bg-accent/40",
+                      )}
+                      style={
+                        active
+                          ? {
+                              background: `hsl(${meta.hsl} / 0.18)`,
+                              boxShadow: `0 0 0 1px hsl(${meta.hsl} / 0.55), 0 0 8px hsl(${meta.hsl} / 0.25)`,
+                            }
+                          : undefined
+                      }
+                    >
+                      <span aria-hidden>{meta.icon}</span>
+                      <span>{meta.label}</span>
+                    </button>
+                  );
+                })}
+                {gi < CATEGORY_GROUPS.length - 1 && (
+                  <span aria-hidden className="hidden sm:inline-block h-3 w-px bg-border/60 ml-1" />
+                )}
+              </div>
+            ))}
             {selectedCategories.size > 0 && (
               <button
                 type="button"

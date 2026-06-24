@@ -34,6 +34,53 @@ async function getEmbedding(text: string, _apiKey?: string): Promise<number[]> {
   return await getEmbeddingShared(text);
 }
 
+const SLACK_GATEWAY_URL = "https://connector-gateway.lovable.dev/slack/api";
+
+async function sendSlackDM(slackUserId: string, message: string): Promise<boolean> {
+  const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+  const slackConnectionKey = Deno.env.get("SLACK_API_KEY");
+  if (!lovableApiKey || !slackConnectionKey) {
+    console.error("[slack] missing LOVABLE_API_KEY or SLACK_API_KEY");
+    return false;
+  }
+  const headers = {
+    Authorization: `Bearer ${lovableApiKey}`,
+    "X-Connection-Api-Key": slackConnectionKey,
+    "Content-Type": "application/json",
+  };
+  try {
+    const openRes = await fetch(`${SLACK_GATEWAY_URL}/conversations.open`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ users: slackUserId }),
+    });
+    const openData = await openRes.json();
+    if (!openData.ok) {
+      console.error("[slack] conversations.open failed:", openData.error);
+      return false;
+    }
+    const msgRes = await fetch(`${SLACK_GATEWAY_URL}/chat.postMessage`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        channel: openData.channel.id,
+        text: message,
+        username: "Duncan",
+        icon_emoji: ":clipboard:",
+      }),
+    });
+    const msgData = await msgRes.json();
+    if (!msgData.ok) {
+      console.error("[slack] postMessage failed:", msgData.error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[slack] DM exception:", err);
+    return false;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });

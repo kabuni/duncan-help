@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
         const rendered = notes
           .map((n: any) => {
             const plain = htmlToText(n.content || "");
-            const body = plain.length > 8000 ? plain.slice(0, 8000) + "\n…[note truncated]" : plain;
+            const body = plain.length > 3500 ? plain.slice(0, 3500) + "\n…[note truncated]" : plain;
             return `### ${n.pinned ? "📌 " : ""}${n.title || "Untitled note"}\n${body}`;
           })
           .join("\n\n---\n\n");

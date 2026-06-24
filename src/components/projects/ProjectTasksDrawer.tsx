@@ -120,7 +120,7 @@ export function ProjectTasksDrawer({
                       disabled={it.status === "promoted"}
                     />
                     <span
-                      className={`flex-1 text-sm ${isDone ? "line-through text-muted-foreground" : "text-foreground"}`}
+                      className={`flex-1 text-sm whitespace-pre-wrap break-words leading-relaxed ${isDone ? "line-through text-muted-foreground" : "text-foreground"}`}
                     >
                       {it.title}
                     </span>

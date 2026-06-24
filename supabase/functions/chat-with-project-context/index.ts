@@ -623,7 +623,7 @@ Deno.serve(async (req) => {
                   created_by: user.id,
                   title: it.title,
                   group_title: it.group,
-                  assignee_profile_id: it.assignee_profile_id || user.id,
+                  assignee_profile_id: it.assignee_profile_id,
                   due_date: it.due_date,
                   status: "accepted",
                   position: startPos + i + 1,

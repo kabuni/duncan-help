@@ -231,7 +231,8 @@ export function ProjectTasksDrawer({
             Tasks — {projectName}
           </SheetTitle>
           <SheetDescription className="text-xs mt-0.5">
-            {items.length} {items.length === 1 ? "task" : "tasks"} in this project
+            {filteredItems.length} of {items.length} {items.length === 1 ? "task" : "tasks"}
+            {(filterOwner !== "all" || filterDue !== "all" || filterDeadline !== "all" || searchText) && " · filtered"}
           </SheetDescription>
         </SheetHeader>
 

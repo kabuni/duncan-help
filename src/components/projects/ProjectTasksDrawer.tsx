@@ -3,7 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, ListChecks } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Loader2, ListChecks, Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { ProjectMember } from "@/hooks/useProjects";
 
@@ -84,6 +86,57 @@ export function ProjectTasksDrawer({
     if (error) toast.error(error.message);
   }
 
+  const [newTitle, setNewTitle] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  async function addTask() {
+    const title = newTitle.trim();
+    if (!title) return;
+    setAdding(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      if (!userId) throw new Error("Not signed in");
+
+      // Find an existing chat in this project, or create a "Tasks" chat.
+      let chatId: string | null = null;
+      const { data: existingChat } = await supabase
+        .from("project_chats")
+        .select("id")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      chatId = existingChat?.id ?? null;
+      if (!chatId) {
+        const { data: created, error: createErr } = await supabase
+          .from("project_chats")
+          .insert({ project_id: projectId, title: "Tasks", created_by: userId })
+          .select("id")
+          .single();
+        if (createErr) throw createErr;
+        chatId = created.id;
+      }
+
+      const { error } = await supabase
+        .from("project_chat_plan_items" as any)
+        .insert({
+          project_id: projectId,
+          chat_id: chatId,
+          created_by: userId,
+          title,
+          status: "accepted",
+        });
+      if (error) throw error;
+      setNewTitle("");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to add task");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
@@ -138,6 +191,25 @@ export function ProjectTasksDrawer({
             </ul>
           )}
         </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            addTask();
+          }}
+          className="border-t border-border px-3 py-2 flex items-center gap-2"
+        >
+          <Input
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder="Add a task…"
+            className="h-8 text-sm"
+            disabled={adding}
+          />
+          <Button type="submit" size="sm" className="h-8 px-2" disabled={adding || !newTitle.trim()}>
+            {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+          </Button>
+        </form>
       </SheetContent>
     </Sheet>
   );

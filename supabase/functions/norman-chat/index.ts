@@ -2201,8 +2201,9 @@ async function executeWorkstreamTool(
           .from("workstream_card_assignees")
           .select("card_id")
           .eq("user_id", userId);
-        restrictCardIds = (myAssign || []).map((r: any) => r.card_id);
-        if (restrictCardIds.length === 0) {
+        const myCardIds = (myAssign || []).map((r: any) => r.card_id);
+        restrictCardIds = myCardIds;
+        if (myCardIds.length === 0) {
           const rr = createReadResult({
             data: [],
             source: "workstreams_db",
@@ -2461,7 +2462,7 @@ async function executeWorkstreamTool(
                 startRow: 0,
                 startColumn: 0,
                 rowData: [headerRow, ...dataRows].map((row) => ({
-                  values: row.map((v) => ({ userEnteredValue: { stringValue: String(v) } })),
+                  values: row.map((v: any) => ({ userEnteredValue: { stringValue: String(v) } })),
                 })),
               }],
             }],

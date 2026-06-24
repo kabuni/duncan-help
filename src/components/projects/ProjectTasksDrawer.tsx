@@ -175,6 +175,13 @@ export function ProjectTasksDrawer({
     }
   }
 
+  function isPast(dateStr: string | null) {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    d.setHours(23, 59, 59, 999);
+    return d < new Date();
+  }
+
   async function deleteTask(id: string) {
     const { error } = await supabase
       .from("project_chat_plan_items" as any)
@@ -226,8 +233,10 @@ export function ProjectTasksDrawer({
                 const assignee = it.assignee_profile_id ? memberById.get(it.assignee_profile_id) : null;
                 const isDone = it.status === "done" || it.status === "promoted";
                 const isPromoted = it.status === "promoted";
+                const duePast = !isDone && isPast(it.due_date);
+                const deadlinePast = !isDone && isPast(it.deadline);
                 return (
-                  <li key={it.id} className="px-4 py-3 space-y-2 group">
+                  <li key={it.id} className={cn("px-4 py-3 space-y-2 group", deadlinePast && "bg-destructive/5")}>
                     <div className="flex items-start gap-3">
                       <Checkbox
                         checked={isDone}
@@ -238,7 +247,7 @@ export function ProjectTasksDrawer({
                       <span
                         className={cn(
                           "flex-1 text-sm whitespace-pre-wrap break-words leading-relaxed",
-                          isDone ? "line-through text-muted-foreground" : "text-foreground",
+                          isDone ? "line-through text-muted-foreground" : deadlinePast ? "text-destructive" : "text-foreground",
                         )}
                       >
                         {it.title}
@@ -312,6 +321,7 @@ export function ProjectTasksDrawer({
                             className={cn(
                               "h-7 text-xs gap-1.5 px-2 font-normal",
                               !it.due_date && "text-muted-foreground",
+                              duePast && "border-norman-warning text-norman-warning",
                             )}
                           >
                             <CalendarIcon className="h-3 w-3" />
@@ -353,6 +363,7 @@ export function ProjectTasksDrawer({
                             className={cn(
                               "h-7 text-xs gap-1.5 px-2 font-normal",
                               !it.deadline && "text-muted-foreground",
+                              deadlinePast && "border-destructive text-destructive bg-destructive/5",
                             )}
                           >
                             <CalendarIcon className="h-3 w-3" />

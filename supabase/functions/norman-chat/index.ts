@@ -3013,26 +3013,41 @@ async function executeWorkstreamTool(
 
       if (tasksErr) throw new Error(`Failed to list project tasks: ${tasksErr.message}`);
 
+      const todayStr = new Date().toISOString().slice(0, 10);
       const result = (tasks || []).map((t: any) => ({
         id: t.id,
         title: t.title,
         status: t.status,
         due_date: t.due_date,
+        overdue: !!(t.due_date && t.due_date < todayStr),
         group: t.group_title,
         project_id: t.project_id,
         project_name: t.projects?.name || "Unknown project",
+        project_url: `/projects/${t.project_id}`,
       }));
 
-      const byProject: Record<string, any[]> = {};
+      const byProject: Record<string, { project_id: string; project_url: string; tasks: any[] }> = {};
       for (const t of result) {
-        (byProject[t.project_name] ||= []).push(t);
+        if (!byProject[t.project_name]) {
+          byProject[t.project_name] = { project_id: t.project_id, project_url: t.project_url, tasks: [] };
+        }
+        byProject[t.project_name].tasks.push(t);
+      }
+      // Sort tasks within each project by due_date asc, nulls last
+      for (const key of Object.keys(byProject)) {
+        byProject[key].tasks.sort((a, b) => {
+          if (!a.due_date && !b.due_date) return 0;
+          if (!a.due_date) return 1;
+          if (!b.due_date) return -1;
+          return a.due_date.localeCompare(b.due_date);
+        });
       }
 
       return {
         tasks_by_project: byProject,
         total_count: result.length,
         project_count: Object.keys(byProject).length,
-        matched_assignee_ids: assigneeIds,
+        overdue_count: result.filter((t) => t.overdue).length,
       };
     }
 

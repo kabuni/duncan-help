@@ -2201,8 +2201,9 @@ async function executeWorkstreamTool(
           .from("workstream_card_assignees")
           .select("card_id")
           .eq("user_id", userId);
-        restrictCardIds = (myAssign || []).map((r: any) => r.card_id);
-        if (restrictCardIds.length === 0) {
+        const myCardIds = (myAssign || []).map((r: any) => r.card_id);
+        restrictCardIds = myCardIds;
+        if (myCardIds.length === 0) {
           const rr = createReadResult({
             data: [],
             source: "workstreams_db",
@@ -2461,7 +2462,7 @@ async function executeWorkstreamTool(
                 startRow: 0,
                 startColumn: 0,
                 rowData: [headerRow, ...dataRows].map((row) => ({
-                  values: row.map((v) => ({ userEnteredValue: { stringValue: String(v) } })),
+                  values: row.map((v: any) => ({ userEnteredValue: { stringValue: String(v) } })),
                 })),
               }],
             }],
@@ -2987,8 +2988,8 @@ async function executeWorkstreamTool(
     }
 
     case "list_my_project_tasks": {
-      const assigneeId = identity?.user_id;
-      if (!assigneeId) {
+      const assigneeIds = [identity?.user_id, identity?.profile_id].filter(Boolean);
+      if (assigneeIds.length === 0) {
         return { error: "User not found", status: "no_data" };
       }
 
@@ -3005,7 +3006,7 @@ async function executeWorkstreamTool(
           project_id,
           projects(name)
         `)
-        .eq("assignee_profile_id", assigneeId)
+        .in("assignee_profile_id", assigneeIds)
         .neq("status", "done")
         .order("position");
 
@@ -3031,6 +3032,7 @@ async function executeWorkstreamTool(
         tasks_by_project: byProject,
         total_count: result.length,
         project_count: Object.keys(byProject).length,
+        matched_assignee_ids: assigneeIds,
       };
     }
 

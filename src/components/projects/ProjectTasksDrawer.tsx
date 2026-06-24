@@ -100,11 +100,23 @@ export function ProjectTasksDrawer({
   }, [members]);
 
   async function patch(id: string, patch: Record<string, any>) {
-    const { error } = await supabase
+    // Optimistic update so the UI reflects the change immediately even if
+    // realtime is slow or no row is returned.
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+    const { data, error } = await supabase
       .from("project_chat_plan_items" as any)
       .update(patch)
-      .eq("id", id);
-    if (error) toast.error(error.message);
+      .eq("id", id)
+      .select("id");
+    if (error) {
+      toast.error(error.message);
+      load();
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast.error("You don't have permission to update this task");
+      load();
+    }
   }
 
   async function toggleDone(item: PlanItemRow) {

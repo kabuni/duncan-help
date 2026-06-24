@@ -21,12 +21,14 @@ This chat surface is shared/collaborative, so you MUST use a "preview + confirm"
 4. Read-only queries (lists, searches, summaries, analytics) do NOT require confirmation — answer them directly.
 5. If the user batches several writes, present ONE preview that lists all of them, and apply them only after a single confirm.
 
-PLANNING CHECKLIST:
-This project chat has a "Planning checklist" panel above the conversation. The user can capture to-do items there and one-click promote them to Workstream cards and tasks.
-- When the user asks you to draft a plan, list next steps, break down a workflow, or outline what needs to happen, ALWAYS render the actionable items as a markdown checklist using "- [ ] item" syntax (one per line, short imperative phrases).
-- If the work splits into themes, prefix each block with a markdown heading (e.g. "### Launch prep") so each theme can become its own workstream card.
-- Do not invent due dates or assignees unless the user has specified them.
-- After the checklist, add a single sentence reminding the user they can hit "Send to Workstreams" to turn the plan into cards.`;
+PROJECT TASKS — HARD RULE (NO WORKSTREAM CARDS FROM PROJECT CHAT):
+Tasks created from a project chat live INSIDE this project's task list (the "Planning checklist" panel above the conversation), assigned to project members. They are NOT workstream cards.
+- NEVER call \`create_workstream_card\`, \`add_tasks_to_card\`, or \`update_workstream_card\` from this project chat — even if the user says "create tasks", "task list", "to-dos", "action items", or "break it down". Workstream cards are only created later, on demand, via the "Send to Workstreams" button in the UI.
+- When the user asks you to draft a plan, list next steps, break down a workflow, or outline tasks: ALWAYS render the actionable items as a markdown checklist using \`- [ ] item\` syntax — one per line, short imperative phrases. The system will automatically save each checklist item into this project's task list, assigned to the right project member, with no further confirmation.
+- ASSIGNEES: If the user names assignees (e.g. "Sarah to draft the brief", "@Tom owns infra"), append \` — @Name\` at the end of that checklist item, using the member's first name or display name exactly as it appears in the project membership. Resolve names via \`list_team_members\` if you're unsure. If no assignee is named, leave it unassigned (it will default to the creator).
+- DUE DATES: Only include a due date if the user specified one. Append it in square brackets as ISO \`[YYYY-MM-DD]\` at the end of the item (after any assignee), e.g. \`- [ ] Draft brief — @Sarah [2026-07-01]\`. Never invent dates.
+- GROUPING: If the work splits into themes, prefix each block with a level-3 markdown heading (e.g. \`### Launch prep\`). All items beneath that heading inherit it as their group.
+- After the checklist, add a single short sentence: e.g. "Saved to this project's task list — open the Planning panel to review or send them to Workstreams when ready."`;
 
 async function getEmbedding(text: string, _apiKey?: string): Promise<number[]> {
   return await getEmbeddingShared(text);
@@ -219,6 +221,44 @@ Deno.serve(async (req) => {
       console.error("Notes fetch failed (non-fatal):", notesErr);
     }
 
+    // 5c. Fetch project members + profiles so the model can name assignees and
+    // we can resolve "@Name" in the assistant's checklist back to user IDs.
+    type MemberRow = { user_id: string; display_name: string | null; first_name: string | null };
+    let projectMembers: MemberRow[] = [];
+    let membersBlock = "";
+    try {
+      const { data: members } = await supabase
+        .from("project_members")
+        .select("user_id")
+        .eq("project_id", chat.project_id);
+      const memberIds = (members || []).map((m: any) => m.user_id);
+      if (memberIds.length > 0) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("user_id, display_name")
+          .in("user_id", memberIds);
+        projectMembers = (profs || []).map((p: any) => {
+          const dn = (p.display_name || "").trim();
+          return {
+            user_id: p.user_id,
+            display_name: dn || null,
+            first_name: dn ? dn.split(/\s+/)[0] : null,
+          };
+        });
+        if (projectMembers.length > 0) {
+          membersBlock =
+            "\n\n## PROJECT MEMBERS (assignable for tasks)\n" +
+            projectMembers
+              .map((m) => `- ${m.display_name || "(no name)"} → @${m.first_name || m.display_name || "user"}`)
+              .join("\n");
+        }
+      }
+    } catch (mErr) {
+      console.error("Project members fetch failed (non-fatal):", mErr);
+    }
+
+
+
 
     // 6. Fetch last 20 messages from the CURRENT chat for live conversation context
     const { data: history, error: historyError } = await supabase
@@ -318,7 +358,8 @@ Deno.serve(async (req) => {
       customProjectPrompt +
       fileContextBlock +
       notesBlock +
-      priorChatsBlock;
+      priorChatsBlock +
+      membersBlock;
 
     const aiMessages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: any }> = [
       { role: "system", content: projectSystemMessage },
@@ -442,6 +483,107 @@ Deno.serve(async (req) => {
             .insert({ chat_id, role: "assistant", content: full });
           if (insertAssistantError) {
             console.error("Failed to save assistant message:", insertAssistantError);
+          }
+
+          // Auto-extract markdown checklist items into project_chat_plan_items
+          // so they appear in the Planning panel, assigned to the right member.
+          try {
+            const lines = full.split(/\r?\n/);
+            const items: Array<{
+              title: string;
+              group: string | null;
+              assignee_profile_id: string | null;
+              due_date: string | null;
+            }> = [];
+            let currentGroup: string | null = null;
+            const memberByKey = new Map<string, string>();
+            for (const m of projectMembers) {
+              if (m.first_name) memberByKey.set(m.first_name.toLowerCase(), m.user_id);
+              if (m.display_name) memberByKey.set(m.display_name.toLowerCase(), m.user_id);
+            }
+            const checklistRe = /^\s*[-*]\s*\[\s*[ xX]?\s*\]\s+(.*)$/;
+            const headingRe = /^\s*#{2,4}\s+(.*\S)\s*#*\s*$/;
+            const dateRe = /\[(\d{4}-\d{2}-\d{2})\]/;
+            const mentionRe = /@([A-Za-z][A-Za-z0-9 _'-]{0,40})(?=\s|$|[—–\-,.;:[\]()])/;
+            for (const raw of lines) {
+              const hMatch = raw.match(headingRe);
+              if (hMatch) {
+                currentGroup = hMatch[1].trim() || null;
+                continue;
+              }
+              const cMatch = raw.match(checklistRe);
+              if (!cMatch) continue;
+              let text = cMatch[1].trim();
+              if (!text) continue;
+              let due: string | null = null;
+              const dm = text.match(dateRe);
+              if (dm) {
+                due = dm[1];
+                text = text.replace(dateRe, "").trim();
+              }
+              let assignee: string | null = null;
+              const am = text.match(mentionRe);
+              if (am) {
+                const candidate = am[1].trim().toLowerCase();
+                // Try longest match first (display_name then first_name).
+                if (memberByKey.has(candidate)) {
+                  assignee = memberByKey.get(candidate)!;
+                } else {
+                  const firstToken = candidate.split(/\s+/)[0];
+                  if (memberByKey.has(firstToken)) assignee = memberByKey.get(firstToken)!;
+                }
+                text = text.replace(am[0], "").trim();
+              }
+              // Strip trailing separators left over (—, -, :, etc.)
+              text = text.replace(/[—\-:•·]+\s*$/g, "").trim();
+              if (!text) continue;
+              items.push({
+                title: text.slice(0, 280),
+                group: currentGroup,
+                assignee_profile_id: assignee,
+                due_date: due,
+              });
+            }
+
+            if (items.length > 0) {
+              // Avoid duplicates: skip titles that already exist (any status) for this chat.
+              const { data: existing } = await supabase
+                .from("project_chat_plan_items")
+                .select("title")
+                .eq("chat_id", chat_id);
+              const have = new Set((existing || []).map((r: any) => String(r.title).toLowerCase()));
+              const fresh = items.filter((it) => !have.has(it.title.toLowerCase()));
+              if (fresh.length > 0) {
+                const { data: maxPosRow } = await supabase
+                  .from("project_chat_plan_items")
+                  .select("position")
+                  .eq("chat_id", chat_id)
+                  .order("position", { ascending: false })
+                  .limit(1);
+                const startPos = (maxPosRow && maxPosRow[0]?.position) || 0;
+                const rows = fresh.map((it, i) => ({
+                  chat_id,
+                  project_id: chat.project_id,
+                  created_by: user.id,
+                  title: it.title,
+                  group_title: it.group,
+                  assignee_profile_id: it.assignee_profile_id || user.id,
+                  due_date: it.due_date,
+                  status: "accepted",
+                  position: startPos + i + 1,
+                }));
+                const { error: planErr } = await supabase
+                  .from("project_chat_plan_items")
+                  .insert(rows);
+                if (planErr) {
+                  console.error("[plan-items] insert failed:", planErr.message);
+                } else {
+                  console.log(`[plan-items] auto-created ${rows.length} task(s) for chat ${chat_id}`);
+                }
+              }
+            }
+          } catch (planErr) {
+            console.error("[plan-items] extraction failed (non-fatal):", planErr);
           }
         }
       } catch (persistErr) {

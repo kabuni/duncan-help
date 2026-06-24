@@ -1909,6 +1909,22 @@ const WORKSTREAM_TOOLS = [
   },
 ];
 
+// ==================== PROJECT TASKS TOOLS ====================
+const PROJECT_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "list_my_project_tasks",
+      description: "List all planning checklist tasks assigned to the current user across Duncan projects (isolated AI workspaces). These are the tasks created inside each project's Planning panel, distinct from workstream kanban cards. Returns tasks grouped by project with title, status, due date, and group. Use this when the user asks about their project tasks, action items across projects, what they need to do in their workspaces, or tasks from their AI project spaces.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+  },
+];
+
 // ==================== PLANNER (KEY EVENTS DIARY) TOOLS ====================
 const PLANNER_TOOLS = [
   {
@@ -2967,6 +2983,52 @@ async function executeWorkstreamTool(
         window: windowLabel,
         caller_timezone: callerTz,
         task_duration_minutes: taskDuration,
+      };
+    }
+
+    case "list_my_project_tasks": {
+      const profileId = identity?.profile_id;
+      if (!profileId) {
+        return { error: "User profile not found", status: "no_data" };
+      }
+
+      const { data: tasks, error: tasksErr } = await supabaseAdmin
+        .from("project_chat_plan_items")
+        .select(`
+          id,
+          title,
+          notes,
+          status,
+          due_date,
+          position,
+          group_title,
+          project_id,
+          projects(name)
+        `)
+        .eq("assignee_profile_id", profileId)
+        .order("position");
+
+      if (tasksErr) throw new Error(`Failed to list project tasks: ${tasksErr.message}`);
+
+      const result = (tasks || []).map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        due_date: t.due_date,
+        group: t.group_title,
+        project_id: t.project_id,
+        project_name: t.projects?.name || "Unknown project",
+      }));
+
+      const byProject: Record<string, any[]> = {};
+      for (const t of result) {
+        (byProject[t.project_name] ||= []).push(t);
+      }
+
+      return {
+        tasks_by_project: byProject,
+        total_count: result.length,
+        project_count: Object.keys(byProject).length,
       };
     }
 
@@ -6709,6 +6771,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
     // Workstream management tools always available
     tools.push(...WORKSTREAM_TOOLS);
     tools.push(...PLANNER_TOOLS);
+    // Project task tools always available
+    tools.push(...PROJECT_TOOLS);
     // Executive summary document generation
     tools.push(...EXEC_SUMMARY_TOOLS);
     // Release logging tool (admin-only enforced inside executor)
@@ -6755,6 +6819,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       ...RELEASE_TOOLS,
       ...LOVABLE_CONTRIBUTORS_TOOLS,
       ...RESCHEDULE_TOOLS,
+      ...PROJECT_TOOLS,
     ];
 
     // Build the filtered toolset. If no intent matches, fall back to the full tools array.
@@ -7314,7 +7379,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const driveToolNames = ["drive_list_files", "drive_search", "drive_get_content"];
       const slackToolNames = ["list_slack_channels", "read_slack_channel_messages", "send_slack_message"];
       const analyticsToolNames = ["get_workstream_analytics", "get_recruitment_analytics", "get_team_activity_analytics", "get_operational_summary", "get_google_analytics_dashboard"];
-      const workstreamMgmtToolNames = ["list_team_members", "list_workstream_cards", "create_workstream_card", "add_tasks_to_card", "update_workstream_card", "check_team_availability"];
+      const workstreamMgmtToolNames = ["list_team_members", "list_workstream_cards", "create_workstream_card", "add_tasks_to_card", "update_workstream_card", "check_team_availability", "list_my_project_tasks"];
       const plannerToolNames = ["list_planner_events", "update_planner_event_meta"];
       const registrationsToolNames = ["list_school_registrations", "get_school_registrations_summary"];
       const execSummaryToolNames = ["generate_exec_summary_document"];

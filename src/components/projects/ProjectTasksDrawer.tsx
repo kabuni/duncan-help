@@ -15,10 +15,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, ListChecks, Plus, CalendarIcon, User, CheckCircle2 } from "lucide-react";
+import { Loader2, ListChecks, Plus, CalendarIcon, User, CheckCircle2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { ProjectMember } from "@/hooks/useProjects";
+import { ImportTasksFromNotesDialog } from "./ImportTasksFromNotesDialog";
 
 interface PlanItemRow {
   id: string;

@@ -277,15 +277,7 @@ export function ProjectTasksDrawer({
                         <SelectTrigger className="h-7 w-auto min-w-[10rem] text-xs gap-1.5 px-2">
                           {assignee ? (
                             <span className="flex items-center gap-1.5">
-                              {assignee.avatar_url ? (
-                                <img
-                                  src={assignee.avatar_url}
-                                  alt=""
-                                  className="h-4 w-4 rounded-sm object-cover"
-                                />
-                              ) : (
-                                <User className="h-3 w-3 text-muted-foreground" />
-                              )}
+                              <User className="h-3 w-3 text-muted-foreground" />
                               <span className="truncate max-w-[12rem]">{assignee.display_name || "Member"}</span>
                             </span>
                           ) : (

@@ -2986,6 +2986,52 @@ async function executeWorkstreamTool(
       };
     }
 
+    case "list_my_project_tasks": {
+      const profileId = identity?.profile_id;
+      if (!profileId) {
+        return { error: "User profile not found", status: "no_data" };
+      }
+
+      const { data: tasks, error: tasksErr } = await supabaseAdmin
+        .from("project_chat_plan_items")
+        .select(`
+          id,
+          title,
+          notes,
+          status,
+          due_date,
+          position,
+          group_title,
+          project_id,
+          projects(name)
+        `)
+        .eq("assignee_profile_id", profileId)
+        .order("position");
+
+      if (tasksErr) throw new Error(`Failed to list project tasks: ${tasksErr.message}`);
+
+      const result = (tasks || []).map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        due_date: t.due_date,
+        group: t.group_title,
+        project_id: t.project_id,
+        project_name: t.projects?.name || "Unknown project",
+      }));
+
+      const byProject: Record<string, any[]> = {};
+      for (const t of result) {
+        (byProject[t.project_name] ||= []).push(t);
+      }
+
+      return {
+        tasks_by_project: byProject,
+        total_count: result.length,
+        project_count: Object.keys(byProject).length,
+      };
+    }
+
     default:
       throw new Error(`Unknown workstream tool: ${toolName}`);
   }

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -278,10 +278,11 @@ export function ProjectTasksDrawer({
                           {assignee ? (
                             <span className="flex items-center gap-1.5">
                               {assignee.avatar_url ? (
-                                <Avatar className="h-4 w-4">
-                                  <AvatarImage src={assignee.avatar_url} />
-                                  <AvatarFallback className="bg-transparent" />
-                                </Avatar>
+                                <img
+                                  src={assignee.avatar_url}
+                                  alt=""
+                                  className="h-4 w-4 rounded-sm object-cover"
+                                />
                               ) : (
                                 <User className="h-3 w-3 text-muted-foreground" />
                               )}

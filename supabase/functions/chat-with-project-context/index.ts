@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
         .eq("project_id", chat.project_id)
         .order("pinned", { ascending: false })
         .order("updated_at", { ascending: false })
-        .limit(30);
+        .limit(10);
       if (notes && notes.length > 0) {
         const htmlToText = (raw: string): string => {
           if (!raw) return "";
@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
         const rendered = notes
           .map((n: any) => {
             const plain = htmlToText(n.content || "");
-            const body = plain.length > 8000 ? plain.slice(0, 8000) + "\n…[note truncated]" : plain;
+            const body = plain.length > 3500 ? plain.slice(0, 3500) + "\n…[note truncated]" : plain;
             return `### ${n.pinned ? "📌 " : ""}${n.title || "Untitled note"}\n${body}`;
           })
           .join("\n\n---\n\n");
@@ -281,7 +281,7 @@ Deno.serve(async (req) => {
         .eq("project_id", chat.project_id)
         .neq("id", chat_id)
         .order("created_at", { ascending: false })
-        .limit(20);
+        .limit(5);
 
       if (otherChatsError) {
         console.error("Failed to fetch prior project chats:", otherChatsError);
@@ -293,23 +293,23 @@ Deno.serve(async (req) => {
           .from("chat_messages")
           .select("chat_id, role, content, created_at")
           .in("chat_id", chatIds)
-          .order("created_at", { ascending: true });
+          .order("created_at", { ascending: false })
+          .limit(60);
 
         if (priorMessages && priorMessages.length > 0) {
-          // Group by chat_id
+          // Group by chat_id (re-sort ascending per chat)
           const grouped: Record<string, Array<{ role: string; content: string }>> = {};
-          for (const m of priorMessages) {
+          for (const m of [...priorMessages].reverse()) {
             (grouped[m.chat_id] ||= []).push({ role: m.role, content: m.content });
           }
 
-          const MAX_CHARS_PER_CHAT = 5000;
+          const MAX_CHARS_PER_CHAT = 1500;
           const sections: string[] = [];
           for (const c of otherChats) {
             const msgs = grouped[c.id];
             if (!msgs || msgs.length === 0) continue;
-            // Take enough recent context from each thread for task extraction, while capping token usage.
-            const recent = msgs.slice(-20).map((m) => {
-              const content = m.content.length > 900 ? m.content.slice(0, 900) + "…" : m.content;
+            const recent = msgs.slice(-8).map((m) => {
+              const content = m.content.length > 400 ? m.content.slice(0, 400) + "…" : m.content;
               return `${m.role.toUpperCase()}: ${content}`;
             }).join("\n");
             const trimmed = recent.length > MAX_CHARS_PER_CHAT ? recent.slice(0, MAX_CHARS_PER_CHAT) + "…" : recent;

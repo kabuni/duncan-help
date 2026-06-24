@@ -358,7 +358,8 @@ Deno.serve(async (req) => {
       customProjectPrompt +
       fileContextBlock +
       notesBlock +
-      priorChatsBlock;
+      priorChatsBlock +
+      membersBlock;
 
     const aiMessages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: any }> = [
       { role: "system", content: projectSystemMessage },

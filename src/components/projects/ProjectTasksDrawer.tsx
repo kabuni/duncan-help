@@ -247,7 +247,7 @@ export function ProjectTasksDrawer({
                       <span
                         className={cn(
                           "flex-1 text-sm whitespace-pre-wrap break-words leading-relaxed",
-                          isDone ? "line-through text-muted-foreground" : "text-foreground",
+                          isDone ? "line-through text-muted-foreground" : deadlinePast ? "text-destructive" : "text-foreground",
                         )}
                       >
                         {it.title}

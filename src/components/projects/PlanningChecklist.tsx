@@ -31,6 +31,7 @@ export interface PlanItem {
   title: string;
   notes: string | null;
   due_date: string | null;
+  deadline: string | null;
   assignee_profile_id: string | null;
   status: "suggested" | "accepted" | "done" | "promoted";
   position: number;

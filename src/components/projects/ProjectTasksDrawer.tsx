@@ -38,6 +38,7 @@ interface PlanItemRow {
   status: "suggested" | "accepted" | "done" | "promoted";
   assignee_profile_id: string | null;
   due_date: string | null;
+  deadline: string | null;
   completed_at: string | null;
   created_at: string;
 }
@@ -70,7 +71,7 @@ export function ProjectTasksDrawer({
     setLoading(true);
     const { data, error } = await supabase
       .from("project_chat_plan_items" as any)
-      .select("id, chat_id, title, status, assignee_profile_id, due_date, completed_at, created_at")
+      .select("id, chat_id, title, status, assignee_profile_id, due_date, deadline, completed_at, created_at")
       .eq("project_id", projectId)
       .order("created_at", { ascending: false });
     if (!error) setItems((data as any[]) as PlanItemRow[]);
@@ -301,7 +302,7 @@ export function ProjectTasksDrawer({
                         </SelectContent>
                       </Select>
 
-                      {/* Deadline */}
+                      {/* Due date */}
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button
@@ -314,7 +315,7 @@ export function ProjectTasksDrawer({
                             )}
                           >
                             <CalendarIcon className="h-3 w-3" />
-                            {it.due_date ? `Due ${format(new Date(it.due_date), "d MMM")}` : "Deadline"}
+                            {it.due_date ? `Due ${format(new Date(it.due_date), "d MMM")}` : "Due date"}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
@@ -334,6 +335,47 @@ export function ProjectTasksDrawer({
                                 size="sm"
                                 className="w-full h-7 text-xs"
                                 onClick={() => patch(it.id, { due_date: null })}
+                              >
+                                Clear due date
+                              </Button>
+                            </div>
+                          )}
+                        </PopoverContent>
+                      </Popover>
+
+                      {/* Deadline */}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isPromoted}
+                            className={cn(
+                              "h-7 text-xs gap-1.5 px-2 font-normal",
+                              !it.deadline && "text-muted-foreground",
+                            )}
+                          >
+                            <CalendarIcon className="h-3 w-3" />
+                            {it.deadline ? `Deadline ${format(new Date(it.deadline), "d MMM")}` : "Deadline"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={it.deadline ? new Date(it.deadline) : undefined}
+                            onSelect={(d) =>
+                              patch(it.id, { deadline: d ? format(d, "yyyy-MM-dd") : null })
+                            }
+                            initialFocus
+                            className={cn("p-3 pointer-events-auto")}
+                          />
+                          {it.deadline && (
+                            <div className="border-t border-border p-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="w-full h-7 text-xs"
+                                onClick={() => patch(it.id, { deadline: null })}
                               >
                                 Clear deadline
                               </Button>

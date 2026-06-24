@@ -1909,6 +1909,22 @@ const WORKSTREAM_TOOLS = [
   },
 ];
 
+// ==================== PROJECT TASKS TOOLS ====================
+const PROJECT_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "list_my_project_tasks",
+      description: "List all planning checklist tasks assigned to the current user across Duncan projects (isolated AI workspaces). These are the tasks created inside each project's Planning panel, distinct from workstream kanban cards. Returns tasks grouped by project with title, status, due date, and group. Use this when the user asks about their project tasks, action items across projects, what they need to do in their workspaces, or tasks from their AI project spaces.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+  },
+];
+
 // ==================== PLANNER (KEY EVENTS DIARY) TOOLS ====================
 const PLANNER_TOOLS = [
   {

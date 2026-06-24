@@ -3020,6 +3020,7 @@ async function executeWorkstreamTool(
         title: t.title,
         status: t.status,
         due_date: t.due_date,
+        deadline: t.deadline,
         overdue: !!(t.due_date && t.due_date < todayStr),
         group: t.group_title,
         project_id: t.project_id,

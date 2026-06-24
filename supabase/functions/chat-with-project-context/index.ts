@@ -602,14 +602,49 @@ Deno.serve(async (req) => {
             }
 
             if (items.length > 0) {
-              // Avoid duplicates: skip titles that already exist (any status) for this chat.
+              // Upsert by title: if an item with the same title already exists in this chat,
+              // UPDATE its assignee / due date / group (so the AI can re-issue the checklist
+              // to reassign or edit existing items). Only insert truly new titles.
               const { data: existing } = await supabase
                 .from("project_chat_plan_items")
-                .select("title")
+                .select("id, title, assignee_profile_id, due_date, group_title, status")
                 .eq("chat_id", chat_id);
-              const have = new Set((existing || []).map((r: any) => String(r.title).toLowerCase()));
-              const fresh = items.filter((it) => !have.has(it.title.toLowerCase()));
-              if (fresh.length > 0) {
+              const existingByTitle = new Map<string, any>();
+              for (const r of existing || []) existingByTitle.set(String(r.title).toLowerCase(), r);
+
+              const toInsert: typeof items = [];
+              const reassigned: Array<{ title: string; group: string | null; assignee_profile_id: string | null; due_date: string | null }> = [];
+              for (const it of items) {
+                const prev = existingByTitle.get(it.title.toLowerCase());
+                if (!prev) {
+                  toInsert.push(it);
+                  continue;
+                }
+                const patch: Record<string, any> = {};
+                if (it.assignee_profile_id && it.assignee_profile_id !== prev.assignee_profile_id) {
+                  patch.assignee_profile_id = it.assignee_profile_id;
+                }
+                if (it.due_date && it.due_date !== prev.due_date) patch.due_date = it.due_date;
+                if (it.group && it.group !== prev.group_title) patch.group_title = it.group;
+                if (Object.keys(patch).length > 0) {
+                  const { error: upErr } = await supabase
+                    .from("project_chat_plan_items")
+                    .update(patch)
+                    .eq("id", prev.id);
+                  if (upErr) console.error("[plan-items] update failed:", upErr.message);
+                  else if (patch.assignee_profile_id) {
+                    reassigned.push({
+                      title: it.title,
+                      group: it.group,
+                      assignee_profile_id: patch.assignee_profile_id,
+                      due_date: it.due_date,
+                    });
+                  }
+                }
+              }
+
+              const fresh = toInsert;
+              if (fresh.length > 0 || reassigned.length > 0) {
                 const { data: maxPosRow } = await supabase
                   .from("project_chat_plan_items")
                   .select("position")
@@ -628,13 +663,29 @@ Deno.serve(async (req) => {
                   status: "accepted",
                   position: startPos + i + 1,
                 }));
-                const { error: planErr } = await supabase
-                  .from("project_chat_plan_items")
-                  .insert(rows);
+                let planErr: any = null;
+                if (rows.length > 0) {
+                  const res = await supabase.from("project_chat_plan_items").insert(rows);
+                  planErr = res.error;
+                }
+                // Include reassignments so Slack DMs fire for newly-assigned people too
+                for (const r of reassigned) {
+                  rows.push({
+                    chat_id,
+                    project_id: chat.project_id,
+                    created_by: user.id,
+                    title: r.title,
+                    group_title: r.group,
+                    assignee_profile_id: r.assignee_profile_id,
+                    due_date: r.due_date,
+                    status: "accepted",
+                    position: 0,
+                  } as any);
+                }
                 if (planErr) {
                   console.error("[plan-items] insert failed:", planErr.message);
                 } else {
-                  console.log(`[plan-items] auto-created ${rows.length} task(s) for chat ${chat_id}`);
+                  console.log(`[plan-items] auto-created ${fresh.length} / reassigned ${reassigned.length} for chat ${chat_id}`);
 
                   // Notify assignees via Slack DM (skip self-assignments / unassigned defaults)
                   try {

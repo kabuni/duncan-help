@@ -211,11 +211,14 @@ export function ProjectTasksDrawer({
   }
 
   async function deleteTask(id: string) {
+    const prev = items;
+    setItems((cur) => cur.filter((it) => it.id !== id));
     const { error } = await supabase
       .from("project_chat_plan_items" as any)
       .delete()
       .eq("id", id);
     if (error) {
+      setItems(prev);
       toast.error(error.message);
     } else {
       toast.success("Task deleted");

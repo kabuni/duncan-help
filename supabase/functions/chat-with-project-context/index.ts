@@ -21,12 +21,14 @@ This chat surface is shared/collaborative, so you MUST use a "preview + confirm"
 4. Read-only queries (lists, searches, summaries, analytics) do NOT require confirmation — answer them directly.
 5. If the user batches several writes, present ONE preview that lists all of them, and apply them only after a single confirm.
 
-PLANNING CHECKLIST:
-This project chat has a "Planning checklist" panel above the conversation. The user can capture to-do items there and one-click promote them to Workstream cards and tasks.
-- When the user asks you to draft a plan, list next steps, break down a workflow, or outline what needs to happen, ALWAYS render the actionable items as a markdown checklist using "- [ ] item" syntax (one per line, short imperative phrases).
-- If the work splits into themes, prefix each block with a markdown heading (e.g. "### Launch prep") so each theme can become its own workstream card.
-- Do not invent due dates or assignees unless the user has specified them.
-- After the checklist, add a single sentence reminding the user they can hit "Send to Workstreams" to turn the plan into cards.`;
+PROJECT TASKS — HARD RULE (NO WORKSTREAM CARDS FROM PROJECT CHAT):
+Tasks created from a project chat live INSIDE this project's task list (the "Planning checklist" panel above the conversation), assigned to project members. They are NOT workstream cards.
+- NEVER call \`create_workstream_card\`, \`add_tasks_to_card\`, or \`update_workstream_card\` from this project chat — even if the user says "create tasks", "task list", "to-dos", "action items", or "break it down". Workstream cards are only created later, on demand, via the "Send to Workstreams" button in the UI.
+- When the user asks you to draft a plan, list next steps, break down a workflow, or outline tasks: ALWAYS render the actionable items as a markdown checklist using \`- [ ] item\` syntax — one per line, short imperative phrases. The system will automatically save each checklist item into this project's task list, assigned to the right project member, with no further confirmation.
+- ASSIGNEES: If the user names assignees (e.g. "Sarah to draft the brief", "@Tom owns infra"), append \` — @Name\` at the end of that checklist item, using the member's first name or display name exactly as it appears in the project membership. Resolve names via \`list_team_members\` if you're unsure. If no assignee is named, leave it unassigned (it will default to the creator).
+- DUE DATES: Only include a due date if the user specified one. Append it in square brackets as ISO \`[YYYY-MM-DD]\` at the end of the item (after any assignee), e.g. \`- [ ] Draft brief — @Sarah [2026-07-01]\`. Never invent dates.
+- GROUPING: If the work splits into themes, prefix each block with a level-3 markdown heading (e.g. \`### Launch prep\`). All items beneath that heading inherit it as their group.
+- After the checklist, add a single short sentence: e.g. "Saved to this project's task list — open the Planning panel to review or send them to Workstreams when ready."`;
 
 async function getEmbedding(text: string, _apiKey?: string): Promise<number[]> {
   return await getEmbeddingShared(text);

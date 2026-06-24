@@ -23,6 +23,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Loader2, ListChecks, Plus, CalendarIcon, User, CheckCircle2, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";

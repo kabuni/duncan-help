@@ -125,7 +125,7 @@ export function ProjectTasksDrawer({
                       {it.title}
                     </span>
                     {assignee && (
-                      <Avatar className="h-5 w-5 shrink-0">
+                      <Avatar className="h-5 w-5 shrink-0 mt-0.5">
                         <AvatarImage src={assignee.avatar_url || undefined} alt={assignee.display_name || ""} />
                         <AvatarFallback className="text-[9px]">
                           {(assignee.display_name || "?").slice(0, 1).toUpperCase()}

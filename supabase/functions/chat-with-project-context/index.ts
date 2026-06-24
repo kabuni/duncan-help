@@ -34,6 +34,53 @@ async function getEmbedding(text: string, _apiKey?: string): Promise<number[]> {
   return await getEmbeddingShared(text);
 }
 
+const SLACK_GATEWAY_URL = "https://connector-gateway.lovable.dev/slack/api";
+
+async function sendSlackDM(slackUserId: string, message: string): Promise<boolean> {
+  const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+  const slackConnectionKey = Deno.env.get("SLACK_API_KEY");
+  if (!lovableApiKey || !slackConnectionKey) {
+    console.error("[slack] missing LOVABLE_API_KEY or SLACK_API_KEY");
+    return false;
+  }
+  const headers = {
+    Authorization: `Bearer ${lovableApiKey}`,
+    "X-Connection-Api-Key": slackConnectionKey,
+    "Content-Type": "application/json",
+  };
+  try {
+    const openRes = await fetch(`${SLACK_GATEWAY_URL}/conversations.open`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ users: slackUserId }),
+    });
+    const openData = await openRes.json();
+    if (!openData.ok) {
+      console.error("[slack] conversations.open failed:", openData.error);
+      return false;
+    }
+    const msgRes = await fetch(`${SLACK_GATEWAY_URL}/chat.postMessage`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        channel: openData.channel.id,
+        text: message,
+        username: "Duncan",
+        icon_emoji: ":clipboard:",
+      }),
+    });
+    const msgData = await msgRes.json();
+    if (!msgData.ok) {
+      console.error("[slack] postMessage failed:", msgData.error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[slack] DM exception:", err);
+    return false;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -584,6 +631,73 @@ Deno.serve(async (req) => {
                   console.error("[plan-items] insert failed:", planErr.message);
                 } else {
                   console.log(`[plan-items] auto-created ${rows.length} task(s) for chat ${chat_id}`);
+
+                  // Notify assignees via Slack DM (skip self-assignments / unassigned defaults)
+                  try {
+                    const assignedRows = rows.filter(
+                      (r: any) => r.assignee_profile_id && r.assignee_profile_id !== user.id,
+                    );
+                    const assigneeUserIds = Array.from(
+                      new Set(assignedRows.map((r: any) => r.assignee_profile_id as string)),
+                    );
+                    if (assigneeUserIds.length > 0) {
+                      const { data: profs } = await supabase
+                        .from("profiles")
+                        .select("id, user_id, display_name")
+                        .in("user_id", assigneeUserIds);
+                      const profileByUserId = new Map<string, { id: string; display_name: string | null }>();
+                      for (const p of profs || []) {
+                        profileByUserId.set(p.user_id, { id: p.id, display_name: p.display_name });
+                      }
+                      const profileIds = (profs || []).map((p: any) => p.id);
+                      const { data: maps } = await supabase
+                        .from("user_notification_mappings")
+                        .select("duncan_user_id, slack_user_identifier, is_active")
+                        .in("duncan_user_id", profileIds)
+                        .eq("is_active", true);
+                      const slackByProfileId = new Map<string, string>();
+                      for (const m of maps || []) {
+                        slackByProfileId.set(m.duncan_user_id, m.slack_user_identifier);
+                      }
+                      // Senders display name (for "assigned by" line)
+                      const { data: senderProf } = await supabase
+                        .from("profiles")
+                        .select("display_name")
+                        .eq("user_id", user.id)
+                        .maybeSingle();
+                      const senderName = senderProf?.display_name || "A teammate";
+
+                      // Group tasks per assignee for a single consolidated DM
+                      const tasksByUser = new Map<string, typeof assignedRows>();
+                      for (const r of assignedRows) {
+                        const arr = tasksByUser.get(r.assignee_profile_id) || [];
+                        arr.push(r);
+                        tasksByUser.set(r.assignee_profile_id, arr);
+                      }
+                      for (const [assigneeUserId, tasks] of tasksByUser) {
+                        const prof = profileByUserId.get(assigneeUserId);
+                        if (!prof) continue;
+                        const slackId = slackByProfileId.get(prof.id);
+                        if (!slackId) {
+                          console.log(`[slack] no mapping for profile ${prof.id} (${prof.display_name})`);
+                          continue;
+                        }
+                        const lines = tasks.map((t: any) => {
+                          const due = t.due_date ? ` _(due ${t.due_date})_` : "";
+                          const grp = t.group_title ? ` — _${t.group_title}_` : "";
+                          return `• ${t.title}${grp}${due}`;
+                        });
+                        const message =
+                          `:clipboard: *${senderName}* assigned you ${tasks.length === 1 ? "a task" : `${tasks.length} tasks`} in project *${project.name}*:\n` +
+                          lines.join("\n") +
+                          `\n\nOpen the project in Duncan to review: https://duncan.help/projects/${chat.project_id}`;
+                        const ok = await sendSlackDM(slackId, message);
+                        console.log(`[slack] DM to ${slackId} for ${tasks.length} task(s): ${ok ? "sent" : "failed"}`);
+                      }
+                    }
+                  } catch (slackErr) {
+                    console.error("[slack] notify assignees failed (non-fatal):", slackErr);
+                  }
                 }
               }
             }

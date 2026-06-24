@@ -161,6 +161,18 @@ export function ProjectTasksDrawer({
     }
   }
 
+  async function deleteTask(id: string) {
+    const { error } = await supabase
+      .from("project_chat_plan_items" as any)
+      .delete()
+      .eq("id", id);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Task deleted");
+    }
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col">

@@ -86,6 +86,57 @@ export function ProjectTasksDrawer({
     if (error) toast.error(error.message);
   }
 
+  const [newTitle, setNewTitle] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  async function addTask() {
+    const title = newTitle.trim();
+    if (!title) return;
+    setAdding(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      if (!userId) throw new Error("Not signed in");
+
+      // Find an existing chat in this project, or create a "Tasks" chat.
+      let chatId: string | null = null;
+      const { data: existingChat } = await supabase
+        .from("project_chats")
+        .select("id")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      chatId = existingChat?.id ?? null;
+      if (!chatId) {
+        const { data: created, error: createErr } = await supabase
+          .from("project_chats")
+          .insert({ project_id: projectId, title: "Tasks", created_by: userId })
+          .select("id")
+          .single();
+        if (createErr) throw createErr;
+        chatId = created.id;
+      }
+
+      const { error } = await supabase
+        .from("project_chat_plan_items" as any)
+        .insert({
+          project_id: projectId,
+          chat_id: chatId,
+          created_by: userId,
+          title,
+          status: "accepted",
+        });
+      if (error) throw error;
+      setNewTitle("");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to add task");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">

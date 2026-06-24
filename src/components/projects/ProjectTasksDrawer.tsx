@@ -324,6 +324,13 @@ export function ProjectTasksDrawer({
           </Button>
         </form>
       </SheetContent>
+      <ImportTasksFromNotesDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        projectId={projectId}
+        members={members}
+        onImported={load}
+      />
     </Sheet>
   );
 }

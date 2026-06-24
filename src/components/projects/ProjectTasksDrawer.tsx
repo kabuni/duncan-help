@@ -112,20 +112,20 @@ export function ProjectTasksDrawer({
                 const assignee = it.assignee_profile_id ? memberById.get(it.assignee_profile_id) : null;
                 const isDone = it.status === "done" || it.status === "promoted";
                 return (
-                  <li key={it.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <li key={it.id} className="flex items-start gap-3 px-4 py-3">
                     <Checkbox
                       checked={isDone}
                       onCheckedChange={() => toggleDone(it)}
-                      className="h-3.5 w-3.5"
+                      className="h-3.5 w-3.5 mt-1 shrink-0"
                       disabled={it.status === "promoted"}
                     />
                     <span
-                      className={`flex-1 text-sm ${isDone ? "line-through text-muted-foreground" : "text-foreground"}`}
+                      className={`flex-1 text-sm whitespace-pre-wrap break-words leading-relaxed ${isDone ? "line-through text-muted-foreground" : "text-foreground"}`}
                     >
                       {it.title}
                     </span>
                     {assignee && (
-                      <Avatar className="h-5 w-5 shrink-0">
+                      <Avatar className="h-5 w-5 shrink-0 mt-0.5">
                         <AvatarImage src={assignee.avatar_url || undefined} alt={assignee.display_name || ""} />
                         <AvatarFallback className="text-[9px]">
                           {(assignee.display_name || "?").slice(0, 1).toUpperCase()}

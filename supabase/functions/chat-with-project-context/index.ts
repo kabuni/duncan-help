@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
         .eq("project_id", chat.project_id)
         .order("pinned", { ascending: false })
         .order("updated_at", { ascending: false })
-        .limit(30);
+        .limit(10);
       if (notes && notes.length > 0) {
         const htmlToText = (raw: string): string => {
           if (!raw) return "";

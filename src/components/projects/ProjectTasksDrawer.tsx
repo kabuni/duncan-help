@@ -236,16 +236,91 @@ export function ProjectTasksDrawer({
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="px-4 py-2 border-b border-border flex justify-end">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs gap-1.5"
-              onClick={() => setImportOpen(true)}
+          {/* Filter bar */}
+          <div className="px-4 py-2 border-b border-border flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[140px]">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+              <Input
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                placeholder="Search tasks…"
+                className="h-7 text-xs pl-7"
+              />
+            </div>
+
+            <Select
+              value={filterOwner}
+              onValueChange={(v) => setFilterOwner(v)}
             >
-              <Sparkles className="h-3 w-3" />
-              Import from notes
-            </Button>
+              <SelectTrigger className="h-7 w-auto min-w-[7.5rem] text-xs gap-1 px-2">
+                <SlidersHorizontal className="h-3 w-3 text-muted-foreground" />
+                {filterOwner === "all" ? "All owners" : filterOwner === UNASSIGNED ? "Unassigned" : (memberById.get(filterOwner)?.display_name || "Owner")}
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All owners</SelectItem>
+                <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.user_id} value={m.user_id}>
+                    {m.display_name || "Member"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterDue} onValueChange={setFilterDue}>
+              <SelectTrigger className="h-7 w-auto min-w-[7.5rem] text-xs gap-1 px-2">
+                <CalendarIcon className="h-3 w-3 text-muted-foreground" />
+                {filterDue === "all" ? "Due date" : filterDue === "overdue" ? "Overdue" : filterDue === "has" ? "Has due" : "No due date"}
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="overdue">Overdue</SelectItem>
+                <SelectItem value="has">Has due date</SelectItem>
+                <SelectItem value="none">No due date</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={filterDeadline} onValueChange={setFilterDeadline}>
+              <SelectTrigger className="h-7 w-auto min-w-[7.5rem] text-xs gap-1 px-2">
+                <CalendarIcon className="h-3 w-3 text-muted-foreground" />
+                {filterDeadline === "all" ? "Deadline" : filterDeadline === "overdue" ? "Overdue" : filterDeadline === "has" ? "Has deadline" : "No deadline"}
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="overdue">Overdue</SelectItem>
+                <SelectItem value="has">Has deadline</SelectItem>
+                <SelectItem value="none">No deadline</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {(filterOwner !== "all" || filterDue !== "all" || filterDeadline !== "all" || searchText) && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs gap-1 px-2"
+                onClick={() => {
+                  setFilterOwner("all");
+                  setFilterDue("all");
+                  setFilterDeadline("all");
+                  setSearchText("");
+                }}
+              >
+                <X className="h-3 w-3" />
+                Clear
+              </Button>
+            )}
+
+            <div className="ml-auto">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1.5"
+                onClick={() => setImportOpen(true)}
+              >
+                <Sparkles className="h-3 w-3" />
+                Import
+              </Button>
+            </div>
           </div>
           {loading ? (
             <div className="flex justify-center py-12">

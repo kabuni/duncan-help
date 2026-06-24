@@ -326,13 +326,13 @@ export function ProjectTasksDrawer({
             <div className="flex justify-center py-12">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
-          ) : items.length === 0 ? (
+          ) : filteredItems.length === 0 ? (
             <p className="text-xs text-muted-foreground italic text-center py-12 px-4">
-              No tasks yet.
+              {items.length === 0 ? "No tasks yet." : "No tasks match your filters."}
             </p>
           ) : (
             <ul className="divide-y divide-border">
-              {items.map((it) => {
+              {filteredItems.map((it) => {
                 const assignee = it.assignee_profile_id ? memberById.get(it.assignee_profile_id) : null;
                 const isDone = it.status === "done" || it.status === "promoted";
                 const isPromoted = it.status === "promoted";

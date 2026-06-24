@@ -53,6 +53,7 @@ export function ProjectTasksDrawer({
   const [loading, setLoading] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [adding, setAdding] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!projectId) return;

@@ -32,6 +32,7 @@ Tasks created from a project chat live INSIDE this project's task list (the "Pla
   Never omit the \` — @Name\` suffix.
 - DUE DATES: Only include a due date if the user specified one. Append it in square brackets as ISO \`[YYYY-MM-DD]\` at the end of the item (after any assignee), e.g. \`- [ ] Draft brief — @Sarah [2026-07-01]\`. Never invent dates.
 - GROUPING: If the work splits into themes, prefix each block with a level-3 markdown heading (e.g. \`### Launch prep\`). All items beneath that heading inherit it as their group.
+- EDITING EXISTING ITEMS: You CAN modify items already in the checklist. To reassign, change the due date, or move an item to another group, simply re-emit the checklist item with the EXACT SAME TITLE and the new \` — @Name\` / \`[YYYY-MM-DD]\` / heading. The system matches on title (case-insensitive) and updates the assignee, due date, and group in place — and notifies the new assignee on Slack. Never tell the user to edit the panel manually; just re-issue the corrected checklist.
 - After the checklist, add a single short sentence: e.g. "Saved to this project's task list — open the Planning panel to review or send them to Workstreams when ready."`;
 
 async function getEmbedding(text: string, _apiKey?: string): Promise<number[]> {

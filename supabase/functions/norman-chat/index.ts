@@ -2987,9 +2987,9 @@ async function executeWorkstreamTool(
     }
 
     case "list_my_project_tasks": {
-      const profileId = identity?.profile_id;
-      if (!profileId) {
-        return { error: "User profile not found", status: "no_data" };
+      const assigneeId = identity?.user_id;
+      if (!assigneeId) {
+        return { error: "User not found", status: "no_data" };
       }
 
       const { data: tasks, error: tasksErr } = await supabaseAdmin
@@ -3005,8 +3005,10 @@ async function executeWorkstreamTool(
           project_id,
           projects(name)
         `)
-        .eq("assignee_profile_id", profileId)
+        .eq("assignee_profile_id", assigneeId)
+        .neq("status", "done")
         .order("position");
+
 
       if (tasksErr) throw new Error(`Failed to list project tasks: ${tasksErr.message}`);
 

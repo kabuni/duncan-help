@@ -5671,7 +5671,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages: rawMessages, mode, userProfile, voiceMode, executeWriteId } = await req.json();
+    const { messages: rawMessages, mode, userProfile, voiceMode, executeWriteId, model_override } = await req.json();
     // When confirm-chat-write invokes us with only { executeWriteId }, `messages` is absent.
     // Default to an empty array so all the message-shaped helpers between here and the
     // executeWriteId handler below don't blow up with "messages is not iterable".
@@ -6671,6 +6671,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
       ],
       stream: true,
     };
+    if (model_override && typeof model_override === "object") {
+      requestBody.model_override = model_override;
+    }
 
     // Include tools based on what's connected
     const tools: any[] = [...GOOGLE_FORMS_TOOLS, ...NDA_TOOLS]; // Always available
@@ -8323,6 +8326,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               messages: sanitizeConversationMessages(conversationMessages),
               stream: true,
               tools: filteredTools,
+              model_override: requestBody.model_override,
             });
             console.log("LLM RESPONSE RECEIVED:");
             console.log({
@@ -8395,6 +8399,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
               messages: finalMessages,
               stream: true,
               tools: filteredTools,
+              model_override: requestBody.model_override,
             });
 
             const finalResult = await consumeSSEStream(finalResponse, enqueue);

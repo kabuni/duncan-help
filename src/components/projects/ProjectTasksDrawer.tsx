@@ -68,6 +68,31 @@ export function ProjectTasksDrawer({
   const [newTitle, setNewTitle] = useState("");
   const [adding, setAdding] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [filterOwner, setFilterOwner] = useState<string | "all">("all");
+  const [filterDue, setFilterDue] = useState<string>("all");
+  const [filterDeadline, setFilterDeadline] = useState<string>("all");
+  const [searchText, setSearchText] = useState("");
+
+  const filteredItems = useMemo(() => {
+    return items.filter((it) => {
+      const isDone = it.status === "done" || it.status === "promoted";
+      if (searchText.trim() && !it.title.toLowerCase().includes(searchText.trim().toLowerCase())) return false;
+      if (filterOwner !== "all") {
+        if (filterOwner === "__unassigned__") {
+          if (it.assignee_profile_id) return false;
+        } else if (it.assignee_profile_id !== filterOwner) {
+          return false;
+        }
+      }
+      if (filterDue === "overdue" && (isDone || !isPast(it.due_date))) return false;
+      if (filterDue === "has" && !it.due_date) return false;
+      if (filterDue === "none" && it.due_date) return false;
+      if (filterDeadline === "overdue" && (isDone || !isPast(it.deadline))) return false;
+      if (filterDeadline === "has" && !it.deadline) return false;
+      if (filterDeadline === "none" && it.deadline) return false;
+      return true;
+    });
+  }, [items, filterOwner, filterDue, filterDeadline, searchText]);
 
   const load = useCallback(async () => {
     if (!projectId) return;

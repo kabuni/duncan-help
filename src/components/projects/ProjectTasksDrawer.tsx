@@ -321,6 +321,7 @@ export function ProjectTasksDrawer({
                             className={cn(
                               "h-7 text-xs gap-1.5 px-2 font-normal",
                               !it.due_date && "text-muted-foreground",
+                              duePast && "border-norman-warning text-norman-warning",
                             )}
                           >
                             <CalendarIcon className="h-3 w-3" />

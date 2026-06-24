@@ -694,11 +694,31 @@ async function openaiStream(opts: CallLLMOptions, model: string): Promise<Readab
   }
   if (opts.temperature !== undefined && !model.startsWith("gpt-5")) body.temperature = opts.temperature;
 
-  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  // Streaming callers must never wait indefinitely for OpenAI to accept the
+  // request. Without this, a slow first byte can hold the edge request open
+  // until the platform's 150s idle timeout and surface as a 504 to the UI.
+  const ctrl = new AbortController();
+  const openTimeoutMs = STREAM_FIRST_CHUNK_TIMEOUT_MS;
+  const timer = setTimeout(() => ctrl.abort(), openTimeoutMs);
+  let resp: Response;
+  try {
+    resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      const err: any = new Error(`OpenAI stream open timeout after ${openTimeoutMs}ms`);
+      err.status = 504;
+      err.timeout = true;
+      throw err;
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   if (!resp.ok || !resp.body) {
     const text = await resp.text().catch(() => "");
     const err: any = new Error(`OpenAI stream ${resp.status}: ${text.slice(0, 200)}`);

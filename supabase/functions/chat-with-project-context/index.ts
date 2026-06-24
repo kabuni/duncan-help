@@ -427,6 +427,11 @@ Deno.serve(async (req) => {
           messages: aiMessages,
           mode: "general",
           userProfile,
+          // Project-context turns carry a large system message (notes/files) and
+          // usually need quick synthesis more than deep multi-tool reasoning.
+          // Keep them on the project memory's standard gpt-4o path instead of
+          // the slower default model to avoid edge idle timeouts.
+          model_override: { openai: "gpt-4o" },
         }),
       });
     } catch (err: any) {

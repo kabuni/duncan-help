@@ -6725,6 +6725,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
     // Workstream management tools always available
     tools.push(...WORKSTREAM_TOOLS);
     tools.push(...PLANNER_TOOLS);
+    // Project task tools always available
+    tools.push(...PROJECT_TOOLS);
     // Executive summary document generation
     tools.push(...EXEC_SUMMARY_TOOLS);
     // Release logging tool (admin-only enforced inside executor)

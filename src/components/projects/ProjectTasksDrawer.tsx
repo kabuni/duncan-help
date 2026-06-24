@@ -363,6 +363,7 @@ export function ProjectTasksDrawer({
                             className={cn(
                               "h-7 text-xs gap-1.5 px-2 font-normal",
                               !it.deadline && "text-muted-foreground",
+                              deadlinePast && "border-destructive text-destructive bg-destructive/5",
                             )}
                           >
                             <CalendarIcon className="h-3 w-3" />

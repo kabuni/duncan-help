@@ -278,10 +278,11 @@ export function ProjectTasksDrawer({
                           {assignee ? (
                             <span className="flex items-center gap-1.5">
                               {assignee.avatar_url ? (
-                                <Avatar className="h-4 w-4">
-                                  <AvatarImage src={assignee.avatar_url} />
-                                  <AvatarFallback className="bg-transparent" />
-                                </Avatar>
+                                <img
+                                  src={assignee.avatar_url}
+                                  alt=""
+                                  className="h-4 w-4 rounded-sm object-cover"
+                                />
                               ) : (
                                 <User className="h-3 w-3 text-muted-foreground" />
                               )}

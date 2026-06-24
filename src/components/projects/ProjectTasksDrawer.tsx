@@ -156,13 +156,26 @@ export function ProjectTasksDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col">
         <SheetHeader className="px-4 py-3 border-b border-border">
-          <SheetTitle className="text-sm font-semibold flex items-center gap-2">
-            <ListChecks className="h-4 w-4" />
-            Tasks — {projectName}
-          </SheetTitle>
-          <SheetDescription className="text-xs">
-            {items.length} {items.length === 1 ? "task" : "tasks"} in this project
-          </SheetDescription>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <SheetTitle className="text-sm font-semibold flex items-center gap-2">
+                <ListChecks className="h-4 w-4" />
+                Tasks — {projectName}
+              </SheetTitle>
+              <SheetDescription className="text-xs mt-0.5">
+                {items.length} {items.length === 1 ? "task" : "tasks"} in this project
+              </SheetDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs gap-1.5 shrink-0"
+              onClick={() => setImportOpen(true)}
+            >
+              <Sparkles className="h-3 w-3" />
+              Import from notes
+            </Button>
+          </div>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto">

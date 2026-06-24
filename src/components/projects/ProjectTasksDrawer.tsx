@@ -191,6 +191,25 @@ export function ProjectTasksDrawer({
             </ul>
           )}
         </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            addTask();
+          }}
+          className="border-t border-border px-3 py-2 flex items-center gap-2"
+        >
+          <Input
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder="Add a task…"
+            className="h-8 text-sm"
+            disabled={adding}
+          />
+          <Button type="submit" size="sm" className="h-8 px-2" disabled={adding || !newTitle.trim()}>
+            {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+          </Button>
+        </form>
       </SheetContent>
     </Sheet>
   );

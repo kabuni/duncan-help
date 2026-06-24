@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Loader2, ListChecks, Plus, CalendarIcon, User, CheckCircle2, Sparkles, Trash2 } from "lucide-react";
+import { Loader2, ListChecks, Plus, CalendarIcon, CheckCircle2, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { ProjectMember } from "@/hooks/useProjects";
@@ -286,15 +286,9 @@ export function ProjectTasksDrawer({
                       >
                         <SelectTrigger className="h-7 w-auto min-w-[10rem] text-xs gap-1.5 px-2">
                           {assignee ? (
-                            <span className="flex items-center gap-1.5">
-                              <User className="h-3 w-3 text-muted-foreground" />
-                              <span className="truncate max-w-[12rem]">{assignee.display_name || "Member"}</span>
-                            </span>
+                            <span className="truncate max-w-[12rem]">{assignee.display_name || "Member"}</span>
                           ) : (
-                            <span className="flex items-center gap-1.5 text-muted-foreground">
-                              <User className="h-3 w-3" />
-                              Owner
-                            </span>
+                            <span className="text-muted-foreground">Owner</span>
                           )}
                         </SelectTrigger>
                         <SelectContent>

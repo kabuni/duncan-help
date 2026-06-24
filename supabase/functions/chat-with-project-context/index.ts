@@ -181,17 +181,44 @@ Deno.serve(async (req) => {
         .order("updated_at", { ascending: false })
         .limit(30);
       if (notes && notes.length > 0) {
+        const htmlToText = (raw: string): string => {
+          if (!raw) return "";
+          let s = String(raw);
+          // Strip scripts/styles entirely
+          s = s.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, "");
+          // Preserve list/line semantics
+          s = s.replace(/<\s*li[^>]*>/gi, "\n• ");
+          s = s.replace(/<\s*br\s*\/?>/gi, "\n");
+          s = s.replace(/<\/\s*(p|div|h[1-6]|tr|ul|ol|blockquote)\s*>/gi, "\n");
+          // Drop all remaining tags
+          s = s.replace(/<[^>]+>/g, "");
+          // Decode common entities
+          s = s.replace(/&nbsp;/g, " ")
+               .replace(/&amp;/g, "&")
+               .replace(/&lt;/g, "<")
+               .replace(/&gt;/g, ">")
+               .replace(/&quot;/g, '"')
+               .replace(/&#39;/g, "'");
+          // Collapse whitespace
+          s = s.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+          return s;
+        };
         const rendered = notes
           .map((n: any) => {
-            const body = (n.content || "").slice(0, 4000);
+            const plain = htmlToText(n.content || "");
+            const body = plain.length > 8000 ? plain.slice(0, 8000) + "\n…[note truncated]" : plain;
             return `### ${n.pinned ? "📌 " : ""}${n.title || "Untitled note"}\n${body}`;
           })
           .join("\n\n---\n\n");
-        notesBlock = `\n\n## PROJECT NOTES\nThe team has captured the following notes inside this project. Treat them as authoritative context:\n\n${rendered}\n`;
+        notesBlock = `\n\n## PROJECT NOTES\nThe team has captured the following notes inside this project. Treat them as authoritative context and answer questions about them directly from this content:\n\n${rendered}\n`;
+        console.log(`[project-notes] injected ${notes.length} notes, total chars=${notesBlock.length}`);
+      } else {
+        console.log(`[project-notes] no notes found for project ${chat.project_id}`);
       }
     } catch (notesErr) {
       console.error("Notes fetch failed (non-fatal):", notesErr);
     }
+
 
     // 6. Fetch last 20 messages from the CURRENT chat for live conversation context
     const { data: history, error: historyError } = await supabase

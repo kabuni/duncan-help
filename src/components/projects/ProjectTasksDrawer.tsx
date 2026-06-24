@@ -236,7 +236,7 @@ export function ProjectTasksDrawer({
                 const duePast = !isDone && isPast(it.due_date);
                 const deadlinePast = !isDone && isPast(it.deadline);
                 return (
-                  <li key={it.id} className="px-4 py-3 space-y-2 group">
+                  <li key={it.id} className={cn("px-4 py-3 space-y-2 group", deadlinePast && "bg-destructive/5")}>
                     <div className="flex items-start gap-3">
                       <Checkbox
                         checked={isDone}

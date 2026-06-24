@@ -484,6 +484,107 @@ Deno.serve(async (req) => {
           if (insertAssistantError) {
             console.error("Failed to save assistant message:", insertAssistantError);
           }
+
+          // Auto-extract markdown checklist items into project_chat_plan_items
+          // so they appear in the Planning panel, assigned to the right member.
+          try {
+            const lines = full.split(/\r?\n/);
+            const items: Array<{
+              title: string;
+              group: string | null;
+              assignee_profile_id: string | null;
+              due_date: string | null;
+            }> = [];
+            let currentGroup: string | null = null;
+            const memberByKey = new Map<string, string>();
+            for (const m of projectMembers) {
+              if (m.first_name) memberByKey.set(m.first_name.toLowerCase(), m.user_id);
+              if (m.display_name) memberByKey.set(m.display_name.toLowerCase(), m.user_id);
+            }
+            const checklistRe = /^\s*[-*]\s*\[\s*[ xX]?\s*\]\s+(.*)$/;
+            const headingRe = /^\s*#{2,4}\s+(.*\S)\s*#*\s*$/;
+            const dateRe = /\[(\d{4}-\d{2}-\d{2})\]/;
+            const mentionRe = /@([A-Za-z][A-Za-z0-9 _'-]{0,40})(?=\s|$|[—–\-,.;:[\]()])/;
+            for (const raw of lines) {
+              const hMatch = raw.match(headingRe);
+              if (hMatch) {
+                currentGroup = hMatch[1].trim() || null;
+                continue;
+              }
+              const cMatch = raw.match(checklistRe);
+              if (!cMatch) continue;
+              let text = cMatch[1].trim();
+              if (!text) continue;
+              let due: string | null = null;
+              const dm = text.match(dateRe);
+              if (dm) {
+                due = dm[1];
+                text = text.replace(dateRe, "").trim();
+              }
+              let assignee: string | null = null;
+              const am = text.match(mentionRe);
+              if (am) {
+                const candidate = am[1].trim().toLowerCase();
+                // Try longest match first (display_name then first_name).
+                if (memberByKey.has(candidate)) {
+                  assignee = memberByKey.get(candidate)!;
+                } else {
+                  const firstToken = candidate.split(/\s+/)[0];
+                  if (memberByKey.has(firstToken)) assignee = memberByKey.get(firstToken)!;
+                }
+                text = text.replace(am[0], "").trim();
+              }
+              // Strip trailing separators left over (—, -, :, etc.)
+              text = text.replace(/[—\-:•·]+\s*$/g, "").trim();
+              if (!text) continue;
+              items.push({
+                title: text.slice(0, 280),
+                group: currentGroup,
+                assignee_profile_id: assignee,
+                due_date: due,
+              });
+            }
+
+            if (items.length > 0) {
+              // Avoid duplicates: skip titles that already exist (any status) for this chat.
+              const { data: existing } = await supabase
+                .from("project_chat_plan_items")
+                .select("title")
+                .eq("chat_id", chat_id);
+              const have = new Set((existing || []).map((r: any) => String(r.title).toLowerCase()));
+              const fresh = items.filter((it) => !have.has(it.title.toLowerCase()));
+              if (fresh.length > 0) {
+                const { data: maxPosRow } = await supabase
+                  .from("project_chat_plan_items")
+                  .select("position")
+                  .eq("chat_id", chat_id)
+                  .order("position", { ascending: false })
+                  .limit(1);
+                const startPos = (maxPosRow && maxPosRow[0]?.position) || 0;
+                const rows = fresh.map((it, i) => ({
+                  chat_id,
+                  project_id: chat.project_id,
+                  created_by: user.id,
+                  title: it.title,
+                  group_title: it.group,
+                  assignee_profile_id: it.assignee_profile_id || user.id,
+                  due_date: it.due_date,
+                  status: "accepted",
+                  position: startPos + i + 1,
+                }));
+                const { error: planErr } = await supabase
+                  .from("project_chat_plan_items")
+                  .insert(rows);
+                if (planErr) {
+                  console.error("[plan-items] insert failed:", planErr.message);
+                } else {
+                  console.log(`[plan-items] auto-created ${rows.length} task(s) for chat ${chat_id}`);
+                }
+              }
+            }
+          } catch (planErr) {
+            console.error("[plan-items] extraction failed (non-fatal):", planErr);
+          }
         }
       } catch (persistErr) {
         console.error("Failed to capture/persist streamed reply:", persistErr);

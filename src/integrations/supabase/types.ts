@@ -2735,6 +2735,7 @@ export type Database = {
         Row: {
           assignee_profile_id: string | null
           chat_id: string
+          completed_at: string | null
           created_at: string
           created_by: string
           due_date: string | null
@@ -2752,6 +2753,7 @@ export type Database = {
         Insert: {
           assignee_profile_id?: string | null
           chat_id: string
+          completed_at?: string | null
           created_at?: string
           created_by: string
           due_date?: string | null
@@ -2769,6 +2771,7 @@ export type Database = {
         Update: {
           assignee_profile_id?: string | null
           chat_id?: string
+          completed_at?: string | null
           created_at?: string
           created_by?: string
           due_date?: string | null

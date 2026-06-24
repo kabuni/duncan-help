@@ -2987,8 +2987,8 @@ async function executeWorkstreamTool(
     }
 
     case "list_my_project_tasks": {
-      const assigneeId = identity?.user_id;
-      if (!assigneeId) {
+      const assigneeIds = [identity?.user_id, identity?.profile_id].filter(Boolean);
+      if (assigneeIds.length === 0) {
         return { error: "User not found", status: "no_data" };
       }
 
@@ -3005,7 +3005,7 @@ async function executeWorkstreamTool(
           project_id,
           projects(name)
         `)
-        .eq("assignee_profile_id", assigneeId)
+        .in("assignee_profile_id", assigneeIds)
         .neq("status", "done")
         .order("position");
 
@@ -3031,6 +3031,7 @@ async function executeWorkstreamTool(
         tasks_by_project: byProject,
         total_count: result.length,
         project_count: Object.keys(byProject).length,
+        matched_assignee_ids: assigneeIds,
       };
     }
 

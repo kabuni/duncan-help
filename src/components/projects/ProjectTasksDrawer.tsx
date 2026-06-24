@@ -13,9 +13,19 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
-import { Loader2, ListChecks, Plus, CalendarIcon, User, CheckCircle2, Sparkles } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Loader2, ListChecks, Plus, CalendarIcon, User, CheckCircle2, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { ProjectMember } from "@/hooks/useProjects";
@@ -152,9 +162,21 @@ export function ProjectTasksDrawer({
     }
   }
 
+  async function deleteTask(id: string) {
+    const { error } = await supabase
+      .from("project_chat_plan_items" as any)
+      .delete()
+      .eq("id", id);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Task deleted");
+    }
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col">
+      <SheetContent side="right" className="w-full sm:max-w-2xl lg:max-w-3xl p-0 flex flex-col">
         <SheetHeader className="px-4 py-3 border-b border-border">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -194,7 +216,7 @@ export function ProjectTasksDrawer({
                 const isDone = it.status === "done" || it.status === "promoted";
                 const isPromoted = it.status === "promoted";
                 return (
-                  <li key={it.id} className="px-4 py-3 space-y-2">
+                  <li key={it.id} className="px-4 py-3 space-y-2 group">
                     <div className="flex items-start gap-3">
                       <Checkbox
                         checked={isDone}
@@ -210,6 +232,37 @@ export function ProjectTasksDrawer({
                       >
                         {it.title}
                       </span>
+                      {!isPromoted && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 focus:opacity-100 shrink-0"
+                              aria-label="Delete task"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete this task?</AlertDialogTitle>
+                              <AlertDialogDescription className="text-xs">
+                                "{it.title}" will be permanently removed.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteTask(it.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 pl-6">
@@ -221,16 +274,18 @@ export function ProjectTasksDrawer({
                         }
                         disabled={isPromoted}
                       >
-                        <SelectTrigger className="h-7 w-auto min-w-[8rem] text-xs gap-1.5 px-2">
+                        <SelectTrigger className="h-7 w-auto min-w-[10rem] text-xs gap-1.5 px-2">
                           {assignee ? (
                             <span className="flex items-center gap-1.5">
-                              <Avatar className="h-4 w-4">
-                                <AvatarImage src={assignee.avatar_url || undefined} />
-                                <AvatarFallback className="text-[8px]">
-                                  {(assignee.display_name || "?").slice(0, 1).toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="truncate max-w-[8rem]">{assignee.display_name || "Member"}</span>
+                              {assignee.avatar_url ? (
+                                <Avatar className="h-4 w-4">
+                                  <AvatarImage src={assignee.avatar_url} />
+                                  <AvatarFallback className="bg-transparent" />
+                                </Avatar>
+                              ) : (
+                                <User className="h-3 w-3 text-muted-foreground" />
+                              )}
+                              <span className="truncate max-w-[12rem]">{assignee.display_name || "Member"}</span>
                             </span>
                           ) : (
                             <span className="flex items-center gap-1.5 text-muted-foreground">

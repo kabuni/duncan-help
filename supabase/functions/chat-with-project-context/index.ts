@@ -273,59 +273,59 @@ Deno.serve(async (req) => {
     }
 
     // 6b. Fetch summaries of OTHER chats in the same project (cross-chat memory)
+    // Only inject this block when the user explicitly references prior chats —
+    // otherwise it bloats the prompt and slows the LLM (causing 504s).
     let priorChatsBlock = "";
-    try {
-      const { data: otherChats, error: otherChatsError } = await supabase
-        .from("project_chats")
-        .select("id, title, created_at")
-        .eq("project_id", chat.project_id)
-        .neq("id", chat_id)
-        .order("created_at", { ascending: false })
-        .limit(5);
-
-      if (otherChatsError) {
-        console.error("Failed to fetch prior project chats:", otherChatsError);
-      }
-
-      if (otherChats && otherChats.length > 0) {
-        const chatIds = otherChats.map((c: any) => c.id);
-        const { data: priorMessages } = await supabase
-          .from("chat_messages")
-          .select("chat_id, role, content, created_at")
-          .in("chat_id", chatIds)
+    const PRIOR_CHAT_REF_RE = /\b(prior|previous|last|earlier|other|past)\s+(chat|chats|conversation|conversations|thread|threads|discussion|discussions)\b|\bchat history\b|\bchat hisory\b/i;
+    const userMentionsPriorChats = PRIOR_CHAT_REF_RE.test((message || ""));
+    if (userMentionsPriorChats) {
+      try {
+        const { data: otherChats } = await supabase
+          .from("project_chats")
+          .select("id, title, created_at")
+          .eq("project_id", chat.project_id)
+          .neq("id", chat_id)
           .order("created_at", { ascending: false })
-          .limit(60);
+          .limit(5);
 
-        if (priorMessages && priorMessages.length > 0) {
-          // Group by chat_id (re-sort ascending per chat)
-          const grouped: Record<string, Array<{ role: string; content: string }>> = {};
-          for (const m of [...priorMessages].reverse()) {
-            (grouped[m.chat_id] ||= []).push({ role: m.role, content: m.content });
-          }
+        if (otherChats && otherChats.length > 0) {
+          const chatIds = otherChats.map((c: any) => c.id);
+          const { data: priorMessages } = await supabase
+            .from("chat_messages")
+            .select("chat_id, role, content, created_at")
+            .in("chat_id", chatIds)
+            .order("created_at", { ascending: false })
+            .limit(60);
 
-          const MAX_CHARS_PER_CHAT = 1500;
-          const sections: string[] = [];
-          for (const c of otherChats) {
-            const msgs = grouped[c.id];
-            if (!msgs || msgs.length === 0) continue;
-            const recent = msgs.slice(-8).map((m) => {
-              const content = m.content.length > 400 ? m.content.slice(0, 400) + "…" : m.content;
-              return `${m.role.toUpperCase()}: ${content}`;
-            }).join("\n");
-            const trimmed = recent.length > MAX_CHARS_PER_CHAT ? recent.slice(0, MAX_CHARS_PER_CHAT) + "…" : recent;
-            sections.push(`### Chat: "${c.title}" (${new Date(c.created_at).toISOString().slice(0, 10)})\n${trimmed}`);
-          }
-
-          if (sections.length > 0) {
-            priorChatsBlock =
-              "\n\n## PRIOR CHAT HISTORY IN THIS PROJECT\nThe following are excerpts from other chat threads within this same project. You have access to these prior project chats. When the user asks about previous chats, last chats, chat history, dates, or tasks mentioned before, answer from this context and do not say you lack chat-history access. If the provided excerpts are insufficient, say exactly what is missing from the available prior-chat excerpts.\n\n" +
-              sections.join("\n\n---\n\n");
+          if (priorMessages && priorMessages.length > 0) {
+            const grouped: Record<string, Array<{ role: string; content: string }>> = {};
+            for (const m of [...priorMessages].reverse()) {
+              (grouped[m.chat_id] ||= []).push({ role: m.role, content: m.content });
+            }
+            const MAX_CHARS_PER_CHAT = 1500;
+            const sections: string[] = [];
+            for (const c of otherChats) {
+              const msgs = grouped[c.id];
+              if (!msgs || msgs.length === 0) continue;
+              const recent = msgs.slice(-8).map((m) => {
+                const content = m.content.length > 400 ? m.content.slice(0, 400) + "…" : m.content;
+                return `${m.role.toUpperCase()}: ${content}`;
+              }).join("\n");
+              const trimmed = recent.length > MAX_CHARS_PER_CHAT ? recent.slice(0, MAX_CHARS_PER_CHAT) + "…" : recent;
+              sections.push(`### Chat: "${c.title}" (${new Date(c.created_at).toISOString().slice(0, 10)})\n${trimmed}`);
+            }
+            if (sections.length > 0) {
+              priorChatsBlock =
+                "\n\n## PRIOR CHAT HISTORY IN THIS PROJECT\nExcerpts from other chat threads in this project, included because the user referenced them.\n\n" +
+                sections.join("\n\n---\n\n");
+            }
           }
         }
+      } catch (priorErr) {
+        console.error("Prior chats retrieval failed (non-fatal):", priorErr);
       }
-    } catch (priorErr) {
-      console.error("Prior chats retrieval failed (non-fatal):", priorErr);
     }
+
 
     const userText = (message || "").trim() || "Analyze the attached file(s)";
 

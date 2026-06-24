@@ -3001,6 +3001,7 @@ async function executeWorkstreamTool(
           notes,
           status,
           due_date,
+          deadline,
           position,
           group_title,
           project_id,

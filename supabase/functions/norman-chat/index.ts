@@ -6773,6 +6773,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       ...RELEASE_TOOLS,
       ...LOVABLE_CONTRIBUTORS_TOOLS,
       ...RESCHEDULE_TOOLS,
+      ...PROJECT_TOOLS,
     ];
 
     // Build the filtered toolset. If no intent matches, fall back to the full tools array.

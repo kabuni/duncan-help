@@ -175,6 +175,13 @@ export function ProjectTasksDrawer({
     }
   }
 
+  function isPast(dateStr: string | null) {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    d.setHours(23, 59, 59, 999);
+    return d < new Date();
+  }
+
   async function deleteTask(id: string) {
     const { error } = await supabase
       .from("project_chat_plan_items" as any)

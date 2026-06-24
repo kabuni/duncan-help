@@ -119,7 +119,7 @@ export function ImportTasksFromNotesDialog({
       if (!chatId) {
         const { data: created, error: cErr } = await supabase
           .from("project_chats")
-          .insert({ project_id: projectId, title: "Tasks", created_by: userId })
+          .insert({ project_id: projectId, title: "Tasks" })
           .select("id")
           .single();
         if (cErr) throw cErr;

@@ -1,0 +1,1 @@
+ALTER TABLE public.project_chat_plan_items ADD COLUMN IF NOT EXISTS deadline DATE;

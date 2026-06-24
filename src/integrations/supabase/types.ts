@@ -2738,6 +2738,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           created_by: string
+          deadline: string | null
           due_date: string | null
           group_title: string | null
           id: string
@@ -2756,6 +2757,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           created_by: string
+          deadline?: string | null
           due_date?: string | null
           group_title?: string | null
           id?: string
@@ -2774,6 +2776,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           created_by?: string
+          deadline?: string | null
           due_date?: string | null
           group_title?: string | null
           id?: string

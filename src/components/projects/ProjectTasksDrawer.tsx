@@ -175,7 +175,7 @@ export function ProjectTasksDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col">
+      <SheetContent side="right" className="w-full sm:max-w-2xl lg:max-w-3xl p-0 flex flex-col">
         <SheetHeader className="px-4 py-3 border-b border-border">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">

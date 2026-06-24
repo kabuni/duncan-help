@@ -38,6 +38,7 @@ interface PlanItemRow {
   status: "suggested" | "accepted" | "done" | "promoted";
   assignee_profile_id: string | null;
   due_date: string | null;
+  deadline: string | null;
   completed_at: string | null;
   created_at: string;
 }
@@ -70,7 +71,7 @@ export function ProjectTasksDrawer({
     setLoading(true);
     const { data, error } = await supabase
       .from("project_chat_plan_items" as any)
-      .select("id, chat_id, title, status, assignee_profile_id, due_date, completed_at, created_at")
+      .select("id, chat_id, title, status, assignee_profile_id, due_date, deadline, completed_at, created_at")
       .eq("project_id", projectId)
       .order("created_at", { ascending: false });
     if (!error) setItems((data as any[]) as PlanItemRow[]);

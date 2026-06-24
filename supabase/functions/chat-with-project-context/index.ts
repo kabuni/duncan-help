@@ -221,6 +221,44 @@ Deno.serve(async (req) => {
       console.error("Notes fetch failed (non-fatal):", notesErr);
     }
 
+    // 5c. Fetch project members + profiles so the model can name assignees and
+    // we can resolve "@Name" in the assistant's checklist back to user IDs.
+    type MemberRow = { user_id: string; display_name: string | null; first_name: string | null };
+    let projectMembers: MemberRow[] = [];
+    let membersBlock = "";
+    try {
+      const { data: members } = await supabase
+        .from("project_members")
+        .select("user_id")
+        .eq("project_id", chat.project_id);
+      const memberIds = (members || []).map((m: any) => m.user_id);
+      if (memberIds.length > 0) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("user_id, display_name")
+          .in("user_id", memberIds);
+        projectMembers = (profs || []).map((p: any) => {
+          const dn = (p.display_name || "").trim();
+          return {
+            user_id: p.user_id,
+            display_name: dn || null,
+            first_name: dn ? dn.split(/\s+/)[0] : null,
+          };
+        });
+        if (projectMembers.length > 0) {
+          membersBlock =
+            "\n\n## PROJECT MEMBERS (assignable for tasks)\n" +
+            projectMembers
+              .map((m) => `- ${m.display_name || "(no name)"} → @${m.first_name || m.display_name || "user"}`)
+              .join("\n");
+        }
+      }
+    } catch (mErr) {
+      console.error("Project members fetch failed (non-fatal):", mErr);
+    }
+
+
+
 
     // 6. Fetch last 20 messages from the CURRENT chat for live conversation context
     const { data: history, error: historyError } = await supabase

@@ -233,6 +233,8 @@ export function ProjectTasksDrawer({
                 const assignee = it.assignee_profile_id ? memberById.get(it.assignee_profile_id) : null;
                 const isDone = it.status === "done" || it.status === "promoted";
                 const isPromoted = it.status === "promoted";
+                const duePast = !isDone && isPast(it.due_date);
+                const deadlinePast = !isDone && isPast(it.deadline);
                 return (
                   <li key={it.id} className="px-4 py-3 space-y-2 group">
                     <div className="flex items-start gap-3">

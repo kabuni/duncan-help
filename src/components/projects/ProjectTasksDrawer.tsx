@@ -25,7 +25,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Loader2, ListChecks, Plus, CalendarIcon, CheckCircle2, Sparkles, Trash2 } from "lucide-react";
+import {
+  Loader2, ListChecks, Plus, CalendarIcon, CheckCircle2,
+  Sparkles, Trash2, SlidersHorizontal, X, Search,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { ProjectMember } from "@/hooks/useProjects";

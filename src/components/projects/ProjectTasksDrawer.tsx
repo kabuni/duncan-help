@@ -112,11 +112,11 @@ export function ProjectTasksDrawer({
                 const assignee = it.assignee_profile_id ? memberById.get(it.assignee_profile_id) : null;
                 const isDone = it.status === "done" || it.status === "promoted";
                 return (
-                  <li key={it.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <li key={it.id} className="flex items-start gap-3 px-4 py-3">
                     <Checkbox
                       checked={isDone}
                       onCheckedChange={() => toggleDone(it)}
-                      className="h-3.5 w-3.5"
+                      className="h-3.5 w-3.5 mt-1 shrink-0"
                       disabled={it.status === "promoted"}
                     />
                     <span

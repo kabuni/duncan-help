@@ -34,7 +34,7 @@ export const CATEGORY_GROUPS: { label: string; keys: string[] }[] = [
   { label: "People",     keys: ["Travel", "Holiday", "GlobalAllHands", "TeamSocials"] },
   { label: "Operations", keys: ["Product", "Releases", "Event", "Super Coaches", "Investor"] },
   { label: "Marketing",  keys: ["Social", "PR", "Launch"] },
-  { label: "Other",      keys: ["Marketing", "Operations", "Communication", "Creative"] },
+  { label: "Other",      keys: ["Marketing", "Operations", "Communication", "Creative", "BusinessDevelopment"] },
 ];
 
 const FALLBACK: CategoryMeta = { label: "Other", icon: "📌", hsl: "240 10% 50%" };

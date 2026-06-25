@@ -6367,8 +6367,67 @@ Format as a natural, readable summary with clear sections. If a section has no d
         /^\s*Notes from ['"][^'"]+['"]\s*\n?/im,
       ];
       for (const re of footerPatterns) out = out.replace(re, "").trim();
-      return out;
+      return reflowGeminiNotes(out);
     };
+
+    // Gemini emails are hard-wrapped (~76 cols) with trailing "  \n" markdown
+    // line breaks, which render as broken mid-sentence lines. Reflow into
+    // proper paragraphs, mark section titles as headings, and turn the
+    // "[Owner] Title: detail" lines into clean bullet list items.
+    function reflowGeminiNotes(raw: string): string {
+      if (!raw) return raw;
+      // Normalize newlines, drop trailing whitespace per line (kills "  \n" breaks).
+      let txt = raw.replace(/\r\n?/g, "\n").split("\n").map((l) => l.replace(/[ \t]+$/g, "")).join("\n");
+      // Collapse 3+ blank lines to a single blank line.
+      txt = txt.replace(/\n{3,}/g, "\n\n");
+
+      const paragraphs = txt.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+      const KNOWN_HEADINGS = /^(summary|suggested next steps|next steps|decisions|action items|attendees|participants|agenda|discussion|topics?)$/i;
+
+      const blocks: string[] = [];
+      for (const para of paragraphs) {
+        const lines = para.split("\n").map((l) => l.trim()).filter(Boolean);
+        if (lines.length === 0) continue;
+
+        // Bullet list of "[Owner] Title: detail" style action items.
+        if (lines.every((l) => /^\[[^\]]+\]/.test(l)) || lines.filter((l) => /^\[[^\]]+\]/.test(l)).length >= 2) {
+          // Merge wrapped continuations into their parent bullet.
+          const items: string[] = [];
+          for (const l of lines) {
+            if (/^\[[^\]]+\]/.test(l)) items.push(l);
+            else if (items.length) items[items.length - 1] += " " + l;
+          }
+          for (const item of items) {
+            const m = item.match(/^\[([^\]]+)\]\s*(.*)$/);
+            if (!m) { blocks.push(`- ${item}`); continue; }
+            const owner = m[1].trim();
+            const rest = m[2].trim();
+            const t = rest.match(/^([^:]{2,80}):\s*(.+)$/);
+            if (t) blocks.push(`- **${owner} — ${t[1].trim()}:** ${t[2].trim()}`);
+            else blocks.push(`- **${owner}:** ${rest}`);
+          }
+          continue;
+        }
+
+        // Single short line → section heading.
+        if (lines.length === 1 && lines[0].length <= 80 && (KNOWN_HEADINGS.test(lines[0]) || /^[A-Z][A-Za-z0-9 ,'&/()-]+$/.test(lines[0]) && !/[.?!]$/.test(lines[0]))) {
+          blocks.push(`### ${lines[0]}`);
+          continue;
+        }
+
+        // First line is a short title, rest is the body → heading + paragraph.
+        if (lines.length > 1 && lines[0].length <= 80 && !/[.?!]$/.test(lines[0]) && /^[A-Z]/.test(lines[0])) {
+          blocks.push(`### ${lines[0]}`);
+          blocks.push(lines.slice(1).join(" ").replace(/\s+/g, " ").trim());
+          continue;
+        }
+
+        // Regular paragraph: join hard-wrapped lines with a space.
+        blocks.push(lines.join(" ").replace(/\s+/g, " ").trim());
+      }
+
+      return blocks.join("\n\n").trim();
+    }
 
     const fetchLatestGeminiNotesFromUserGmail = async (uid: string): Promise<string> => {
       const tok = await getUserGmailAccessToken(uid);

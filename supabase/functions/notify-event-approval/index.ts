@@ -251,12 +251,70 @@ async function handler(req: Request): Promise<Response> {
       slackTargets.map((t) => sendSlackDM(t.slack_id, t.text)),
     );
 
+    // Email + deletion side-effects for decided approvals
+    let emailSent = false;
+    let eventDeleted = false;
+    if (kind === "decided" && requesterProfile) {
+      const status = approval.status as string;
+      const { data: usersList } = await admin.auth.admin.listUsers({ perPage: 1000 });
+      const requesterAuth = (usersList?.users || []).find((u: any) => u.id === requesterProfile.user_id);
+      const requesterEmail = requesterAuth?.email as string | undefined;
+
+      if (requesterEmail) {
+        try {
+          const gmailToken = await getGmailSenderToken(admin);
+          if (gmailToken) {
+            const verb = status === "approved" ? "Approved" : "Declined";
+            const subject = `${verb}: ${eventTitle}`;
+            const html = buildDecisionHtml({
+              status,
+              eventTitle,
+              eventDate,
+              approverName,
+              requesterName,
+              decisionNote: approval.decision_note,
+              typeLabel,
+              link,
+            });
+            const raw = buildRFC2822(requesterEmail, subject, html, "duncan@kabuni.com");
+            const encoded = base64url(raw);
+            const sendRes = await fetch(
+              "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+              {
+                method: "POST",
+                headers: { Authorization: `Bearer ${gmailToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ raw: encoded }),
+              },
+            );
+            if (sendRes.ok) emailSent = true;
+            else console.error("decision email failed:", await sendRes.text());
+          } else {
+            console.warn("Gmail sender token unavailable — skipping decision email");
+          }
+        } catch (e) {
+          console.error("decision email error:", e);
+        }
+      }
+
+      // Rejection → delete the planner event entirely (after notifications + email)
+      if (status === "rejected" && approval.event_id) {
+        const { error: delErr } = await admin
+          .from("key_events")
+          .delete()
+          .eq("id", approval.event_id);
+        if (delErr) console.error("event delete after rejection failed:", delErr);
+        else eventDeleted = true;
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         notifications_inserted: notifications.length,
         slack_sent: slackResults.filter(Boolean).length,
         slack_attempted: slackTargets.length,
+        email_sent: emailSent,
+        event_deleted: eventDeleted,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

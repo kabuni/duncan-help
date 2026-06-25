@@ -71,7 +71,7 @@ async function notify(approvalId: string, kind: "requested" | "decided" | "propo
   }
 }
 
-export function EventApprovals({ eventId }: { eventId: string }) {
+export function EventApprovals({ eventId, onChanged, onEventRemoved }: { eventId: string; onChanged?: () => void; onEventRemoved?: () => void }) {
   const [rows, setRows] = useState<ApprovalRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileLite[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);

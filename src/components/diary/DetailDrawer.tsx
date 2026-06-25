@@ -279,6 +279,12 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                   <Badge variant="outline" className="font-mono text-[10px] uppercase">{event.category}</Badge>
                 )}
                 <Badge className={cn("border text-[10px]", RISK_TONE[event.risk_level])}>{event.risk_level}</Badge>
+                {event.approval_state === "pending" && (
+                  <Badge className="border text-[10px] bg-amber-500/15 text-amber-600 border-amber-500/30 dark:text-amber-400">Pending approval</Badge>
+                )}
+                {event.approval_state === "approved" && (
+                  <Badge className="border text-[10px] bg-emerald-500/15 text-emerald-600 border-emerald-500/30 dark:text-emerald-400">Approved</Badge>
+                )}
                 {canEditFinal && !editing && (
                   <div className="ml-auto flex items-center gap-2">
                     <Button

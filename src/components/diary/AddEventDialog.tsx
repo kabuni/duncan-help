@@ -305,7 +305,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     }
 
     if (effectiveApprovals.length > 0 && uid) {
-      const { data: insertedApprovals } = await supabase
+      const { data: insertedApprovals, error: approvalError } = await supabase
         .from("key_event_approvals" as any)
         .insert(
           effectiveApprovals.map((a) => ({
@@ -317,6 +317,13 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
           })),
         )
         .select("id");
+
+      if (approvalError) {
+        setSaving(false);
+        console.error("Approval insert failed:", approvalError);
+        toast.error(`Event saved, but approval failed: ${approvalError.message}`);
+        return;
+      }
 
       // Fire-and-forget Slack DMs to each assigned approver
       const approvalRows = (insertedApprovals as unknown as { id: string }[] | null) || [];

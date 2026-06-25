@@ -128,7 +128,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       const [{ data }, calRes] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, user_id, display_name")
+          .select("id, user_id, display_name, role_title")
           .eq("approval_status", "approved")
           .order("display_name"),
         uid
@@ -141,7 +141,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       ]);
       const list = (data || []).filter((p) => p.display_name);
       setOwners(list as any);
-      setProfiles(list.map((p: any) => ({ id: p.id, display_name: p.display_name })));
+      setProfiles(list.map((p: any) => ({ id: p.id, display_name: p.display_name, role_title: p.role_title })));
       setPersonalCalConnected(!!(calRes as any)?.data);
 
       // Default the owner to the current user (they can change it).

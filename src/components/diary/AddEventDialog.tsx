@@ -308,7 +308,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       const { data: insertedApprovals } = await supabase
         .from("key_event_approvals" as any)
         .insert(
-          approvals.map((a) => ({
+          effectiveApprovals.map((a) => ({
             event_id: (inserted as any).id,
             approval_type: a.approval_type,
             label: a.label.trim() || null,

@@ -92,7 +92,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string>("");
   const [owners, setOwners] = useState<{ display_name: string; user_id?: string }[]>([]);
-  const [profiles, setProfiles] = useState<{ id: string; display_name: string | null }[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; display_name: string | null; role_title?: string | null }[]>([]);
   const [collabPerson, setCollabPerson] = useState<string>("");
   const [collabRole, setCollabRole] = useState<string>("");
   const [form, setForm] = useState({

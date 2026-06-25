@@ -454,7 +454,15 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                   )}
                   <div className="border border-dashed border-border rounded-md p-2 space-y-1.5">
                     <div className="flex flex-col sm:flex-row gap-1.5">
-                      <Select key={`collab-${form.collaborators.length}`} value={collabPerson} onValueChange={setCollabPerson}>
+                      <Select
+                        key={`collab-${form.collaborators.length}`}
+                        value={collabPerson}
+                        onValueChange={(v) => {
+                          setCollabPerson(v);
+                          const p = profiles.find((x) => x.id === v);
+                          setCollabRole(p?.role_title || "");
+                        }}
+                      >
                         <SelectTrigger className="h-8 text-xs flex-1 min-w-0">
                           <SelectValue placeholder="Pick a person" />
                         </SelectTrigger>
@@ -465,7 +473,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                             .sort((a, b) => (a.display_name || "").localeCompare(b.display_name || ""))
                             .map((p) => (
                               <SelectItem key={p.id} value={p.id} className="text-xs">
-                                {p.display_name}
+                                {p.display_name}{p.role_title ? ` — ${p.role_title}` : ""}
                               </SelectItem>
                             ))}
                         </SelectContent>
@@ -473,7 +481,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                       <Input
                         value={collabRole}
                         onChange={(e) => setCollabRole(e.target.value)}
-                        placeholder="Role (e.g. Designer)"
+                        placeholder="Role (auto from profile)"
                         className="h-8 text-xs flex-1 min-w-0"
                       />
                       <Button
@@ -489,7 +497,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
                             ...f,
                             collaborators: [
                               ...f.collaborators,
-                              { profile_id: p.id, display_name: p.display_name || "Unnamed", role: collabRole.trim() },
+                              { profile_id: p.id, display_name: p.display_name || "Unnamed", role: (collabRole.trim() || p.role_title || "") },
                             ],
                           }));
                           setCollabPerson("");

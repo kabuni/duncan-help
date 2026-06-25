@@ -6429,6 +6429,107 @@ Format as a natural, readable summary with clear sections. If a section has no d
       return blocks.join("\n\n").trim();
     }
 
+    const getMeetingAnalysisObject = (meeting: any): Record<string, any> | null => {
+      return meeting?.analysis && typeof meeting.analysis === "object" ? meeting.analysis as Record<string, any> : null;
+    };
+
+    const isGeminiMeetingRow = (meeting: any): boolean => {
+      return meeting?.source === "gemini" || meeting?.source === "google_meet" || /gemini-notes@google\.com/i.test(String(meeting?.sender_email || ""));
+    };
+
+    const formatMeetingDate = (value: any): string => {
+      return value ? new Date(value).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Date unavailable";
+    };
+
+    const formatMeetingSourceLabel = (meeting: any): string => {
+      if (meeting?.source === "plaud") return "Plaud";
+      if (isGeminiMeetingRow(meeting)) return "Google Meet (Gemini)";
+      return meeting?.source || "Meetings DB";
+    };
+
+    const getCleanMeetingNotes = (meeting: any): string => {
+      const analysis = getMeetingAnalysisObject(meeting);
+      const rawNotes = String(meeting?.transcript || meeting?.summary || analysis?.summary || "").trim();
+      if (!rawNotes) return "";
+      if (isGeminiMeetingRow(meeting)) return stripGeminiBoilerplate(rawNotes);
+      if (meeting?.source === "plaud") return stripPlaudBoilerplate(rawNotes);
+      return rawNotes;
+    };
+
+    const normalizeActionItem = (item: any): { owner: string; task: string; deadline?: string; priority?: string } | null => {
+      if (!item) return null;
+      if (typeof item === "string") {
+        const m = item.match(/^\[([^\]]+)\]\s*(.+)$/) || item.match(/^([^:]{2,80}):\s*(.+)$/);
+        if (m) return { owner: m[1].trim() || "Unassigned", task: m[2].trim() };
+        return { owner: "Unassigned", task: item.trim() };
+      }
+      const owner = String(item.owner || item.assignee || item.responsible || item.person || "Unassigned").trim();
+      const task = String(item.task || item.action || item.description || item.title || item.item || "").trim();
+      if (!task) return null;
+      const deadline = item.deadline || item.due_date || item.due || item.when;
+      const priority = item.priority;
+      return {
+        owner: owner || "Unassigned",
+        task,
+        deadline: deadline ? String(deadline).trim() : undefined,
+        priority: priority ? String(priority).trim() : undefined,
+      };
+    };
+
+    const extractBracketedActionItems = (notes: string): Array<{ owner: string; task: string }> => {
+      const items: Array<{ owner: string; task: string }> = [];
+      let current: { owner: string; text: string } | null = null;
+      for (const rawLine of notes.split("\n")) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        const start = line.match(/^\[([^\]]+)\]\s*(.+)$/);
+        if (start) {
+          if (current) items.push(toAction(current));
+          current = { owner: start[1].trim(), text: start[2].trim() };
+          continue;
+        }
+        if (current && !/^#{1,6}\s/.test(line)) current.text += ` ${line}`;
+      }
+      if (current) items.push(toAction(current));
+      return items;
+
+      function toAction(value: { owner: string; text: string }): { owner: string; task: string } {
+        const split = value.text.match(/^([^:]{2,100}):\s*(.+)$/);
+        return {
+          owner: value.owner || "Unassigned",
+          task: split ? `${split[1].trim()}: ${split[2].trim()}` : value.text.trim(),
+        };
+      }
+    };
+
+    const getMeetingActionItems = (meeting: any): Array<{ owner: string; task: string; deadline?: string; priority?: string }> => {
+      const analysis = getMeetingAnalysisObject(meeting);
+      const structured = Array.isArray(analysis?.action_items)
+        ? analysis.action_items.map(normalizeActionItem).filter(Boolean) as Array<{ owner: string; task: string; deadline?: string; priority?: string }>
+        : [];
+      if (structured.length > 0) return structured;
+      return extractBracketedActionItems(getCleanMeetingNotes(meeting));
+    };
+
+    const formatActionItemsMarkdown = (meeting: any): string => {
+      const title = meeting?.title?.trim() || "Latest meeting";
+      const dateStr = formatMeetingDate(meeting?.meeting_date);
+      const sourceLabel = formatMeetingSourceLabel(meeting);
+      const items = getMeetingActionItems(meeting);
+      const header = `## Action items — ${title}\n\n- **Date:** ${dateStr}\n- **Source:** ${sourceLabel} (from the meetings database)`;
+      if (items.length === 0) {
+        return `${header}\n\nNo structured action items were found for this meeting.`;
+      }
+      const bullets = items.map((item) => {
+        const meta = [
+          item.deadline ? `Due: ${item.deadline}` : null,
+          item.priority ? `Priority: ${item.priority}` : null,
+        ].filter(Boolean).join("; ");
+        return `- **${item.owner}:** ${item.task}${meta ? ` _(${meta})_` : ""}`;
+      }).join("\n");
+      return `${header}\n\n### From this meeting\n\n${bullets}`;
+    };
+
     const fetchLatestGeminiNotesFromUserGmail = async (uid: string): Promise<string> => {
       const tok = await getUserGmailAccessToken(uid);
       if (!tok) {

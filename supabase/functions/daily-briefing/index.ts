@@ -43,9 +43,10 @@ serve(async (req) => {
     // Get user profile
     const { data: profile } = await supabaseAdmin
       .from("profiles")
-      .select("display_name, role_title, department, preferences")
+      .select("id, display_name, role_title, department, preferences")
       .eq("user_id", user.id)
       .maybeSingle();
+    const profileId = profile?.id || null;
 
     const displayName = profile?.display_name || userName;
     const firstName = displayName.toLowerCase().split(" ")[0];

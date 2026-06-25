@@ -353,6 +353,11 @@ export function ProjectTasksDrawer({
                 const deadlinePast = !isDone && isPast(it.deadline);
                 const showDoneHeader = isDone && (idx === 0 || !(sortedItems[idx - 1].status === "done" || sortedItems[idx - 1].status === "promoted"));
                 return [
+                  showDoneHeader && (
+                    <li key={`done-header-${it.id}`} className="px-4 py-2 bg-muted/50 border-y border-border text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Completed
+                    </li>
+                  ),
                   <li key={it.id} className={cn("px-4 py-3 space-y-2 group", deadlinePast && "bg-destructive/5")}>
                     <div className="flex items-start gap-3">
                       <Checkbox

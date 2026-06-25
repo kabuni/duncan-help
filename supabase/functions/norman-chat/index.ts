@@ -6582,9 +6582,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const meeting = Array.isArray(data) ? data[0] : null;
       const sourceLabel = source === "plaud" ? "Plaud" : "Google Meet (Gemini)";
       if (!meeting) return `I couldn't find any recent ${sourceLabel} meeting notes in the meetings database.`;
-      const date = meeting.meeting_date ? new Date(meeting.meeting_date).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Date unavailable";
-      const analysis = meeting.analysis && typeof meeting.analysis === "object" ? meeting.analysis : null;
-      const notes = String(meeting.transcript || meeting.summary || (analysis as any)?.summary || "").trim();
+      const date = formatMeetingDate(meeting.meeting_date);
+      const notes = getCleanMeetingNotes(meeting);
       const body = notes || "No transcript or notes content is available for this meeting yet.";
       return `## ${meeting.title?.trim() || "Latest meeting notes"}\n\n- **Date:** ${date}\n- **Source:** ${sourceLabel}\n\n${body.slice(0, 40000)}`;
     };
@@ -6598,10 +6597,11 @@ Format as a natural, readable summary with clear sections. If a section has no d
     // they continue through the normal meeting-tool flow.
     const LATEST_MEETING_RE = /\b(?:my\s+)?(latest|most\s+recent|last|today'?s|yesterday'?s)\b[\s\S]{0,80}?\b(meeting|meetings|call|calls|notes?|transcript|transcripts|recording|recordings|standup|recap)\b/i;
     const RANGE_HINT_RE = /\b(this\s+week|last\s+week|next\s+week|this\s+month|last\s+month|from\s+\d|between\s+\d)\b/i;
-    // If the user explicitly asks for action items / tasks / follow-ups / to-dos / next steps,
-    // do NOT short-circuit into a raw notes dump — let the normal tool flow run
-    // `list_meetings` + `get_meeting_action_items_with_context` so we return structured actions.
     const ACTION_ITEMS_RE = /\b(action\s*items?|action\s*points?|to-?dos?|todos?|follow[\s-]*ups?|next\s*steps?|tasks?\s+from)\b/i;
+    const isLatestMeetingActionItemsIntent =
+      LATEST_MEETING_RE.test(latestUserText) &&
+      !RANGE_HINT_RE.test(latestUserText) &&
+      ACTION_ITEMS_RE.test(latestUserText);
     const isLatestMeetingIntent =
       LATEST_MEETING_RE.test(latestUserText) &&
       !RANGE_HINT_RE.test(latestUserText) &&
@@ -6629,6 +6629,13 @@ Format as a natural, readable summary with clear sections. If a section has no d
       let hits = 0;
       for (const t of tokensB) if (tokensA.has(t)) hits++;
       return hits / tokensB.length;
+    }
+
+    function extractLatestSourceHint(text: string, hint: string | null): "gemini" | "plaud" | null {
+      const value = `${hint || ""} ${text || ""}`.toLowerCase();
+      if (/\b(plaud)\b/.test(value)) return "plaud";
+      if (/\b(gemini|google\s*meet|meet\s*notes)\b/.test(value)) return "gemini";
+      return null;
     }
 
     const stripPlaudBoilerplate = (notes: string): string => {
@@ -6723,7 +6730,9 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     async function fetchLatestMeetingFromDb(
       hint: string | null,
+      output: "notes" | "action_items" = "notes",
     ): Promise<string | null> {
+      const sourceHint = extractLatestSourceHint(latestUserText, hint);
       let qb = supabaseAdmin
         .from("meetings")
         .select("id, title, meeting_date, source, sender_email, summary, transcript, analysis, created_at")
@@ -6738,18 +6747,38 @@ Format as a natural, readable summary with clear sections. If a section has no d
         .order("meeting_date", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(1);
-      if (hint) qb = qb.ilike("title", `%${hint}%`);
+      if (sourceHint === "plaud") {
+        qb = qb.eq("source", "plaud");
+      } else if (sourceHint === "gemini") {
+        qb = qb.or("source.eq.gemini,source.eq.google_meet,sender_email.ilike.%gemini-notes@google.com%");
+      } else if (hint) {
+        qb = qb.ilike("title", `%${hint}%`);
+      }
       const { data, error } = await qb;
       if (error || !data || data.length === 0) return null;
       const m = data[0];
-      const dateStr = m.meeting_date ? new Date(m.meeting_date).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Date unavailable";
-      const analysis = m.analysis && typeof m.analysis === "object" ? m.analysis as any : null;
-      const rawNotes = String(m.transcript || m.summary || analysis?.summary || "").trim();
-      const isGoogleMeet = m.source === "gemini" || m.source === "google_meet" || /gemini-notes@google\.com/i.test(String(m.sender_email || ""));
-      const cleanedNotes = isGoogleMeet ? stripGeminiBoilerplate(rawNotes) : rawNotes;
+      if (output === "action_items") return formatActionItemsMarkdown(m);
+      const dateStr = formatMeetingDate(m.meeting_date);
+      const cleanedNotes = getCleanMeetingNotes(m);
       const notes = cleanedNotes || "No transcript or notes content is available for this meeting yet.";
-      const srcLabel = m.source === "plaud" ? "Plaud" : isGoogleMeet ? "Google Meet (Gemini)" : (m.source || "Meetings DB");
+      const srcLabel = formatMeetingSourceLabel(m);
       return `## ${m.title?.trim() || "Latest meeting"}\n\n- **Date:** ${dateStr}\n- **Source:** ${srcLabel} (from the meetings database)\n\n${notes.slice(0, 40000)}`;
+    }
+
+    if (isLatestMeetingActionItemsIntent) {
+      const hint = extractLatestTitleHint(latestUserText);
+      console.log("[LATEST MEETING ACTION ITEMS SMART]", { user: userId, hint, latestUserText });
+      try {
+        const dbMarkdown = await fetchLatestMeetingFromDb(hint, "action_items");
+        if (dbMarkdown) return buildTextSseResponse(dbMarkdown);
+        const msg = hint
+          ? `I couldn't find recent meeting action items matching "${hint}" in the meetings database. Try broadening the title, or ask me to list recent meetings.`
+          : `I couldn't find recent meeting action items in the meetings database. Try syncing Plaud, or ask me to list recent meetings.`;
+        return buildTextSseResponse(msg);
+      } catch (e: any) {
+        console.error("[LATEST MEETING ACTION ITEMS SMART] error", e);
+        return buildTextSseResponse(`I hit an error trying to fetch those action items: ${e?.message || "unknown error"}.`);
+      }
     }
 
     if (isLatestMeetingIntent) {

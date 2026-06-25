@@ -71,7 +71,7 @@ async function notify(approvalId: string, kind: "requested" | "decided" | "propo
   }
 }
 
-export function EventApprovals({ eventId }: { eventId: string }) {
+export function EventApprovals({ eventId, onChanged, onEventRemoved }: { eventId: string; onChanged?: () => void; onEventRemoved?: () => void }) {
   const [rows, setRows] = useState<ApprovalRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileLite[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -149,6 +149,7 @@ export function EventApprovals({ eventId }: { eventId: string }) {
     setType("Design");
     toast.success("Approver saved");
     if ((data as any)?.id) notify((data as any).id, "requested");
+    onChanged?.();
     load();
   }
 
@@ -171,7 +172,19 @@ export function EventApprovals({ eventId }: { eventId: string }) {
       .eq("id", row.id);
     setBusyId(null);
     if (error) return toast.error(error.message);
-    if (status !== "pending") notify(row.id, "decided");
+    if (status !== "pending") {
+      // Await so the edge function (email + event deletion on reject) completes
+      // before we refresh the diary.
+      await notify(row.id, "decided");
+      if (status === "rejected") {
+        toast.success("Request declined — event removed from Planner");
+        onEventRemoved?.();
+        return;
+      } else {
+        toast.success("Request approved");
+        onChanged?.();
+      }
+    }
     load();
   }
 

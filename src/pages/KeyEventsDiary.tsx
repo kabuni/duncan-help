@@ -289,10 +289,15 @@ export default function KeyEventsDiary() {
 
   const eventPropGetter = (item: CalItem) => {
     const ev = item.resource.data;
-    const lvl = ev.risk_level;
+    const colorKey =
+      ev.approval_state === "pending"
+        ? "amber"
+        : ev.approval_state === "approved"
+        ? "green"
+        : ev.risk_level;
     const meta = getCategoryMeta(ev.category);
     return {
-      className: `evt-${lvl}`,
+      className: `evt-${colorKey}`,
       style: { ["--cat-color" as any]: meta.hsl } as React.CSSProperties,
     };
   };

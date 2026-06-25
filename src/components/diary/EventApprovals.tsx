@@ -171,7 +171,16 @@ export function EventApprovals({ eventId }: { eventId: string }) {
       .eq("id", row.id);
     setBusyId(null);
     if (error) return toast.error(error.message);
-    if (status !== "pending") notify(row.id, "decided");
+    if (status !== "pending") {
+      // Await so the edge function (email + event deletion on reject) completes
+      // before we refresh the diary.
+      await notify(row.id, "decided");
+      if (status === "rejected") {
+        toast.success("Request declined — event removed from Planner");
+      } else {
+        toast.success("Request approved");
+      }
+    }
     load();
   }
 

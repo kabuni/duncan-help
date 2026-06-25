@@ -6438,9 +6438,14 @@ Format as a natural, readable summary with clear sections. If a section has no d
     // they continue through the normal meeting-tool flow.
     const LATEST_MEETING_RE = /\b(?:my\s+)?(latest|most\s+recent|last|today'?s|yesterday'?s)\b[\s\S]{0,80}?\b(meeting|meetings|call|calls|notes?|transcript|transcripts|recording|recordings|standup|recap)\b/i;
     const RANGE_HINT_RE = /\b(this\s+week|last\s+week|next\s+week|this\s+month|last\s+month|from\s+\d|between\s+\d)\b/i;
+    // If the user explicitly asks for action items / tasks / follow-ups / to-dos / next steps,
+    // do NOT short-circuit into a raw notes dump — let the normal tool flow run
+    // `list_meetings` + `get_meeting_action_items_with_context` so we return structured actions.
+    const ACTION_ITEMS_RE = /\b(action\s*items?|action\s*points?|to-?dos?|todos?|follow[\s-]*ups?|next\s*steps?|tasks?\s+from)\b/i;
     const isLatestMeetingIntent =
       LATEST_MEETING_RE.test(latestUserText) &&
-      !RANGE_HINT_RE.test(latestUserText);
+      !RANGE_HINT_RE.test(latestUserText) &&
+      !ACTION_ITEMS_RE.test(latestUserText);
 
 
     function extractLatestTitleHint(text: string): string | null {

@@ -1,56 +1,72 @@
-## Goal
-Reduce visual clutter on the Planner (`/diary`) category filter bar by grouping chips into four labelled clusters and tightening the layout. Also rename a few labels and add two new categories.
+## Revised after feedback
 
-## Category groups (display order)
+- `risk_level` is NOT purely cosmetic — `duncan-calendar-sync` derives it from missing fields/blockers and `DetailDrawer` shows it as a risk badge. Reusing it would conflict with sync. → Introduce a dedicated `approval_state` column instead.
+- Triggers will only **synchronise state**. Deletion on rejection moves into the edge function, after emails are sent.
 
-- **People** — Travel, Annual Leave (was Holiday), Global All Hands *(new)*, Team Socials *(new)*
-- **Operations** — Product, Releases, Event, Super Coaches, Investor
-- **Marketing** — Social Media (was Social), PR, Launches (was Launch)
-- **Other** — Marketing (legacy parent), Operations (legacy parent), Communication, Creative — kept so historic events still filter, shown muted at the end
+## Current Architecture (unchanged from prior plan)
 
-Underlying keys are unchanged (`Holiday`, `Social`, `Launch`, etc.) so existing events keep their colors and remain filterable. Two new keys are added: `GlobalAllHands` and `TeamSocials`.
+- **Events**: `public.key_events`, colour driven by `risk_level` (`evt-green/amber/red` in `calendar.css`).
+- **Approvals**: `public.key_event_approvals` (status `pending`/`approved`/`rejected`/`proposed`), mirrored into the unified `approvals` inbox by trigger `sync_event_approval_to_inbox`.
+- **Decision flow**: `EventApprovals.tsx` → update `key_event_approvals.status` → client calls `notify-event-approval` → Slack DM + `notifications` row. No email today.
+- **Email precedent**: `send-po-approval-email` sends via the shared `duncan@kabuni.com` Gmail sender (`getGmailSenderToken`).
 
-## Files to change
+## Proposed Changes
 
-1. **`src/components/diary/categoryMeta.ts`**
-   - Update labels: `Holiday → "Annual Leave"`, `Social → "Social Media"`, `Launch → "Launches"`.
-   - Add `GlobalAllHands` (icon 🌐, hsl `215 70% 50%`) and `TeamSocials` (icon 🥂, hsl `300 65% 55%`).
-   - Export a new ordered grouping structure used by the legend:
-     ```ts
-     export const CATEGORY_GROUPS: { label: string; keys: string[] }[] = [
-       { label: "People",     keys: ["Travel","Holiday","GlobalAllHands","TeamSocials"] },
-       { label: "Operations", keys: ["Product","Releases","Event","Super Coaches","Investor"] },
-       { label: "Marketing",  keys: ["Social","PR","Launch"] },
-       { label: "Other",      keys: ["Marketing","Operations","Communication","Creative"] },
-     ];
-     ```
-   - Keep `CATEGORY_META`, `CATEGORY_LIST`, and `getCategoryMeta` working as before.
+### 1. Database (one migration)
 
-2. **`src/pages/KeyEventsDiary.tsx`** (lines ~434–472)
-   - Replace the flat `Object.entries(CATEGORY_META).map(...)` legend with a grouped layout:
-     - Iterate `CATEGORY_GROUPS`. Each group renders a small uppercase label (matching the existing `font-mono uppercase tracking-wider text-[10px] text-muted-foreground` style) followed by its chips.
-     - Groups separated by a thin vertical divider (`<span className="h-3 w-px bg-border/60 mx-1" />`) on `sm+`; on mobile they stack into rows.
-     - "Other" group renders with `opacity-70` and smaller text to de-emphasise legacy chips.
-   - Tighten chip styling for less clutter:
-     - Drop the colored swatch square (`<span className="h-2 w-2 ...">`) — the emoji + ring already convey color.
-     - Reduce gap to `gap-x-1.5 gap-y-1`, padding to `px-1.5`, border radius unchanged.
-   - Keep `toggleCategory`, active/inactive states, and the existing "Clear" pill unchanged.
-   - The `AddEventDialog` category dropdown should also reflect the new grouping; update its category source to render `<optgroup>` (or shadcn `SelectGroup`) per `CATEGORY_GROUPS`.
+Add a dedicated presentation/state column — no overloading of `risk_level`:
 
-3. **`src/components/diary/AddEventDialog.tsx`**
-   - Switch the category picker from a flat list to grouped options using `CATEGORY_GROUPS`, so new events can be tagged `GlobalAllHands` / `TeamSocials`.
-   - No schema change — `category` remains a free-text column.
-
-## Out of scope
-- No DB migration; legacy events tagged `Holiday`, `Social`, `Launch` keep their stored key and just display under the new label.
-- No automatic re-tagging of existing events into the new keys (`GlobalAllHands`, `TeamSocials`).
-- `DetailDrawer.tsx` continues using `getCategoryMeta` and needs no change.
-
-## Visual sketch
-```text
-Categories
-  People       ✈️ Travel   🏖️ Annual Leave   🌐 Global All Hands   🥂 Team Socials
-  Operations   🛠️ Product   📦 Releases   📌 Event   🏆 Super Coaches   💼 Investor
-  Marketing    📱 Social Media   📰 PR   🚀 Launches
-  Other (faded)  Marketing · Operations · Communication · Creative           [Clear]
+```sql
+ALTER TABLE public.key_events
+  ADD COLUMN approval_state text;  -- null | 'pending' | 'approved'
+CREATE INDEX idx_key_events_approval_state ON public.key_events(approval_state);
 ```
+
+Trigger `sync_event_approval_state` on `key_event_approvals` (AFTER INSERT/UPDATE/DELETE) — **state sync only, no deletes, no row removal**:
+
+- Recomputes `key_events.approval_state` for the affected `event_id`:
+  - `pending` if any approval row is `pending` or `proposed`
+  - `approved` if at least one is `approved` and none are pending/proposed
+  - `null` if no approval rows exist (or all `rejected` and event still around)
+- Never touches `risk_level` or `risk_reason`.
+- Never deletes anything.
+
+### 2. Edge Function — `notify-event-approval`
+
+Extend the existing `decided` branch:
+
+1. Insert the existing notification + Slack DM (unchanged).
+2. **New:** look up the requester's auth email and send a transactional email via the Gmail sender (copy `getGmailSenderToken` + send helper from `send-po-approval-email`):
+   - Approved → `Subject: Approved: <event title>` with date, approver name, decision note, link to `/diary`.
+   - Rejected → `Subject: Declined: <event title>` with approver name, reason, link to `/diary`.
+3. **New (rejection only, after email send succeeds or fails non-fatally):** delete the `key_events` row for this `event_id` using the service-role client. All deletion logic lives here, not in a trigger. Future business logic (audit, restore window, etc.) can hook in at this point.
+
+Order: notifications → email → deletion. Wrapped so a failed email doesn't block deletion, but a failed deletion is logged and surfaced.
+
+### 3. UI
+
+- **`KeyEventsDiary.tsx` `eventPropGetter`**: prefer `approval_state` when present.
+  ```ts
+  const colorKey = ev.approval_state === "pending" ? "amber"
+                 : ev.approval_state === "approved" ? "green"
+                 : ev.risk_level;
+  return { className: `evt-${colorKey}`, style: { ["--cat-color"]: meta.hsl } };
+  ```
+  No CSS changes — existing `evt-amber` / `evt-green` classes are reused.
+- **`EventApprovals.tsx`**: after a `rejected` decision, refresh parent so the now-deleted event drops from the diary; toast reads "Request declined — event removed".
+- **`DetailDrawer.tsx`**: small pill near the title when `approval_state='pending'` so users understand the amber state ("Pending approval"). Risk badge keeps its current meaning.
+- **`useKeyEvents.ts`** + types regenerate after migration to expose `approval_state`.
+
+### 4. Email
+
+One Gmail helper added inside `notify-event-approval`. No new edge function, no Resend, no new secrets.
+
+## Constraints honoured
+
+- Reuses `key_event_approvals`, `approvals` inbox, and the existing Gmail sender.
+- New column is minimal and explicitly named for its purpose — no overloading of `risk_level`.
+- Triggers are sync-only. All side effects (email, deletion) live in the edge function where business logic belongs.
+- No duplicated approval logic, no extra tables.
+- Planner colour is driven by event state (`approval_state` then `risk_level`), not hardcoded UI branching.
+
+Approve to implement.

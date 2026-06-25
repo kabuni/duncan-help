@@ -2196,6 +2196,7 @@ export type Database = {
       key_events: {
         Row: {
           all_day: boolean
+          approval_state: string | null
           attendees: Json
           calendar_id: string
           category: string | null
@@ -2234,6 +2235,7 @@ export type Database = {
         }
         Insert: {
           all_day?: boolean
+          approval_state?: string | null
           attendees?: Json
           calendar_id: string
           category?: string | null
@@ -2272,6 +2274,7 @@ export type Database = {
         }
         Update: {
           all_day?: boolean
+          approval_state?: string | null
           attendees?: Json
           calendar_id?: string
           category?: string | null

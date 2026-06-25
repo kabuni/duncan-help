@@ -149,6 +149,7 @@ export function EventApprovals({ eventId, onChanged, onEventRemoved }: { eventId
     setType("Design");
     toast.success("Approver saved");
     if ((data as any)?.id) notify((data as any).id, "requested");
+    onChanged?.();
     load();
   }
 

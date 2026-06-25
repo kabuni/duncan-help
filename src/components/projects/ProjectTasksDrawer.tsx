@@ -94,6 +94,15 @@ export function ProjectTasksDrawer({
     });
   }, [items, filterOwner, filterDue, filterDeadline, searchText]);
 
+  const sortedItems = useMemo(() => {
+    return [...filteredItems].sort((a, b) => {
+      const aDone = a.status === "done" || a.status === "promoted";
+      const bDone = b.status === "done" || b.status === "promoted";
+      if (aDone === bDone) return 0;
+      return aDone ? 1 : -1;
+    });
+  }, [filteredItems]);
+
   const load = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
@@ -336,13 +345,19 @@ export function ProjectTasksDrawer({
             </p>
           ) : (
             <ul className="divide-y divide-border">
-              {filteredItems.map((it) => {
+              {sortedItems.map((it, idx) => {
                 const assignee = it.assignee_profile_id ? memberById.get(it.assignee_profile_id) : null;
                 const isDone = it.status === "done" || it.status === "promoted";
                 const isPromoted = it.status === "promoted";
                 const duePast = !isDone && isPast(it.due_date);
                 const deadlinePast = !isDone && isPast(it.deadline);
-                return (
+                const showDoneHeader = isDone && (idx === 0 || !(sortedItems[idx - 1].status === "done" || sortedItems[idx - 1].status === "promoted"));
+                return [
+                  showDoneHeader && (
+                    <li key={`done-header-${it.id}`} className="px-4 py-2 bg-muted/50 border-y border-border text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Completed
+                    </li>
+                  ),
                   <li key={it.id} className={cn("px-4 py-3 space-y-2 group", deadlinePast && "bg-destructive/5")}>
                     <div className="flex items-start gap-3">
                       <Checkbox
@@ -510,8 +525,8 @@ export function ProjectTasksDrawer({
                         </span>
                       )}
                     </div>
-                  </li>
-                );
+                  </li>,
+                ];
               })}
             </ul>
           )}

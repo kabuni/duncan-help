@@ -43,9 +43,10 @@ serve(async (req) => {
     // Get user profile
     const { data: profile } = await supabaseAdmin
       .from("profiles")
-      .select("display_name, role_title, department, preferences")
+      .select("id, display_name, role_title, department, preferences")
       .eq("user_id", user.id)
       .maybeSingle();
+    const profileId = profile?.id || null;
 
     const displayName = profile?.display_name || userName;
     const firstName = displayName.toLowerCase().split(" ")[0];
@@ -87,6 +88,7 @@ serve(async (req) => {
       leaderboardResult,
       assignedCardsResult,
       assignedTasksResult,
+      projectTasksResult,
     ] = await Promise.all([
       fetchCalendarEvents(supabaseUrl, supabaseAdmin, authHeader, user.id),
 
@@ -121,6 +123,9 @@ serve(async (req) => {
 
       // Workstream tasks assigned to user (incomplete)
       fetchAssignedTasks(supabaseAdmin, user.id),
+
+      // Outstanding project tasks (project_chat_plan_items) assigned to user
+      fetchProjectTasks(supabaseAdmin, profileId),
     ]);
 
     // NOTE: We deliberately do NOT update last_briefing_at here.
@@ -185,6 +190,9 @@ serve(async (req) => {
       workstreams: {
         assigned_cards: assignedCardsResult || [],
         assigned_tasks: assignedTasksResult || [],
+      },
+      project_tasks: {
+        outstanding: projectTasksResult || [],
       },
       token_usage: {
         my_today: myTokenUsage.data ? {
@@ -425,6 +433,45 @@ async function fetchAssignedTasks(supabaseAdmin: any, userId: string) {
     }));
   } catch (err: any) {
     console.error("Workstream tasks briefing error:", err);
+    return [];
+  }
+}
+
+// ── Helper: Fetch outstanding project tasks assigned to user ──
+async function fetchProjectTasks(supabaseAdmin: any, profileId: string | null) {
+  if (!profileId) return [];
+  try {
+    const { data: tasks } = await supabaseAdmin
+      .from("project_chat_plan_items")
+      .select("id, project_id, title, status, due_date, deadline, completed_at")
+      .eq("assignee_profile_id", profileId)
+      .is("completed_at", null)
+      .neq("status", "done")
+      .order("deadline", { ascending: true, nullsFirst: false })
+      .limit(25);
+
+    if (!tasks || tasks.length === 0) return [];
+
+    const projectIds = [...new Set(tasks.map((t: any) => t.project_id).filter(Boolean))];
+    const { data: projects } = await supabaseAdmin
+      .from("projects")
+      .select("id, name")
+      .in("id", projectIds);
+    const projectMap: Record<string, string> = {};
+    for (const p of projects || []) projectMap[p.id] = p.name;
+
+    const today = new Date().toISOString().split("T")[0];
+    return tasks.map((t: any) => ({
+      title: t.title,
+      status: t.status,
+      due_date: t.due_date,
+      deadline: t.deadline,
+      project: projectMap[t.project_id] || "Unknown project",
+      overdue_deadline: !!(t.deadline && t.deadline < today),
+      overdue_due: !!(t.due_date && t.due_date < today),
+    }));
+  } catch (err: any) {
+    console.error("Project tasks briefing error:", err);
     return [];
   }
 }

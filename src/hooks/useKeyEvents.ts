@@ -30,6 +30,7 @@ export interface KeyEvent {
   is_complete: boolean;
   risk_level: "green" | "amber" | "red";
   risk_reason: string | null;
+  approval_state: "pending" | "approved" | null;
   /** UUIDs of workstream_cards (column repurposed from goals). */
   linked_goal_ids: string[];
 

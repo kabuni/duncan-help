@@ -191,6 +191,9 @@ serve(async (req) => {
         assigned_cards: assignedCardsResult || [],
         assigned_tasks: assignedTasksResult || [],
       },
+      project_tasks: {
+        outstanding: projectTasksResult || [],
+      },
       token_usage: {
         my_today: myTokenUsage.data ? {
           total_tokens: myTokenUsage.data.total_tokens,

@@ -361,6 +361,7 @@ async function fetchAssignedCards(supabaseAdmin: any, userId: string) {
       .select("id, title, status, priority, due_date, project_tag, updated_at")
       .in("id", cardIds)
       .is("archived_at", null)
+      .neq("status", "done")
       .order("updated_at", { ascending: false })
       .limit(15);
 

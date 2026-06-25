@@ -293,7 +293,18 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       await uploadFiles((inserted as any).id, uid);
     }
 
-    if (approvals.length > 0 && uid) {
+    // Auto-include a selected-but-not-yet-added approver so users don't have
+    // to remember to hit "+ Add" before saving.
+    const effectiveApprovals = [...approvals];
+    if (appApprover && appApprover !== "none") {
+      effectiveApprovals.push({
+        approval_type: appType,
+        label: appLabel,
+        approver_profile_id: appApprover,
+      });
+    }
+
+    if (effectiveApprovals.length > 0 && uid) {
       const { data: insertedApprovals } = await supabase
         .from("key_event_approvals" as any)
         .insert(

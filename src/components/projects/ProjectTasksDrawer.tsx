@@ -345,7 +345,7 @@ export function ProjectTasksDrawer({
             </p>
           ) : (
             <ul className="divide-y divide-border">
-              {filteredItems.map((it) => {
+              {sortedItems.map((it, idx) => {
                 const assignee = it.assignee_profile_id ? memberById.get(it.assignee_profile_id) : null;
                 const isDone = it.status === "done" || it.status === "promoted";
                 const isPromoted = it.status === "promoted";

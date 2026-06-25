@@ -352,7 +352,7 @@ export function ProjectTasksDrawer({
                 const duePast = !isDone && isPast(it.due_date);
                 const deadlinePast = !isDone && isPast(it.deadline);
                 const showDoneHeader = isDone && (idx === 0 || !(sortedItems[idx - 1].status === "done" || sortedItems[idx - 1].status === "promoted"));
-                return (
+                return [
                   <li key={it.id} className={cn("px-4 py-3 space-y-2 group", deadlinePast && "bg-destructive/5")}>
                     <div className="flex items-start gap-3">
                       <Checkbox

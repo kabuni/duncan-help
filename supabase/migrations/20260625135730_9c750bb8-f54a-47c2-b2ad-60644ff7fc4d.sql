@@ -1,0 +1,1 @@
+DELETE FROM public.meetings WHERE sender_email ILIKE '%drive-shares%' OR title ILIKE 'Share request%' OR title ILIKE '%requests access%';

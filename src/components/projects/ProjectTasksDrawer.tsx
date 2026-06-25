@@ -520,8 +520,8 @@ export function ProjectTasksDrawer({
                         </span>
                       )}
                     </div>
-                  </li>
-                );
+                  </li>,
+                ];
               })}
             </ul>
           )}

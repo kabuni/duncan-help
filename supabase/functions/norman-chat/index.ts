@@ -3442,10 +3442,57 @@ async function executeGmailTool(
 
     case "read_gmail_email": {
       const data = await callGmailApi("read", { messageId: args.messageId });
-      const body = data.textBody || data.htmlBody?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 5000) || data.snippet;
+
+      // Convert HTML → readable text while preserving structure (paragraphs, lists, headings).
+      // Gemini meeting-notes emails are HTML-only and previously got crushed by a naive tag strip + 5k cap.
+      function htmlToText(html: string): string {
+        return html
+          .replace(/<style[\s\S]*?<\/style>/gi, "")
+          .replace(/<script[\s\S]*?<\/script>/gi, "")
+          .replace(/<head[\s\S]*?<\/head>/gi, "")
+          .replace(/<br\s*\/?>/gi, "\n")
+          .replace(/<\/(p|div|li|tr|h[1-6]|section|article|header|footer|blockquote)>/gi, "\n")
+          .replace(/<li[^>]*>/gi, "• ")
+          .replace(/<\/td>/gi, "\t")
+          .replace(/<[^>]+>/g, "")
+          .replace(/&nbsp;/g, " ")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+          .replace(/[ \t]+\n/g, "\n")
+          .replace(/\n{3,}/g, "\n\n")
+          .replace(/[ \t]{2,}/g, " ")
+          .trim();
+      }
+
+      // Detect Gemini / Google Meet notes so we never truncate meeting content.
+      const fromLower = (data.from || "").toLowerCase();
+      const subjLower = (data.subject || "").toLowerCase();
+      const isMeetingNotes =
+        fromLower.includes("gemini-notes@google.com") ||
+        fromLower.includes("meetings-noreply@google.com") ||
+        subjLower.startsWith("notes -") ||
+        subjLower.startsWith("notes:") ||
+        subjLower.includes("meeting notes");
+
+      // Generous cap by default (50k), effectively unlimited for meeting notes (200k).
+      const MAX_LEN = isMeetingNotes ? 200000 : 50000;
+
+      let body = data.textBody && data.textBody.trim().length > 0
+        ? data.textBody
+        : data.htmlBody
+          ? htmlToText(data.htmlBody)
+          : (data.snippet || "");
+
+      if (body.length > MAX_LEN) body = body.slice(0, MAX_LEN) + "\n\n[…truncated]";
+
       const payload = {
         id: data.id, from: data.from, to: data.to, cc: data.cc || null,
         subject: data.subject, date: data.date, body, unread: data.isUnread,
+        is_meeting_notes: isMeetingNotes || undefined,
       };
       const rr = createReadResult({
         data: payload, source: "gmail", freshness_sla_seconds: 300, row_count: 1,

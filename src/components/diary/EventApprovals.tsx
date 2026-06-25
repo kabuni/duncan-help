@@ -177,8 +177,11 @@ export function EventApprovals({ eventId, onChanged, onEventRemoved }: { eventId
       await notify(row.id, "decided");
       if (status === "rejected") {
         toast.success("Request declined — event removed from Planner");
+        onEventRemoved?.();
+        return;
       } else {
         toast.success("Request approved");
+        onChanged?.();
       }
     }
     load();

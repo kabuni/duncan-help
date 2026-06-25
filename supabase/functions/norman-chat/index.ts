@@ -6567,6 +6567,14 @@ Format as a natural, readable summary with clear sections. If a section has no d
       let qb = supabaseAdmin
         .from("meetings")
         .select("id, title, meeting_date, source, sender_email, summary, transcript, analysis, created_at")
+        // Exclude Google Drive share-request notifications and other non-notes emails
+        // that get accidentally ingested (e.g. drive-shares-dm-noreply@google.com,
+        // subject "Share request for ...", source=email_notes).
+        .not("sender_email", "ilike", "%drive-shares%")
+        .not("sender_email", "ilike", "%noreply@google.com%")
+        .not("title", "ilike", "Share request%")
+        .not("title", "ilike", "%requests access%")
+        .neq("source", "email_notes")
         .order("meeting_date", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(1);

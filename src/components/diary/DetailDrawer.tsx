@@ -579,7 +579,7 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
 
                 
 
-                <EventApprovals eventId={event.id} />
+                <EventApprovals eventId={event.id} onChanged={onChanged} onEventRemoved={() => { onChanged(); onOpenChange(false); }} />
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">

@@ -94,6 +94,15 @@ export function ProjectTasksDrawer({
     });
   }, [items, filterOwner, filterDue, filterDeadline, searchText]);
 
+  const sortedItems = useMemo(() => {
+    return [...filteredItems].sort((a, b) => {
+      const aDone = a.status === "done" || a.status === "promoted";
+      const bDone = b.status === "done" || b.status === "promoted";
+      if (aDone === bDone) return 0;
+      return aDone ? 1 : -1;
+    });
+  }, [filteredItems]);
+
   const load = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);

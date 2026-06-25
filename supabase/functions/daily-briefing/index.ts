@@ -88,6 +88,7 @@ serve(async (req) => {
       leaderboardResult,
       assignedCardsResult,
       assignedTasksResult,
+      projectTasksResult,
     ] = await Promise.all([
       fetchCalendarEvents(supabaseUrl, supabaseAdmin, authHeader, user.id),
 

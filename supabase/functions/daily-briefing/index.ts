@@ -125,7 +125,7 @@ serve(async (req) => {
       fetchAssignedTasks(supabaseAdmin, user.id),
 
       // Outstanding project tasks (project_chat_plan_items) assigned to user
-      fetchProjectTasks(supabaseAdmin, profileId),
+      fetchProjectTasks(supabaseAdmin, user.id),
     ]);
 
     // NOTE: We deliberately do NOT update last_briefing_at here.
@@ -438,13 +438,14 @@ async function fetchAssignedTasks(supabaseAdmin: any, userId: string) {
 }
 
 // ── Helper: Fetch outstanding project tasks assigned to user ──
-async function fetchProjectTasks(supabaseAdmin: any, profileId: string | null) {
-  if (!profileId) return [];
+async function fetchProjectTasks(supabaseAdmin: any, userId: string | null) {
+  if (!userId) return [];
   try {
+    // Note: column is named `assignee_profile_id` but actually stores auth user_id
     const { data: tasks } = await supabaseAdmin
       .from("project_chat_plan_items")
       .select("id, project_id, title, status, due_date, deadline, completed_at")
-      .eq("assignee_profile_id", profileId)
+      .eq("assignee_profile_id", userId)
       .is("completed_at", null)
       .neq("status", "done")
       .order("deadline", { ascending: true, nullsFirst: false })

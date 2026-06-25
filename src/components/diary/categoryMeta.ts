@@ -27,13 +27,14 @@ export const CATEGORY_META: Record<string, CategoryMeta> = {
   Operations: { label: "Operations",   icon: "⚙️", hsl: "220 15% 45%" },
   Communication: { label: "Communication", icon: "💬", hsl: "150 60% 45%" },
   Creative:   { label: "Creative",     icon: "🎨", hsl: "45 90% 55%"  },
+  BusinessDevelopment: { label: "Business Development", icon: "🤝", hsl: "140 60% 40%" },
 };
 
 export const CATEGORY_GROUPS: { label: string; keys: string[] }[] = [
   { label: "People",     keys: ["Travel", "Holiday", "GlobalAllHands", "TeamSocials"] },
   { label: "Operations", keys: ["Product", "Releases", "Event", "Super Coaches", "Investor"] },
   { label: "Marketing",  keys: ["Social", "PR", "Launch"] },
-  { label: "Other",      keys: ["Marketing", "Operations", "Communication", "Creative"] },
+  { label: "Other",      keys: ["Marketing", "Operations", "Communication", "Creative", "BusinessDevelopment"] },
 ];
 
 const FALLBACK: CategoryMeta = { label: "Other", icon: "📌", hsl: "240 10% 50%" };

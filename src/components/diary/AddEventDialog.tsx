@@ -101,7 +101,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
   });
   const [saving, setSaving] = useState(false);
   const [owners, setOwners] = useState<{ user_id: string; display_name: string | null; profile_id?: string }[]>([]);
-  const [profiles, setProfiles] = useState<{ id: string; display_name: string | null }[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; display_name: string | null; role_title?: string | null }[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [approvals, setApprovals] = useState<DraftApproval[]>([]);
   const [appType, setAppType] = useState("Design");
@@ -128,7 +128,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       const [{ data }, calRes] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, user_id, display_name")
+          .select("id, user_id, display_name, role_title")
           .eq("approval_status", "approved")
           .order("display_name"),
         uid
@@ -141,7 +141,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       ]);
       const list = (data || []).filter((p) => p.display_name);
       setOwners(list as any);
-      setProfiles(list.map((p: any) => ({ id: p.id, display_name: p.display_name })));
+      setProfiles(list.map((p: any) => ({ id: p.id, display_name: p.display_name, role_title: p.role_title })));
       setPersonalCalConnected(!!(calRes as any)?.data);
 
       // Default the owner to the current user (they can change it).
@@ -561,7 +561,15 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
             )}
             <div className="border border-dashed border-border rounded-md p-2 space-y-1.5">
               <div className="flex flex-col sm:flex-row gap-1.5">
-                <Select key={`collab-${collaborators.length}`} value={collabPerson} onValueChange={setCollabPerson}>
+                <Select
+                  key={`collab-${collaborators.length}`}
+                  value={collabPerson}
+                  onValueChange={(v) => {
+                    setCollabPerson(v);
+                    const p = profiles.find((x) => x.id === v);
+                    setCollabRole(p?.role_title || "");
+                  }}
+                >
                   <SelectTrigger className="h-8 text-xs flex-1 min-w-0">
                     <SelectValue placeholder="Pick a person" />
                   </SelectTrigger>
@@ -573,7 +581,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
                       .sort((a, b) => (a.display_name || "").localeCompare(b.display_name || ""))
                       .map((p) => (
                         <SelectItem key={p.id} value={p.id} className="text-xs">
-                          {p.display_name}
+                          {p.display_name}{p.role_title ? ` — ${p.role_title}` : ""}
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -581,7 +589,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
                 <Input
                   value={collabRole}
                   onChange={(e) => setCollabRole(e.target.value)}
-                  placeholder="Role (e.g. Designer)"
+                  placeholder="Role (auto from profile)"
                   className="h-8 text-xs flex-1 min-w-0"
                 />
                 <Button
@@ -598,7 +606,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
                       {
                         profile_id: p.id,
                         display_name: p.display_name || "Unnamed",
-                        role: collabRole.trim(),
+                        role: (collabRole.trim() || p.role_title || ""),
                       },
                     ]);
                     setCollabPerson("");

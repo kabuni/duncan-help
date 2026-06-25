@@ -125,7 +125,7 @@ serve(async (req) => {
       fetchAssignedTasks(supabaseAdmin, user.id),
 
       // Outstanding project tasks (project_chat_plan_items) assigned to user
-      fetchProjectTasks(supabaseAdmin, profileId),
+      fetchProjectTasks(supabaseAdmin, user.id),
     ]);
 
     // NOTE: We deliberately do NOT update last_briefing_at here.

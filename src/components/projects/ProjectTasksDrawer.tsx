@@ -194,7 +194,7 @@ export function ProjectTasksDrawer({
         chatId = created.id;
       }
 
-      const { error } = await supabase
+      const { data: inserted, error } = await supabase
         .from("project_chat_plan_items" as any)
         .insert({
           project_id: projectId,
@@ -202,8 +202,17 @@ export function ProjectTasksDrawer({
           created_by: userId,
           title,
           status: "accepted",
-        });
+        })
+        .select("id, chat_id, title, status, assignee_profile_id, due_date, deadline, completed_at, created_at")
+        .single();
       if (error) throw error;
+      if (inserted) {
+        setItems((prev) => {
+          const row = inserted as unknown as PlanItemRow;
+          if (prev.some((it) => it.id === row.id)) return prev;
+          return [row, ...prev];
+        });
+      }
       setNewTitle("");
     } catch (e: any) {
       toast.error(e.message || "Failed to add task");

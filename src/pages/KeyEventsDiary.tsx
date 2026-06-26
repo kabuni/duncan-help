@@ -291,7 +291,7 @@ export default function KeyEventsDiary() {
     }
     setDrawerOpen(false);
     setSelectedEvent(null);
-  }, [events, selectedEvent?.id]);
+  }, [events, selectedEvent]);
 
   const owners = useMemo(() => {
     const set = new Set<string>();

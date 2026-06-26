@@ -122,16 +122,14 @@ export function useDecideApproval() {
           .eq("id", row.id);
         if (aErr) throw aErr;
       } else if (row.source_table === "key_event_approvals") {
-        const { error } = await supabase
-          .functions.invoke("notify-event-approval", {
-            body: {
-              approval_id: row.source_id,
-              kind: "decided",
-              decision_status: status,
-              decision_note: note ?? null,
-            },
-          })
-          ;
+        const { error } = await supabase.functions.invoke("notify-event-approval", {
+          body: {
+            approval_id: row.source_id,
+            kind: "decided",
+            decision_status: status,
+            decision_note: note ?? null,
+          },
+        });
         if (error) throw error;
       } else if (row.source_table === "travel_requests") {
         const update: any = {

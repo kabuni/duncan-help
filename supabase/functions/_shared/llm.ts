@@ -8,6 +8,7 @@ export type Provider = "openai" | "claude";
 export type WorkflowName =
   | "norman-chat"
   | "ceo-briefing"
+  | "daily-briefing"
   | "ceo-email-pulse"
   | "analyze-meeting"
   | "finalize-release"

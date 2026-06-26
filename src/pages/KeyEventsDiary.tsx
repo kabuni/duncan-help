@@ -405,6 +405,11 @@ export default function KeyEventsDiary() {
 
   return (
     <>
+      {plannerDebug && (
+        <div className="fixed top-2 right-2 z-[9999] rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-mono text-amber-700 dark:text-amber-300 shadow">
+          PlannerDiag · build {BUILD_HASH} · {(window as any).__plannerDiagnostics?.length ?? 0} events · console: <code>__plannerDiagnostics</code>
+        </div>
+      )}
       <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 h-[calc(100dvh-3.5rem)] md:h-[100dvh] min-h-0 overflow-y-auto overflow-x-hidden">
         <header className="shrink-0">
           <div className="flex items-center gap-3">

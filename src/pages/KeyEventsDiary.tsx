@@ -282,6 +282,17 @@ export default function KeyEventsDiary() {
     }
   }, [params, events, setParams]);
 
+  useEffect(() => {
+    if (!selectedEvent) return;
+    const latest = events.find((e) => e.id === selectedEvent.id);
+    if (latest) {
+      setSelectedEvent(latest);
+      return;
+    }
+    setDrawerOpen(false);
+    setSelectedEvent(null);
+  }, [events, selectedEvent?.id]);
+
   const owners = useMemo(() => {
     const set = new Set<string>();
     events.forEach((e) => { if (e.owner) set.add(e.owner); });

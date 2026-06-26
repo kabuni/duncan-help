@@ -296,8 +296,26 @@ export default function KeyEventsDiary() {
         ? "green"
         : ev.risk_level;
     const meta = getCategoryMeta(ev.category);
+    const className = `evt-${colorKey}`;
+
+    if (plannerDebug) {
+      const rec = {
+        id: ev.id,
+        title: ev.event_name || ev.title,
+        approval_state: ev.approval_state,
+        risk_level: ev.risk_level,
+        colorKey,
+        className,
+        buildHash: BUILD_HASH,
+      };
+      // eslint-disable-next-line no-console
+      console.log("[PlannerDiag]", rec);
+      (window as any).__plannerDiagnostics = (window as any).__plannerDiagnostics || [];
+      (window as any).__plannerDiagnostics.push(rec);
+    }
+
     return {
-      className: `evt-${colorKey}`,
+      className,
       style: { ["--cat-color" as any]: meta.hsl } as React.CSSProperties,
     };
   };

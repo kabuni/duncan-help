@@ -43,6 +43,7 @@ export const WORKFLOW_ROUTING: Record<WorkflowName, { primary: Provider; fallbac
 
   // Claude primary (long-form synthesis, executive writing, scoring)
   "ceo-briefing":              { primary: "claude", fallback: "openai" },
+  "daily-briefing":            { primary: "claude", fallback: "openai" },
   "ceo-email-pulse":           { primary: "claude", fallback: "openai" },
   "analyze-meeting":           { primary: "claude", fallback: "openai" },
   "finalize-release":          { primary: "claude", fallback: "openai" },

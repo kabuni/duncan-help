@@ -589,7 +589,7 @@ export function useNormanChat() {
     toolStatuses,
     lastError,
     send,
-    sendBriefing,
+    
     clearMessages,
     setMessages,
     confirmWrite,

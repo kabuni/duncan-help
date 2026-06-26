@@ -1,90 +1,119 @@
 
-# Daily Briefing Reliability Plan
+# Daily Briefing Reliability Plan (v3 — final)
 
 ## Objective
-Make the Daily Briefing reliable, fast, and independent from the Norman Chat workflow. The briefing is a **report-generation task**, not a conversation — it should have its own lightweight execution path with no tool orchestration.
+Make the Home Daily Briefing its own reliable reporting workflow, fully independent of `norman-chat`, reusing the existing `_shared/llm.ts` router for provider/model/retry/fallback, gracefully degrading on per-source failures, with persisted metrics so we can verify the improvement.
 
-## Root cause
-Today the briefing pipes through `norman-chat`, which attaches the full chat toolset (27/75 tools observed). That inflates the prompt and slows OpenAI's first-token response past the 30s stream-open window → user sees *"Daily Briefing could not be completed."*
+## Findings driving the design
 
-The problem is **reliability**, not data retrieval — `daily-briefing` already gathers calendar, meetings, work items, workstreams, planner items, etc., correctly.
+1. **`_shared/llm.ts` already is the reusable LLM router** (workflow-keyed primary/fallback across Claude + OpenAI, retry, model degrade, classified errors, per-workflow timeouts). `ceo-briefing` (the /ceo page) already uses it. No new synthesis layer is needed.
+2. **`daily-briefing` has one caller and one downstream purpose** today (the client forwards its JSON straight to `norman-chat` for synthesis). Standing up a separate `briefing-synthesise` edge function would create a service purely for its own sake.
+3. **Norman-chat already bypasses tools when `mode === "briefing"`** (line 7180), so "tools attached" isn't the smoking gun — the cost is the giant Norman system prompt + streaming orchestration applied to a one-shot report. Removing norman-chat from this path entirely is the right cut.
+4. **`daily-briefing` already wraps each source in try/catch**, but silently coerces failures to `[]`. Half of graceful degradation is already there; it just needs to surface per-source status.
 
 ## Architecture
+
+Single edge function, single round trip:
 
 ```text
 Home page
    │
    ▼
-ceo-briefing  (queues job)
-   │
-   ▼
-ceo-briefing-worker  (background)
-   │
-   ├── daily-briefing  ──► structured context object
-   │
-   ▼
-briefing-synthesise  (NEW dedicated LLM call)
-   │   • no tools registered
-   │   • dedicated executive-briefing system prompt
-   │   • gpt-4o → retry → gpt-4o-mini fallback
-   │
-   ▼
-ceo_briefings row  (polled by useCEOBriefing)
+daily-briefing  (rebuilt)
+   ├── 1. Gather context (per-source {status, data, error?})
+   ├── 2. Build structured context object
+   ├── 3. Call _shared/llm.ts → callLLMWithFallback({ workflow: "daily-briefing" })
+   ├── 4. Persist a briefing_runs metrics row
+   └── 5. Return { markdown, model, fallback_used, degraded_sources, took_ms }
 ```
+
+`norman-chat` is removed from the briefing path. Norman general chat is untouched.
 
 ## Implementation steps
 
-### 1. New edge function: `briefing-synthesise`
-Single-purpose synthesiser. Inputs: the structured context from `daily-briefing`. Outputs: the briefing markdown + structured fields (trajectory, scores) for `ceo_briefings`.
+### 1. Rebuild `daily-briefing` with per-source resilience
+- Replace silent `[]` fallbacks with `{ status: "ok" | "failed", data, error? }` per source (calendar, meetings, work_items, workstreams, project_tasks, token_usage, leaderboard).
+- Synthesis runs on whatever sections are `ok`; `failed` sections are listed in `degraded_sources` and the prompt is instructed to surface them explicitly ("📭 Email pulse unavailable — Gmail token expired").
+- Synthesis itself is the only path that can fail the whole briefing.
+- Keep the once-per-UTC-day gate, but defer the `last_briefing_at` write until synthesis succeeds (already the design — `mark-briefing-shown` is called from the client on success).
 
-- No tool registration. No write workflows. No planner/workstream tool surface.
-- Dedicated system prompt focused on executive briefing format (priorities, blockers, key meetings, urgent approvals, deadlines, follow-ups).
-- Calls OpenAI directly (consistent with `tech/llm-provider` — bypass AI Gateway).
+### 2. Add `daily-briefing` workflow to `_shared/llm.ts`
+- Extend `WorkflowName` with `"daily-briefing"`.
+- Route: `{ primary: "claude", fallback: "openai" }` (long-form synthesis, mirrors `ceo-briefing`).
+- No hardcoded models in the function — router picks Sonnet 4.5 → Haiku degrade → GPT-5 → GPT-5-mini degrade. Provider/model changes happen in one file.
+- Keep the default 60s per-attempt timeout; override only if measurement says we need it.
 
-### 2. Resilience wrapper (`fetchAIWithRetry` pattern)
-Per `tech/ai-resilience-strategy`, reuse the existing helper. On the briefing path:
-1. Primary: `gpt-4o`.
-2. On stream-open timeout / 504 / network abort: retry once on `gpt-4o`.
-3. If retry fails: fallback to `gpt-4o-mini` with the same prompt.
-4. Log every fallback (model, attempt, reason) to function logs.
+### 3. Optional raw-context mode for future reuse
+- Accept `?format=context` (or `{ format: "context" }`). When set, return the structured context JSON without calling the LLM. Default is the synthesised briefing. This preserves a clean reuse surface (CEO dashboard widget, weekly digest, etc.) without forcing a second function today.
 
-### 3. Timeout strategy
-- Keep request optimisation (no tools, pre-built context) as the primary fix.
-- Raise stream-open timeout to **45s** as a safety net only — not the headline fix.
+### 4. Rewire the client off norman-chat
+- Replace `useNormanChat.sendBriefing` with a small `useDailyBriefing` hook that calls `supabase.functions.invoke("daily-briefing")` and renders the returned markdown.
+- Swap the streamed-text UI for a single loading state ("Generating your briefing…") that resolves to the full briefing. A once-a-day report doesn't need token-by-token streaming; reliability beats animation.
+- Surface structured errors from `classifyLLMError` ("Synthesis service rate-limited — try again in a minute") instead of the generic "could not be completed".
+- On success → call existing `mark-briefing-shown`. On failure → don't mark.
 
-### 4. Rewire the worker
-`ceo-briefing-worker` (or whatever currently invokes `norman-chat` for the briefing) calls `briefing-synthesise` instead. `norman-chat` is no longer in the briefing path.
+### 5. Metrics: new `briefing_runs` table
+Persist one row per attempt for queryable success-rate / fallback-rate / per-source failure-rate.
 
-### 5. Structured logging
-For every briefing run, log:
-- Context generation time (ms)
-- Prompt token count
-- LLM generation time (ms)
-- Model used + retry count + fallback flag
-- Total execution time
-- Job ID for correlation with `ceo_briefing_jobs`
+| Column | Notes |
+| --- | --- |
+| `id uuid pk` | |
+| `user_id uuid` | FK auth.users |
+| `started_at timestamptz` | |
+| `total_ms int` | end-to-end |
+| `context_ms int` | gather time |
+| `llm_ms int` | synthesis time |
+| `status text` | `success` \| `failed` |
+| `model text` | resolved model id (e.g. `claude-sonnet-4-5-20250929`) |
+| `provider text` | `claude` \| `openai` |
+| `attempts int` | retries on primary |
+| `fallback_used bool` | true if fell to fallback provider |
+| `degraded bool` | true if degraded model engaged |
+| `degraded_sources text[]` | e.g. `{calendar,emails}` |
+| `prompt_tokens int`, `completion_tokens int` | from router usage |
+| `error_code text`, `error_message text` | nullable, when `status=failed` |
 
-### 6. Frontend
-No UI changes required. `useCEOBriefing` continues to poll `ceo-briefing-status`; the user sees the same progress phases (`gathering` → `synthesising` → `completed`) with materially fewer failures.
+RLS: `service_role` ALL; `authenticated` SELECT on own rows; admin SELECT all (via `has_role`). Indexed on `(started_at)` and `(user_id, started_at)`.
+
+Plus the same structured `[briefing]` log line for ad-hoc grep.
+
+### 6. Norman-chat cleanup
+- Mark the `mode === "briefing"` branch in `norman-chat` as deprecated; remove in a follow-up after one week of clean metrics.
+
+## Verifying the improvement (the point of metrics)
+
+After deploy, run against the `briefing_runs` table:
+
+```text
+success_rate   = count(status='success') / count(*)
+avg_total_ms   = avg(total_ms)
+fallback_rate  = count(fallback_used) / count(*)
+retry_rate     = count(attempts > 1) / count(*)
+degraded_pct   = count(degraded) / count(*)
+top_failing_sources = unnest(degraded_sources), group, count, order desc
+```
+
+Target after rollout: success_rate ≥ 99%, p95 total_ms < 25 s, fallback_rate observable (not silently masking primary failures).
 
 ## Out of scope
-- `norman-chat` general chat behaviour — untouched.
-- Briefing **content / data gathering** in `daily-briefing` — untouched (already correct).
-- New briefing formats or new data sources.
-- Ingestion pipeline (Plaud / Gemini meeting notes).
+- Norman Chat general behaviour — untouched.
+- `/ceo` page (`ceo-briefing` function) — already on the router, separate surface.
+- Ingestion pipelines (Plaud / Gemini).
+- New briefing content or new data sources.
 
-## Technical details
+## Files
 
-**Files to add/change:**
-- `supabase/functions/briefing-synthesise/index.ts` — NEW. OpenAI call with retry/fallback, no tools, executive prompt.
-- `supabase/functions/ceo-briefing-worker/index.ts` (or current worker) — swap `norman-chat` invocation for `briefing-synthesise`.
-- Shared helper (e.g. `supabase/functions/_shared/llmWithFallback.ts`) — extract the retry+fallback pattern if not already shared, so the briefing and any future report task can reuse it.
+- `supabase/functions/_shared/llm.ts` — add `"daily-briefing"` to `WorkflowName` and `WORKFLOW_ROUTING`.
+- `supabase/functions/daily-briefing/index.ts` — restructure to per-source status, add synthesis stage via `callLLMWithFallback`, write `briefing_runs` row, support `?format=context`.
+- New migration — `briefing_runs` table + RLS + grants + indexes.
+- `src/hooks/useDailyBriefing.ts` — NEW small hook (or fold into existing if cleaner).
+- `src/hooks/useNormanChat.ts` — remove `sendBriefing`.
+- Home page component — call new hook, render markdown.
 
-**Verification:**
-- Trigger briefing from Home; confirm `briefing-synthesise` logs show `tools=0`, model attempts, and completion under ~20s.
-- Force a primary failure (temporarily wrong model id) → confirm fallback to `gpt-4o-mini` engages and the briefing still renders.
-- Confirm `norman-chat` logs no longer show briefing turns.
-- Confirm general chat in the sidebar continues to work unchanged with its full tool set.
+## Verification
 
-## Expected outcome
-Faster first token, smaller prompts, near-zero briefing failures, cleaner separation between chat and reporting, no impact on Duncan Chat.
+- Trigger briefing on Home → `briefing_runs` row written with `status='success'`, provider/model populated, `degraded_sources` empty on a healthy day.
+- Revoke Gmail token → briefing still renders, row shows `degraded_sources={emails}`, `status='success'`.
+- Temporarily wrong primary model id → fallback engages, row shows `fallback_used=true`, briefing still renders.
+- `norman-chat` logs no longer show `mode=briefing` from Home.
+- General sidebar chat unchanged.

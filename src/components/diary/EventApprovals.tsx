@@ -60,13 +60,25 @@ interface ProfileLite {
   display_name: string | null;
 }
 
-async function notify(approvalId: string, kind: "requested" | "decided" | "proposed" | "counter_resolved") {
+async function notify(
+  approvalId: string,
+  kind: "requested" | "decided" | "proposed" | "counter_resolved",
+  extra?: Record<string, unknown>,
+) {
+  const { error } = await supabase.functions.invoke("notify-event-approval", {
+    body: { approval_id: approvalId, kind, ...(extra || {}) },
+  });
+  if (error) throw error;
+}
+
+async function notifyBestEffort(
+  approvalId: string,
+  kind: "requested" | "proposed" | "counter_resolved",
+  extra?: Record<string, unknown>,
+) {
   try {
-    await supabase.functions.invoke("notify-event-approval", {
-      body: { approval_id: approvalId, kind },
-    });
+    await notify(approvalId, kind, extra);
   } catch (err) {
-    // notifications are best-effort
     console.warn("notify-event-approval failed:", err);
   }
 }
@@ -148,34 +160,24 @@ export function EventApprovals({ eventId, onChanged, onEventRemoved }: { eventId
     setApproverId(currentProfileId || "none");
     setType("Design");
     toast.success("Approver saved");
-    if ((data as any)?.id) notify((data as any).id, "requested");
+    if ((data as any)?.id) notifyBestEffort((data as any).id, "requested");
     onChanged?.();
     load();
   }
 
   async function setStatus(row: ApprovalRow, status: "approved" | "rejected" | "pending", note?: string) {
     setBusyId(row.id);
-    const update: any = {
-      status,
-      decided_at: status === "pending" ? null : new Date().toISOString(),
-      proposed_date: status === "pending" ? row.proposed_date : null,
-      proposed_note: status === "pending" ? row.proposed_note : null,
-    };
-    if (status === "pending") {
-      update.decision_note = null;
-    } else {
-      update.decision_note = note?.trim() ? note.trim() : null;
-    }
-    const { error } = await supabase
-      .from("key_event_approvals" as any)
-      .update(update)
-      .eq("id", row.id);
-    setBusyId(null);
-    if (error) return toast.error(error.message);
     if (status !== "pending") {
-      // Await so the edge function (email + event deletion on reject) completes
-      // before we refresh the diary.
-      await notify(row.id, "decided");
+      try {
+        await notify(row.id, "decided", {
+          decision_status: status,
+          decision_note: note?.trim() ? note.trim() : null,
+        });
+      } catch (error: any) {
+        setBusyId(null);
+        return toast.error(error?.message || "Could not save decision");
+      }
+      setBusyId(null);
       if (status === "rejected") {
         toast.success("Request declined — event removed from Planner");
         onEventRemoved?.();
@@ -185,6 +187,7 @@ export function EventApprovals({ eventId, onChanged, onEventRemoved }: { eventId
         onChanged?.();
       }
     }
+    setBusyId(null);
     load();
   }
 
@@ -221,7 +224,7 @@ export function EventApprovals({ eventId, onChanged, onEventRemoved }: { eventId
     setSuggestDate("");
     setSuggestNote("");
     toast.success("New date suggested");
-    notify(row.id, "proposed");
+    notifyBestEffort(row.id, "proposed");
     load();
   }
 
@@ -242,7 +245,7 @@ export function EventApprovals({ eventId, onChanged, onEventRemoved }: { eventId
     setBusyId(null);
     if (evErr || apErr) return toast.error((evErr || apErr)!.message);
     toast.success("New date accepted");
-    notify(row.id, "counter_resolved");
+    notifyBestEffort(row.id, "counter_resolved");
     load();
   }
 
@@ -258,7 +261,7 @@ export function EventApprovals({ eventId, onChanged, onEventRemoved }: { eventId
     setBusyId(null);
     if (error) return toast.error(error.message);
     toast.success("Suggestion declined");
-    notify(row.id, "counter_resolved");
+    notifyBestEffort(row.id, "counter_resolved");
     load();
   }
 

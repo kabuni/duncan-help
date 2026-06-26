@@ -230,6 +230,66 @@ export type Database = {
         }
         Relationships: []
       }
+      briefing_runs: {
+        Row: {
+          attempts: number
+          completion_tokens: number | null
+          context_ms: number | null
+          degraded: boolean
+          degraded_sources: string[]
+          error_code: string | null
+          error_message: string | null
+          fallback_used: boolean
+          id: string
+          llm_ms: number | null
+          model: string | null
+          prompt_tokens: number | null
+          provider: string | null
+          started_at: string
+          status: string
+          total_ms: number | null
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          completion_tokens?: number | null
+          context_ms?: number | null
+          degraded?: boolean
+          degraded_sources?: string[]
+          error_code?: string | null
+          error_message?: string | null
+          fallback_used?: boolean
+          id?: string
+          llm_ms?: number | null
+          model?: string | null
+          prompt_tokens?: number | null
+          provider?: string | null
+          started_at?: string
+          status: string
+          total_ms?: number | null
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          completion_tokens?: number | null
+          context_ms?: number | null
+          degraded?: boolean
+          degraded_sources?: string[]
+          error_code?: string | null
+          error_message?: string | null
+          fallback_used?: boolean
+          id?: string
+          llm_ms?: number | null
+          model?: string | null
+          prompt_tokens?: number | null
+          provider?: string | null
+          started_at?: string
+          status?: string
+          total_ms?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       budgets: {
         Row: {
           allocated_amount: number

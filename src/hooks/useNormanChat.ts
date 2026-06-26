@@ -568,61 +568,11 @@ export function useNormanChat() {
     [callConfirmEndpoint]
   );
 
-  const sendBriefing = useCallback(
-    async (briefingData: Record<string, any>): Promise<boolean> => {
-      setIsLoading(true);
-      let assistantSoFar = "";
-      let success = false;
+  // Daily briefing has been moved to its own pipeline (POST /daily-briefing).
+  // See src/pages/Index.tsx → runBriefing. This hook no longer carries a
+  // briefing path; the home page renders the synthesised markdown directly.
 
-      const upsertAssistant = (chunk: string) => {
-        assistantSoFar += chunk;
-        setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last?.role === "assistant") {
-            return prev.map((m, i) =>
-              i === prev.length - 1 ? { ...m, content: assistantSoFar } : m
-            );
-          }
-          return [...prev, { role: "assistant", content: assistantSoFar }];
-        });
-      };
 
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        const controller = new AbortController();
-        const timeoutId = window.setTimeout(() => controller.abort(), HEAVY_TIMEOUT_MS);
-
-        const briefingPrompt = `Generate my personalized morning briefing. Here is the latest data from across our systems:\n\n${JSON.stringify(briefingData, null, 2)}`;
-        const apiMessages = [{ role: "user", content: briefingPrompt }];
-
-        try {
-          const resp = await fetch(CHAT_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ messages: apiMessages, mode: "briefing", userProfile: profile ?? undefined }),
-            signal: controller.signal,
-          });
-          if (!resp.ok) {
-            const err = await resp.json().catch(() => ({}));
-            throw new Error(err.error || `Request failed (${resp.status})`);
-          }
-          await streamAssistantResponse(resp, { onContent: upsertAssistant, onDuncanEvent: handleDuncanEvent }, "briefing");
-          success = true;
-        } finally {
-          window.clearTimeout(timeoutId);
-        }
-      } catch (e) {
-        console.error("[Duncan] briefing: failure reason →", e);
-        if (mountedRef.current) toast.error("Daily briefing could not be completed right now.");
-      } finally {
-        setIsLoading(false);
-      }
-
-      return success;
-    },
-    [profile, handleDuncanEvent]
-  );
 
   const clearMessages = useCallback(() => {
     setMessages([]);

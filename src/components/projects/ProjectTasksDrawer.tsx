@@ -224,6 +224,8 @@ export function ProjectTasksDrawer({
         });
       }
       setNewTitle("");
+      setNewAssignee(user?.id ?? null);
+      setNewDueDate(undefined);
     } catch (e: any) {
       toast.error(e.message || "Failed to add task");
     } finally {

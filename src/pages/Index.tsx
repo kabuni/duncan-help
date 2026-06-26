@@ -137,7 +137,7 @@ MessageBubble.displayName = "MessageBubble";
 
 /* ── Main Page ── */
 const Index = () => {
-  const { messages, isLoading, extractionProgress, pendingWrites, toolStatuses, lastError, send, sendBriefing, clearMessages, setMessages, confirmWrite, cancelWrite, retryLastTurn } = useNormanChat();
+  const { messages, isLoading, extractionProgress, pendingWrites, toolStatuses, lastError, send, clearMessages, setMessages, confirmWrite, cancelWrite, retryLastTurn } = useNormanChat();
   const navigate = useNavigate();
   const briefingTriggered = useRef(false);
   const [briefingError, setBriefingError] = useState(false);

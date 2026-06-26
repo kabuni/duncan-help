@@ -558,15 +558,76 @@ export function ProjectTasksDrawer({
             e.preventDefault();
             addTask();
           }}
-          className="border-t border-border px-3 py-2 flex items-center gap-2"
+          className="border-t border-border px-3 py-2 flex flex-wrap items-center gap-2"
         >
           <Input
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             placeholder="Add a task…"
-            className="h-8 text-sm"
+            className="h-8 text-sm flex-1 min-w-[200px]"
             disabled={adding}
           />
+
+          <Select
+            value={newAssignee ?? UNASSIGNED}
+            onValueChange={(v) => setNewAssignee(v === UNASSIGNED ? null : v)}
+          >
+            <SelectTrigger className="h-8 w-auto min-w-[8rem] text-xs gap-1.5 px-2">
+              {newAssignee ? (
+                <span className="truncate max-w-[12rem]">
+                  {memberById.get(newAssignee)?.display_name || "Member"}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">Owner</span>
+              )}
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+              {members.map((m) => (
+                <SelectItem key={m.user_id} value={m.user_id}>
+                  {m.display_name || "Member"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "h-8 text-xs gap-1.5 px-2 font-normal",
+                  !newDueDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="h-3 w-3" />
+                {newDueDate ? `Due ${format(newDueDate, "d MMM")}` : "Due date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={newDueDate}
+                onSelect={(d) => setNewDueDate(d)}
+                initialFocus
+                className={cn("p-3 pointer-events-auto")}
+              />
+              {newDueDate && (
+                <div className="border-t border-border p-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full h-7 text-xs"
+                    onClick={() => setNewDueDate(undefined)}
+                  >
+                    Clear due date
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+
           <Button type="submit" size="sm" className="h-8 px-2" disabled={adding || !newTitle.trim()}>
             {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
           </Button>

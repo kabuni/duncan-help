@@ -216,6 +216,48 @@ export default function KeyEventsDiary() {
   
   const viewTz = "Europe/London" as ViewTz;
 
+  // ----- Planner diagnostic mode -----
+  // Enable via ?plannerDebug=1 (sticky in localStorage) or ?plannerDebug=0 to clear.
+  const plannerDebug = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const q = params.get("plannerDebug");
+    if (q === "1") { try { localStorage.setItem("plannerDebug", "1"); } catch {} return true; }
+    if (q === "0") { try { localStorage.removeItem("plannerDebug"); } catch {} return false; }
+    try { return localStorage.getItem("plannerDebug") === "1"; } catch { return false; }
+  }, [params]);
+
+  const BUILD_HASH = useMemo(() => {
+    if (typeof document === "undefined") return "unknown";
+    const scripts = Array.from(document.querySelectorAll('script[src]')) as HTMLScriptElement[];
+    const m = scripts.map((s) => s.src).find((s) => /index-[A-Za-z0-9_-]+\.js/.test(s));
+    return m ? (m.match(/index-([A-Za-z0-9_-]+)\.js/)?.[1] || "unknown") : "unknown";
+  }, []);
+
+  useEffect(() => {
+    if (!plannerDebug) return;
+    (window as any).__plannerDiagnostics = [];
+    // eslint-disable-next-line no-console
+    console.log("[PlannerDiag] enabled · build", BUILD_HASH);
+    const t = window.setTimeout(() => {
+      const nodes = Array.from(document.querySelectorAll<HTMLElement>(".rbc-event"));
+      const dom = nodes.map((n) => {
+        const cs = getComputedStyle(n);
+        return {
+          text: (n.textContent || "").trim().slice(0, 60),
+          className: n.className,
+          backgroundColor: cs.backgroundColor,
+          color: cs.color,
+        };
+      });
+      // eslint-disable-next-line no-console
+      console.table(dom);
+      (window as any).__plannerDiagnosticsDOM = dom;
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, [plannerDebug, events, BUILD_HASH]);
+
+
+
   useEffect(() => {
     const flag = params.get("duncan_calendar");
     if (!flag) return;
@@ -296,8 +338,26 @@ export default function KeyEventsDiary() {
         ? "green"
         : ev.risk_level;
     const meta = getCategoryMeta(ev.category);
+    const className = `evt-${colorKey}`;
+
+    if (plannerDebug) {
+      const rec = {
+        id: ev.id,
+        title: ev.event_name || ev.title,
+        approval_state: ev.approval_state,
+        risk_level: ev.risk_level,
+        colorKey,
+        className,
+        buildHash: BUILD_HASH,
+      };
+      // eslint-disable-next-line no-console
+      console.log("[PlannerDiag]", rec);
+      (window as any).__plannerDiagnostics = (window as any).__plannerDiagnostics || [];
+      (window as any).__plannerDiagnostics.push(rec);
+    }
+
     return {
-      className: `evt-${colorKey}`,
+      className,
       style: { ["--cat-color" as any]: meta.hsl } as React.CSSProperties,
     };
   };
@@ -345,6 +405,11 @@ export default function KeyEventsDiary() {
 
   return (
     <>
+      {plannerDebug && (
+        <div className="fixed top-2 right-2 z-[9999] rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-mono text-amber-700 dark:text-amber-300 shadow">
+          PlannerDiag · build {BUILD_HASH} · {(window as any).__plannerDiagnostics?.length ?? 0} events · console: <code>__plannerDiagnostics</code>
+        </div>
+      )}
       <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 h-[calc(100dvh-3.5rem)] md:h-[100dvh] min-h-0 overflow-y-auto overflow-x-hidden">
         <header className="shrink-0">
           <div className="flex items-center gap-3">

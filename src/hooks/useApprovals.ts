@@ -123,13 +123,15 @@ export function useDecideApproval() {
         if (aErr) throw aErr;
       } else if (row.source_table === "key_event_approvals") {
         const { error } = await supabase
-          .from("key_event_approvals" as any)
-          .update({
-            status,
-            decision_note: note ?? null,
-            decided_at: new Date().toISOString(),
+          .functions.invoke("notify-event-approval", {
+            body: {
+              approval_id: row.source_id,
+              kind: "decided",
+              decision_status: status,
+              decision_note: note ?? null,
+            },
           })
-          .eq("id", row.source_id);
+          ;
         if (error) throw error;
       } else if (row.source_table === "travel_requests") {
         const update: any = {
@@ -164,6 +166,7 @@ export function useDecideApproval() {
       qc.invalidateQueries({ queryKey: ["approvals-count"] });
       qc.invalidateQueries({ queryKey: ["purchase-orders"] });
       qc.invalidateQueries({ queryKey: ["travel-requests"] });
+      qc.invalidateQueries({ queryKey: ["key-events"] });
       toast.success(vars.status === "approved" ? "Approved" : "Rejected");
     },
     onError: (e: any) => toast.error(e.message),

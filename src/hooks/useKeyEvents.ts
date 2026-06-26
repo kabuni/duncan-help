@@ -30,7 +30,7 @@ export interface KeyEvent {
   is_complete: boolean;
   risk_level: "green" | "amber" | "red";
   risk_reason: string | null;
-  approval_state: "pending" | "approved" | null;
+  approval_state: "pending" | "approved" | "rejected" | null;
   /** UUIDs of workstream_cards (column repurposed from goals). */
   linked_goal_ids: string[];
 
@@ -83,6 +83,7 @@ export function useKeyEvents() {
           .from("key_events" as any)
           .select("*")
           .eq("deleted_in_google", false)
+          .or("approval_state.is.null,approval_state.neq.rejected")
           .order("start_at", { ascending: true }),
         supabase
           .from("workstream_cards" as any)
@@ -107,7 +108,19 @@ export function useKeyEvents() {
     }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    refresh();
+
+    const channel = supabase
+      .channel("planner-key-events")
+      .on("postgres_changes", { event: "*", schema: "public", table: "key_events" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "key_event_approvals" }, refresh)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refresh]);
 
   const connect = useCallback(async () => {
     const { data, error } = await supabase.functions.invoke("duncan-calendar-auth");

@@ -9,6 +9,7 @@ const SLACK_GATEWAY_URL = "https://connector-gateway.lovable.dev/slack/api";
 const APP_URL = Deno.env.get("APP_URL") || "https://duncan.help";
 
 type Kind = "requested" | "decided" | "proposed" | "counter_resolved";
+type DecisionStatus = "approved" | "rejected";
 
 async function sendSlackDM(slackUserId: string, text: string): Promise<boolean> {
   const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
@@ -102,12 +103,61 @@ async function handler(req: Request): Promise<Response> {
 
     const admin = createClient(supabaseUrl, serviceKey);
 
-    const { data: approval, error: aErr } = await admin
+    let { data: approval, error: aErr } = await admin
       .from("key_event_approvals")
       .select("*")
       .eq("id", approvalId)
       .maybeSingle();
     if (aErr || !approval) throw new Error(aErr?.message || "Approval not found");
+
+    let approverProfile: any = null;
+    if (approval.approver_profile_id) {
+      const { data } = await admin
+        .from("profiles")
+        .select("id, user_id, display_name")
+        .eq("id", approval.approver_profile_id)
+        .maybeSingle();
+      approverProfile = data;
+    }
+
+    if (kind === "decided") {
+      const decisionStatus = String(body?.decision_status || "").trim() as DecisionStatus;
+      if (!["approved", "rejected"].includes(decisionStatus)) {
+        return new Response(JSON.stringify({ error: "decision_status must be approved or rejected" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!approverProfile?.user_id || approverProfile.user_id !== user.id) {
+        return new Response(JSON.stringify({ error: "Only the assigned approver can decide this request" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const decisionNote = typeof body?.decision_note === "string" && body.decision_note.trim()
+        ? body.decision_note.trim()
+        : null;
+      const { error: updateErr } = await admin
+        .from("key_event_approvals")
+        .update({
+          status: decisionStatus,
+          decision_note: decisionNote,
+          decided_at: new Date().toISOString(),
+          proposed_date: null,
+          proposed_note: null,
+        })
+        .eq("id", approvalId);
+      if (updateErr) throw updateErr;
+
+      const refreshed = await admin
+        .from("key_event_approvals")
+        .select("*")
+        .eq("id", approvalId)
+        .maybeSingle();
+      if (refreshed.error || !refreshed.data) throw new Error(refreshed.error?.message || "Approval not found after update");
+      approval = refreshed.data;
+    }
 
     const { data: event } = await admin
       .from("key_events")
@@ -121,16 +171,6 @@ async function handler(req: Request): Promise<Response> {
       .select("id, user_id, display_name")
       .eq("user_id", approval.requested_by)
       .maybeSingle();
-
-    let approverProfile: any = null;
-    if (approval.approver_profile_id) {
-      const { data } = await admin
-        .from("profiles")
-        .select("id, user_id, display_name")
-        .eq("id", approval.approver_profile_id)
-        .maybeSingle();
-      approverProfile = data;
-    }
 
     async function slackIdFor(profileId: string | null | undefined) {
       if (!profileId) return null;

@@ -210,6 +210,8 @@ export function ProjectTasksDrawer({
           created_by: userId,
           title,
           status: "accepted",
+          assignee_profile_id: newAssignee,
+          due_date: newDueDate ? format(newDueDate, "yyyy-MM-dd") : null,
         })
         .select("id, chat_id, title, status, assignee_profile_id, due_date, deadline, completed_at, created_at")
         .single();

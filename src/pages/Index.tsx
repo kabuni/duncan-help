@@ -176,11 +176,10 @@ const Index = () => {
     })();
   }, [chatOps.activeChatId]);
 
-  // ── Daily Briefing flow (server is single source of truth) ──
-  // 1. POST /daily-briefing → returns either { already_shown_today } or full data
-  // 2. If new data → stream via sendBriefing()
-  // 3. On stream success → POST /mark-briefing-shown to lock for the day
-  // No sessionStorage gate. No pre-emptive locking. Retry-safe.
+  // ── Daily Briefing flow ──
+  // 1. POST /daily-briefing → returns { already_shown_today } | { markdown, ... } | { error }
+  // 2. On success → append markdown as assistant message + POST /mark-briefing-shown
+  // 3. On failure → show error state. No partial lock.
   const runBriefing = useCallback(async () => {
     setBriefingError(false);
     briefingTriggered.current = true;
@@ -202,14 +201,15 @@ const Index = () => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${session.access_token}`,
           },
+          body: JSON.stringify({}),
         }
       );
 
       console.info("[Duncan] briefing: API response", resp.status);
       if (!resp.ok) {
-        const errText = await resp.text();
-        console.error("[Duncan] briefing: API error", resp.status, errText);
-        throw new Error(`Briefing fetch failed (${resp.status})`);
+        const errPayload = await resp.json().catch(() => ({}));
+        console.error("[Duncan] briefing: API error", resp.status, errPayload);
+        throw new Error(errPayload?.error || `Briefing fetch failed (${resp.status})`);
       }
 
       const briefingData = await resp.json();
@@ -221,14 +221,19 @@ const Index = () => {
         return;
       }
 
-      console.info("[Duncan] briefing: streaming via sendBriefing");
-      const ok = await sendBriefing(briefingData);
-
-      if (!ok) {
-        throw new Error("Briefing stream did not complete");
+      if (!briefingData?.markdown) {
+        throw new Error("Briefing returned no content");
       }
 
-      // Stream succeeded → NOW lock the day
+      console.info(
+        `[Duncan] briefing: synthesised via ${briefingData.provider}/${briefingData.model} in ${briefingData.took_ms}ms ` +
+        `fallback=${briefingData.fallback_used} degraded=${briefingData.degraded} ` +
+        `degraded_sources=${JSON.stringify(briefingData.degraded_sources || [])}`
+      );
+
+      setMessages((prev) => [...prev, { role: "assistant", content: briefingData.markdown }]);
+
+      // Lock the day only after successful render.
       try {
         const markResp = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mark-briefing-shown`,
@@ -257,7 +262,7 @@ const Index = () => {
       setBriefingError(true);
       briefingTriggered.current = false; // allow retry
     }
-  }, [sendBriefing]);
+  }, [setMessages]);
 
   useEffect(() => {
     if (briefingTriggered.current) return;

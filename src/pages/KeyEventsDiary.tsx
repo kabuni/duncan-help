@@ -216,6 +216,48 @@ export default function KeyEventsDiary() {
   
   const viewTz = "Europe/London" as ViewTz;
 
+  // ----- Planner diagnostic mode -----
+  // Enable via ?plannerDebug=1 (sticky in localStorage) or ?plannerDebug=0 to clear.
+  const plannerDebug = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const q = params.get("plannerDebug");
+    if (q === "1") { try { localStorage.setItem("plannerDebug", "1"); } catch {} return true; }
+    if (q === "0") { try { localStorage.removeItem("plannerDebug"); } catch {} return false; }
+    try { return localStorage.getItem("plannerDebug") === "1"; } catch { return false; }
+  }, [params]);
+
+  const BUILD_HASH = useMemo(() => {
+    if (typeof document === "undefined") return "unknown";
+    const scripts = Array.from(document.querySelectorAll('script[src]')) as HTMLScriptElement[];
+    const m = scripts.map((s) => s.src).find((s) => /index-[A-Za-z0-9_-]+\.js/.test(s));
+    return m ? (m.match(/index-([A-Za-z0-9_-]+)\.js/)?.[1] || "unknown") : "unknown";
+  }, []);
+
+  useEffect(() => {
+    if (!plannerDebug) return;
+    (window as any).__plannerDiagnostics = [];
+    // eslint-disable-next-line no-console
+    console.log("[PlannerDiag] enabled · build", BUILD_HASH);
+    const t = window.setTimeout(() => {
+      const nodes = Array.from(document.querySelectorAll<HTMLElement>(".rbc-event"));
+      const dom = nodes.map((n) => {
+        const cs = getComputedStyle(n);
+        return {
+          text: (n.textContent || "").trim().slice(0, 60),
+          className: n.className,
+          backgroundColor: cs.backgroundColor,
+          color: cs.color,
+        };
+      });
+      // eslint-disable-next-line no-console
+      console.table(dom);
+      (window as any).__plannerDiagnosticsDOM = dom;
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, [plannerDebug, events, BUILD_HASH]);
+
+
+
   useEffect(() => {
     const flag = params.get("duncan_calendar");
     if (!flag) return;

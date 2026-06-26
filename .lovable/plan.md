@@ -1,72 +1,90 @@
-## Revised after feedback
 
-- `risk_level` is NOT purely cosmetic — `duncan-calendar-sync` derives it from missing fields/blockers and `DetailDrawer` shows it as a risk badge. Reusing it would conflict with sync. → Introduce a dedicated `approval_state` column instead.
-- Triggers will only **synchronise state**. Deletion on rejection moves into the edge function, after emails are sent.
+# Daily Briefing Reliability Plan
 
-## Current Architecture (unchanged from prior plan)
+## Objective
+Make the Daily Briefing reliable, fast, and independent from the Norman Chat workflow. The briefing is a **report-generation task**, not a conversation — it should have its own lightweight execution path with no tool orchestration.
 
-- **Events**: `public.key_events`, colour driven by `risk_level` (`evt-green/amber/red` in `calendar.css`).
-- **Approvals**: `public.key_event_approvals` (status `pending`/`approved`/`rejected`/`proposed`), mirrored into the unified `approvals` inbox by trigger `sync_event_approval_to_inbox`.
-- **Decision flow**: `EventApprovals.tsx` → update `key_event_approvals.status` → client calls `notify-event-approval` → Slack DM + `notifications` row. No email today.
-- **Email precedent**: `send-po-approval-email` sends via the shared `duncan@kabuni.com` Gmail sender (`getGmailSenderToken`).
+## Root cause
+Today the briefing pipes through `norman-chat`, which attaches the full chat toolset (27/75 tools observed). That inflates the prompt and slows OpenAI's first-token response past the 30s stream-open window → user sees *"Daily Briefing could not be completed."*
 
-## Proposed Changes
+The problem is **reliability**, not data retrieval — `daily-briefing` already gathers calendar, meetings, work items, workstreams, planner items, etc., correctly.
 
-### 1. Database (one migration)
+## Architecture
 
-Add a dedicated presentation/state column — no overloading of `risk_level`:
-
-```sql
-ALTER TABLE public.key_events
-  ADD COLUMN approval_state text;  -- null | 'pending' | 'approved'
-CREATE INDEX idx_key_events_approval_state ON public.key_events(approval_state);
+```text
+Home page
+   │
+   ▼
+ceo-briefing  (queues job)
+   │
+   ▼
+ceo-briefing-worker  (background)
+   │
+   ├── daily-briefing  ──► structured context object
+   │
+   ▼
+briefing-synthesise  (NEW dedicated LLM call)
+   │   • no tools registered
+   │   • dedicated executive-briefing system prompt
+   │   • gpt-4o → retry → gpt-4o-mini fallback
+   │
+   ▼
+ceo_briefings row  (polled by useCEOBriefing)
 ```
 
-Trigger `sync_event_approval_state` on `key_event_approvals` (AFTER INSERT/UPDATE/DELETE) — **state sync only, no deletes, no row removal**:
+## Implementation steps
 
-- Recomputes `key_events.approval_state` for the affected `event_id`:
-  - `pending` if any approval row is `pending` or `proposed`
-  - `approved` if at least one is `approved` and none are pending/proposed
-  - `null` if no approval rows exist (or all `rejected` and event still around)
-- Never touches `risk_level` or `risk_reason`.
-- Never deletes anything.
+### 1. New edge function: `briefing-synthesise`
+Single-purpose synthesiser. Inputs: the structured context from `daily-briefing`. Outputs: the briefing markdown + structured fields (trajectory, scores) for `ceo_briefings`.
 
-### 2. Edge Function — `notify-event-approval`
+- No tool registration. No write workflows. No planner/workstream tool surface.
+- Dedicated system prompt focused on executive briefing format (priorities, blockers, key meetings, urgent approvals, deadlines, follow-ups).
+- Calls OpenAI directly (consistent with `tech/llm-provider` — bypass AI Gateway).
 
-Extend the existing `decided` branch:
+### 2. Resilience wrapper (`fetchAIWithRetry` pattern)
+Per `tech/ai-resilience-strategy`, reuse the existing helper. On the briefing path:
+1. Primary: `gpt-4o`.
+2. On stream-open timeout / 504 / network abort: retry once on `gpt-4o`.
+3. If retry fails: fallback to `gpt-4o-mini` with the same prompt.
+4. Log every fallback (model, attempt, reason) to function logs.
 
-1. Insert the existing notification + Slack DM (unchanged).
-2. **New:** look up the requester's auth email and send a transactional email via the Gmail sender (copy `getGmailSenderToken` + send helper from `send-po-approval-email`):
-   - Approved → `Subject: Approved: <event title>` with date, approver name, decision note, link to `/diary`.
-   - Rejected → `Subject: Declined: <event title>` with approver name, reason, link to `/diary`.
-3. **New (rejection only, after email send succeeds or fails non-fatally):** delete the `key_events` row for this `event_id` using the service-role client. All deletion logic lives here, not in a trigger. Future business logic (audit, restore window, etc.) can hook in at this point.
+### 3. Timeout strategy
+- Keep request optimisation (no tools, pre-built context) as the primary fix.
+- Raise stream-open timeout to **45s** as a safety net only — not the headline fix.
 
-Order: notifications → email → deletion. Wrapped so a failed email doesn't block deletion, but a failed deletion is logged and surfaced.
+### 4. Rewire the worker
+`ceo-briefing-worker` (or whatever currently invokes `norman-chat` for the briefing) calls `briefing-synthesise` instead. `norman-chat` is no longer in the briefing path.
 
-### 3. UI
+### 5. Structured logging
+For every briefing run, log:
+- Context generation time (ms)
+- Prompt token count
+- LLM generation time (ms)
+- Model used + retry count + fallback flag
+- Total execution time
+- Job ID for correlation with `ceo_briefing_jobs`
 
-- **`KeyEventsDiary.tsx` `eventPropGetter`**: prefer `approval_state` when present.
-  ```ts
-  const colorKey = ev.approval_state === "pending" ? "amber"
-                 : ev.approval_state === "approved" ? "green"
-                 : ev.risk_level;
-  return { className: `evt-${colorKey}`, style: { ["--cat-color"]: meta.hsl } };
-  ```
-  No CSS changes — existing `evt-amber` / `evt-green` classes are reused.
-- **`EventApprovals.tsx`**: after a `rejected` decision, refresh parent so the now-deleted event drops from the diary; toast reads "Request declined — event removed".
-- **`DetailDrawer.tsx`**: small pill near the title when `approval_state='pending'` so users understand the amber state ("Pending approval"). Risk badge keeps its current meaning.
-- **`useKeyEvents.ts`** + types regenerate after migration to expose `approval_state`.
+### 6. Frontend
+No UI changes required. `useCEOBriefing` continues to poll `ceo-briefing-status`; the user sees the same progress phases (`gathering` → `synthesising` → `completed`) with materially fewer failures.
 
-### 4. Email
+## Out of scope
+- `norman-chat` general chat behaviour — untouched.
+- Briefing **content / data gathering** in `daily-briefing` — untouched (already correct).
+- New briefing formats or new data sources.
+- Ingestion pipeline (Plaud / Gemini meeting notes).
 
-One Gmail helper added inside `notify-event-approval`. No new edge function, no Resend, no new secrets.
+## Technical details
 
-## Constraints honoured
+**Files to add/change:**
+- `supabase/functions/briefing-synthesise/index.ts` — NEW. OpenAI call with retry/fallback, no tools, executive prompt.
+- `supabase/functions/ceo-briefing-worker/index.ts` (or current worker) — swap `norman-chat` invocation for `briefing-synthesise`.
+- Shared helper (e.g. `supabase/functions/_shared/llmWithFallback.ts`) — extract the retry+fallback pattern if not already shared, so the briefing and any future report task can reuse it.
 
-- Reuses `key_event_approvals`, `approvals` inbox, and the existing Gmail sender.
-- New column is minimal and explicitly named for its purpose — no overloading of `risk_level`.
-- Triggers are sync-only. All side effects (email, deletion) live in the edge function where business logic belongs.
-- No duplicated approval logic, no extra tables.
-- Planner colour is driven by event state (`approval_state` then `risk_level`), not hardcoded UI branching.
+**Verification:**
+- Trigger briefing from Home; confirm `briefing-synthesise` logs show `tools=0`, model attempts, and completion under ~20s.
+- Force a primary failure (temporarily wrong model id) → confirm fallback to `gpt-4o-mini` engages and the briefing still renders.
+- Confirm `norman-chat` logs no longer show briefing turns.
+- Confirm general chat in the sidebar continues to work unchanged with its full tool set.
 
-Approve to implement.
+## Expected outcome
+Faster first token, smaller prompts, near-zero briefing failures, cleaner separation between chat and reporting, no impact on Duncan Chat.

@@ -68,6 +68,13 @@ export function ProjectTasksDrawer({
   const [loading, setLoading] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [adding, setAdding] = useState(false);
+  const { user } = useAuth();
+  const [newAssignee, setNewAssignee] = useState<string | null>(null);
+  const [newDueDate, setNewDueDate] = useState<Date | undefined>(undefined);
+
+  useEffect(() => {
+    if (user?.id) setNewAssignee(user.id);
+  }, [user?.id]);
   const [importOpen, setImportOpen] = useState(false);
   const [filterOwner, setFilterOwner] = useState<string | "all">("all");
   const [filterDue, setFilterDue] = useState<string>("all");

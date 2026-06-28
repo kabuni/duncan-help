@@ -7,10 +7,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Save, User, Briefcase, Building2, Camera } from "lucide-react";
+import { Loader2, Save, User, Briefcase, Building2, Camera, Globe } from "lucide-react";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { USER_REGIONS } from "@/components/diary/holidayRegions";
 
 const ROLE_TITLES = [
   "Developer", "Designer", "Project Manager", "Operations Manager",

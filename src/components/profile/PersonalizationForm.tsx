@@ -53,18 +53,22 @@ export default function PersonalizationForm({
 
   useEffect(() => {
     if (profile) {
+      const prefs = (profile.preferences && typeof profile.preferences === "object")
+        ? (profile.preferences as Record<string, unknown>)
+        : {};
       setForm({
         display_name: profile.display_name ?? "",
         role_title: profile.role_title ?? "",
         department: profile.department ?? "",
         bio: profile.bio ?? "",
         norman_context: profile.norman_context ?? "",
+        region: typeof prefs.region === "string" ? prefs.region : "",
       });
       setDirty(false);
     }
   }, [profile]);
 
-  const set = (key: keyof ProfileData, value: string) => {
+  const set = (key: keyof ProfileData | "region", value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   };
@@ -77,12 +81,18 @@ export default function PersonalizationForm({
       toast.error("Display name is required");
       return;
     }
+    const existingPrefs = (profile?.preferences && typeof profile.preferences === "object")
+      ? (profile.preferences as Record<string, unknown>)
+      : {};
+    const nextRegion = (form.region || "").trim();
+    const mergedPrefs = { ...existingPrefs, region: nextRegion || null };
     const sanitized: Partial<ProfileData> = {
       display_name: displayName,
       role_title: form.role_title ?? null,
       department: form.department ?? null,
       bio: stripHtml(form.bio ?? "").slice(0, 1000),
       norman_context: stripHtml(form.norman_context ?? "").slice(0, 2000),
+      preferences: mergedPrefs,
     };
     updateProfile(sanitized, {
       onSuccess: () => {
@@ -94,12 +104,16 @@ export default function PersonalizationForm({
 
   const handleCancel = () => {
     if (profile) {
+      const prefs = (profile.preferences && typeof profile.preferences === "object")
+        ? (profile.preferences as Record<string, unknown>)
+        : {};
       setForm({
         display_name: profile.display_name ?? "",
         role_title: profile.role_title ?? "",
         department: profile.department ?? "",
         bio: profile.bio ?? "",
         norman_context: profile.norman_context ?? "",
+        region: typeof prefs.region === "string" ? prefs.region : "",
       });
       setDirty(false);
     }

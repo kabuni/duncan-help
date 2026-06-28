@@ -12,6 +12,7 @@ import { Paperclip, X, Plus, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { TimezonePicker, zonedDateTimeToISO } from "./TimezonePicker";
 import { CATEGORY_META, CATEGORY_GROUPS } from "./categoryMeta";
+import { HOLIDAY_REGIONS, type HolidayRegion } from "./holidayRegions";
 
 const DEFAULT_TZ = (() => {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London"; } catch { return "Europe/London"; }
@@ -98,6 +99,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     location: "",
     raw_description: "",
     start_tz: DEFAULT_TZ,
+    holiday_region: "Global" as HolidayRegion,
   });
   const [saving, setSaving] = useState(false);
   const [owners, setOwners] = useState<{ user_id: string; display_name: string | null; profile_id?: string }[]>([]);
@@ -167,6 +169,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       location: "",
       raw_description: "",
       start_tz: DEFAULT_TZ,
+      holiday_region: "Global",
     });
     setFiles([]);
     setApprovals([]);
@@ -204,6 +207,8 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     }
   }
 
+  const isPublicHoliday = draft.category === "PublicHoliday";
+
   async function save() {
     if (!draft.event_name.trim()) {
       toast.error("Event name is required");
@@ -218,7 +223,8 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       toast.error("End date must be on or after the start date");
       return;
     }
-    if (!draft.owner.trim()) {
+    // Public Holidays don't need an owner — they belong to a region, not a person.
+    if (!isPublicHoliday && !draft.owner.trim()) {
       toast.error("Owner is required — every event needs an accountable owner");
       return;
     }
@@ -266,16 +272,18 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
         location: draft.location.trim() || null,
         raw_description: draft.raw_description.trim() || null,
         owner: draft.owner.trim() || null,
-        missing_fields: missing,
-        is_complete: isComplete,
-        risk_level: isComplete ? "green" : "amber",
-        risk_reason: isComplete ? null : "Missing owner",
+        missing_fields: isPublicHoliday ? [] : missing,
+        is_complete: isPublicHoliday ? true : isComplete,
+        risk_level: "green",
+        risk_reason: null,
         linked_goal_ids: [],
         linked_docs: [],
         attendees: [],
         deleted_in_google: false,
         created_by: authUser?.id ?? null,
-        collaborators,
+        collaborators: isPublicHoliday ? [] : collaborators,
+        holiday_region: isPublicHoliday ? draft.holiday_region : null,
+        approval_state: isPublicHoliday ? "approved" : null,
       })
       .select("id")
       .single();
@@ -295,8 +303,9 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
 
     // Auto-include a selected-but-not-yet-added approver so users don't have
     // to remember to hit "+ Add" before saving.
-    const effectiveApprovals = [...approvals];
-    if (appApprover && appApprover !== "none") {
+    // Public Holidays bypass the approval workflow entirely.
+    const effectiveApprovals = isPublicHoliday ? [] : [...approvals];
+    if (!isPublicHoliday && appApprover && appApprover !== "none") {
       effectiveApprovals.push({
         approval_type: appType,
         label: appLabel,
@@ -418,22 +427,42 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Owner *</Label>
-            <Select value={draft.owner} onValueChange={(v) => setDraft({ ...draft, owner: v })}>
-              <SelectTrigger><SelectValue placeholder="Select owner (required)" /></SelectTrigger>
-              <SelectContent>
-                {owners.map((o) => (
-                  <SelectItem key={o.user_id} value={o.display_name as string}>
-                    {o.display_name}
-                  </SelectItem>
-                ))}
-                {owners.length === 0 && (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground">No team members</div>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+          {isPublicHoliday ? (
+            <div className="space-y-1.5">
+              <Label>Region *</Label>
+              <Select
+                value={draft.holiday_region}
+                onValueChange={(v) => setDraft({ ...draft, holiday_region: v as HolidayRegion })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {HOLIDAY_REGIONS.map((r) => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Public Holidays are auto-approved and only shown to people in the matching region.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label>Owner *</Label>
+              <Select value={draft.owner} onValueChange={(v) => setDraft({ ...draft, owner: v })}>
+                <SelectTrigger><SelectValue placeholder="Select owner (required)" /></SelectTrigger>
+                <SelectContent>
+                  {owners.map((o) => (
+                    <SelectItem key={o.user_id} value={o.display_name as string}>
+                      {o.display_name}
+                    </SelectItem>
+                  ))}
+                  {owners.length === 0 && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">No team members</div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="col-span-2 space-y-1.5">
             <Label>Time zone</Label>
@@ -683,6 +712,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
             )}
           </div>
 
+          {!isPublicHoliday && (
           <div className="col-span-2 space-y-1.5">
             <Label className="flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5" /> Approvals
@@ -765,11 +795,12 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
               </div>
             </div>
           </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving || !draft.event_name.trim() || !draft.owner.trim()}>
+          <Button onClick={save} disabled={saving || !draft.event_name.trim() || (!isPublicHoliday && !draft.owner.trim())}>
             {saving ? "Saving…" : "Add to diary"}
           </Button>
         </DialogFooter>

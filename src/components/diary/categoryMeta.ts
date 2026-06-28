@@ -13,6 +13,7 @@ export type CategoryMeta = {
 export const CATEGORY_META: Record<string, CategoryMeta> = {
   Travel:     { label: "Travel",       icon: "✈️", hsl: "210 85% 55%" },
   Holiday:    { label: "Annual Leave", icon: "🏖️", hsl: "180 65% 45%" },
+  PublicHoliday: { label: "Public Holiday", icon: "🎉", hsl: "215 90% 55%" },
   GlobalAllHands: { label: "Global All Hands", icon: "🌐", hsl: "215 70% 50%" },
   TeamSocials: { label: "Team Socials", icon: "🥂", hsl: "300 65% 55%" },
   Product:    { label: "Product",      icon: "🛠️", hsl: "200 75% 50%" },
@@ -31,7 +32,7 @@ export const CATEGORY_META: Record<string, CategoryMeta> = {
 };
 
 export const CATEGORY_GROUPS: { label: string; keys: string[] }[] = [
-  { label: "People",     keys: ["Travel", "Holiday", "GlobalAllHands", "TeamSocials"] },
+  { label: "People",     keys: ["Travel", "Holiday", "PublicHoliday", "GlobalAllHands", "TeamSocials"] },
   { label: "Operations", keys: ["Product", "Releases", "Event", "Super Coaches", "Investor"] },
   { label: "Marketing",  keys: ["Social", "PR", "Launch"] },
   { label: "Other",      keys: ["Marketing", "Operations", "Communication", "Creative", "BusinessDevelopment"] },

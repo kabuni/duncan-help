@@ -24,6 +24,7 @@ import { AddEventDialog } from "@/components/diary/AddEventDialog";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatTimeInTz } from "@/components/diary/TimezonePicker";
 import { CATEGORY_META, CATEGORY_GROUPS, getCategoryMeta } from "@/components/diary/categoryMeta";
+import { getRegionFlag, formatHolidayTitle } from "@/components/diary/holidayRegions";
 
 type ViewTz = "Europe/London" | "Asia/Kolkata" | "both";
 const VIEW_TZ_KEY = "planner_view_tz";
@@ -173,7 +174,11 @@ function MobileAgenda({
                       >
                         <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: `hsl(${meta.hsl})` }} aria-hidden />
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-semibold leading-snug text-foreground break-words">{meta.icon} {ev.event_name || ev.title}</span>
+                          <span className="block text-sm font-semibold leading-snug text-foreground break-words">
+                            {ev.category === "PublicHoliday"
+                              ? `${getRegionFlag(ev.holiday_region)} ${ev.event_name || ev.title} [${ev.holiday_region || "Global"}]`
+                              : `${meta.icon} ${ev.event_name || ev.title}`}
+                          </span>
                           <span className="mt-1 block text-xs leading-snug text-muted-foreground break-words">{formatMobileTime(item, viewTz)}</span>
                           {ev.owner && <span className="mt-1 block text-xs leading-snug text-muted-foreground break-words">{ev.owner}</span>}
                         </span>
@@ -317,12 +322,19 @@ export default function KeyEventsDiary() {
         const end = e.end_at ? new Date(e.end_at) : new Date(start.getTime() + 60 * 60 * 1000);
         const name = e.event_name || e.title;
         const meta = getCategoryMeta(e.category);
-        const cat = e.category ? ` [${e.category}]` : "";
-        const owner = e.owner ? ` · ${e.owner}` : "";
-        const tz = e.start_tz && e.start_tz !== "Europe/London" ? ` · ${e.start_tz.split("/").pop()?.replace(/_/g, " ")}` : "";
+        const isPublicHoliday = e.category === "PublicHoliday";
+        let title: string;
+        if (isPublicHoliday) {
+          title = formatHolidayTitle(name, e.holiday_region);
+        } else {
+          const cat = e.category ? ` [${e.category}]` : "";
+          const owner = e.owner ? ` · ${e.owner}` : "";
+          const tz = e.start_tz && e.start_tz !== "Europe/London" ? ` · ${e.start_tz.split("/").pop()?.replace(/_/g, " ")}` : "";
+          title = `${meta.icon} ${name}${cat}${owner}${tz}`;
+        }
         return {
           id: `event:${e.id}`,
-          title: `${meta.icon} ${name}${cat}${owner}${tz}`,
+          title,
           start,
           end,
           allDay: e.all_day,
@@ -342,12 +354,14 @@ export default function KeyEventsDiary() {
 
   const eventPropGetter = (item: CalItem) => {
     const ev = item.resource.data;
-    const colorKey =
-      ev.approval_state === "pending"
-        ? "amber"
-        : ev.approval_state === "approved"
-        ? "green"
-        : ev.risk_level;
+    const isPublicHoliday = ev.category === "PublicHoliday";
+    const colorKey = isPublicHoliday
+      ? "holiday"
+      : ev.approval_state === "pending"
+      ? "amber"
+      : ev.approval_state === "approved"
+      ? "green"
+      : ev.risk_level;
     const meta = getCategoryMeta(ev.category);
     const className = `evt-${colorKey}`;
 
@@ -377,8 +391,15 @@ export default function KeyEventsDiary() {
     const ev = event.resource.data;
     const name = ev.event_name || ev.title;
     const isAllDay = ev.all_day;
+    const isPublicHoliday = ev.category === "PublicHoliday";
     const meta = getCategoryMeta(ev.category);
-    const Header = (
+    const Header = isPublicHoliday ? (
+      <div className="flex items-center gap-1 min-w-0">
+        <span aria-hidden className="text-[10px] leading-none">{getRegionFlag(ev.holiday_region)}</span>
+        <span className="truncate font-medium">{name}</span>
+        <span className="ml-1 text-[10px] opacity-75 shrink-0">[{ev.holiday_region || "Global"}]</span>
+      </div>
+    ) : (
       <div className="flex items-center gap-1 min-w-0">
         <span
           aria-hidden

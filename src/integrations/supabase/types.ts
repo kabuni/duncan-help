@@ -2269,6 +2269,7 @@ export type Database = {
           end_at: string | null
           event_name: string | null
           google_event_id: string
+          holiday_region: string | null
           html_link: string | null
           id: string
           is_complete: boolean
@@ -2308,6 +2309,7 @@ export type Database = {
           end_at?: string | null
           event_name?: string | null
           google_event_id: string
+          holiday_region?: string | null
           html_link?: string | null
           id?: string
           is_complete?: boolean
@@ -2347,6 +2349,7 @@ export type Database = {
           end_at?: string | null
           event_name?: string | null
           google_event_id?: string
+          holiday_region?: string | null
           html_link?: string | null
           id?: string
           is_complete?: boolean
@@ -4730,6 +4733,10 @@ export type Database = {
         Args: { _project_id: string; _user_id: string }
         Returns: boolean
       }
+      can_view_holiday: {
+        Args: { _region: string; _user_id: string }
+        Returns: boolean
+      }
       get_action_items_around: {
         Args: { _days_back?: number; _meeting_id: string }
         Returns: Json
@@ -4805,6 +4812,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_user_region: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

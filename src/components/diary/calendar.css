@@ -134,9 +134,11 @@
 .rbc-event.evt-green   { background: hsl(142 70% 45% / 0.22); color: hsl(142 70% 28%); }
 .rbc-event.evt-amber   { background: hsl(38 95% 50% / 0.22);  color: hsl(38 95% 35%); }
 .rbc-event.evt-red     { background: hsl(0 80% 55% / 0.18);   color: hsl(0 80% 45%); }
+.rbc-event.evt-holiday { background: hsl(215 90% 55% / 0.18);  color: hsl(215 90% 35%); border-left-color: hsl(215 90% 55%); }
 .dark .rbc-event.evt-green { color: hsl(142 70% 70%); }
 .dark .rbc-event.evt-amber { color: hsl(38 95% 65%); }
 .dark .rbc-event.evt-red   { color: hsl(0 85% 75%); }
+.dark .rbc-event.evt-holiday { color: hsl(215 90% 78%); }
 
 /* Goal markers */
 .rbc-event.evt-goal {

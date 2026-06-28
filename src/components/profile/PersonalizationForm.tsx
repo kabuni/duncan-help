@@ -7,10 +7,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Save, User, Briefcase, Building2, Camera } from "lucide-react";
+import { Loader2, Save, User, Briefcase, Building2, Camera, Globe } from "lucide-react";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { USER_REGIONS } from "@/components/diary/holidayRegions";
 
 const ROLE_TITLES = [
   "Developer", "Designer", "Project Manager", "Operations Manager",
@@ -40,29 +41,34 @@ export default function PersonalizationForm({
   const { profile, isLoading, updateProfile, isSaving } = useProfile();
   const { data: departments = [], isLoading: departmentsLoading } = useDepartments();
 
-  const [form, setForm] = useState<Partial<ProfileData>>({
+  const [form, setForm] = useState<Partial<ProfileData> & { region?: string }>({
     display_name: "",
     role_title: "",
     department: "",
     bio: "",
     norman_context: "",
+    region: "",
   });
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     if (profile) {
+      const prefs = (profile.preferences && typeof profile.preferences === "object")
+        ? (profile.preferences as Record<string, unknown>)
+        : {};
       setForm({
         display_name: profile.display_name ?? "",
         role_title: profile.role_title ?? "",
         department: profile.department ?? "",
         bio: profile.bio ?? "",
         norman_context: profile.norman_context ?? "",
+        region: typeof prefs.region === "string" ? prefs.region : "",
       });
       setDirty(false);
     }
   }, [profile]);
 
-  const set = (key: keyof ProfileData, value: string) => {
+  const set = (key: keyof ProfileData | "region", value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   };
@@ -75,12 +81,18 @@ export default function PersonalizationForm({
       toast.error("Display name is required");
       return;
     }
+    const existingPrefs = (profile?.preferences && typeof profile.preferences === "object")
+      ? (profile.preferences as Record<string, unknown>)
+      : {};
+    const nextRegion = (form.region || "").trim();
+    const mergedPrefs = { ...existingPrefs, region: nextRegion || null };
     const sanitized: Partial<ProfileData> = {
       display_name: displayName,
       role_title: form.role_title ?? null,
       department: form.department ?? null,
       bio: stripHtml(form.bio ?? "").slice(0, 1000),
       norman_context: stripHtml(form.norman_context ?? "").slice(0, 2000),
+      preferences: mergedPrefs,
     };
     updateProfile(sanitized, {
       onSuccess: () => {
@@ -92,12 +104,16 @@ export default function PersonalizationForm({
 
   const handleCancel = () => {
     if (profile) {
+      const prefs = (profile.preferences && typeof profile.preferences === "object")
+        ? (profile.preferences as Record<string, unknown>)
+        : {};
       setForm({
         display_name: profile.display_name ?? "",
         role_title: profile.role_title ?? "",
         department: profile.department ?? "",
         bio: profile.bio ?? "",
         norman_context: profile.norman_context ?? "",
+        region: typeof prefs.region === "string" ? prefs.region : "",
       });
       setDirty(false);
     }
@@ -208,6 +224,27 @@ export default function PersonalizationForm({
               )}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <Globe className="h-3.5 w-3.5" /> Region
+          </Label>
+          <Select
+            value={form.region || "__none"}
+            onValueChange={(v) => set("region", v === "__none" ? "" : v)}
+          >
+            <SelectTrigger className="h-9"><SelectValue placeholder="Select region" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none">Not set (Global only)</SelectItem>
+              {USER_REGIONS.map((r) => (
+                <SelectItem key={r} value={r}>{r}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] text-muted-foreground/70">
+            Controls which Public Holidays appear on your Planner. Global holidays are always shown.
+          </p>
         </div>
 
         <div className="space-y-1.5">

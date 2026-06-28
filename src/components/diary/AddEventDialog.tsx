@@ -303,8 +303,9 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
 
     // Auto-include a selected-but-not-yet-added approver so users don't have
     // to remember to hit "+ Add" before saving.
-    const effectiveApprovals = [...approvals];
-    if (appApprover && appApprover !== "none") {
+    // Public Holidays bypass the approval workflow entirely.
+    const effectiveApprovals = isPublicHoliday ? [] : [...approvals];
+    if (!isPublicHoliday && appApprover && appApprover !== "none") {
       effectiveApprovals.push({
         approval_type: appType,
         label: appLabel,

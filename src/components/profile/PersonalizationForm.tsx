@@ -41,12 +41,13 @@ export default function PersonalizationForm({
   const { profile, isLoading, updateProfile, isSaving } = useProfile();
   const { data: departments = [], isLoading: departmentsLoading } = useDepartments();
 
-  const [form, setForm] = useState<Partial<ProfileData>>({
+  const [form, setForm] = useState<Partial<ProfileData> & { region?: string }>({
     display_name: "",
     role_title: "",
     department: "",
     bio: "",
     norman_context: "",
+    region: "",
   });
   const [dirty, setDirty] = useState(false);
 

@@ -305,14 +305,16 @@ export default function KeyEventsDiary() {
   }, [events]);
 
   const calItems = useMemo<CalItem[]>(() => {
+    // Public holidays bypass all user filters — they are always visible.
+    const isHoliday = (e: KeyEvent) => e.category === "PublicHoliday";
     let filteredEvents = riskFilter === "atrisk"
-      ? events.filter((e) => e.risk_level !== "green")
+      ? events.filter((e) => isHoliday(e) || e.risk_level !== "green")
       : events;
     if (ownerFilter !== "all") {
-      filteredEvents = filteredEvents.filter((e) => (e.owner || "") === ownerFilter);
+      filteredEvents = filteredEvents.filter((e) => isHoliday(e) || (e.owner || "") === ownerFilter);
     }
     if (selectedCategories.size > 0) {
-      filteredEvents = filteredEvents.filter((e) => e.category && selectedCategories.has(e.category));
+      filteredEvents = filteredEvents.filter((e) => isHoliday(e) || (e.category && selectedCategories.has(e.category)));
     }
 
     const evItems: CalItem[] = filteredEvents

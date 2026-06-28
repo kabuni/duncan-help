@@ -427,22 +427,42 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Owner *</Label>
-            <Select value={draft.owner} onValueChange={(v) => setDraft({ ...draft, owner: v })}>
-              <SelectTrigger><SelectValue placeholder="Select owner (required)" /></SelectTrigger>
-              <SelectContent>
-                {owners.map((o) => (
-                  <SelectItem key={o.user_id} value={o.display_name as string}>
-                    {o.display_name}
-                  </SelectItem>
-                ))}
-                {owners.length === 0 && (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground">No team members</div>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+          {isPublicHoliday ? (
+            <div className="space-y-1.5">
+              <Label>Region *</Label>
+              <Select
+                value={draft.holiday_region}
+                onValueChange={(v) => setDraft({ ...draft, holiday_region: v as HolidayRegion })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {HOLIDAY_REGIONS.map((r) => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Public Holidays are auto-approved and only shown to people in the matching region.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label>Owner *</Label>
+              <Select value={draft.owner} onValueChange={(v) => setDraft({ ...draft, owner: v })}>
+                <SelectTrigger><SelectValue placeholder="Select owner (required)" /></SelectTrigger>
+                <SelectContent>
+                  {owners.map((o) => (
+                    <SelectItem key={o.user_id} value={o.display_name as string}>
+                      {o.display_name}
+                    </SelectItem>
+                  ))}
+                  {owners.length === 0 && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">No team members</div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="col-span-2 space-y-1.5">
             <Label>Time zone</Label>

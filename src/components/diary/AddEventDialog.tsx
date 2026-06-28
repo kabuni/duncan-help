@@ -795,6 +795,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
               </div>
             </div>
           </div>
+          )}
         </div>
 
         <DialogFooter>

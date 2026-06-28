@@ -169,6 +169,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       location: "",
       raw_description: "",
       start_tz: DEFAULT_TZ,
+      holiday_region: "Global",
     });
     setFiles([]);
     setApprovals([]);

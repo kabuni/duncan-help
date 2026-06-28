@@ -174,7 +174,11 @@ function MobileAgenda({
                       >
                         <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: `hsl(${meta.hsl})` }} aria-hidden />
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-semibold leading-snug text-foreground break-words">{meta.icon} {ev.event_name || ev.title}</span>
+                          <span className="block text-sm font-semibold leading-snug text-foreground break-words">
+                            {ev.category === "PublicHoliday"
+                              ? `${getRegionFlag(ev.holiday_region)} ${ev.event_name || ev.title} [${ev.holiday_region || "Global"}]`
+                              : `${meta.icon} ${ev.event_name || ev.title}`}
+                          </span>
                           <span className="mt-1 block text-xs leading-snug text-muted-foreground break-words">{formatMobileTime(item, viewTz)}</span>
                           {ev.owner && <span className="mt-1 block text-xs leading-snug text-muted-foreground break-words">{ev.owner}</span>}
                         </span>

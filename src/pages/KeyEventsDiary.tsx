@@ -350,12 +350,14 @@ export default function KeyEventsDiary() {
 
   const eventPropGetter = (item: CalItem) => {
     const ev = item.resource.data;
-    const colorKey =
-      ev.approval_state === "pending"
-        ? "amber"
-        : ev.approval_state === "approved"
-        ? "green"
-        : ev.risk_level;
+    const isPublicHoliday = ev.category === "PublicHoliday";
+    const colorKey = isPublicHoliday
+      ? "holiday"
+      : ev.approval_state === "pending"
+      ? "amber"
+      : ev.approval_state === "approved"
+      ? "green"
+      : ev.risk_level;
     const meta = getCategoryMeta(ev.category);
     const className = `evt-${colorKey}`;
 
@@ -385,8 +387,15 @@ export default function KeyEventsDiary() {
     const ev = event.resource.data;
     const name = ev.event_name || ev.title;
     const isAllDay = ev.all_day;
+    const isPublicHoliday = ev.category === "PublicHoliday";
     const meta = getCategoryMeta(ev.category);
-    const Header = (
+    const Header = isPublicHoliday ? (
+      <div className="flex items-center gap-1 min-w-0">
+        <span aria-hidden className="text-[10px] leading-none">{getRegionFlag(ev.holiday_region)}</span>
+        <span className="truncate font-medium">{name}</span>
+        <span className="ml-1 text-[10px] opacity-75 shrink-0">[{ev.holiday_region || "Global"}]</span>
+      </div>
+    ) : (
       <div className="flex items-center gap-1 min-w-0">
         <span
           aria-hidden

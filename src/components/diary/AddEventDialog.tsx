@@ -207,6 +207,8 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     }
   }
 
+  const isPublicHoliday = draft.category === "PublicHoliday";
+
   async function save() {
     if (!draft.event_name.trim()) {
       toast.error("Event name is required");
@@ -221,7 +223,8 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       toast.error("End date must be on or after the start date");
       return;
     }
-    if (!draft.owner.trim()) {
+    // Public Holidays don't need an owner — they belong to a region, not a person.
+    if (!isPublicHoliday && !draft.owner.trim()) {
       toast.error("Owner is required — every event needs an accountable owner");
       return;
     }

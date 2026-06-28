@@ -24,6 +24,7 @@ import { AddEventDialog } from "@/components/diary/AddEventDialog";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatTimeInTz } from "@/components/diary/TimezonePicker";
 import { CATEGORY_META, CATEGORY_GROUPS, getCategoryMeta } from "@/components/diary/categoryMeta";
+import { getRegionFlag, formatHolidayTitle } from "@/components/diary/holidayRegions";
 
 type ViewTz = "Europe/London" | "Asia/Kolkata" | "both";
 const VIEW_TZ_KEY = "planner_view_tz";
@@ -317,12 +318,19 @@ export default function KeyEventsDiary() {
         const end = e.end_at ? new Date(e.end_at) : new Date(start.getTime() + 60 * 60 * 1000);
         const name = e.event_name || e.title;
         const meta = getCategoryMeta(e.category);
-        const cat = e.category ? ` [${e.category}]` : "";
-        const owner = e.owner ? ` · ${e.owner}` : "";
-        const tz = e.start_tz && e.start_tz !== "Europe/London" ? ` · ${e.start_tz.split("/").pop()?.replace(/_/g, " ")}` : "";
+        const isPublicHoliday = e.category === "PublicHoliday";
+        let title: string;
+        if (isPublicHoliday) {
+          title = formatHolidayTitle(name, e.holiday_region);
+        } else {
+          const cat = e.category ? ` [${e.category}]` : "";
+          const owner = e.owner ? ` · ${e.owner}` : "";
+          const tz = e.start_tz && e.start_tz !== "Europe/London" ? ` · ${e.start_tz.split("/").pop()?.replace(/_/g, " ")}` : "";
+          title = `${meta.icon} ${name}${cat}${owner}${tz}`;
+        }
         return {
           id: `event:${e.id}`,
-          title: `${meta.icon} ${name}${cat}${owner}${tz}`,
+          title,
           start,
           end,
           allDay: e.all_day,

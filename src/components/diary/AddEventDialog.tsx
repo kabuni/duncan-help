@@ -800,7 +800,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving || !draft.event_name.trim() || !draft.owner.trim()}>
+          <Button onClick={save} disabled={saving || !draft.event_name.trim() || (!isPublicHoliday && !draft.owner.trim())}>
             {saving ? "Saving…" : "Add to diary"}
           </Button>
         </DialogFooter>

@@ -12,6 +12,7 @@ import { Paperclip, X, Plus, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { TimezonePicker, zonedDateTimeToISO } from "./TimezonePicker";
 import { CATEGORY_META, CATEGORY_GROUPS } from "./categoryMeta";
+import { HOLIDAY_REGIONS, type HolidayRegion } from "./holidayRegions";
 
 const DEFAULT_TZ = (() => {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London"; } catch { return "Europe/London"; }
@@ -98,6 +99,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
     location: "",
     raw_description: "",
     start_tz: DEFAULT_TZ,
+    holiday_region: "Global" as HolidayRegion,
   });
   const [saving, setSaving] = useState(false);
   const [owners, setOwners] = useState<{ user_id: string; display_name: string | null; profile_id?: string }[]>([]);

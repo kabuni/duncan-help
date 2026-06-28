@@ -227,6 +227,27 @@ export default function PersonalizationForm({
         </div>
 
         <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <Globe className="h-3.5 w-3.5" /> Region
+          </Label>
+          <Select
+            value={form.region || "__none"}
+            onValueChange={(v) => set("region", v === "__none" ? "" : v)}
+          >
+            <SelectTrigger className="h-9"><SelectValue placeholder="Select region" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none">Not set (Global only)</SelectItem>
+              {USER_REGIONS.map((r) => (
+                <SelectItem key={r} value={r}>{r}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] text-muted-foreground/70">
+            Controls which Public Holidays appear on your Planner. Global holidays are always shown.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">About You</Label>
           <Textarea value={form.bio ?? ""} onChange={(e) => set("bio", e.target.value)}
             placeholder="A brief description of what you do…" className="min-h-[80px]" />

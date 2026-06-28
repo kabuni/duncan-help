@@ -272,16 +272,18 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
         location: draft.location.trim() || null,
         raw_description: draft.raw_description.trim() || null,
         owner: draft.owner.trim() || null,
-        missing_fields: missing,
-        is_complete: isComplete,
-        risk_level: isComplete ? "green" : "amber",
-        risk_reason: isComplete ? null : "Missing owner",
+        missing_fields: isPublicHoliday ? [] : missing,
+        is_complete: isPublicHoliday ? true : isComplete,
+        risk_level: "green",
+        risk_reason: null,
         linked_goal_ids: [],
         linked_docs: [],
         attendees: [],
         deleted_in_google: false,
         created_by: authUser?.id ?? null,
-        collaborators,
+        collaborators: isPublicHoliday ? [] : collaborators,
+        holiday_region: isPublicHoliday ? draft.holiday_region : null,
+        approval_state: isPublicHoliday ? "approved" : null,
       })
       .select("id")
       .single();

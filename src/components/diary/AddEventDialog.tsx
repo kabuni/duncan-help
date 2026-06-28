@@ -712,6 +712,7 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
             )}
           </div>
 
+          {!isPublicHoliday && (
           <div className="col-span-2 space-y-1.5">
             <Label className="flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5" /> Approvals

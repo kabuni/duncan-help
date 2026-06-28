@@ -77,6 +77,8 @@ export function useKeyEvents() {
   const [syncing, setSyncing] = useState(false);
 
   const refresh = useCallback(async () => {
+    const debug = typeof window !== "undefined" && window.localStorage.getItem("plannerDebug") === "1";
+    if (debug) console.log("[useKeyEvents.refresh] start", new Date().toISOString());
     setLoading(true);
     try {
       const [{ data: ev }, { data: wc }, { data: st }, { data: log }] = await Promise.all([
@@ -99,7 +101,14 @@ export function useKeyEvents() {
           .limit(1)
           .maybeSingle(),
       ]);
-      setEvents(((ev as any[]) || []).map((e) => ({ ...e, collaborators: Array.isArray(e.collaborators) ? e.collaborators : [] })));
+      const nextEvents = ((ev as any[]) || []).map((e) => ({ ...e, collaborators: Array.isArray(e.collaborators) ? e.collaborators : [] }));
+      if (debug) {
+        console.log("[useKeyEvents.refresh] loaded", {
+          total: nextEvents.length,
+          publicHolidays: nextEvents.filter((e) => e.category === "PublicHoliday").length,
+        });
+      }
+      setEvents(nextEvents);
       setCards((wc as any[]) || []);
       const stRow = Array.isArray(st) ? (st[0] as any) : (st as any);
       setStatus(stRow ? (stRow as DuncanCalendarStatus) : { connected: false, google_account_email: null, calendar_id: null, calendar_name: null, last_updated: null });
@@ -114,8 +123,18 @@ export function useKeyEvents() {
 
     const channel = supabase
       .channel("planner-key-events")
-      .on("postgres_changes", { event: "*", schema: "public", table: "key_events" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "key_event_approvals" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "key_events" }, (payload) => {
+        if (typeof window !== "undefined" && window.localStorage.getItem("plannerDebug") === "1") {
+          console.log("[Realtime:key_events]", payload);
+        }
+        refresh();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "key_event_approvals" }, (payload) => {
+        if (typeof window !== "undefined" && window.localStorage.getItem("plannerDebug") === "1") {
+          console.log("[Realtime:key_event_approvals]", payload);
+        }
+        refresh();
+      })
       .subscribe();
 
     return () => {

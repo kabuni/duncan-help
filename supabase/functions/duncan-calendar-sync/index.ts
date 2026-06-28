@@ -241,7 +241,7 @@ serve(async (req) => {
     const existingIds = new Set(
       (existing || [])
         .map((e: any) => e.google_event_id as string)
-        .filter((id) => !id.startsWith("local:"))
+        .filter((id) => !id.startsWith("local:") && !id.startsWith("holiday-"))
     );
     const seenIds = new Set<string>();
 

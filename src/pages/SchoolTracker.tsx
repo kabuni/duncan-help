@@ -138,6 +138,10 @@ function ProgressBar({ value, className }: { value: number; className?: string }
 }
 
 export default function SchoolTracker() {
+  const { user } = useAuth();
+  if (!canAccessSchoolTracker(user?.id)) {
+    return <Navigate to="/" replace />;
+  }
   const { data: rows = [], isLoading } = useSchoolTracker();
   const [statusFilter, setStatusFilter] = useState<SchoolTrackerStatus | "all">("all");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");

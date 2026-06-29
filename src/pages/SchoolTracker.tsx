@@ -2,10 +2,29 @@ import { useEffect, useMemo, useState } from "react";
 import { useSchoolTracker, type SchoolTrackerRow, type SchoolTrackerStatus } from "@/hooks/useSchoolTracker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowUpDown, School as SchoolIcon, Loader2 } from "lucide-react";
+import { ArrowUpDown, CalendarPlus, Plus, School as SchoolIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import AddSchoolDialog from "@/components/school-tracker/AddSchoolDialog";
+
+function buildCalendarUrl(row: SchoolTrackerRow) {
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: `Kabuni intro — ${row.name}`,
+    details: [
+      `School: ${row.name}`,
+      `Region: ${row.region}`,
+      `Status: ${row.status}`,
+      row.contact_name ? `Contact: ${row.contact_name}` : "",
+      `Students: ${row.student_count}`,
+    ].filter(Boolean).join("\n"),
+    location: row.region,
+  });
+  if (row.contact_email) params.set("add", row.contact_email);
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
 
 const STATUS_META: Record<SchoolTrackerStatus, { label: string; badge: string; bar: string }> = {
   registered: {
@@ -119,6 +138,7 @@ export default function SchoolTracker() {
   const { data: rows = [], isLoading } = useSchoolTracker();
   const [statusFilter, setStatusFilter] = useState<SchoolTrackerStatus | "all">("all");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [addOpen, setAddOpen] = useState(false);
 
   const counts = useMemo(() => {
     const c = { registered: 0, confirmed: 0, pending: 0, declined: 0 };
@@ -154,10 +174,14 @@ export default function SchoolTracker() {
         <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
           <SchoolIcon className="h-4 w-4" />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-xl font-semibold tracking-tight">School Registrations</h1>
           <p className="text-xs text-muted-foreground">Kabuni school outreach pipeline — live tracker</p>
         </div>
+        <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
+          <Plus className="h-4 w-4" />
+          Add school
+        </Button>
       </header>
 
       {/* Summary stat cards */}
@@ -233,15 +257,27 @@ export default function SchoolTracker() {
               <Loader2 className="h-4 w-4 animate-spin" /> Loading schools…
             </div>
           ) : filtered.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">No schools match this filter.</div>
+            <div className="py-12 text-center text-sm text-muted-foreground">
+              {rows.length === 0 ? (
+                <div className="space-y-3">
+                  <div>No schools yet — start by adding one.</div>
+                  <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
+                    <Plus className="h-4 w-4" /> Add school
+                  </Button>
+                </div>
+              ) : (
+                "No schools match this filter."
+              )}
+            </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>School</TableHead>
                   <TableHead className="w-32">Status</TableHead>
-                  <TableHead className="w-[280px]">Progress</TableHead>
-                  <TableHead className="w-28 text-right">Students</TableHead>
+                  <TableHead className="w-[260px]">Progress</TableHead>
+                  <TableHead className="w-24 text-right">Students</TableHead>
+                  <TableHead className="w-40 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -253,6 +289,8 @@ export default function SchoolTracker() {
           )}
         </CardContent>
       </Card>
+
+      <AddSchoolDialog open={addOpen} onOpenChange={setAddOpen} />
     </div>
   );
 }
@@ -277,6 +315,24 @@ function SchoolRow({ row }: { row: SchoolTrackerRow }) {
         </div>
       </TableCell>
       <TableCell className="text-right text-sm tabular-nums">{row.student_count.toLocaleString()}</TableCell>
+      <TableCell className="text-right">
+        <Button
+          asChild
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1.5 text-xs"
+        >
+          <a
+            href={buildCalendarUrl(row)}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={row.contact_email ? `Invite ${row.contact_email}` : "Schedule a meeting"}
+          >
+            <CalendarPlus className="h-3.5 w-3.5" />
+            Schedule
+          </a>
+        </Button>
+      </TableCell>
     </TableRow>
   );
 }

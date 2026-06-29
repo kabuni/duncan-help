@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { useSchoolTracker, type SchoolTrackerRow, type SchoolTrackerStatus } from "@/hooks/useSchoolTracker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ArrowUpDown, CalendarPlus, Plus, School as SchoolIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AddSchoolDialog from "@/components/school-tracker/AddSchoolDialog";
+import { useAuth } from "@/hooks/useAuth";
+import { canAccessSchoolTracker } from "@/lib/schoolTrackerAccess";
 
 function buildCalendarUrl(row: SchoolTrackerRow) {
   const params = new URLSearchParams({
@@ -135,6 +138,10 @@ function ProgressBar({ value, className }: { value: number; className?: string }
 }
 
 export default function SchoolTracker() {
+  const { user } = useAuth();
+  if (!canAccessSchoolTracker(user?.id)) {
+    return <Navigate to="/" replace />;
+  }
   const { data: rows = [], isLoading } = useSchoolTracker();
   const [statusFilter, setStatusFilter] = useState<SchoolTrackerStatus | "all">("all");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");

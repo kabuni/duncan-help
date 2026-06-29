@@ -3420,6 +3420,8 @@ export type Database = {
       }
       school_tracker: {
         Row: {
+          contact_email: string | null
+          contact_name: string | null
           created_at: string
           id: string
           name: string
@@ -3431,6 +3433,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          contact_email?: string | null
+          contact_name?: string | null
           created_at?: string
           id?: string
           name: string
@@ -3442,6 +3446,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          contact_email?: string | null
+          contact_name?: string | null
           created_at?: string
           id?: string
           name?: string

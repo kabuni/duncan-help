@@ -40,6 +40,7 @@ import InstagramCallback from "./pages/InstagramCallback";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import RegisterSchool from "./pages/RegisterSchool";
 import Registrations from "./pages/Registrations";
+import SchoolTracker from "./pages/SchoolTracker";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsAndConditions from "./pages/TermsAndConditions";
 import Integrations from "./pages/Integrations";
@@ -102,6 +103,7 @@ const AppContent = () => {
             <Route path="/knowledge-base" element={<KnowledgeBase />} />
             <Route path="/learn" element={<Learn />} />
             <Route path="/registrations" element={<Registrations />} />
+            <Route path="/school-tracker" element={<SchoolTracker />} />
             <Route path="/school-registrations" element={<Navigate to="/registrations" replace />} />
             <Route path="/travel" element={<Navigate to="/purchase-orders?tab=travel" replace />} />
             <Route path="/ceo" element={<Navigate to="/team-briefing" replace />} />

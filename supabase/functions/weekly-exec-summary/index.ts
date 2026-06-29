@@ -17,7 +17,16 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
 
-const RECIPIENT_EMAILS = ["simon@kabuni.com", "palash@kabuni.com"];
+const RECIPIENT_EMAILS = [
+  "simon@kabuni.com",
+  "nimesh@kabuni.com",
+  "patrick@kabuni.com",
+  "ellaine@kabuni.com",
+  "matt@kabuni.com",
+  "parmy@kabuni.com",
+  "arzoo@kabuni.com",
+  "aashrey@kabuni.com",
+];
 const SENDER_EMAIL = "duncan@kabuni.com";
 
 const json = (b: unknown, status = 200) =>

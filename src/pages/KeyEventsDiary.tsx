@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Calendar as RBCalendar, dateFnsLocalizer, View } from "react-big-calendar";
-import { format, parse, startOfWeek, getDay } from "date-fns";
+import { format, parse, startOfWeek as dateFnsStartOfWeek, getDay } from "date-fns";
 import { enUS } from "date-fns/locale";
+
+const startOfWeek = (date: Date) => dateFnsStartOfWeek(date, { weekStartsOn: 1 });
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "@/components/diary/calendar.css";
 

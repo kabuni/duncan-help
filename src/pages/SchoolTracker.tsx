@@ -257,15 +257,27 @@ export default function SchoolTracker() {
               <Loader2 className="h-4 w-4 animate-spin" /> Loading schools…
             </div>
           ) : filtered.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">No schools match this filter.</div>
+            <div className="py-12 text-center text-sm text-muted-foreground">
+              {rows.length === 0 ? (
+                <div className="space-y-3">
+                  <div>No schools yet — start by adding one.</div>
+                  <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
+                    <Plus className="h-4 w-4" /> Add school
+                  </Button>
+                </div>
+              ) : (
+                "No schools match this filter."
+              )}
+            </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>School</TableHead>
                   <TableHead className="w-32">Status</TableHead>
-                  <TableHead className="w-[280px]">Progress</TableHead>
-                  <TableHead className="w-28 text-right">Students</TableHead>
+                  <TableHead className="w-[260px]">Progress</TableHead>
+                  <TableHead className="w-24 text-right">Students</TableHead>
+                  <TableHead className="w-40 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -277,6 +289,8 @@ export default function SchoolTracker() {
           )}
         </CardContent>
       </Card>
+
+      <AddSchoolDialog open={addOpen} onOpenChange={setAddOpen} />
     </div>
   );
 }
@@ -301,6 +315,24 @@ function SchoolRow({ row }: { row: SchoolTrackerRow }) {
         </div>
       </TableCell>
       <TableCell className="text-right text-sm tabular-nums">{row.student_count.toLocaleString()}</TableCell>
+      <TableCell className="text-right">
+        <Button
+          asChild
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1.5 text-xs"
+        >
+          <a
+            href={buildCalendarUrl(row)}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={row.contact_email ? `Invite ${row.contact_email}` : "Schedule a meeting"}
+          >
+            <CalendarPlus className="h-3.5 w-3.5" />
+            Schedule
+          </a>
+        </Button>
+      </TableCell>
     </TableRow>
   );
 }

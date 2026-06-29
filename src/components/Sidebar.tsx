@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useApprovalCount } from "@/hooks/useApprovals";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { canAccessRegistrations } from "@/lib/registrationsAccess";
+import { canAccessSchoolTracker } from "@/lib/schoolTrackerAccess";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useProfile } from "@/hooks/useProfile";

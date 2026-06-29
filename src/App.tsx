@@ -26,6 +26,7 @@ import FeedbackIssues from "./pages/FeedbackIssues";
 import Projects from "./pages/Projects";
 import ProjectWorkspace from "./pages/ProjectWorkspace";
 import Workstreams from "./pages/Workstreams";
+import WorkstreamsPresentation from "./pages/WorkstreamsPresentation";
 import Gmail from "./pages/Gmail";
 import ReleaseManager from "./pages/ReleaseManager";
 import WhatsNew from "./pages/WhatsNew";
@@ -92,6 +93,7 @@ const AppContent = () => {
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:projectId" element={<ProjectWorkspace />} />
             <Route path="/workstreams" element={<Workstreams />} />
+            <Route path="/workstreams/present" element={<WorkstreamsPresentation />} />
             <Route path="/gmail" element={<Gmail />} />
             <Route path="/releases" element={<ReleaseManager />} />
             <Route path="/whats-new" element={<WhatsNew />} />

@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Plus, Search, Filter, LayoutGrid, List, Loader2,
   AlertTriangle, Clock, User, CheckCircle2, Target,
-  CalendarDays, ArrowUpDown, ListChecks,
+  CalendarDays, ArrowUpDown, ListChecks, Presentation,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,9 +108,16 @@ const Workstreams = () => {
               </div>
               <p className="text-xs text-muted-foreground font-mono">Track projects, tasks, and team progress</p>
             </div>
-            <Button onClick={() => setShowCreate(true)} className="gap-2 w-full sm:w-auto">
-              <Plus className="h-4 w-4" /> New Card
-            </Button>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button asChild variant="outline" className="gap-2 flex-1 sm:flex-none">
+                <Link to="/workstreams/present">
+                  <Presentation className="h-4 w-4" /> Present
+                </Link>
+              </Button>
+              <Button onClick={() => setShowCreate(true)} className="gap-2 flex-1 sm:flex-none">
+                <Plus className="h-4 w-4" /> New Card
+              </Button>
+            </div>
           </motion.div>
 
           {/* Global progress overview */}

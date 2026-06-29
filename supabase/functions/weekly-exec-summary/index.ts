@@ -1,16 +1,15 @@
 // Weekly Executive Summary orchestrator.
 // Triggered by pg_cron every Monday at 08:00 UK time, or manually by an admin.
 //
-// Flow:
-//   1. Resolve latest weekly folder under the configured parent Drive folder.
-//   2. Read every Google Doc / DOCX inside, extract text.
-//   3. Ask GPT-4o for a structured executive summary.
-//   4. Call generate-exec-summary to produce a branded DOCX in Azure Blob.
-//   5. Mint a signed download token and email it to the recipient.
-//   6. Log the entire run in exec_summary_runs.
+// New flow (no Google Drive):
+//   1. Determine "last week" window (previous Mon 00:00 → Sat 00:00 UK).
+//   2. Pull Gemini/Plaud meetings whose meeting_date falls in that window.
+//   3. Pull workstream_cards updated/created in that window (with task activity).
+//   4. Ask GPT-4o for a structured executive summary grounded ONLY in that data.
+//   5. Email it via duncan@kabuni.com Gmail.
+//   6. Log the run in exec_summary_runs.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.3";
-import JSZip from "https://esm.sh/jszip@3.10.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,7 +17,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
 
-const PARENT_FOLDER_ID = "1R5JxrnLsSGPu4iRMqn02oCOHmGbRSW7G";
 const RECIPIENT_EMAILS = ["simon@kabuni.com", "palash@kabuni.com"];
 const SENDER_EMAIL = "duncan@kabuni.com";
 
@@ -40,7 +38,7 @@ function ukNowParts() {
     hour12: false,
   });
   const parts = Object.fromEntries(
-    fmt.formatToParts(new Date()).map((p) => [p.type, p.value])
+    fmt.formatToParts(new Date()).map((p) => [p.type, p.value]),
   );
   return {
     weekday: parts.weekday,
@@ -49,28 +47,15 @@ function ukNowParts() {
   };
 }
 
-// ─── Single source of truth for report dates (UK time) ────────────────────
-// One object computed once per run. Used for:
-//   - folder name matching
-//   - subject line
-//   - email header label
-//   - GPT date grounding (prevents year hallucination)
-//   - upcoming-week planner window
-//   - pre-send validator
+// ─── Report week (previous Mon–Fri, UK) ────────────────────────────────────
 interface ReportWeek {
-  monday: Date;
-  friday: Date;
-  upcomingMonday: Date;
-  upcomingSundayExcl: Date;
+  monday: Date;          // last week Monday 00:00 UTC (representing UK-day boundary)
+  saturdayExcl: Date;    // exclusive upper bound (Saturday 00:00) — covers Mon–Fri
+  friday: Date;          // last week Friday for labels
   year: number;
-  monthLong: string;
-  monthShort: string;
-  monDay: number;
-  friDay: number;
-  label: string;              // "11th May - 15th May"
-  isoLabel: string;           // "2026-05-11/2026-05-15"
-  todayLabel: string;         // "Friday 22 May 2026"
-  upcomingLabel: string;      // "Monday 25 May – Sunday 31 May 2026"
+  label: string;         // "22nd June - 26th June"
+  isoLabel: string;      // "2026-06-22/2026-06-26"
+  todayLabel: string;    // "Monday 29 June 2026"
 }
 
 function ordinalNum(n: number) {
@@ -81,267 +66,159 @@ function ordinalNum(n: number) {
 
 function buildReportWeek(asOf?: Date): ReportWeek {
   const fmt = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
+    timeZone: "Europe/London",
+    year: "numeric", month: "2-digit", day: "2-digit",
   });
-  const p = Object.fromEntries(fmt.formatToParts(asOf ?? new Date()).map((x) => [x.type, x.value]));
+  const p = Object.fromEntries(
+    fmt.formatToParts(asOf ?? new Date()).map((x) => [x.type, x.value]),
+  );
   const ukToday = new Date(Date.UTC(+p.year, +p.month - 1, +p.day));
-  const dow = ukToday.getUTCDay();
+  const dow = ukToday.getUTCDay();                  // 0=Sun..6=Sat
   const daysBackToMon = dow === 0 ? 6 : dow - 1;
-  const thisMon = new Date(ukToday); thisMon.setUTCDate(ukToday.getUTCDate() - daysBackToMon);
-  const monday = new Date(thisMon); monday.setUTCDate(thisMon.getUTCDate() - 7);
-  const friday = new Date(monday); friday.setUTCDate(monday.getUTCDate() + 4);
-  const upcomingMonday = new Date(monday); upcomingMonday.setUTCDate(monday.getUTCDate() + 14);
-  const upcomingSundayExcl = new Date(upcomingMonday); upcomingSundayExcl.setUTCDate(upcomingMonday.getUTCDate() + 7);
-  const monthLong = monday.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
-  const monthShort = monday.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
-  const friMonthLong = friday.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
-  const label = monthLong === friMonthLong
-    ? `${ordinalNum(monday.getUTCDate())} ${monthLong} - ${ordinalNum(friday.getUTCDate())} ${friMonthLong}`
-    : `${ordinalNum(monday.getUTCDate())} ${monthLong} - ${ordinalNum(friday.getUTCDate())} ${friMonthLong}`;
+  const thisMon = new Date(ukToday);
+  thisMon.setUTCDate(ukToday.getUTCDate() - daysBackToMon);
+  const monday = new Date(thisMon);
+  monday.setUTCDate(thisMon.getUTCDate() - 7);      // last week Monday
+  const friday = new Date(monday);
+  friday.setUTCDate(monday.getUTCDate() + 4);       // last week Friday
+  const saturdayExcl = new Date(monday);
+  saturdayExcl.setUTCDate(monday.getUTCDate() + 5); // exclusive Sat 00:00
+
+  const monMonth = monday.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  const friMonth = friday.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  const label = monMonth === friMonth
+    ? `${ordinalNum(monday.getUTCDate())} ${monMonth} - ${ordinalNum(friday.getUTCDate())} ${friMonth}`
+    : `${ordinalNum(monday.getUTCDate())} ${monMonth} - ${ordinalNum(friday.getUTCDate())} ${friMonth}`;
   const isoLabel = `${monday.toISOString().slice(0, 10)}/${friday.toISOString().slice(0, 10)}`;
   const todayLabel = ukToday.toLocaleDateString("en-GB", {
     weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
   });
-  const upSat = new Date(upcomingSundayExcl.getTime() - 86400000);
-  const upcomingLabel =
-    `${upcomingMonday.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })} ` +
-    `– ${upSat.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}`;
   return {
-    monday, friday, upcomingMonday, upcomingSundayExcl,
+    monday, saturdayExcl, friday,
     year: monday.getUTCFullYear(),
-    monthLong, monthShort,
-    monDay: monday.getUTCDate(), friDay: friday.getUTCDate(),
-    label, isoLabel, todayLabel, upcomingLabel,
+    label, isoLabel, todayLabel,
   };
-}
-
-// ─── Google Drive helpers ──────────────────────────────────────────────────
-async function refreshGoogleToken(refresh: string) {
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      refresh_token: refresh,
-      client_id: Deno.env.get("GMAIL_CLIENT_ID")!,
-      client_secret: Deno.env.get("GMAIL_CLIENT_SECRET")!,
-      grant_type: "refresh_token",
-    }),
-  });
-  if (!res.ok) throw new Error(`Drive token refresh failed: ${await res.text()}`);
-  return (await res.json()) as { access_token: string; expires_in: number };
-}
-
-async function getDriveToken(admin: any): Promise<string> {
-  const { data: row } = await admin
-    .from("google_drive_tokens")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!row) throw new Error("Google Drive not connected");
-
-  const expiry = new Date(row.token_expiry).getTime();
-  if (expiry - Date.now() < 5 * 60 * 1000) {
-    const fresh = await refreshGoogleToken(row.refresh_token);
-    const newExpiry = new Date(Date.now() + fresh.expires_in * 1000).toISOString();
-    await admin
-      .from("google_drive_tokens")
-      .update({ access_token: fresh.access_token, token_expiry: newExpiry })
-      .eq("id", row.id);
-    return fresh.access_token;
-  }
-  return row.access_token;
-}
-
-async function driveFetch(token: string, url: string): Promise<Response> {
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-}
-
-function normalizeFolderName(s: string) {
-  return s.toLowerCase()
-    .replace(/[\u2013\u2014]/g, "-")            // en/em dash → hyphen
-    .replace(/(\d+)(st|nd|rd|th)/g, "$1")        // strip ordinals
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function folderMatchesWeek(name: string, w: ReportWeek): boolean {
-  const n = normalizeFolderName(name);
-  const monthLong = w.monthLong.toLowerCase();
-  const monthShort = w.monthShort.toLowerCase();
-  const hasMonth = n.includes(monthLong) || n.includes(monthShort);
-  const hasMonDay = new RegExp(`(^|[^0-9])${w.monDay}([^0-9]|$)`).test(n);
-  const hasFriDay = new RegExp(`(^|[^0-9])${w.friDay}([^0-9]|$)`).test(n);
-  return hasMonth && hasMonDay && hasFriDay;
-}
-
-interface ResolvedFolder {
-  id: string;
-  name: string;
-  matched: boolean;
-  candidatesConsidered: string[];
-}
-
-async function findFolderForWeek(token: string, w: ReportWeek): Promise<ResolvedFolder> {
-  const q = encodeURIComponent(
-    `'${PARENT_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
-  );
-  const url =
-    `https://www.googleapis.com/drive/v3/files?q=${q}` +
-    `&fields=files(id,name,createdTime,modifiedTime)` +
-    `&orderBy=createdTime%20desc&pageSize=50`;
-  const res = await driveFetch(token, url);
-  if (!res.ok) throw new Error(`Drive folder list failed: ${await res.text()}`);
-  const folders = ((await res.json()).files ?? []) as Array<{ id: string; name: string }>;
-  const names = folders.map((f) => f.name);
-  const matched = folders.find((f) => folderMatchesWeek(f.name, w));
-  if (matched) return { id: matched.id, name: matched.name, matched: true, candidatesConsidered: names };
-  return { id: "", name: "", matched: false, candidatesConsidered: names };
-}
-
-async function listFolderFiles(token: string, folderId: string) {
-  const q = encodeURIComponent(
-    `'${folderId}' in parents and trashed = false and (` +
-      `mimeType = 'application/vnd.google-apps.document' or ` +
-      `mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'` +
-    `)`
-  );
-  const url =
-    `https://www.googleapis.com/drive/v3/files?q=${q}` +
-    `&fields=files(id,name,mimeType,modifiedTime,size)&pageSize=100`;
-  const res = await driveFetch(token, url);
-  if (!res.ok) throw new Error(`Drive file list failed: ${await res.text()}`);
-  return (await res.json()).files ?? [];
-}
-
-async function extractGoogleDoc(token: string, fileId: string): Promise<string> {
-  const res = await driveFetch(
-    token,
-    `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`
-  );
-  if (!res.ok) throw new Error(`Doc export failed: ${await res.text()}`);
-  return await res.text();
-}
-
-async function extractDocx(token: string, fileId: string): Promise<string> {
-  const res = await driveFetch(
-    token,
-    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
-  );
-  if (!res.ok) throw new Error(`DOCX download failed: ${await res.text()}`);
-  const buf = await res.arrayBuffer();
-  const zip = await JSZip.loadAsync(buf);
-  const docXml = await zip.file("word/document.xml")?.async("string");
-  if (!docXml) return "";
-  // Insert newlines for paragraph breaks, then strip XML, then collapse spaces.
-  const withBreaks = docXml
-    .replace(/<\/w:p>/g, "\n")
-    .replace(/<w:tab\b[^/]*\/>/g, "\t");
-  const text = withBreaks.replace(/<[^>]+>/g, "");
-  return text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function truncate(s: string, max: number) {
   return s.length <= max ? s : s.slice(0, max) + "\n…[truncated]";
 }
 
-// ─── Planner: upcoming week (derived from ReportWeek for consistency) ─────
-interface PlannerRange {
-  startUtc: string; endUtc: string; mondayLabel: string; sundayLabel: string;
+// ─── Data fetch: meetings & workstreams in window ──────────────────────────
+interface MeetingRow {
+  id: string; title: string; meeting_date: string;
+  source: string | null; summary: string | null;
+  action_items: any; analysis: any;
+  participants: string[] | null; attendee_emails: string[] | null;
+  transcript: string | null;
 }
 
-function plannerRangeFromReportWeek(w: ReportWeek): PlannerRange {
-  const fmtLabel = (d: Date) =>
-    d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
-  return {
-    startUtc: w.upcomingMonday.toISOString(),
-    endUtc: w.upcomingSundayExcl.toISOString(),
-    mondayLabel: fmtLabel(w.upcomingMonday),
-    sundayLabel: fmtLabel(new Date(w.upcomingSundayExcl.getTime() - 86400000)),
-  };
-}
-
-interface PlannerEvent {
-  weekday: string; day: string; title: string; category: string | null; description: string | null;
-  startIso: string;
-}
-
-async function fetchUpcomingPlannerEvents(
-  admin: any,
-  reportWeek: ReportWeek,
-): Promise<{ events: PlannerEvent[]; range: PlannerRange }> {
-  const range = plannerRangeFromReportWeek(reportWeek);
+async function fetchMeetings(admin: any, w: ReportWeek): Promise<MeetingRow[]> {
   const { data, error } = await admin
-    .from("key_events")
-    .select("title, start_at, category, raw_description, status, deleted_in_google")
-    .gte("start_at", range.startUtc)
-    .lt("start_at", range.endUtc)
-    .eq("deleted_in_google", false)
-    .order("start_at", { ascending: true });
+    .from("meetings")
+    .select("id,title,meeting_date,source,summary,action_items,analysis,participants,attendee_emails,transcript")
+    .gte("meeting_date", w.monday.toISOString())
+    .lt("meeting_date", w.saturdayExcl.toISOString())
+    .order("meeting_date", { ascending: true });
   if (error) {
-    console.warn("[weekly-exec-summary] planner fetch failed:", error.message);
-    return { events: [], range };
+    console.warn("[weekly-exec-summary] meetings fetch failed:", error.message);
+    return [];
   }
-  const dayFmt = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London", weekday: "long", day: "numeric", month: "short",
-  });
-  const seen = new Set<string>();
-  const events: PlannerEvent[] = [];
-  for (const r of (data ?? [])) {
-    if (!r.start_at) continue;
-    const title = (r.title ?? "").trim();
-    if (!title) continue;
-    const status = (r.status ?? "").toLowerCase();
-    if (["cancelled", "canceled", "archived", "draft"].includes(status)) continue;
-    if (/^(tbc|tbd|placeholder|untitled|test)\b/i.test(title)) continue;
+  return (data ?? []) as MeetingRow[];
+}
 
-    const parts = Object.fromEntries(
-      dayFmt.formatToParts(new Date(r.start_at)).map((p) => [p.type, p.value])
-    );
-    const weekday = parts.weekday;
-    const dayLabel = `${parts.weekday} ${parts.day} ${parts.month}`;
-    const desc = (r.raw_description ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    const shortDesc = desc ? (desc.length > 140 ? desc.slice(0, 137) + "…" : desc) : null;
-    const dedupKey = `${weekday}::${title.toLowerCase()}`;
-    if (seen.has(dedupKey)) continue;
-    seen.add(dedupKey);
-    events.push({
-      weekday, day: dayLabel, title, category: r.category ?? null,
-      description: shortDesc, startIso: r.start_at,
+interface CardRow {
+  id: string; title: string; description: string | null;
+  status: string | null; priority: string | null;
+  project_tag: string | null; due_date: string | null;
+  created_at: string; updated_at: string;
+}
+
+async function fetchWorkstreamCards(admin: any, w: ReportWeek): Promise<{ cards: CardRow[]; tasks: any[] }> {
+  // Cards created or updated in the window.
+  const { data: cards, error } = await admin
+    .from("workstream_cards")
+    .select("id,title,description,status,priority,project_tag,due_date,created_at,updated_at")
+    .gte("updated_at", w.monday.toISOString())
+    .lt("updated_at", w.saturdayExcl.toISOString())
+    .is("archived_at", null)
+    .order("updated_at", { ascending: false });
+  if (error) {
+    console.warn("[weekly-exec-summary] cards fetch failed:", error.message);
+    return { cards: [], tasks: [] };
+  }
+  const cardList = (cards ?? []) as CardRow[];
+  if (!cardList.length) return { cards: [], tasks: [] };
+
+  const ids = cardList.map((c) => c.id);
+  const { data: tasks } = await admin
+    .from("workstream_tasks")
+    .select("id,card_id,title,status,completed,due_date,updated_at")
+    .in("card_id", ids)
+    .gte("updated_at", w.monday.toISOString())
+    .lt("updated_at", w.saturdayExcl.toISOString());
+  return { cards: cardList, tasks: tasks ?? [] };
+}
+
+// ─── Build source-data block for the model ─────────────────────────────────
+function formatMeetingsBlock(meetings: MeetingRow[]): string {
+  if (!meetings.length) return "No Gemini/Plaud meetings recorded in this window.";
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-GB", {
+      weekday: "short", day: "numeric", month: "short", timeZone: "Europe/London",
     });
-  }
-  return { events, range };
+  return meetings.map((m) => {
+    const parts: string[] = [];
+    parts.push(`### ${fmtDate(m.meeting_date)} — ${m.title || "(untitled meeting)"}  [source: ${m.source ?? "unknown"}]`);
+    const people = [
+      ...(m.participants ?? []),
+      ...(m.attendee_emails ?? []),
+    ].filter(Boolean);
+    if (people.length) parts.push(`Participants: ${Array.from(new Set(people)).slice(0, 12).join(", ")}`);
+    if (m.summary) parts.push(`Summary: ${m.summary.trim()}`);
+    if (m.action_items && Array.isArray(m.action_items) && m.action_items.length) {
+      const items = m.action_items
+        .map((a: any) => typeof a === "string" ? a : (a?.task ?? a?.title ?? JSON.stringify(a)))
+        .slice(0, 20);
+      parts.push(`Action items:\n- ${items.join("\n- ")}`);
+    }
+    if (!m.summary && m.transcript) {
+      parts.push(`Transcript excerpt:\n${truncate(m.transcript.trim(), 4000)}`);
+    }
+    return parts.join("\n");
+  }).join("\n\n");
 }
 
-
-function formatPlannerBlock(
-  events: PlannerEvent[],
-  range: PlannerRange,
-): string {
-  if (!events.length) {
-    return `Upcoming This Week (${range.mondayLabel} – ${range.sundayLabel}):\n- No planner events scheduled.`;
+function formatWorkstreamBlock(cards: CardRow[], tasks: any[]): string {
+  if (!cards.length) return "No workstream card activity in this window.";
+  const tasksByCard = new Map<string, any[]>();
+  for (const t of tasks) {
+    if (!tasksByCard.has(t.card_id)) tasksByCard.set(t.card_id, []);
+    tasksByCard.get(t.card_id)!.push(t);
   }
-  const lines = [`Upcoming This Week (${range.mondayLabel} – ${range.sundayLabel}):`];
-  for (const e of events) {
-    const cat = e.category ? ` [${e.category}]` : "";
-    const desc = e.description ? ` — ${e.description}` : "";
-    lines.push(`- ${e.day} — ${e.title}${cat}${desc}`);
-  }
-  return lines.join("\n");
-}
-
-function plannerHashInput(events: PlannerEvent[]): string {
-  return events
-    .map((e) => `${e.startIso}|${e.title}|${e.category ?? ""}`)
-    .sort()
-    .join("\n");
+  return cards.map((c) => {
+    const lines: string[] = [];
+    const created = new Date(c.created_at) >= new Date(c.updated_at) ? false : true;
+    lines.push(`### ${c.title} [${c.status ?? "?"}${c.priority ? ` · ${c.priority}` : ""}]${c.project_tag ? ` (${c.project_tag})` : ""}`);
+    lines.push(`Updated: ${new Date(c.updated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })}${c.due_date ? ` · Due: ${c.due_date}` : ""}`);
+    if (c.description) lines.push(truncate(c.description.replace(/\s+/g, " ").trim(), 600));
+    const ts = tasksByCard.get(c.id) ?? [];
+    if (ts.length) {
+      lines.push(`Tasks updated this week:`);
+      for (const t of ts.slice(0, 10)) {
+        lines.push(`- [${t.completed ? "x" : " "}] ${t.title}${t.status ? ` (${t.status})` : ""}`);
+      }
+    }
+    return lines.join("\n");
+  }).join("\n\n");
 }
 
 // ─── OpenAI summary ───────────────────────────────────────────────────────
 async function buildSummaryMarkdown(
-  folderName: string,
-  fileBlocks: string,
-  plannerBlock: string,
+  meetingsBlock: string,
+  workstreamsBlock: string,
+  meetingsCount: number,
+  cardsCount: number,
   reportWeek: ReportWeek,
 ): Promise<string> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
@@ -350,36 +227,29 @@ async function buildSummaryMarkdown(
   const dateGrounding =
     `\n\n=== AUTHORITATIVE DATE CONTEXT (USE EXACTLY — DO NOT ALTER) ===\n` +
     `TODAY (UK): ${reportWeek.todayLabel}\n` +
-    `REPORT WEEK (the week being summarised): ${reportWeek.label} ${reportWeek.year}\n` +
-    `UPCOMING WEEK (forward-looking section): ${reportWeek.upcomingLabel}\n` +
+    `REPORT WEEK (Mon–Fri being summarised): ${reportWeek.label} ${reportWeek.year}\n` +
     `CURRENT YEAR: ${reportWeek.year}\n` +
     `RULES:\n` +
     `- The H1 MUST read exactly: "Weekly Executive Summary — ${reportWeek.label} ${reportWeek.year}".\n` +
-    `- Do NOT invent or shift years. The only year that may appear anywhere is ${reportWeek.year}.\n` +
-    `- Do NOT relabel the report week. The phrase "week of" must use ${reportWeek.label} ${reportWeek.year}.\n`;
+    `- Do NOT invent or shift years. The only year that may appear is ${reportWeek.year}.\n` +
+    `- Use ONLY the meetings and workstream activity provided below. Do not invent items.\n`;
 
   const system =
     "You are Duncan, Kabuni's executive intelligence engine. " +
-    "Produce a board-ready weekly executive summary in clean Markdown. " +
+    "Produce a board-ready weekly executive summary in clean Markdown, grounded strictly in the meetings (Gemini/Plaud) and workstream-card activity provided. " +
     "Use H1 for the report title, H2 for sections, bullets where useful, and Markdown tables when comparing items. " +
-    "Sections (in order): Executive Snapshot, Performance Overview (RYG table), " +
-    "Wins of the Week, Risks & Blockers (with mitigations), Key Decisions Needed, " +
-    "Cross-Department Highlights, Upcoming This Week. " +
-    "For the 'Upcoming This Week' section, use ONLY the planner schedule provided below — " +
-    "group bullets by weekday in chronological order, keep it concise, and do not invent events. " +
-    "Keep 'Upcoming This Week' to a short, scannable list; it must NOT dominate the report. " +
-    "Be concise, factual, decision-oriented. Never invent figures. " +
-    "ALWAYS honour the AUTHORITATIVE DATE CONTEXT exactly — never substitute a different year or week." +
+    "Sections (in order): Executive Snapshot, Meetings This Week (key discussions & decisions), " +
+    "Workstream Progress (RYG table: card · status · update), Wins of the Week, Risks & Blockers (with mitigations), Action Items & Owners, Key Decisions Needed. " +
+    "Be concise, factual, decision-oriented. Never invent figures or events. " +
+    "If a section has no data, state 'No activity recorded this week.' instead of fabricating." +
     dateGrounding;
 
   const user =
-    `Folder: ${folderName}\n` +
-    `Report week: ${reportWeek.label} ${reportWeek.year}\n` +
-    `Today: ${reportWeek.todayLabel}\n\n` +
-    `=== PLANNER SCHEDULE (upcoming week, UK time) ===\n${plannerBlock}\n\n` +
-    `=== PREVIOUS WEEK SOURCE REPORTS ===\n` +
-    `Source reports from ${reportWeek.label} ${reportWeek.year} are below. Synthesise across them.\n\n` +
-    fileBlocks;
+    `Report week: ${reportWeek.label} ${reportWeek.year} (Monday–Friday)\n` +
+    `Today: ${reportWeek.todayLabel}\n` +
+    `Meetings ingested: ${meetingsCount} · Workstream cards with activity: ${cardsCount}\n\n` +
+    `=== MEETINGS (Gemini / Plaud) ===\n${meetingsBlock}\n\n` +
+    `=== WORKSTREAM CARD ACTIVITY ===\n${workstreamsBlock}\n`;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -401,7 +271,6 @@ async function buildSummaryMarkdown(
   const data = await res.json();
   return data.choices?.[0]?.message?.content ?? "";
 }
-
 
 // ─── Gmail send ───────────────────────────────────────────────────────────
 async function getGmailSenderToken(admin: any): Promise<string | null> {
@@ -456,14 +325,14 @@ async function sendEmail(token: string, to: string, subject: string, html: strin
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ raw: b64url(raw) }),
-    }
+    },
   );
   const j = await res.json();
   if (!res.ok) throw new Error(`Gmail send failed: ${JSON.stringify(j)}`);
   return j.id as string;
 }
 
-// ─── Markdown → HTML (lightweight, email-safe) ────────────────────────────
+// ─── Markdown → HTML ──────────────────────────────────────────────────────
 function escapeHtml(s: string) {
   return s
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -482,21 +351,17 @@ function mdToHtml(md: string): string {
   const lines = md.split("\n");
   const out: string[] = [];
   let i = 0;
-
   const flushList = (tag: "ul" | "ol", items: string[]) => {
     out.push(
       `<${tag} style="margin:8px 0 14px 22px;padding:0;color:#334155;font-size:14px;line-height:1.6">` +
         items.map((it) => `<li style="margin:4px 0">${inlineMd(it)}</li>`).join("") +
-      `</${tag}>`
+      `</${tag}>`,
     );
   };
-
   while (i < lines.length) {
     const line = lines[i];
     const t = line.trim();
     if (!t) { i++; continue; }
-
-    // Table
     if (t.startsWith("|") && lines[i + 1]?.trim().match(/^\|[\s\-:|]+\|$/)) {
       const parseRow = (l: string) => l.trim().split("|").slice(1, -1).map((c) => c.trim());
       const headers = parseRow(t);
@@ -513,13 +378,12 @@ function mdToHtml(md: string): string {
           rows.map((r, idx) =>
             `<tr style="background:${idx % 2 ? "#f8fafc" : "#ffffff"}">` +
               r.map((c) => `<td style="padding:8px 10px;border:1px solid #e2e8f0;color:#334155;vertical-align:top">${inlineMd(c)}</td>`).join("") +
-            `</tr>`
+            `</tr>`,
           ).join("") +
-        `</tbody></table>`
+        `</tbody></table>`,
       );
       i = j; continue;
     }
-
     if (/^[-*]\s+/.test(t)) {
       const items: string[] = [];
       while (i < lines.length && /^[-*]\s+/.test(lines[i].trim())) {
@@ -534,7 +398,6 @@ function mdToHtml(md: string): string {
       }
       flushList("ol", items); continue;
     }
-
     if (t.startsWith("### ")) {
       out.push(`<h3 style="margin:20px 0 8px;color:#1e293b;font-size:16px">${inlineMd(t.slice(4))}</h3>`);
     } else if (t.startsWith("## ")) {
@@ -554,20 +417,15 @@ function mdToHtml(md: string): string {
 function emailHtml(opts: {
   title: string;
   weekRange: string;
-  folderName: string;
-  folderMatched: boolean;
-  fileCount: number;
+  meetingsCount: number;
+  cardsCount: number;
   summaryMd: string;
 }): string {
-  const folderProvenance = opts.folderName
-    ? `Source folder: <em>${escapeHtml(opts.folderName)}</em>${opts.folderMatched ? "" : ' <span style="color:#b45309">(name did not match report week)</span>'}`
-    : `<span style="color:#b45309">No source folder matched ${escapeHtml(opts.weekRange)} — fallback summary.</span>`;
   return `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#1a1a1a;background:#ffffff">
   <div style="border-bottom:2px solid #0f172a;padding-bottom:14px;margin-bottom:20px">
     <h1 style="margin:0 0 4px;color:#0f172a;font-size:24px">${escapeHtml(opts.title)}</h1>
-    <div style="color:#64748b;font-size:13px">${escapeHtml(opts.weekRange)} &nbsp;·&nbsp; synthesised from <strong>${opts.fileCount}</strong> source report${opts.fileCount === 1 ? "" : "s"}</div>
-    <div style="color:#94a3b8;font-size:12px;margin-top:4px">${folderProvenance}</div>
+    <div style="color:#64748b;font-size:13px">${escapeHtml(opts.weekRange)} &nbsp;·&nbsp; <strong>${opts.meetingsCount}</strong> meeting${opts.meetingsCount === 1 ? "" : "s"} &nbsp;·&nbsp; <strong>${opts.cardsCount}</strong> workstream card${opts.cardsCount === 1 ? "" : "s"}</div>
   </div>
   ${mdToHtml(opts.summaryMd)}
   <div style="margin-top:32px;padding-top:14px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px;text-align:center">
@@ -575,29 +433,6 @@ function emailHtml(opts: {
   </div>
 </div>`;
 }
-
-// ─── Pre-send validator ───────────────────────────────────────────────────
-function validateOutput(opts: {
-  subject: string;
-  summaryMd: string;
-  reportWeek: ReportWeek;
-}): { ok: true } | { ok: false; reason: string } {
-  const { subject, summaryMd, reportWeek } = opts;
-  if (!subject.includes(reportWeek.label)) {
-    return { ok: false, reason: `Subject missing report-week label "${reportWeek.label}"` };
-  }
-  // Find any 4-digit year in the body and assert it equals reportWeek.year.
-  const years = Array.from(summaryMd.matchAll(/\b(19|20)\d{2}\b/g)).map((m) => m[0]);
-  const wrongYears = years.filter((y) => y !== String(reportWeek.year));
-  if (wrongYears.length) {
-    return {
-      ok: false,
-      reason: `GPT produced wrong year(s): ${[...new Set(wrongYears)].join(", ")} (expected ${reportWeek.year})`,
-    };
-  }
-  return { ok: true };
-}
-
 
 // ─── Auth: admin or cron ──────────────────────────────────────────────────
 async function authorize(req: Request, admin: any): Promise<
@@ -614,7 +449,7 @@ async function authorize(req: Request, admin: any): Promise<
   const userClient = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } }
+    { global: { headers: { Authorization: authHeader } } },
   );
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return { ok: false, res: json({ error: "Unauthorized" }, 401) };
@@ -633,22 +468,20 @@ Deno.serve(async (req) => {
   const authz = await authorize(req, admin);
   if (!authz.ok) return authz.res;
 
-  // Parse body
   let body: any = {};
   try { body = await req.json(); } catch { /* empty body fine */ }
   const force = body?.force === true;
-  const skipDedup = body?.skip_dedup === true;
-  const allowEmptyFolder = body?.allow_empty_folder === true;
-  // Optional one-off recipient override. Accepts string, comma-separated list, or array.
-  // Production cron always emails RECIPIENT_EMAILS unless explicitly overridden.
   const overrideRaw: unknown = body?.recipient_override;
-  const overrideList: string[] = Array.isArray(overrideRaw) ? overrideRaw.map((x) => String(x)) : typeof overrideRaw === "string" ? overrideRaw.split(",") : [];
-  const validRecipients = overrideList.map((s) => s.trim()).filter((s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
+  const overrideList: string[] = Array.isArray(overrideRaw)
+    ? overrideRaw.map((x) => String(x))
+    : typeof overrideRaw === "string" ? overrideRaw.split(",") : [];
+  const validRecipients = overrideList
+    .map((s) => s.trim())
+    .filter((s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
   const effectiveRecipients = validRecipients.length ? validRecipients : [...RECIPIENT_EMAILS];
   const recipientHeader = effectiveRecipients.join(", ");
 
-  // DST-safe gate: cron fires at 07:00 and 08:00 UTC every Monday; only run at 08:00 UK local.
-  // `force: true` bypasses the time gate (used for admin-triggered test runs over the cron channel).
+  // DST-safe gate: cron fires Monday 08:00 UK only.
   if (authz.source === "cron" && !force) {
     const uk = ukNowParts();
     if (uk.weekday !== "Mon" || uk.hour !== 8) {
@@ -658,13 +491,10 @@ Deno.serve(async (req) => {
 
   const uk = ukNowParts();
   const baseKey = `weekly-${uk.isoDate}`;
-  // For cron-source forced runs (admin test sends via cron-secret), append a suffix
-  // so we never collide with the real weekly idempotency key.
   const runKey = authz.source === "cron"
     ? (force ? `${baseKey}-force-${Date.now()}` : baseKey)
     : `manual-${uk.isoDate}-${Date.now()}`;
 
-  // Idempotency: refuse duplicate real cron runs for the same day.
   if (authz.source === "cron" && !force) {
     const { data: existing } = await admin
       .from("exec_summary_runs")
@@ -676,8 +506,6 @@ Deno.serve(async (req) => {
     }
   }
 
-
-  // Create run row
   const { data: runRow, error: insErr } = await admin
     .from("exec_summary_runs")
     .insert({
@@ -707,131 +535,39 @@ Deno.serve(async (req) => {
   };
 
   try {
-    // 0. Single source of truth for all dates this run.
     const asOfRaw = typeof body?.as_of === "string" ? body.as_of : null;
     const asOfDate = asOfRaw ? new Date(asOfRaw) : undefined;
     const reportWeek = buildReportWeek(asOfDate && !isNaN(asOfDate.getTime()) ? asOfDate : undefined);
     const weekRange = reportWeek.label;
 
-    // 1. Drive token
-    const driveToken = await getDriveToken(admin);
+    // Pull source data — meetings + workstreams in last-week window.
+    const [meetings, ws] = await Promise.all([
+      fetchMeetings(admin, reportWeek),
+      fetchWorkstreamCards(admin, reportWeek),
+    ]);
 
-    // 2. Folder for the report week (name-matched, not "newest wins").
-    const folder = await findFolderForWeek(driveToken, reportWeek);
-    if (!folder.matched && !allowEmptyFolder) {
+    const meetingsBlock = formatMeetingsBlock(meetings);
+    const workstreamsBlock = formatWorkstreamBlock(ws.cards, ws.tasks);
+
+    await admin.from("exec_summary_runs").update({
+      file_count: meetings.length + ws.cards.length,
+      files_processed: {
+        meetings: meetings.map((m) => ({ id: m.id, title: m.title, date: m.meeting_date, source: m.source })),
+        cards: ws.cards.map((c) => ({ id: c.id, title: c.title, status: c.status })),
+      },
+    }).eq("id", runId);
+
+    if (meetings.length === 0 && ws.cards.length === 0) {
       throw new Error(
-        `No Drive folder matched the report week "${weekRange} ${reportWeek.year}". ` +
-        `Candidates considered: ${folder.candidatesConsidered.slice(0, 10).join(", ") || "(none)"}`
-      );
-    }
-    await admin.from("exec_summary_runs").update({
-      folder_id: folder.id || null,
-      folder_name: folder.name || null,
-    }).eq("id", runId);
-
-    // 3. List + extract (skip if no folder matched — fallback path).
-    const files = folder.matched ? await listFolderFiles(driveToken, folder.id) : [];
-    if (folder.matched && !files.length && !allowEmptyFolder) {
-      throw new Error(`No Google Docs or DOCX files in folder "${folder.name}"`);
-    }
-
-    const processed: Array<{ id: string; name: string; chars: number; type: string }> = [];
-    const failed: Array<{ id: string; name: string; error: string }> = [];
-    const blocks: string[] = [];
-
-    for (const f of files) {
-      try {
-        const isGdoc = f.mimeType === "application/vnd.google-apps.document";
-        const text = isGdoc
-          ? await extractGoogleDoc(driveToken, f.id)
-          : await extractDocx(driveToken, f.id);
-        const clean = truncate(text.trim(), 25_000);
-        if (!clean) {
-          failed.push({ id: f.id, name: f.name, error: "Empty after extraction" });
-          continue;
-        }
-        processed.push({ id: f.id, name: f.name, chars: clean.length, type: isGdoc ? "gdoc" : "docx" });
-        blocks.push(`\n\n=== ${f.name} (${isGdoc ? "Google Doc" : "DOCX"}) ===\n${clean}`);
-      } catch (e) {
-        failed.push({ id: f.id, name: f.name, error: e instanceof Error ? e.message : String(e) });
-      }
-    }
-
-    const emptyFallback = processed.length === 0;
-    if (emptyFallback && !allowEmptyFolder) {
-      throw new Error("All file extractions failed — nothing to summarise");
-    }
-    if (emptyFallback) {
-      const folderNote = folder.matched
-        ? `The Drive folder "${folder.name}" matched the report week but contained no readable Google Docs or DOCX files.`
-        : `No Drive folder matched the report week "${weekRange} ${reportWeek.year}".`;
-      blocks.push(
-        `\n\n=== NO WEEKLY SOURCE REPORTS AVAILABLE ===\n` +
-        `${folderNote} ` +
-        `Generate a brief fallback Executive Snapshot that explicitly notes "No weekly source reports were available for ${weekRange} ${reportWeek.year}", ` +
-        `omit RYG/Wins/Risks tables that would require source data (or render them with a single 'No data' row), ` +
-        `and still produce the full 'Upcoming This Week' section from the planner schedule below.`
+        `No meetings or workstream activity found between ${reportWeek.monday.toISOString().slice(0, 10)} and ${reportWeek.friday.toISOString().slice(0, 10)}.`,
       );
     }
 
-    // Fetch upcoming planner events (derived from reportWeek for consistency).
-    const { events: plannerEvents, range: plannerRange } = await fetchUpcomingPlannerEvents(admin, reportWeek);
-    const plannerBlock = formatPlannerBlock(plannerEvents, plannerRange);
-
-    // Deterministic content hash from processed files + planner schedule + report-week.
-    const fingerprintInput = files
-      .map((f: any) => `${f.id}|${f.modifiedTime ?? ""}|${f.size ?? ""}`)
-      .sort()
-      .join("\n")
-      + `\n#week=${reportWeek.isoLabel}`
-      + `\n#count=${processed.length}\n#chars=${processed.reduce((a, p) => a + p.chars, 0)}`
-      + `\n#planner_range=${plannerRange.startUtc}..${plannerRange.endUtc}`
-      + `\n#planner=\n${plannerHashInput(plannerEvents)}`;
-    const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintInput));
-    const contentHash = Array.from(new Uint8Array(hashBuf))
-      .map((b) => b.toString(16).padStart(2, "0")).join("");
-
-    await admin.from("exec_summary_runs").update({
-      files_processed: processed,
-      file_count: processed.length,
-      failed_files: failed,
-      content_hash: contentHash,
-    }).eq("id", runId);
-
-    // Duplicate-content protection.
-    if (!skipDedup && !force && folder.matched) {
-      const { data: prior } = await admin
-        .from("exec_summary_runs")
-        .select("id,started_at,email_message_id")
-        .eq("folder_id", folder.id)
-        .eq("content_hash", contentHash)
-        .eq("status", "succeeded")
-        .neq("id", runId)
-        .order("started_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (prior) {
-        await admin.from("exec_summary_runs").update({
-          status: "skipped_no_changes",
-          finished_at: new Date().toISOString(),
-          error: `Identical content already sent in run ${prior.id}`,
-        }).eq("id", runId);
-        return json({
-          skipped: true,
-          reason: "skipped_no_changes",
-          run_id: runId,
-          previous_run_id: prior.id,
-          folder: folder.name,
-          content_hash: contentHash,
-        });
-      }
-    }
-
-    // 4. GPT-4o summary (with authoritative date grounding).
     const summaryMd = await buildSummaryMarkdown(
-      folder.name || `(no folder matched ${weekRange} ${reportWeek.year})`,
-      blocks.join("\n"),
-      plannerBlock,
+      meetingsBlock,
+      workstreamsBlock,
+      meetings.length,
+      ws.cards.length,
       reportWeek,
     );
     if (!summaryMd) throw new Error("OpenAI returned empty summary");
@@ -839,37 +575,18 @@ Deno.serve(async (req) => {
     const title = "Weekly Executive Summary";
     const subject = `Weekly Executive Summary | ${weekRange} ${reportWeek.year}`;
 
-    // Pre-send validator — block any run with subject/body date drift.
-    const validation = validateOutput({ subject, summaryMd, reportWeek });
-    if (!validation.ok) {
-      await admin.from("exec_summary_runs").update({
-        status: "failed_validation",
-        finished_at: new Date().toISOString(),
-        error: validation.reason,
-        error_details: { subject, report_week: reportWeek.label, year: reportWeek.year },
-      }).eq("id", runId);
-      return json({
-        error: `Validation failed: ${validation.reason}`,
-        run_id: runId,
-        subject,
-        report_week: `${reportWeek.label} ${reportWeek.year}`,
-      }, 500);
-    }
-
     await admin.from("exec_summary_runs").update({
       summary_chars: summaryMd.length,
     }).eq("id", runId);
 
-    // 5. Email
     const gmailToken = await getGmailSenderToken(admin);
     if (!gmailToken) throw new Error("Gmail sender token (duncan@kabuni.com) unavailable");
 
     const html = emailHtml({
       title,
       weekRange: `${weekRange} ${reportWeek.year}`,
-      folderName: folder.name,
-      folderMatched: folder.matched,
-      fileCount: processed.length,
+      meetingsCount: meetings.length,
+      cardsCount: ws.cards.length,
       summaryMd,
     });
     const messageId = await sendEmail(gmailToken, recipientHeader, subject, html);
@@ -883,12 +600,9 @@ Deno.serve(async (req) => {
     return json({
       success: true,
       run_id: runId,
-      folder: folder.name || null,
-      folder_matched: folder.matched,
-      files_processed: processed.length,
-      failed_files: failed.length,
+      meetings: meetings.length,
+      workstream_cards: ws.cards.length,
       recipients: effectiveRecipients,
-      content_hash: contentHash,
       subject,
       week_range: `${weekRange} ${reportWeek.year}`,
     });
@@ -896,4 +610,3 @@ Deno.serve(async (req) => {
     return fail(e);
   }
 });
-

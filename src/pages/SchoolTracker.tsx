@@ -2,10 +2,29 @@ import { useEffect, useMemo, useState } from "react";
 import { useSchoolTracker, type SchoolTrackerRow, type SchoolTrackerStatus } from "@/hooks/useSchoolTracker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowUpDown, School as SchoolIcon, Loader2 } from "lucide-react";
+import { ArrowUpDown, CalendarPlus, Plus, School as SchoolIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import AddSchoolDialog from "@/components/school-tracker/AddSchoolDialog";
+
+function buildCalendarUrl(row: SchoolTrackerRow) {
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: `Kabuni intro — ${row.name}`,
+    details: [
+      `School: ${row.name}`,
+      `Region: ${row.region}`,
+      `Status: ${row.status}`,
+      row.contact_name ? `Contact: ${row.contact_name}` : "",
+      `Students: ${row.student_count}`,
+    ].filter(Boolean).join("\n"),
+    location: row.region,
+  });
+  if (row.contact_email) params.set("add", row.contact_email);
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
 
 const STATUS_META: Record<SchoolTrackerStatus, { label: string; badge: string; bar: string }> = {
   registered: {

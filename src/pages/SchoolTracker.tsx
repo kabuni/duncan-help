@@ -138,6 +138,7 @@ export default function SchoolTracker() {
   const { data: rows = [], isLoading } = useSchoolTracker();
   const [statusFilter, setStatusFilter] = useState<SchoolTrackerStatus | "all">("all");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [addOpen, setAddOpen] = useState(false);
 
   const counts = useMemo(() => {
     const c = { registered: 0, confirmed: 0, pending: 0, declined: 0 };
@@ -173,10 +174,14 @@ export default function SchoolTracker() {
         <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
           <SchoolIcon className="h-4 w-4" />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-xl font-semibold tracking-tight">School Registrations</h1>
           <p className="text-xs text-muted-foreground">Kabuni school outreach pipeline — live tracker</p>
         </div>
+        <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
+          <Plus className="h-4 w-4" />
+          Add school
+        </Button>
       </header>
 
       {/* Summary stat cards */}

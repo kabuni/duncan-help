@@ -3418,6 +3418,42 @@ export type Database = {
         }
         Relationships: []
       }
+      school_tracker: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          progress_pct: number
+          region: string
+          status: Database["public"]["Enums"]["school_tracker_status"]
+          student_count: number
+          target_flag: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          progress_pct?: number
+          region: string
+          status?: Database["public"]["Enums"]["school_tracker_status"]
+          student_count?: number
+          target_flag?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          progress_pct?: number
+          region?: string
+          status?: Database["public"]["Enums"]["school_tracker_status"]
+          student_count?: number
+          target_flag?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       slack_connections: {
         Row: {
           access_token: string
@@ -4901,6 +4937,7 @@ export type Database = {
         | "approved"
         | "rejected"
         | "cancelled"
+      school_tracker_status: "registered" | "confirmed" | "pending" | "declined"
       travel_status: "pending_approval" | "approved" | "rejected" | "cancelled"
       travel_transport: "flight" | "train" | "car" | "other"
     }
@@ -5075,6 +5112,7 @@ export const Constants = {
         "rejected",
         "cancelled",
       ],
+      school_tracker_status: ["registered", "confirmed", "pending", "declined"],
       travel_status: ["pending_approval", "approved", "rejected", "cancelled"],
       travel_transport: ["flight", "train", "car", "other"],
     },

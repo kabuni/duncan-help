@@ -26,6 +26,7 @@ const RECIPIENT_EMAILS = [
   "parmy@kabuni.com",
   "arzoo@kabuni.com",
   "aashrey@kabuni.com",
+  "tim@kabuni.com",
 ];
 const SENDER_EMAIL = "duncan@kabuni.com";
 

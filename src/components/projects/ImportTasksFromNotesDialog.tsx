@@ -106,8 +106,11 @@ export function ImportTasksFromNotesDialog({
   // Gmail browsing state
   const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
   const [loadingMeetings, setLoadingMeetings] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [meetings, setMeetings] = useState<MeetingEmail[]>([]);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeQuery, setActiveQuery] = useState<string>("");
   const [loadingMeetingId, setLoadingMeetingId] = useState<string | null>(null);
   const [sourceSubject, setSourceSubject] = useState<string | null>(null);
 
@@ -116,7 +119,10 @@ export function ImportTasksFromNotesDialog({
     setNotes("");
     setActions([]);
     setSearchQuery("");
+    setActiveQuery("");
     setSourceSubject(null);
+    setMeetings([]);
+    setNextPageToken(null);
   }
 
   function resolveAssignee(hint?: string | null): string | null {
@@ -130,20 +136,33 @@ export function ImportTasksFromNotesDialog({
     return match?.user_id ?? null;
   }
 
-  async function fetchMeetings(query?: string) {
-    setLoadingMeetings(true);
+  function buildQuery(userQuery: string): string {
+    const q = userQuery.trim();
+    if (!q) return GEMINI_NOTES_QUERY;
+    // If user typed a free-text search, broaden: search BOTH meeting-note emails
+    // AND any email that matches the user's text. This way they can find any
+    // meeting in their mailbox, not just Gemini auto-notes.
+    return `(${GEMINI_NOTES_QUERY}) OR (${q})`;
+  }
+
+  async function fetchMeetings(userQuery: string, append = false) {
+    if (append) setLoadingMore(true);
+    else setLoadingMeetings(true);
     try {
+      const q = buildQuery(userQuery);
+      setActiveQuery(userQuery);
       const { data, error } = await supabase.functions.invoke("gmail-api", {
         body: {
           action: "search",
-          query: query && query.trim().length > 0
-            ? `(${GEMINI_NOTES_QUERY}) ${query.trim()}`
-            : GEMINI_NOTES_QUERY,
-          maxResults: 6,
+          query: q,
+          maxResults: append ? 10 : 6,
+          pageToken: append ? nextPageToken ?? undefined : undefined,
         },
       });
       if (error) throw error;
-      setMeetings(data?.emails ?? []);
+      const incoming: MeetingEmail[] = data?.emails ?? [];
+      setMeetings((prev) => (append ? [...prev, ...incoming] : incoming));
+      setNextPageToken(data?.nextPageToken ?? null);
     } catch (e: any) {
       const msg = e.message || "Failed to load meetings";
       if (/not connected|reconnect|token/i.test(msg)) {
@@ -153,6 +172,7 @@ export function ImportTasksFromNotesDialog({
       }
     } finally {
       setLoadingMeetings(false);
+      setLoadingMore(false);
     }
   }
 
@@ -171,7 +191,7 @@ export function ImportTasksFromNotesDialog({
           return;
         }
         setGmailConnected(true);
-        fetchMeetings();
+        fetchMeetings("");
       } catch {
         if (!cancelled) setGmailConnected(false);
       }
@@ -188,27 +208,61 @@ export function ImportTasksFromNotesDialog({
       const { data: emailData, error: readErr } = await supabase.functions.invoke("gmail-api", {
         body: { action: "read", messageId: m.id },
       });
-      if (readErr) throw readErr;
+      if (readErr) throw new Error(readErr.message || "Gmail read failed");
 
-      const body: string =
-        emailData?.textBody ||
-        (emailData?.htmlBody ? stripHtml(emailData.htmlBody) : "") ||
-        emailData?.snippet ||
-        "";
+      const htmlBody: string = emailData?.htmlBody || "";
+      const textBody: string = emailData?.textBody || "";
+      const snippet: string = emailData?.snippet || "";
 
-      if (body.trim().length < 20) {
-        toast.error("This email doesn't contain enough notes text to extract actions.");
+      // 1) If the email links a Google Doc (Gemini's notes doc), fetch the full
+      //    doc text from Drive — that's where the real notes live.
+      let notesText = "";
+      const docId = extractDocId(htmlBody, textBody);
+      if (docId) {
+        try {
+          const { data: docData, error: docErr } = await supabase.functions.invoke(
+            "google-drive-api",
+            {
+              body: {
+                action: "get_content",
+                fileId: docId,
+                mimeType: "application/vnd.google-apps.document",
+              },
+            },
+          );
+          if (docErr) throw new Error(docErr.message || "Drive read failed");
+          if (docData?.content && typeof docData.content === "string") {
+            notesText = docData.content;
+          }
+        } catch (driveErr: any) {
+          // Fall through to email body — surface a hint in console
+          console.warn("Drive doc fetch failed, falling back to email body:", driveErr);
+        }
+      }
+
+      // 2) Fall back to the email body itself.
+      if (notesText.trim().length < 20) {
+        notesText = textBody || (htmlBody ? stripHtml(htmlBody) : "") || snippet;
+      }
+
+      if (notesText.trim().length < 20) {
+        toast.error(
+          docId
+            ? "Found a notes doc but couldn't read it. Make sure Google Drive is connected with access to this doc."
+            : "This email doesn't contain enough notes text to extract actions.",
+        );
         return;
       }
 
       setSourceSubject(m.subject || "Meeting notes");
-      await extractFrom(body);
+      await extractFrom(notesText);
     } catch (e: any) {
       toast.error(e.message || "Failed to read meeting notes");
     } finally {
       setLoadingMeetingId(null);
     }
   }
+
 
   async function extractFrom(text: string) {
     setExtracting(true);

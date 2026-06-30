@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCreateCard, useUserProfiles, useProjectTags, type CardStatus, type CardPriority } from "@/hooks/useWorkstreams";
+import { useCreateCard, useUserProfiles, useProjectTags, WORKSTREAM_CATEGORIES, type CardStatus, type CardPriority } from "@/hooks/useWorkstreams";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import MultiAssigneeSelect from "./MultiAssigneeSelect";
 
@@ -28,6 +28,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState("");
   const [projectTag, setProjectTag] = useState("");
+  const [category, setCategory] = useState<string>("");
   const [addingNew, setAddingNew] = useState(false);
   const [newTag, setNewTag] = useState("");
 
@@ -41,7 +42,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
 
   const reset = () => {
     setTitle(""); setDescription(""); setStatus("not_started");
-    setAssigneeIds([]); setDueDate(""); setProjectTag("");
+    setAssigneeIds([]); setDueDate(""); setProjectTag(""); setCategory("");
     setAddingNew(false); setNewTag("");
   };
 
@@ -55,6 +56,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
       owner_id: assigneeIds[0] || undefined,
       due_date: dueDate || undefined,
       project_tag: projectTag.trim() || undefined,
+      category: category || undefined,
       assignee_ids: assigneeIds,
     });
     reset();
@@ -113,6 +115,19 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
                 placeholder="Assign people"
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium flex items-center gap-1"><Tag className="h-3 w-3" /> Category</Label>
+            <Select value={category || "none"} onValueChange={v => setCategory(v === "none" ? "" : v)}>
+              <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {WORKSTREAM_CATEGORIES.map(c => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-1.5">

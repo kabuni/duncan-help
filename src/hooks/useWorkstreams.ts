@@ -6,6 +6,18 @@ import { toast } from "sonner";
 export type CardStatus = "not_started" | "red" | "amber" | "green" | "done";
 export type CardPriority = "low" | "medium" | "high" | "critical";
 
+export const WORKSTREAM_CATEGORIES = [
+  "HR & People",
+  "Legal & Compliance",
+  "Finance",
+  "Operations",
+  "Product & Engineering",
+  "Sales & Marketing",
+  "Recruitment",
+  "General / Company-Wide",
+] as const;
+export type WorkstreamCategory = (typeof WORKSTREAM_CATEGORIES)[number];
+
 export interface WorkstreamCard {
   id: string;
   title: string;
@@ -15,6 +27,7 @@ export interface WorkstreamCard {
   owner_id: string | null;
   due_date: string | null;
   project_tag: string | null;
+  category: string | null;
   created_by: string;
   archived_at: string | null;
   created_at: string;
@@ -174,6 +187,7 @@ export function useWorkstreamCards(filters?: {
   assignee?: string;
   priority?: CardPriority;
   project_tag?: string;
+  category?: string;
   search?: string;
 }) {
   return useQuery({
@@ -188,6 +202,10 @@ export function useWorkstreamCards(filters?: {
       if (filters?.status) query = query.eq("status", filters.status);
       if (filters?.priority) query = query.eq("priority", filters.priority);
       if (filters?.project_tag) query = query.eq("project_tag", filters.project_tag);
+      if (filters?.category) {
+        if (filters.category === "__none__") query = query.is("category", null);
+        else query = query.eq("category", filters.category);
+      }
       if (filters?.search) {
         const term = filters.search.replace(/[%,()]/g, " ").trim();
         if (term) {
@@ -459,7 +477,7 @@ export function useCreateCard() {
   return useMutation({
     mutationFn: async (input: {
       title: string; description?: string; status?: CardStatus; priority?: CardPriority;
-      owner_id?: string; due_date?: string; project_tag?: string; assignee_ids?: string[];
+      owner_id?: string; due_date?: string; project_tag?: string; category?: string; assignee_ids?: string[];
     }) => {
       if (!user) throw new Error("Not authenticated");
       const { assignee_ids, ...cardInput } = input;

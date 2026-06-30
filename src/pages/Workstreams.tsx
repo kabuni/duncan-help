@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { useWorkstreamCards, useUserProfiles, useTasksByAssignee, type WorkstreamCard, type CardStatus, type AssignedTask } from "@/hooks/useWorkstreams";
+import { useWorkstreamCards, useUserProfiles, useTasksByAssignee, WORKSTREAM_CATEGORIES, type WorkstreamCard, type CardStatus, type AssignedTask } from "@/hooks/useWorkstreams";
 
 import { isPast, isThisWeek } from "date-fns";
 import KanbanBoard from "@/components/workstreams/KanbanBoard";
@@ -29,6 +29,7 @@ const Workstreams = () => {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterPriority] = useState<string>("all");
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [prefillTag, setPrefillTag] = useState<string | undefined>(undefined);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -53,10 +54,11 @@ const Workstreams = () => {
     status: filterStatus !== "all" ? filterStatus as CardStatus : undefined,
     priority: filterPriority !== "all" ? filterPriority as import("@/hooks/useWorkstreams").CardPriority : undefined,
     assignee: filterAssignee !== "all" ? filterAssignee : undefined,
+    category: filterCategory !== "all" ? filterCategory : undefined,
     search: search || undefined,
-  }), [filterStatus, filterPriority, filterAssignee, search]);
+  }), [filterStatus, filterPriority, filterAssignee, filterCategory, search]);
 
-  const { data: cards, isLoading } = useWorkstreamCards(filters.status || filters.priority || filters.assignee || filters.search ? filters : undefined);
+  const { data: cards, isLoading } = useWorkstreamCards(filters.status || filters.priority || filters.assignee || filters.category || filters.search ? filters : undefined);
 
   // For dashboard: fetch ALL cards (unfiltered) separately for stats
   const { data: allCards } = useWorkstreamCards();
@@ -166,6 +168,19 @@ const Workstreams = () => {
                   {(users || []).map(u => (
                     <SelectItem key={u.user_id} value={u.user_id}>{u.display_name || "Unnamed"}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger className="h-9 w-[170px] text-xs">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {WORKSTREAM_CATEGORIES.map(c => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                  <SelectItem value="__none__">None</SelectItem>
                 </SelectContent>
               </Select>
 

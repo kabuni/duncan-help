@@ -38,9 +38,30 @@ interface MeetingEmail {
 
 type Mode = "meetings" | "paste";
 
-// Default Gemini / Google Meet notes query
-const GEMINI_NOTES_QUERY =
-  'from:(meetings-noreply@google.com OR notes-noreply@google.com) OR subject:("Notes from" OR "Gemini")';
+// Default Gemini / Google Meet notes query. Broad on purpose so we catch:
+//  - Google Meet / Gemini auto-generated notes emails
+//  - Forwarded / shared Gemini notes
+//  - Anything that looks like meeting notes / recap / summary
+const GEMINI_NOTES_QUERY = [
+  'from:meetings-noreply@google.com',
+  'from:notes-noreply@google.com',
+  'from:noreply-meet@google.com',
+  '"Gemini took notes"',
+  '"took notes in"',
+  '"Notes from"',
+  '"Meeting notes"',
+  '"meeting recap"',
+  '"meeting summary"',
+  'subject:"Notes:"',
+  'subject:"Recap:"',
+].join(' OR ');
+
+// Extract a Google Docs file ID from an email body (HTML or text)
+function extractDocId(html: string, text: string): string | null {
+  const haystack = `${html || ""}\n${text || ""}`;
+  const m = haystack.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]{20,})/);
+  return m ? m[1] : null;
+}
 
 function stripHtml(html: string): string {
   return html
@@ -85,8 +106,11 @@ export function ImportTasksFromNotesDialog({
   // Gmail browsing state
   const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
   const [loadingMeetings, setLoadingMeetings] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [meetings, setMeetings] = useState<MeetingEmail[]>([]);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeQuery, setActiveQuery] = useState<string>("");
   const [loadingMeetingId, setLoadingMeetingId] = useState<string | null>(null);
   const [sourceSubject, setSourceSubject] = useState<string | null>(null);
 
@@ -95,7 +119,10 @@ export function ImportTasksFromNotesDialog({
     setNotes("");
     setActions([]);
     setSearchQuery("");
+    setActiveQuery("");
     setSourceSubject(null);
+    setMeetings([]);
+    setNextPageToken(null);
   }
 
   function resolveAssignee(hint?: string | null): string | null {
@@ -109,20 +136,33 @@ export function ImportTasksFromNotesDialog({
     return match?.user_id ?? null;
   }
 
-  async function fetchMeetings(query?: string) {
-    setLoadingMeetings(true);
+  function buildQuery(userQuery: string): string {
+    const q = userQuery.trim();
+    if (!q) return GEMINI_NOTES_QUERY;
+    // If user typed a free-text search, broaden: search BOTH meeting-note emails
+    // AND any email that matches the user's text. This way they can find any
+    // meeting in their mailbox, not just Gemini auto-notes.
+    return `(${GEMINI_NOTES_QUERY}) OR (${q})`;
+  }
+
+  async function fetchMeetings(userQuery: string, append = false) {
+    if (append) setLoadingMore(true);
+    else setLoadingMeetings(true);
     try {
+      const q = buildQuery(userQuery);
+      setActiveQuery(userQuery);
       const { data, error } = await supabase.functions.invoke("gmail-api", {
         body: {
           action: "search",
-          query: query && query.trim().length > 0
-            ? `(${GEMINI_NOTES_QUERY}) ${query.trim()}`
-            : GEMINI_NOTES_QUERY,
-          maxResults: 6,
+          query: q,
+          maxResults: append ? 10 : 6,
+          pageToken: append ? nextPageToken ?? undefined : undefined,
         },
       });
       if (error) throw error;
-      setMeetings(data?.emails ?? []);
+      const incoming: MeetingEmail[] = data?.emails ?? [];
+      setMeetings((prev) => (append ? [...prev, ...incoming] : incoming));
+      setNextPageToken(data?.nextPageToken ?? null);
     } catch (e: any) {
       const msg = e.message || "Failed to load meetings";
       if (/not connected|reconnect|token/i.test(msg)) {
@@ -132,6 +172,7 @@ export function ImportTasksFromNotesDialog({
       }
     } finally {
       setLoadingMeetings(false);
+      setLoadingMore(false);
     }
   }
 
@@ -150,7 +191,7 @@ export function ImportTasksFromNotesDialog({
           return;
         }
         setGmailConnected(true);
-        fetchMeetings();
+        fetchMeetings("");
       } catch {
         if (!cancelled) setGmailConnected(false);
       }
@@ -167,27 +208,61 @@ export function ImportTasksFromNotesDialog({
       const { data: emailData, error: readErr } = await supabase.functions.invoke("gmail-api", {
         body: { action: "read", messageId: m.id },
       });
-      if (readErr) throw readErr;
+      if (readErr) throw new Error(readErr.message || "Gmail read failed");
 
-      const body: string =
-        emailData?.textBody ||
-        (emailData?.htmlBody ? stripHtml(emailData.htmlBody) : "") ||
-        emailData?.snippet ||
-        "";
+      const htmlBody: string = emailData?.htmlBody || "";
+      const textBody: string = emailData?.textBody || "";
+      const snippet: string = emailData?.snippet || "";
 
-      if (body.trim().length < 20) {
-        toast.error("This email doesn't contain enough notes text to extract actions.");
+      // 1) If the email links a Google Doc (Gemini's notes doc), fetch the full
+      //    doc text from Drive — that's where the real notes live.
+      let notesText = "";
+      const docId = extractDocId(htmlBody, textBody);
+      if (docId) {
+        try {
+          const { data: docData, error: docErr } = await supabase.functions.invoke(
+            "google-drive-api",
+            {
+              body: {
+                action: "get_content",
+                fileId: docId,
+                mimeType: "application/vnd.google-apps.document",
+              },
+            },
+          );
+          if (docErr) throw new Error(docErr.message || "Drive read failed");
+          if (docData?.content && typeof docData.content === "string") {
+            notesText = docData.content;
+          }
+        } catch (driveErr: any) {
+          // Fall through to email body — surface a hint in console
+          console.warn("Drive doc fetch failed, falling back to email body:", driveErr);
+        }
+      }
+
+      // 2) Fall back to the email body itself.
+      if (notesText.trim().length < 20) {
+        notesText = textBody || (htmlBody ? stripHtml(htmlBody) : "") || snippet;
+      }
+
+      if (notesText.trim().length < 20) {
+        toast.error(
+          docId
+            ? "Found a notes doc but couldn't read it. Make sure Google Drive is connected with access to this doc."
+            : "This email doesn't contain enough notes text to extract actions.",
+        );
         return;
       }
 
       setSourceSubject(m.subject || "Meeting notes");
-      await extractFrom(body);
+      await extractFrom(notesText);
     } catch (e: any) {
       toast.error(e.message || "Failed to read meeting notes");
     } finally {
       setLoadingMeetingId(null);
     }
   }
+
 
   async function extractFrom(text: string) {
     setExtracting(true);
@@ -398,38 +473,52 @@ export function ImportTasksFromNotesDialog({
                     </div>
                   ) : meetings.length === 0 ? (
                     <div className="py-8 text-center text-xs text-muted-foreground">
-                      No Gemini meeting notes found{searchQuery ? " for that search" : ""}.
+                      No meeting notes found{activeQuery ? " for that search" : ""}.
                     </div>
                   ) : (
-                    meetings.map((m) => {
-                      const isLoading = loadingMeetingId === m.id;
-                      const disabled = !!loadingMeetingId || extracting;
-                      return (
-                        <button
-                          key={m.id}
-                          type="button"
-                          onClick={() => pickMeeting(m)}
-                          disabled={disabled}
-                          className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-start gap-2.5"
-                        >
-                          <Mail className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{m.subject || "(no subject)"}</p>
-                            <p className="text-[11px] text-muted-foreground truncate">
-                              {safeDate(m.date)} · {m.from.replace(/<.*>/, "").trim()}
-                            </p>
-                            {m.snippet && (
-                              <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                                {m.snippet}
+                    <>
+                      {meetings.map((m) => {
+                        const isLoading = loadingMeetingId === m.id;
+                        const disabled = !!loadingMeetingId || extracting;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => pickMeeting(m)}
+                            disabled={disabled}
+                            className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-start gap-2.5"
+                          >
+                            <Mail className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{m.subject || "(no subject)"}</p>
+                              <p className="text-[11px] text-muted-foreground truncate">
+                                {safeDate(m.date)} · {m.from.replace(/<.*>/, "").trim()}
                               </p>
-                            )}
-                          </div>
-                          {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 mt-1" />}
+                              {m.snippet && (
+                                <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
+                                  {m.snippet}
+                                </p>
+                              )}
+                            </div>
+                            {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 mt-1" />}
+                          </button>
+                        );
+                      })}
+                      {nextPageToken && (
+                        <button
+                          type="button"
+                          onClick={() => fetchMeetings(activeQuery, true)}
+                          disabled={loadingMore}
+                          className="w-full text-center px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+                        >
+                          {loadingMore && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                          Load more meetings
                         </button>
-                      );
-                    })
+                      )}
+                    </>
                   )}
                 </div>
+
 
                 <div className="flex justify-between items-center text-xs">
                   <button

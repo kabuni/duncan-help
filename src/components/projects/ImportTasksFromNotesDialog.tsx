@@ -38,9 +38,30 @@ interface MeetingEmail {
 
 type Mode = "meetings" | "paste";
 
-// Default Gemini / Google Meet notes query
-const GEMINI_NOTES_QUERY =
-  'from:(meetings-noreply@google.com OR notes-noreply@google.com) OR subject:("Notes from" OR "Gemini")';
+// Default Gemini / Google Meet notes query. Broad on purpose so we catch:
+//  - Google Meet / Gemini auto-generated notes emails
+//  - Forwarded / shared Gemini notes
+//  - Anything that looks like meeting notes / recap / summary
+const GEMINI_NOTES_QUERY = [
+  'from:meetings-noreply@google.com',
+  'from:notes-noreply@google.com',
+  'from:noreply-meet@google.com',
+  '"Gemini took notes"',
+  '"took notes in"',
+  '"Notes from"',
+  '"Meeting notes"',
+  '"meeting recap"',
+  '"meeting summary"',
+  'subject:"Notes:"',
+  'subject:"Recap:"',
+].join(' OR ');
+
+// Extract a Google Docs file ID from an email body (HTML or text)
+function extractDocId(html: string, text: string): string | null {
+  const haystack = `${html || ""}\n${text || ""}`;
+  const m = haystack.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]{20,})/);
+  return m ? m[1] : null;
+}
 
 function stripHtml(html: string): string {
   return html

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { useWorkstreamCards, useUserProfiles, useTasksByAssignee, type WorkstreamCard, type CardStatus, type AssignedTask } from "@/hooks/useWorkstreams";
+import { useWorkstreamCards, useUserProfiles, useTasksByAssignee, WORKSTREAM_CATEGORIES, type WorkstreamCard, type CardStatus, type AssignedTask } from "@/hooks/useWorkstreams";
 
 import { isPast, isThisWeek } from "date-fns";
 import KanbanBoard from "@/components/workstreams/KanbanBoard";

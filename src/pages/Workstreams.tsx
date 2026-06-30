@@ -180,7 +180,7 @@ const Workstreams = () => {
                   {WORKSTREAM_CATEGORIES.map(c => (
                     <SelectItem key={c} value={c}>{c}</SelectItem>
                   ))}
-                  <SelectItem value="__none__">None</SelectItem>
+                  
                 </SelectContent>
               </Select>
 

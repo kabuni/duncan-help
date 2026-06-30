@@ -29,6 +29,7 @@ const Workstreams = () => {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterPriority] = useState<string>("all");
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [prefillTag, setPrefillTag] = useState<string | undefined>(undefined);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);

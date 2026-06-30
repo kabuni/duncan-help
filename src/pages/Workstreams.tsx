@@ -54,10 +54,11 @@ const Workstreams = () => {
     status: filterStatus !== "all" ? filterStatus as CardStatus : undefined,
     priority: filterPriority !== "all" ? filterPriority as import("@/hooks/useWorkstreams").CardPriority : undefined,
     assignee: filterAssignee !== "all" ? filterAssignee : undefined,
+    category: filterCategory !== "all" ? filterCategory : undefined,
     search: search || undefined,
-  }), [filterStatus, filterPriority, filterAssignee, search]);
+  }), [filterStatus, filterPriority, filterAssignee, filterCategory, search]);
 
-  const { data: cards, isLoading } = useWorkstreamCards(filters.status || filters.priority || filters.assignee || filters.search ? filters : undefined);
+  const { data: cards, isLoading } = useWorkstreamCards(filters.status || filters.priority || filters.assignee || filters.category || filters.search ? filters : undefined);
 
   // For dashboard: fetch ALL cards (unfiltered) separately for stats
   const { data: allCards } = useWorkstreamCards();

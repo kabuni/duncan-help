@@ -473,38 +473,52 @@ export function ImportTasksFromNotesDialog({
                     </div>
                   ) : meetings.length === 0 ? (
                     <div className="py-8 text-center text-xs text-muted-foreground">
-                      No Gemini meeting notes found{searchQuery ? " for that search" : ""}.
+                      No meeting notes found{activeQuery ? " for that search" : ""}.
                     </div>
                   ) : (
-                    meetings.map((m) => {
-                      const isLoading = loadingMeetingId === m.id;
-                      const disabled = !!loadingMeetingId || extracting;
-                      return (
-                        <button
-                          key={m.id}
-                          type="button"
-                          onClick={() => pickMeeting(m)}
-                          disabled={disabled}
-                          className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-start gap-2.5"
-                        >
-                          <Mail className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{m.subject || "(no subject)"}</p>
-                            <p className="text-[11px] text-muted-foreground truncate">
-                              {safeDate(m.date)} · {m.from.replace(/<.*>/, "").trim()}
-                            </p>
-                            {m.snippet && (
-                              <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                                {m.snippet}
+                    <>
+                      {meetings.map((m) => {
+                        const isLoading = loadingMeetingId === m.id;
+                        const disabled = !!loadingMeetingId || extracting;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => pickMeeting(m)}
+                            disabled={disabled}
+                            className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-start gap-2.5"
+                          >
+                            <Mail className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{m.subject || "(no subject)"}</p>
+                              <p className="text-[11px] text-muted-foreground truncate">
+                                {safeDate(m.date)} · {m.from.replace(/<.*>/, "").trim()}
                               </p>
-                            )}
-                          </div>
-                          {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 mt-1" />}
+                              {m.snippet && (
+                                <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
+                                  {m.snippet}
+                                </p>
+                              )}
+                            </div>
+                            {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 mt-1" />}
+                          </button>
+                        );
+                      })}
+                      {nextPageToken && (
+                        <button
+                          type="button"
+                          onClick={() => fetchMeetings(activeQuery, true)}
+                          disabled={loadingMore}
+                          className="w-full text-center px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+                        >
+                          {loadingMore && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                          Load more meetings
                         </button>
-                      );
-                    })
+                      )}
+                    </>
                   )}
                 </div>
+
 
                 <div className="flex justify-between items-center text-xs">
                   <button

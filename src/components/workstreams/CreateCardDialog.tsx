@@ -42,7 +42,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
 
   const reset = () => {
     setTitle(""); setDescription(""); setStatus("not_started");
-    setAssigneeIds([]); setDueDate(""); setProjectTag("");
+    setAssigneeIds([]); setDueDate(""); setProjectTag(""); setCategory("");
     setAddingNew(false); setNewTag("");
   };
 
@@ -56,6 +56,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
       owner_id: assigneeIds[0] || undefined,
       due_date: dueDate || undefined,
       project_tag: projectTag.trim() || undefined,
+      category: category || undefined,
       assignee_ids: assigneeIds,
     });
     reset();

@@ -1,0 +1,1 @@
+ALTER TABLE public.workstream_cards ADD COLUMN IF NOT EXISTS category TEXT;

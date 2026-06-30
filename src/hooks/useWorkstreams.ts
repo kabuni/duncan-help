@@ -187,6 +187,7 @@ export function useWorkstreamCards(filters?: {
   assignee?: string;
   priority?: CardPriority;
   project_tag?: string;
+  category?: string;
   search?: string;
 }) {
   return useQuery({
@@ -201,6 +202,10 @@ export function useWorkstreamCards(filters?: {
       if (filters?.status) query = query.eq("status", filters.status);
       if (filters?.priority) query = query.eq("priority", filters.priority);
       if (filters?.project_tag) query = query.eq("project_tag", filters.project_tag);
+      if (filters?.category) {
+        if (filters.category === "__none__") query = query.is("category", null);
+        else query = query.eq("category", filters.category);
+      }
       if (filters?.search) {
         const term = filters.search.replace(/[%,()]/g, " ").trim();
         if (term) {

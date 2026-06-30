@@ -28,6 +28,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState("");
   const [projectTag, setProjectTag] = useState("");
+  const [category, setCategory] = useState<string>("");
   const [addingNew, setAddingNew] = useState(false);
   const [newTag, setNewTag] = useState("");
 

@@ -171,6 +171,19 @@ const Workstreams = () => {
                 </SelectContent>
               </Select>
 
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger className="h-9 w-[170px] text-xs">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {WORKSTREAM_CATEGORIES.map(c => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                  <SelectItem value="__none__">None</SelectItem>
+                </SelectContent>
+              </Select>
+
               {/* View toggle */}
               <div className="flex items-center bg-secondary/50 rounded-lg p-0.5 ml-auto">
                 <button

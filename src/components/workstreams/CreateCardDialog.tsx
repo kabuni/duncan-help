@@ -118,6 +118,19 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
           </div>
 
           <div className="space-y-1.5">
+            <Label className="text-xs font-medium flex items-center gap-1"><Tag className="h-3 w-3" /> Category</Label>
+            <Select value={category || "none"} onValueChange={v => setCategory(v === "none" ? "" : v)}>
+              <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {WORKSTREAM_CATEGORIES.map(c => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
             <Label className="text-xs font-medium flex items-center gap-1"><Tag className="h-3 w-3" /> Project / Workstream</Label>
             {addingNew ? (
               <div className="flex items-center gap-2">

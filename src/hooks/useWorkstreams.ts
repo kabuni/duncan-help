@@ -477,7 +477,7 @@ export function useCreateCard() {
   return useMutation({
     mutationFn: async (input: {
       title: string; description?: string; status?: CardStatus; priority?: CardPriority;
-      owner_id?: string; due_date?: string; project_tag?: string; assignee_ids?: string[];
+      owner_id?: string; due_date?: string; project_tag?: string; category?: string; assignee_ids?: string[];
     }) => {
       if (!user) throw new Error("Not authenticated");
       const { assignee_ids, ...cardInput } = input;

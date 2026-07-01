@@ -3,6 +3,8 @@
 export const REGISTRATIONS_ALLOWED_USER_IDS: ReadonlySet<string> = new Set([
   // Pratik (Operations, Executive)
   "3b8d4435-6d70-4c95-8b0b-272d8c458bbb",
+  // Adit Bhargava
+  "8f8607b0-9074-41c9-a9fb-43d48639feba",
 ]);
 
 export function canAccessRegistrations(opts: {

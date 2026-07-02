@@ -133,7 +133,7 @@ export const LeaderboardSection = () => {
                 </thead>
                 <tbody>
                   {top.map((r, i) => {
-                    const hours = r.request_count * HOURS_PER_REQUEST;
+                    const hours = r.minutes_saved / 60;
                     const mine = r.user_id === user?.id;
                     return (
                       <tr

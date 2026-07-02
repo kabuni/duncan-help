@@ -4857,6 +4857,16 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_token_leaderboard: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          display_name: string
+          request_count: number
+          total_tokens: number
+          user_id: string
+        }[]
+      }
       get_user_region: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {

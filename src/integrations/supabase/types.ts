@@ -3789,6 +3789,7 @@ export type Database = {
       }
       token_usage: {
         Row: {
+          category_counts: Json
           completion_tokens: number
           created_at: string
           id: string
@@ -3800,6 +3801,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          category_counts?: Json
           completion_tokens?: number
           created_at?: string
           id?: string
@@ -3811,6 +3813,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          category_counts?: Json
           completion_tokens?: number
           created_at?: string
           id?: string
@@ -4862,6 +4865,7 @@ export type Database = {
         Returns: {
           avatar_url: string
           display_name: string
+          minutes_saved: number
           request_count: number
           total_tokens: number
           user_id: string

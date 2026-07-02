@@ -4,15 +4,13 @@ import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
-// Heuristic: every Duncan interaction saves ~6 minutes of manual work.
-const HOURS_PER_REQUEST = 0.1;
-
 type Row = {
   user_id: string;
   display_name: string;
   avatar_url: string | null;
   total_tokens: number;
   request_count: number;
+  minutes_saved: number;
 };
 
 const fmt = (n: number) => new Intl.NumberFormat("en-US").format(Math.round(n));
@@ -32,10 +30,12 @@ function useLeaderboard() {
         avatar_url: r.avatar_url ?? null,
         total_tokens: Number(r.total_tokens ?? 0),
         request_count: Number(r.request_count ?? 0),
+        minutes_saved: Number(r.minutes_saved ?? 0),
       }));
     },
   });
 }
+
 
 const Card = ({
   icon: Icon,

@@ -1,15 +1,19 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { School as SchoolIcon, MapPin, CalendarCheck2, Users, Search } from "lucide-react";
+import { School as SchoolIcon, MapPin, CalendarCheck2, Users, Search, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { canAccessSchoolTracker } from "@/lib/schoolTrackerAccess";
-import { MEETINGS, type Meeting } from "@/data/meetings";
+import { MEETINGS as BASE_MEETINGS, type Meeting } from "@/data/meetings";
+import AddMeetingDialog from "@/components/school-tracker/AddMeetingDialog";
+
+const LS_KEY = "school-tracker:custom-meetings";
 
 function Stat({ label, value, sub, icon: Icon }: { label: string; value: string; sub?: string; icon?: any }) {
   return (
@@ -76,9 +80,23 @@ export default function SchoolTracker() {
   const [region, setRegion] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
   const [month, setMonth] = useState<string>("all");
+  const [addOpen, setAddOpen] = useState(false);
+  const [extras, setExtras] = useState<Meeting[]>(() => {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      return raw ? (JSON.parse(raw) as Meeting[]) : [];
+    } catch {
+      return [];
+    }
+  });
 
-  const regions = useMemo(() => Array.from(new Set(MEETINGS.map((m) => m.region).filter(Boolean))), []);
-  const months = useMemo(() => Array.from(new Set(MEETINGS.map((m) => m.sheet))), []);
+  useEffect(() => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(extras)); } catch {}
+  }, [extras]);
+
+  const MEETINGS = useMemo(() => [...extras, ...BASE_MEETINGS], [extras]);
+  const regions = useMemo(() => Array.from(new Set(MEETINGS.map((m) => m.region).filter(Boolean))), [MEETINGS]);
+  const months = useMemo(() => Array.from(new Set(MEETINGS.map((m) => m.sheet))), [MEETINGS]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -89,7 +107,7 @@ export default function SchoolTracker() {
       if (!term) return true;
       return [m.name, m.school, m.location, m.note].some((v) => (v || "").toLowerCase().includes(term));
     });
-  }, [q, region, status, month]);
+  }, [q, region, status, month, MEETINGS]);
 
   const totals = useMemo(() => {
     const confirmed = filtered.filter((m) => m.confirmed === "Confirmed").length;

@@ -159,7 +159,17 @@ export default function SchoolTracker() {
             Kabuni outreach meetings dashboard · {MEETINGS.length} appointments tracked
           </p>
         </div>
+        <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
+          <Plus className="h-3.5 w-3.5" /> Add meeting
+        </Button>
       </header>
+
+      <AddMeetingDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        regions={regions}
+        onAdd={(m) => setExtras((prev) => [m, ...prev])}
+      />
 
       {/* Summary */}
       <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">

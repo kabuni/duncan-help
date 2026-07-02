@@ -5,6 +5,7 @@ import {
   Globe2, TrendingUp, TrendingDown, BarChart3, ExternalLink, Loader2, ListChecks, PoundSterling,
 } from "lucide-react";
 import { useGAHomeSummary, useMyPendingTasks } from "@/hooks/useHomeDashboard";
+import { LeaderboardSection } from "@/components/home/LeaderboardTile";
 
 const formatNumber = (n: number | undefined | null) => {
   if (n == null || Number.isNaN(n)) return "—";
@@ -305,6 +306,9 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
           </div>
         )}
       </TileShell>
+
+      {/* LEADERBOARDS */}
+      <LeaderboardSection />
 
       {/* MY PENDING TASKS */}
       <MyPendingTasksTile />

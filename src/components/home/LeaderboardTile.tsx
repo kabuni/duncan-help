@@ -78,11 +78,12 @@ export const LeaderboardSection = () => {
   const rows = data ?? [];
   const me = rows.find((r) => r.user_id === user?.id);
   const myTokens = me?.total_tokens ?? 0;
-  const myHours = (me?.request_count ?? 0) * HOURS_PER_REQUEST;
+  const myHours = (me?.minutes_saved ?? 0) / 60;
 
   const totalTokens = rows.reduce((s, r) => s + r.total_tokens, 0);
   const totalRequests = rows.reduce((s, r) => s + r.request_count, 0);
-  const totalHours = totalRequests * HOURS_PER_REQUEST;
+  const totalHours = rows.reduce((s, r) => s + r.minutes_saved, 0) / 60;
+
 
   const top = [...rows].slice(0, 10);
 

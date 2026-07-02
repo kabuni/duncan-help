@@ -4,15 +4,13 @@ import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
-// Heuristic: every Duncan interaction saves ~6 minutes of manual work.
-const HOURS_PER_REQUEST = 0.1;
-
 type Row = {
   user_id: string;
   display_name: string;
   avatar_url: string | null;
   total_tokens: number;
   request_count: number;
+  minutes_saved: number;
 };
 
 const fmt = (n: number) => new Intl.NumberFormat("en-US").format(Math.round(n));
@@ -32,10 +30,12 @@ function useLeaderboard() {
         avatar_url: r.avatar_url ?? null,
         total_tokens: Number(r.total_tokens ?? 0),
         request_count: Number(r.request_count ?? 0),
+        minutes_saved: Number(r.minutes_saved ?? 0),
       }));
     },
   });
 }
+
 
 const Card = ({
   icon: Icon,
@@ -78,11 +78,12 @@ export const LeaderboardSection = () => {
   const rows = data ?? [];
   const me = rows.find((r) => r.user_id === user?.id);
   const myTokens = me?.total_tokens ?? 0;
-  const myHours = (me?.request_count ?? 0) * HOURS_PER_REQUEST;
+  const myHours = (me?.minutes_saved ?? 0) / 60;
 
   const totalTokens = rows.reduce((s, r) => s + r.total_tokens, 0);
   const totalRequests = rows.reduce((s, r) => s + r.request_count, 0);
-  const totalHours = totalRequests * HOURS_PER_REQUEST;
+  const totalHours = rows.reduce((s, r) => s + r.minutes_saved, 0) / 60;
+
 
   const top = [...rows].slice(0, 10);
 
@@ -132,7 +133,7 @@ export const LeaderboardSection = () => {
                 </thead>
                 <tbody>
                   {top.map((r, i) => {
-                    const hours = r.request_count * HOURS_PER_REQUEST;
+                    const hours = r.minutes_saved / 60;
                     const mine = r.user_id === user?.id;
                     return (
                       <tr
@@ -156,7 +157,7 @@ export const LeaderboardSection = () => {
                 </tbody>
               </table>
               <div className="text-[10px] text-muted-foreground/70 mt-2">
-                Hours saved estimated at ~6 minutes per Duncan interaction.
+                Hours saved is a weighted estimate by task type — summaries ~23m, tasks ~7m, meetings ~10m, email ~8m, other ~4m.
               </div>
             </div>
           )}

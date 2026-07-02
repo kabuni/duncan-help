@@ -157,7 +157,7 @@ export const LeaderboardSection = () => {
                 </tbody>
               </table>
               <div className="text-[10px] text-muted-foreground/70 mt-2">
-                Hours saved estimated at ~6 minutes per Duncan interaction.
+                Hours saved is a weighted estimate by task type — summaries ~23m, tasks ~7m, meetings ~10m, email ~8m, other ~4m.
               </div>
             </div>
           )}

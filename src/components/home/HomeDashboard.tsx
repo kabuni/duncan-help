@@ -307,6 +307,9 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
         )}
       </TileShell>
 
+      {/* LEADERBOARDS */}
+      <LeaderboardSection />
+
       {/* MY PENDING TASKS */}
       <MyPendingTasksTile />
     </div>

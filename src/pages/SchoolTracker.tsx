@@ -1,62 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { useSchoolTracker, type SchoolTrackerRow, type SchoolTrackerStatus } from "@/hooks/useSchoolTracker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowUpDown, CalendarPlus, Plus, School as SchoolIcon, Loader2 } from "lucide-react";
+import { School as SchoolIcon, MapPin, CalendarCheck2, Users, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import AddSchoolDialog from "@/components/school-tracker/AddSchoolDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { canAccessSchoolTracker } from "@/lib/schoolTrackerAccess";
+import { MEETINGS, type Meeting } from "@/data/meetings";
 
-function buildCalendarUrl(row: SchoolTrackerRow) {
-  const params = new URLSearchParams({
-    action: "TEMPLATE",
-    text: `Kabuni intro — ${row.name}`,
-    details: [
-      `School: ${row.name}`,
-      `Region: ${row.region}`,
-      `Status: ${row.status}`,
-      row.contact_name ? `Contact: ${row.contact_name}` : "",
-      `Students: ${row.student_count}`,
-    ].filter(Boolean).join("\n"),
-    location: row.region,
-  });
-  if (row.contact_email) params.set("add", row.contact_email);
-  return `https://calendar.google.com/calendar/render?${params.toString()}`;
-}
-
-const STATUS_META: Record<SchoolTrackerStatus, { label: string; badge: string; bar: string }> = {
-  registered: {
-    label: "Registered",
-    badge: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
-    bar: "bg-emerald-500",
-  },
-  confirmed: {
-    label: "Confirmed",
-    badge: "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30",
-    bar: "bg-sky-500",
-  },
-  pending: {
-    label: "Pending",
-    badge: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
-    bar: "bg-amber-500",
-  },
-  declined: {
-    label: "Declined",
-    badge: "bg-destructive/15 text-destructive border-destructive/30",
-    bar: "bg-destructive",
-  },
-};
-
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Stat({ label, value, sub, icon: Icon }: { label: string; value: string; sub?: string; icon?: any }) {
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+        <div className="flex items-center justify-between">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+          {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
+        </div>
         <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
         {sub && <div className="mt-1 text-[11px] text-muted-foreground">{sub}</div>}
       </CardContent>
@@ -64,116 +26,108 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
-function ArcGauge({ pct }: { pct: number }) {
-  const [animated, setAnimated] = useState(0);
-  useEffect(() => {
-    const t = setTimeout(() => setAnimated(pct), 50);
-    return () => clearTimeout(t);
-  }, [pct]);
-
-  // Half-circle arc from 180° to 360°
-  const radius = 90;
-  const cx = 110;
-  const cy = 110;
-  const circumference = Math.PI * radius; // half circle
-  const offset = circumference - (animated / 100) * circumference;
-
+function Bar({ label, count, max, tint }: { label: string; count: number; max: number; tint: string }) {
+  const pct = max ? (count / max) * 100 : 0;
   return (
-    <div className="flex flex-col items-center justify-center">
-      <svg width="220" height="140" viewBox="0 0 220 140">
-        <path
-          d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
-          fill="none"
-          stroke="hsl(var(--muted))"
-          strokeWidth="16"
-          strokeLinecap="round"
-        />
-        <path
-          d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
-          fill="none"
-          stroke="hsl(var(--primary))"
-          strokeWidth="16"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 1200ms cubic-bezier(0.22, 1, 0.36, 1)" }}
-        />
-        <text
-          x={cx}
-          y={cy - 5}
-          textAnchor="middle"
-          className="fill-foreground"
-          style={{ fontSize: 32, fontWeight: 600 }}
-        >
-          {Math.round(animated)}%
-        </text>
-        <text
-          x={cx}
-          y={cy + 18}
-          textAnchor="middle"
-          className="fill-muted-foreground"
-          style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase" }}
-        >
-          Engaged
-        </text>
-      </svg>
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-medium">{label}</span>
+        <span className="tabular-nums text-muted-foreground">{count}</span>
+      </div>
+      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all duration-700", tint)} style={{ width: `${pct}%` }} />
+      </div>
     </div>
   );
 }
 
-function ProgressBar({ value, className }: { value: number; className?: string }) {
-  const [w, setW] = useState(0);
-  useEffect(() => {
-    const t = setTimeout(() => setW(value), 50);
-    return () => clearTimeout(t);
-  }, [value]);
-  return (
-    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-      <div
-        className={cn("h-full rounded-full transition-all duration-1000 ease-out", className ?? "bg-primary")}
-        style={{ width: `${Math.max(0, Math.min(100, w))}%` }}
-      />
-    </div>
-  );
+const REGION_TINT: Record<string, string> = {
+  North: "bg-sky-500",
+  South: "bg-emerald-500",
+  East: "bg-amber-500",
+  West: "bg-violet-500",
+  Central: "bg-rose-500",
+};
+
+function numeric(n: Meeting["num_schools"]): number {
+  return typeof n === "number" ? n : 0;
+}
+
+function formatDate(m: Meeting) {
+  if (m.date) {
+    try {
+      return new Date(m.date + "T00:00:00").toLocaleDateString(undefined, {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return m.date;
+    }
+  }
+  return m.date_raw ?? "—";
 }
 
 export default function SchoolTracker() {
   const { user } = useAuth();
-  if (!canAccessSchoolTracker(user?.id)) {
-    return <Navigate to="/" replace />;
-  }
-  const { data: rows = [], isLoading } = useSchoolTracker();
-  const [statusFilter, setStatusFilter] = useState<SchoolTrackerStatus | "all">("all");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [addOpen, setAddOpen] = useState(false);
+  if (!canAccessSchoolTracker(user?.id)) return <Navigate to="/" replace />;
 
-  const counts = useMemo(() => {
-    const c = { registered: 0, confirmed: 0, pending: 0, declined: 0 };
-    rows.forEach((r) => {
-      c[r.status] = (c[r.status] ?? 0) + 1;
-    });
-    return c;
-  }, [rows]);
+  const [q, setQ] = useState("");
+  const [region, setRegion] = useState<string>("all");
+  const [status, setStatus] = useState<string>("all");
+  const [month, setMonth] = useState<string>("all");
 
-  const total = rows.length;
-  const engaged = counts.registered + counts.confirmed;
-  const overallPct = total > 0 ? Math.round((engaged / total) * 100) : 0;
+  const regions = useMemo(() => Array.from(new Set(MEETINGS.map((m) => m.region).filter(Boolean))), []);
+  const months = useMemo(() => Array.from(new Set(MEETINGS.map((m) => m.sheet))), []);
 
   const filtered = useMemo(() => {
-    let list = statusFilter === "all" ? rows : rows.filter((r) => r.status === statusFilter);
-    const order: Record<SchoolTrackerStatus, number> = {
-      registered: 1,
-      confirmed: 2,
-      pending: 3,
-      declined: 4,
-    };
-    list = [...list].sort((a, b) =>
-      sortDir === "asc" ? order[a.status] - order[b.status] : order[b.status] - order[a.status]
-    );
-    return list;
-  }, [rows, statusFilter, sortDir]);
+    const term = q.trim().toLowerCase();
+    return MEETINGS.filter((m) => {
+      if (region !== "all" && m.region !== region) return false;
+      if (status !== "all" && m.confirmed !== status) return false;
+      if (month !== "all" && m.sheet !== month) return false;
+      if (!term) return true;
+      return [m.name, m.school, m.location, m.note].some((v) => (v || "").toLowerCase().includes(term));
+    });
+  }, [q, region, status, month]);
 
-  const maxCount = Math.max(counts.registered, counts.confirmed, counts.pending, counts.declined, 1);
+  const totals = useMemo(() => {
+    const confirmed = filtered.filter((m) => m.confirmed === "Confirmed").length;
+    const tentative = filtered.filter((m) => m.confirmed === "Tentative").length;
+    const reach = filtered.reduce((s, m) => s + numeric(m.num_schools), 0);
+    const locations = new Set(filtered.map((m) => m.location).filter(Boolean)).size;
+    return { total: filtered.length, confirmed, tentative, reach, locations };
+  }, [filtered]);
+
+  const byRegion = useMemo(() => {
+    const map = new Map<string, { meetings: number; reach: number }>();
+    filtered.forEach((m) => {
+      const r = m.region || "—";
+      const cur = map.get(r) || { meetings: 0, reach: 0 };
+      cur.meetings += 1;
+      cur.reach += numeric(m.num_schools);
+      map.set(r, cur);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1].meetings - a[1].meetings);
+  }, [filtered]);
+
+  const byMonth = useMemo(() => {
+    const map = new Map<string, number>();
+    filtered.forEach((m) => map.set(m.sheet, (map.get(m.sheet) || 0) + 1));
+    return Array.from(map.entries());
+  }, [filtered]);
+
+  const topProspects = useMemo(
+    () =>
+      [...filtered]
+        .filter((m) => typeof m.num_schools === "number" && (m.num_schools as number) > 0)
+        .sort((a, b) => numeric(b.num_schools) - numeric(a.num_schools))
+        .slice(0, 8),
+    [filtered],
+  );
+
+  const maxRegion = Math.max(1, ...byRegion.map(([, v]) => v.meetings));
+  const maxMonth = Math.max(1, ...byMonth.map(([, v]) => v));
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-7xl mx-auto space-y-6">
@@ -183,163 +137,164 @@ export default function SchoolTracker() {
         </div>
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-semibold tracking-tight">School Registrations</h1>
-          <p className="text-xs text-muted-foreground">Kabuni school outreach pipeline — live tracker</p>
+          <p className="text-xs text-muted-foreground">
+            Kabuni outreach meetings dashboard · {MEETINGS.length} appointments tracked
+          </p>
         </div>
-        <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
-          <Plus className="h-4 w-4" />
-          Add school
-        </Button>
       </header>
 
-      {/* Summary stat cards */}
+      {/* Summary */}
       <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <Stat label="Total Targeted" value={String(total)} />
-        <Stat label="Registered" value={String(counts.registered)} />
-        <Stat label="Confirmed" value={String(counts.confirmed)} />
-        <Stat label="Pending" value={String(counts.pending)} />
-        <Stat label="Overall Progress" value={`${overallPct}%`} sub="Registered + Confirmed" />
+        <Stat label="Total Meetings" value={String(totals.total)} icon={CalendarCheck2} />
+        <Stat label="Confirmed" value={String(totals.confirmed)} sub="Appointments locked" />
+        <Stat label="Tentative" value={String(totals.tentative)} sub="Awaiting confirmation" />
+        <Stat label="Potential Schools" value={totals.reach.toLocaleString()} icon={Users} sub="Sum of numeric reach" />
+        <Stat label="Locations" value={String(totals.locations)} icon={MapPin} />
       </section>
 
-      {/* Arc + pipeline */}
+      {/* Breakdown */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
-          <CardContent className="p-6 flex flex-col items-center justify-center">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2">Overall Progress</div>
-            <ArcGauge pct={overallPct} />
-            <div className="text-[11px] text-muted-foreground mt-1">
-              {engaged} of {total} schools engaged
-            </div>
+          <CardContent className="p-6 space-y-4">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Meetings by Region</div>
+            {byRegion.length === 0 ? (
+              <div className="text-xs text-muted-foreground">No data</div>
+            ) : (
+              byRegion.map(([r, v]) => (
+                <Bar key={r} label={`${r} · ${v.reach.toLocaleString()} potential schools`} count={v.meetings} max={maxRegion} tint={REGION_TINT[r] ?? "bg-primary"} />
+              ))
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-6 space-y-4">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Pipeline Breakdown</div>
-            {(["registered", "confirmed", "pending", "declined"] as SchoolTrackerStatus[]).map((s) => {
-              const count = counts[s];
-              const pct = (count / maxCount) * 100;
-              return (
-                <div key={s} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium">{STATUS_META[s].label}</span>
-                    <span className="tabular-nums text-muted-foreground">{count}</span>
-                  </div>
-                  <ProgressBar value={pct} className={STATUS_META[s].bar} />
-                </div>
-              );
-            })}
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Meetings by Month</div>
+            {byMonth.map(([m, v]) => (
+              <Bar key={m} label={m} count={v} max={maxMonth} tint="bg-primary" />
+            ))}
+            <div className="pt-4 border-t border-border/60 space-y-2">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Top Prospects (by reach)</div>
+              {topProspects.length === 0 ? (
+                <div className="text-xs text-muted-foreground">No numeric reach in current filter</div>
+              ) : (
+                <ul className="space-y-1.5">
+                  {topProspects.map((m, i) => (
+                    <li key={i} className="flex items-center justify-between text-xs">
+                      <span className="truncate mr-2">
+                        <span className="font-medium">{m.school}</span>{" "}
+                        <span className="text-muted-foreground">· {m.name}</span>
+                      </span>
+                      <span className="tabular-nums text-muted-foreground">{numeric(m.num_schools).toLocaleString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </CardContent>
         </Card>
       </section>
 
       {/* Filters */}
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-muted-foreground">Filter status:</span>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as SchoolTrackerStatus | "all")}>
-          <SelectTrigger className="h-8 w-40 text-xs">
-            <SelectValue />
-          </SelectTrigger>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search school, contact, location…"
+            className="h-8 pl-8 text-xs"
+          />
+        </div>
+        <Select value={month} onValueChange={setMonth}>
+          <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="registered">Registered</SelectItem>
-            <SelectItem value="confirmed">Confirmed</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="declined">Declined</SelectItem>
+            <SelectItem value="all">All months</SelectItem>
+            {months.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
           </SelectContent>
         </Select>
-        <button
-          onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-muted transition-colors"
-        >
-          <ArrowUpDown className="h-3 w-3" />
-          Sort by status ({sortDir})
-        </button>
+        <Select value={region} onValueChange={setRegion}>
+          <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All regions</SelectItem>
+            {regions.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="Confirmed">Confirmed</SelectItem>
+            <SelectItem value="Tentative">Tentative</SelectItem>
+          </SelectContent>
+        </Select>
+        <span className="ml-auto text-[11px] text-muted-foreground">
+          Showing {filtered.length} of {MEETINGS.length}
+        </span>
       </div>
 
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          {isLoading ? (
-            <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading schools…
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">
-              {rows.length === 0 ? (
-                <div className="space-y-3">
-                  <div>No schools yet — start by adding one.</div>
-                  <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
-                    <Plus className="h-4 w-4" /> Add school
-                  </Button>
-                </div>
-              ) : (
-                "No schools match this filter."
-              )}
-            </div>
+          {filtered.length === 0 ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">No meetings match these filters.</div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[180px]">Contact</TableHead>
                   <TableHead>School</TableHead>
-                  <TableHead className="w-32">Status</TableHead>
-                  <TableHead className="w-[260px]">Progress</TableHead>
-                  <TableHead className="w-24 text-right">Students</TableHead>
-                  <TableHead className="w-40 text-right">Actions</TableHead>
+                  <TableHead className="w-32">Location</TableHead>
+                  <TableHead className="w-24">Region</TableHead>
+                  <TableHead className="w-36">Date</TableHead>
+                  <TableHead className="w-20">Time</TableHead>
+                  <TableHead className="w-24">Status</TableHead>
+                  <TableHead className="w-20 text-right">Schools</TableHead>
+                  <TableHead>Note</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((row) => (
-                  <SchoolRow key={row.id} row={row} />
+                {filtered.map((m, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="text-sm font-medium">{m.name}</TableCell>
+                    <TableCell className="text-sm">{m.school}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{m.location}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={cn("text-[10px]", REGION_TINT[m.region] && `${REGION_TINT[m.region]}/15 border-transparent`)}>
+                        {m.region || "—"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <div>{formatDate(m)}</div>
+                      {m.day && <div className="text-[10px] text-muted-foreground">{m.day}</div>}
+                    </TableCell>
+                    <TableCell className="text-xs tabular-nums">{m.time || "—"}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] font-medium",
+                          m.confirmed === "Confirmed"
+                            ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                            : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
+                        )}
+                      >
+                        {m.confirmed}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right text-xs tabular-nums">
+                      {m.num_schools ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-[320px]">
+                      <div className="line-clamp-2">{m.note || "—"}</div>
+                    </TableCell>
+                  </TableRow>
                 ))}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
-
-      <AddSchoolDialog open={addOpen} onOpenChange={setAddOpen} />
     </div>
-  );
-}
-
-function SchoolRow({ row }: { row: SchoolTrackerRow }) {
-  const meta = STATUS_META[row.status];
-  return (
-    <TableRow>
-      <TableCell>
-        <div className="font-medium text-sm">{row.name}</div>
-        <div className="text-xs text-muted-foreground">{row.region}</div>
-      </TableCell>
-      <TableCell>
-        <Badge variant="outline" className={cn("font-medium", meta.badge)}>
-          {meta.label}
-        </Badge>
-      </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <ProgressBar value={row.progress_pct} className={meta.bar} />
-          <span className="text-xs tabular-nums text-muted-foreground w-10 text-right">{row.progress_pct}%</span>
-        </div>
-      </TableCell>
-      <TableCell className="text-right text-sm tabular-nums">{row.student_count.toLocaleString()}</TableCell>
-      <TableCell className="text-right">
-        <Button
-          asChild
-          size="sm"
-          variant="outline"
-          className="h-7 gap-1.5 text-xs"
-        >
-          <a
-            href={buildCalendarUrl(row)}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={row.contact_email ? `Invite ${row.contact_email}` : "Schedule a meeting"}
-          >
-            <CalendarPlus className="h-3.5 w-3.5" />
-            Schedule
-          </a>
-        </Button>
-      </TableCell>
-    </TableRow>
   );
 }

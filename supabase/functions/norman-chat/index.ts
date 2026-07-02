@@ -8677,17 +8677,33 @@ Format as a natural, readable summary with clear sections. If a section has no d
             }
           }
 
-          // Log estimated token usage (approx 1 token per 4 chars)
+          // Log estimated token usage (approx 1 token per 4 chars) + classify category
           if (userId) {
             try {
               const estimatedPromptTokens = Math.ceil(JSON.stringify(messages).length / 4);
               const estimatedCompletionTokens = Math.ceil(aggregatedContent.length / 4);
-              const estimatedTotal = estimatedPromptTokens + estimatedCompletionTokens;
               const today = new Date().toISOString().split("T")[0];
+
+              // Classify this request into a category based on the latest user message.
+              const classifyCategory = (text: string): "summarize" | "tasks" | "meetings" | "email" | "other" => {
+                const t = (text || "").toLowerCase();
+                if (/\b(summar|tl;?dr|recap|digest|brief|takeaway|key points|meeting notes)\b/.test(t)) return "summarize";
+                if (/\b(task|to.?do|action item|assign|kanban|workstream|create card|add card)\b/.test(t)) return "tasks";
+                if (/\b(schedule|meeting|calendar|invite|book|reschedule|availability|slot)\b/.test(t)) return "meetings";
+                if (/\b(email|reply|draft|compose|send.*(email|mail)|inbox|gmail)\b/.test(t)) return "email";
+                return "other";
+              };
+              const latestUser = [...messages].reverse().find((m: any) => m?.role === "user");
+              const latestUserTextForCat = typeof latestUser?.content === "string"
+                ? latestUser.content
+                : Array.isArray(latestUser?.content)
+                  ? latestUser.content.map((p: any) => p?.text || "").join(" ")
+                  : "";
+              const category = classifyCategory(latestUserTextForCat);
 
               const { data: existing } = await supabaseAdmin
                 .from("token_usage")
-                .select("id, prompt_tokens, completion_tokens, total_tokens, request_count")
+                .select("id, prompt_tokens, completion_tokens, total_tokens, request_count, category_counts")
                 .eq("user_id", userId)
                 .eq("usage_date", today)
                 .maybeSingle();
@@ -8695,15 +8711,18 @@ Format as a natural, readable summary with clear sections. If a section has no d
               if (existing) {
                 const newPrompt = existing.prompt_tokens + estimatedPromptTokens;
                 const newCompletion = existing.completion_tokens + estimatedCompletionTokens;
+                const cc = (existing as any).category_counts && typeof (existing as any).category_counts === "object"
+                  ? { ...(existing as any).category_counts }
+                  : {};
+                cc[category] = (Number(cc[category]) || 0) + 1;
                 await supabaseAdmin
                   .from("token_usage")
                   .update({
                     prompt_tokens: newPrompt,
                     completion_tokens: newCompletion,
-                    // Always derive total from prompt + completion to preserve the
-                    // arithmetic invariant enforced by the DB CHECK constraint.
                     total_tokens: newPrompt + newCompletion,
                     request_count: existing.request_count + 1,
+                    category_counts: cc,
                   })
                   .eq("id", existing.id);
               } else {
@@ -8714,15 +8733,16 @@ Format as a natural, readable summary with clear sections. If a section has no d
                     usage_date: today,
                     prompt_tokens: estimatedPromptTokens,
                     completion_tokens: estimatedCompletionTokens,
-                    // Derived value — never written independently.
                     total_tokens: estimatedPromptTokens + estimatedCompletionTokens,
                     request_count: 1,
+                    category_counts: { [category]: 1 },
                   });
               }
             } catch (tokenErr) {
               console.error("Token usage logging error:", tokenErr);
             }
           }
+
 
           const needsFinalAnswer = !lastFullContent || lastFullContent.trim().length < 20;
 

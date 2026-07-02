@@ -2,15 +2,9 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
-  Globe2, TrendingUp, TrendingDown, Users, Briefcase, FolderKanban,
-  AlertTriangle, Share2, BarChart3, ExternalLink, Loader2, ListChecks, PoundSterling,
+  Globe2, TrendingUp, TrendingDown, BarChart3, ExternalLink, Loader2, ListChecks, PoundSterling,
 } from "lucide-react";
-import {
-  useGAHomeSummary, useHiresStats, useWorkstreamsStats, useProjectsStats, useSocialStats, useMyPendingTasks,
-  useHubSpotSocialFeed,
-} from "@/hooks/useHomeDashboard";
-import { useInstagramInsights } from "@/hooks/useInstagramInsights";
-import { Instagram } from "lucide-react";
+import { useGAHomeSummary, useMyPendingTasks } from "@/hooks/useHomeDashboard";
 
 const formatNumber = (n: number | undefined | null) => {
   if (n == null || Number.isNaN(n)) return "—";
@@ -62,7 +56,6 @@ const Stat = ({ label, value, hint }: { label: string; value: React.ReactNode; h
   </div>
 );
 
-
 const STATUS_STYLES: Record<string, string> = {
   red: "bg-destructive/10 text-destructive border-destructive/20",
   amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
@@ -103,7 +96,7 @@ function MyPendingTasksTile() {
       {isLoading ? (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
       ) : tasks.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No pending tasks. You're all clear.</p>
+        <p className="text-xs text-muted-foreground">No pending tasks. You&apos;re all clear.</p>
       ) : (
         <div className="divide-y divide-border/40">
           {tasks.map((t) => {
@@ -135,99 +128,6 @@ function MyPendingTasksTile() {
     </TileShell>
   );
 }
-
-function HubSpotSocialFeedTile() {
-  const { data, isLoading } = useHubSpotSocialFeed();
-  const channels = data?.channels ?? [];
-  const posts = data?.posts ?? [];
-
-  const errorText = data?.errors ? Object.values(data.errors).join(" · ") : null;
-  const missingScope = errorText?.includes("social-access");
-
-  return (
-    <TileShell delay={0.115}>
-      <TileHeader icon={Share2} label="HubSpot · Social" />
-      {isLoading ? (
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-      ) : data?.status === "not_configured" ? (
-        <p className="text-xs text-muted-foreground">HubSpot is not connected.</p>
-      ) : missingScope ? (
-        <div className="space-y-2 text-xs">
-          <p className="text-muted-foreground">
-            HubSpot social feed is unavailable because the connected token is missing the{" "}
-            <code className="px-1 py-0.5 rounded bg-muted text-foreground">social-access</code> scope.
-          </p>
-          <p className="text-[11px] text-muted-foreground/80">
-            Add the <span className="font-medium">Social</span> permission to the HubSpot Private App
-            (Settings → Integrations → Private Apps), then reconnect.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {channels.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {channels.map((c) => (
-                <span
-                  key={c.guid}
-                  className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-foreground"
-                >
-                  <span className="font-medium">{c.platform}</span>
-                  <span className="text-muted-foreground">· {c.name}</span>
-                </span>
-              ))}
-            </div>
-          )}
-          {posts.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              {channels.length === 0
-                ? "No connected channels found in HubSpot."
-                : "No posts published via HubSpot yet."}
-            </p>
-          ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-              {posts.map((p) => (
-                <div
-                  key={p.id}
-                  className="border-b border-border/40 pb-2 last:border-0 last:pb-0"
-                >
-                  <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
-                    <span className="font-medium text-foreground/80">
-                      {p.platform}
-                      {p.channel && p.channel !== "—" ? ` · ${p.channel}` : ""}
-                    </span>
-                    <span>
-                      {p.publishedAt ? new Date(p.publishedAt).toLocaleDateString() : "—"}
-                    </span>
-                  </div>
-                  {p.body && (
-                    <div className="mt-1 text-xs text-foreground leading-snug line-clamp-3">
-                      {p.body}
-                    </div>
-                  )}
-                  {p.url && (
-                    <a
-                      href={p.url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="mt-1 inline-flex items-center gap-0.5 text-[10px] text-primary hover:underline"
-                    >
-                      View post <ExternalLink className="h-2.5 w-2.5" />
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          <p className="text-[10px] text-muted-foreground/70">
-            Engagement metrics (followers, likes, shares) are not exposed by HubSpot's API.
-          </p>
-        </div>
-      )}
-    </TileShell>
-  );
-}
-
-
 
 function GbpInrRateTile() {
   const [rate, setRate] = useState<number | null>(null);
@@ -292,49 +192,9 @@ function GbpInrRateTile() {
   );
 }
 
-function InstagramTile() {
-  const { data, isLoading } = useInstagramInsights();
-  const fmt = (n: number | null | undefined) =>
-    n == null ? "—" : new Intl.NumberFormat("en-US").format(Math.round(n));
-  return (
-    <TileShell delay={0.12}>
-      <TileHeader
-        icon={Instagram}
-        label={`Instagram · @kabuni.india${data?.captured_at ? ` · synced ${new Date(data.captured_at).toLocaleDateString()}` : ""}`}
-      />
-      {isLoading ? (
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-      ) : !data ? (
-        <p className="text-xs text-muted-foreground">
-          Instagram is not connected yet. An admin can link the Kabuni.India account from Settings → Integrations.
-        </p>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Stat
-            label="Followers"
-            value={fmt(data.followers_count)}
-            hint={
-              data.followers_gained_28d != null
-                ? `${data.followers_gained_28d >= 0 ? "+" : ""}${fmt(data.followers_gained_28d)} since last sync`
-                : undefined
-            }
-          />
-          <Stat label="Reach · 28d" value={fmt(data.reach_28d)} hint={`${fmt(data.reach_7d)} · 7d`} />
-          <Stat label="Impressions · 28d" value={fmt(data.impressions_28d)} hint={`${fmt(data.impressions_7d)} · 7d`} />
-          <Stat label="Profile views · 28d" value={fmt(data.profile_views_28d)} hint={`${fmt(data.media_count)} posts`} />
-        </div>
-      )}
-    </TileShell>
-  );
-}
-
 export const HomeDashboard = ({ userName }: { userName: string }) => {
   const navigate = useNavigate();
   const ga = useGAHomeSummary();
-  const hires = useHiresStats();
-  const ws = useWorkstreamsStats();
-  const proj = useProjectsStats();
-  const social = useSocialStats();
 
   const play = ga.data?.play;
   const web = ga.data?.website;
@@ -393,187 +253,61 @@ export const HomeDashboard = ({ userName }: { userName: string }) => {
       {/* GBP → INR EXCHANGE RATE */}
       <GbpInrRateTile />
 
-      {/* WEBSITE + SOCIAL */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        <TileShell delay={0.05}>
-          <TileHeader
-            icon={BarChart3}
-            label="Website · kabuni.com · 7d"
-            action={
-              <button onClick={() => navigate("/operations")} className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5">
-                Open <ExternalLink className="h-2.5 w-2.5" />
-              </button>
-            }
-          />
-          {ga.isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          ) : !gaConnected ? (
-            <div className="text-xs text-muted-foreground">Not connected.</div>
-          ) : (
-            <div className="grid grid-cols-3 gap-3">
-              <Stat label="Users" value={formatNumber(web?.activeUsers7d ?? 0)} />
-              <Stat label="Sessions" value={formatNumber(web?.sessions7d ?? 0)} />
-              <Stat label="Page views" value={formatNumber(web?.pageViews7d ?? 0)} />
-              {web?.topPage && (
-                <div className="col-span-3 text-[11px] text-muted-foreground truncate">
-                  Top page: <span className="text-foreground font-medium">{web.topPage}</span>
-                </div>
-              )}
-              {web?.trackedPages && web.trackedPages.length > 0 && (
-                <div className="col-span-3 mt-2 pt-2 border-t border-border/40 space-y-1.5">
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tracked pages</div>
-                  {web.trackedPages.map((p) => (
-                    <div key={p.path} className="flex items-center justify-between gap-2 text-[11px]">
-                      <div className="min-w-0">
-                        <div className="text-foreground font-medium truncate">{p.label}</div>
-                        <div className="text-muted-foreground truncate">{p.path}</div>
-                      </div>
-                      <div className="text-right shrink-0 leading-tight">
-                        <div className="text-foreground font-semibold">{formatNumber(p.pageViewsToday)} <span className="text-muted-foreground font-normal">· today</span></div>
-                        <div className="text-muted-foreground">
-                          {formatNumber(p.pageViewsYesterday)} · yest
-                          {p.deltaPct != null && !Number.isNaN(p.deltaPct) && (
-                            <span className={`ml-1.5 font-medium ${p.deltaPct >= 0 ? "text-norman-success" : "text-destructive"}`}>
-                              {p.deltaPct >= 0 ? "+" : ""}{p.deltaPct}%
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </TileShell>
-
-        <TileShell delay={0.1}>
-          <TileHeader
-            icon={Share2}
-            label={`Social · latest week${social.data?.fetchedAt ? ` · synced ${new Date(social.data.fetchedAt).toLocaleDateString()}` : ""}`}
-          />
-          {social.isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          ) : !social.data?.accounts.length ? (
-            <p className="text-xs text-muted-foreground">
-              Waiting for Alex's social stats sheet to land in Duncan's inbox.
-            </p>
-          ) : (
-            <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
-              {social.data.accounts.map((a) => {
-                const delta = a.delta_followers;
-                return (
-                  <div key={a.account} className="flex items-center justify-between gap-3 border-b border-border/40 pb-1.5 last:border-0 last:pb-0">
+      {/* WEBSITE */}
+      <TileShell delay={0.05}>
+        <TileHeader
+          icon={BarChart3}
+          label="Website · kabuni.com · 7d"
+          action={
+            <button onClick={() => navigate("/operations")} className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5">
+              Open <ExternalLink className="h-2.5 w-2.5" />
+            </button>
+          }
+        />
+        {ga.isLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        ) : !gaConnected ? (
+          <div className="text-xs text-muted-foreground">Not connected.</div>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            <Stat label="Users" value={formatNumber(web?.activeUsers7d ?? 0)} />
+            <Stat label="Sessions" value={formatNumber(web?.sessions7d ?? 0)} />
+            <Stat label="Page views" value={formatNumber(web?.pageViews7d ?? 0)} />
+            {web?.topPage && (
+              <div className="col-span-3 text-[11px] text-muted-foreground truncate">
+                Top page: <span className="text-foreground font-medium">{web.topPage}</span>
+              </div>
+            )}
+            {web?.trackedPages && web.trackedPages.length > 0 && (
+              <div className="col-span-3 mt-2 pt-2 border-t border-border/40 space-y-1.5">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tracked pages</div>
+                {web.trackedPages.map((p) => (
+                  <div key={p.path} className="flex items-center justify-between gap-2 text-[11px]">
                     <div className="min-w-0">
-                      <div className="text-xs font-medium text-foreground truncate">{a.account}</div>
-                      <div className="text-[10px] text-muted-foreground truncate">
-                        {[
-                          a.likes != null && `${formatNumber(a.likes)} likes`,
-                          a.comments != null && `${formatNumber(a.comments)} comments`,
-                          a.shares != null && `${formatNumber(a.shares)} shares`,
-                        ].filter(Boolean).join(" · ") || "—"}
-                      </div>
+                      <div className="text-foreground font-medium truncate">{p.label}</div>
+                      <div className="text-muted-foreground truncate">{p.path}</div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-sm font-bold text-foreground">
-                        {a.followers != null ? formatNumber(a.followers) : "—"}
+                    <div className="text-right shrink-0 leading-tight">
+                      <div className="text-foreground font-semibold">{formatNumber(p.pageViewsToday)} <span className="text-muted-foreground font-normal">· today</span></div>
+                      <div className="text-muted-foreground">
+                        {formatNumber(p.pageViewsYesterday)} · yest
+                        {p.deltaPct != null && !Number.isNaN(p.deltaPct) && (
+                          <span className={`ml-1.5 font-medium ${p.deltaPct >= 0 ? "text-norman-success" : "text-destructive"}`}>
+                            {p.deltaPct >= 0 ? "+" : ""}{p.deltaPct}%
+                          </span>
+                        )}
                       </div>
-                      {delta != null && delta !== 0 && (
-                        <div className={`text-[10px] inline-flex items-center gap-0.5 ${delta >= 0 ? "text-norman-success" : "text-destructive"}`}>
-                          {delta >= 0 ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
-                          {delta >= 0 ? "+" : ""}{formatNumber(delta)}
-                        </div>
-                      )}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </TileShell>
-      </div>
-
-      {/* INSTAGRAM INSIGHTS */}
-      <InstagramTile />
-
-      {/* HUBSPOT SOCIAL FEED — temporarily hidden */}
-      {false && <HubSpotSocialFeedTile />}
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </TileShell>
 
       {/* MY PENDING TASKS */}
       <MyPendingTasksTile />
-
-      {/* HIRES / WORKSTREAMS / PROJECTS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-        <TileShell delay={0.15}>
-          <TileHeader
-            icon={Users}
-            label="Hires"
-            action={
-              <button onClick={() => navigate("/recruitment")} className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5">
-                Open <ExternalLink className="h-2.5 w-2.5" />
-              </button>
-            }
-          />
-          {hires.isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          ) : (
-            <div className="space-y-3">
-              <Stat label="Open roles" value={hires.data?.openRoles ?? 0} />
-              <Stat label="Candidates in pipeline" value={formatNumber(hires.data?.totalCandidates ?? 0)} />
-              <Stat label="Interviews invited this week" value={hires.data?.interviewsThisWeek ?? 0} />
-            </div>
-          )}
-        </TileShell>
-
-        <TileShell delay={0.2}>
-          <TileHeader
-            icon={FolderKanban}
-            label="Workstreams"
-            action={
-              <button onClick={() => navigate("/workstreams")} className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5">
-                Open <ExternalLink className="h-2.5 w-2.5" />
-              </button>
-            }
-          />
-          {ws.isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-baseline gap-3">
-                <Stat label="Active" value={ws.data?.active ?? 0} />
-                {(ws.data?.red ?? 0) > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 text-destructive border border-destructive/20 px-1.5 py-0.5 text-[10px] font-medium">
-                    <AlertTriangle className="h-2.5 w-2.5" /> {ws.data?.red} red
-                  </span>
-                )}
-              </div>
-              <Stat label="Overdue" value={ws.data?.overdue ?? 0} />
-              <Stat label="On track" value={`${ws.data?.onTrackPct ?? 0}%`} hint={`${ws.data?.myOpen ?? 0} assigned to ${userName}`} />
-            </div>
-          )}
-        </TileShell>
-
-        <TileShell delay={0.25}>
-          <TileHeader
-            icon={Briefcase}
-            label="Projects"
-            action={
-              <button onClick={() => navigate("/projects")} className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5">
-                Open <ExternalLink className="h-2.5 w-2.5" />
-              </button>
-            }
-          />
-          {proj.isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          ) : (
-            <div className="space-y-3">
-              <Stat label="Active projects" value={proj.data?.active ?? 0} />
-              <Stat label="Files indexed" value={formatNumber(proj.data?.filesIndexed ?? 0)} />
-              <Stat label="Updated in last 24h" value={proj.data?.updatedToday ?? 0} />
-            </div>
-          )}
-        </TileShell>
-      </div>
     </div>
   );
 };

@@ -413,6 +413,8 @@ export type Database = {
           name: string
           onboarding_card_id: string | null
           preferred_name: string | null
+          rejected_at: string | null
+          rejected_by: string | null
           scoring_details: Json | null
           start_date: string | null
           status: string
@@ -451,6 +453,8 @@ export type Database = {
           name: string
           onboarding_card_id?: string | null
           preferred_name?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
           scoring_details?: Json | null
           start_date?: string | null
           status?: string
@@ -489,6 +493,8 @@ export type Database = {
           name?: string
           onboarding_card_id?: string | null
           preferred_name?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
           scoring_details?: Json | null
           start_date?: string | null
           status?: string

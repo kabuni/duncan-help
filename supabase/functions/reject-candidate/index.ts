@@ -48,17 +48,52 @@ async function getDuncanGmailAccess(admin: any): Promise<{ token: string; email:
   return { token: refreshed.access_token, email: row.google_account_email };
 }
 
-function buildRawEmail(from: string, to: string, subject: string, body: string): string {
+function buildHtmlBody(plainText: string, candidateName: string, roleTitle: string): string {
+  const paragraphs = plainText
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => p.replace(/\n/g, "<br>"));
+
+  const bodyHtml = paragraphs
+    .map((p) => `<p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#2b2b2b">${p}</p>`)
+    .join("");
+
+  return `<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif">
+  <div style="max-width:560px;margin:0 auto;padding:32px 16px">
+    <div style="background:#ffffff;border-radius:12px;border:1px solid #eaeaea;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.03)">
+      <div style="padding:24px 32px 20px;border-bottom:1px solid #f0f0f0">
+        <div style="font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:#8a8a8a;font-weight:600">Kabuni</div>
+        <div style="margin-top:6px;font-size:18px;font-weight:600;color:#111">Application update</div>
+      </div>
+      <div style="padding:28px 32px 8px">
+        ${bodyHtml}
+      </div>
+      <div style="padding:20px 32px 28px;border-top:1px solid #f0f0f0;margin-top:8px">
+        <div style="font-size:12px;color:#9a9a9a;line-height:1.6">
+          This message was sent by Kabuni's recruitment team regarding your application${roleTitle ? ` for the ${roleTitle} role` : ""}. Please do not reply to this email — for any questions, contact <a href="mailto:careers@kabuni.com" style="color:#5b5b5b">careers@kabuni.com</a>.
+        </div>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:16px;font-size:11px;color:#b0b0b0;letter-spacing:0.08em;text-transform:uppercase">© Kabuni</div>
+  </div>
+</body>
+</html>`;
+}
+
+function buildRawEmail(from: string, to: string, subject: string, htmlBody: string): string {
   const encodedSubject = `=?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
   const msg = [
-    `From: Kabuni <${from}>`,
+    `From: Kabuni Careers <${from}>`,
     `To: ${to}`,
     `Subject: ${encodedSubject}`,
     `MIME-Version: 1.0`,
-    `Content-Type: text/plain; charset="UTF-8"`,
+    `Content-Type: text/html; charset="UTF-8"`,
     `Content-Transfer-Encoding: 7bit`,
     ``,
-    body,
+    htmlBody,
   ].join("\r\n");
   return btoa(unescape(encodeURIComponent(msg))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }

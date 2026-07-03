@@ -73,7 +73,7 @@ function buildHtmlBody(plainText: string, candidateName: string, roleTitle: stri
       </div>
       <div style="padding:20px 32px 28px;border-top:1px solid #f0f0f0;margin-top:8px">
         <div style="font-size:12px;color:#9a9a9a;line-height:1.6">
-          This message was sent by Kabuni's recruitment team regarding your application${roleTitle ? ` for the ${roleTitle} role` : ""}. Please do not reply to this email — for any questions, contact <a href="mailto:careers@kabuni.com" style="color:#5b5b5b">careers@kabuni.com</a>.
+          This message was sent by Kabuni's recruitment team regarding your application${roleTitle ? ` for the ${roleTitle} role` : ""}. Please do not reply to this email.
         </div>
       </div>
     </div>

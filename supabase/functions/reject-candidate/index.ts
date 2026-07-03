@@ -1,5 +1,5 @@
 // Reject a candidate: flip status to 'rejected' and send a polite rejection
-// email via the triggering user's Gmail (same auth pattern as trigger-onboarding).
+// email from duncan@kabuni.com (via duncan_gmail_tokens).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -13,6 +13,54 @@ interface Body {
   subject?: string;
   body?: string;
   skip_email?: boolean;
+}
+
+async function refreshGoogleToken(refreshToken: string, clientId: string, clientSecret: string) {
+  const r = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+  if (!r.ok) throw new Error(`token refresh failed: ${await r.text()}`);
+  return await r.json();
+}
+
+async function getDuncanGmailAccess(admin: any): Promise<{ token: string; email: string }> {
+  const { data: row, error } = await admin.from("duncan_gmail_tokens").select("*").limit(1).maybeSingle();
+  if (error || !row) throw new Error("Duncan Gmail not connected");
+  if (new Date(row.token_expiry).getTime() - Date.now() > 60_000) {
+    return { token: row.access_token, email: row.google_account_email };
+  }
+  const refreshed = await refreshGoogleToken(
+    row.refresh_token,
+    Deno.env.get("GMAIL_CLIENT_ID")!,
+    Deno.env.get("GMAIL_CLIENT_SECRET")!,
+  );
+  const expiry = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
+  await admin.from("duncan_gmail_tokens")
+    .update({ access_token: refreshed.access_token, token_expiry: expiry })
+    .eq("id", row.id);
+  return { token: refreshed.access_token, email: row.google_account_email };
+}
+
+function buildRawEmail(from: string, to: string, subject: string, body: string): string {
+  const encodedSubject = `=?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
+  const msg = [
+    `From: Kabuni <${from}>`,
+    `To: ${to}`,
+    `Subject: ${encodedSubject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    `Content-Transfer-Encoding: 7bit`,
+    ``,
+    body,
+  ].join("\r\n");
+  return btoa(unescape(encodeURIComponent(msg))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 Deno.serve(async (req) => {
@@ -48,7 +96,6 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Candidate not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Flip status
     await admin.from("candidates").update({
       status: "rejected",
       rejected_at: new Date().toISOString(),
@@ -56,25 +103,34 @@ Deno.serve(async (req) => {
     }).eq("id", candidate.id);
 
     let emailResult: any = { sent: false };
-    if (!body.skip_email && candidate.email) {
-      try {
-        const sendRes = await admin.functions.invoke("gmail-api", {
-          body: {
-            action: "send",
-            to: candidate.email,
-            subject: body.subject || `Update on your application at Kabuni`,
-            body: body.body || defaultBody(candidate),
-          },
-          headers: { Authorization: authHeader },
-        });
-        emailResult = { sent: !sendRes.error, error: sendRes.error?.message, messageId: (sendRes.data as any)?.messageId };
-      } catch (e: any) {
-        emailResult = { sent: false, error: e?.message };
-      }
+    if (body.skip_email) {
+      emailResult = { sent: false, skipped: true };
     } else if (!candidate.email) {
       emailResult = { sent: false, error: "no candidate email on file" };
     } else {
-      emailResult = { sent: false, skipped: true };
+      try {
+        const { token, email: fromEmail } = await getDuncanGmailAccess(admin);
+        const raw = buildRawEmail(
+          fromEmail,
+          candidate.email,
+          body.subject || "Update on your application at Kabuni",
+          body.body || defaultBody(candidate),
+        );
+        const r = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ raw }),
+        });
+        if (!r.ok) {
+          const t = await r.text();
+          emailResult = { sent: false, error: `Gmail ${r.status}: ${t}` };
+        } else {
+          const j = await r.json();
+          emailResult = { sent: true, messageId: j.id, from: fromEmail };
+        }
+      } catch (e: any) {
+        emailResult = { sent: false, error: e?.message };
+      }
     }
 
     return new Response(JSON.stringify({ success: true, email: emailResult }), {

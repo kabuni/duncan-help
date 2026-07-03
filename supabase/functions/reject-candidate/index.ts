@@ -86,7 +86,7 @@ function buildHtmlBody(plainText: string, candidateName: string, roleTitle: stri
 function buildRawEmail(from: string, to: string, subject: string, htmlBody: string): string {
   const encodedSubject = `=?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
   const msg = [
-    `From: Kabuni Careers <${from}>`,
+    `From: Kabuni <${from}>`,
     `To: ${to}`,
     `Subject: ${encodedSubject}`,
     `MIME-Version: 1.0`,

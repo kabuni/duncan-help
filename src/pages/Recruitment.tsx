@@ -10,10 +10,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Mail, RefreshCw, Users, Briefcase, Loader2, CheckCircle, AlertCircle, Star, Target, FileText, Video, ExternalLink, Trophy, AlertTriangle, XCircle, RotateCcw, UserCheck } from "lucide-react";
+import { Mail, RefreshCw, Users, Briefcase, Loader2, CheckCircle, AlertCircle, Star, Target, FileText, Video, ExternalLink, Trophy, AlertTriangle, XCircle, RotateCcw, UserCheck, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { JobRolesManager } from "@/components/recruitment/JobRolesManager";
 import { MarkAsHiredDialog } from "@/components/recruitment/MarkAsHiredDialog";
+import { RejectCandidateDialog } from "@/components/recruitment/RejectCandidateDialog";
 
 const VALUE_LABELS = [
   { key: "sweat_the_detail", label: "Detail", emoji: "🔍" },
@@ -130,6 +131,7 @@ const Recruitment = () => {
   const [assigningRole, setAssigningRole] = useState<string | null>(null);
   const [loadingPlaybackId, setLoadingPlaybackId] = useState<string | null>(null);
   const [hireCandidate, setHireCandidate] = useState<any>(null);
+  const [rejectCandidate, setRejectCandidate] = useState<any>(null);
 
   const handleWatchInterview = async (candidate: any) => {
     const isCompleted = candidate.hireflix_status === "completed";
@@ -674,15 +676,25 @@ const Recruitment = () => {
                               >
                                 {c.status}
                               </Badge>
-                              {c.status !== "hired" && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-6 px-2 text-[10px] gap-1"
-                                  onClick={() => setHireCandidate(c)}
-                                >
-                                  <UserCheck className="h-3 w-3" /> Hire
-                                </Button>
+                              {c.status !== "hired" && c.status !== "rejected" && (
+                                <div className="flex gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 px-2 text-[10px] gap-1"
+                                    onClick={() => setHireCandidate(c)}
+                                  >
+                                    <UserCheck className="h-3 w-3" /> Hire
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 px-2 text-[10px] gap-1 text-destructive hover:text-destructive"
+                                    onClick={() => setRejectCandidate(c)}
+                                  >
+                                    <UserX className="h-3 w-3" /> Reject
+                                  </Button>
+                                </div>
                               )}
                               {c.status === "hired" && c.onboarding_card_id && (
                                 <a

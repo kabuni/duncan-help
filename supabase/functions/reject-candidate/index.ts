@@ -145,11 +145,14 @@ Deno.serve(async (req) => {
     } else {
       try {
         const { token, email: fromEmail } = await getDuncanGmailAccess(admin);
+        const plainText = body.body || defaultBody(candidate);
+        const roleTitle = (candidate as any).job_roles?.title || "";
+        const htmlBody = buildHtmlBody(plainText, candidate.name, roleTitle);
         const raw = buildRawEmail(
           fromEmail,
           candidate.email,
           body.subject || "Update on your application at Kabuni",
-          body.body || defaultBody(candidate),
+          htmlBody,
         );
         const r = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
           method: "POST",

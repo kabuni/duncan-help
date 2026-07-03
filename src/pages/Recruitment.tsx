@@ -1008,6 +1008,13 @@ const Recruitment = () => {
           onOpenChange={(v) => { if (!v) setHireCandidate(null); }}
           onCompleted={() => { /* react-query will refetch on focus */ }}
         />
+
+        <RejectCandidateDialog
+          candidate={rejectCandidate}
+          open={!!rejectCandidate}
+          onOpenChange={(v) => { if (!v) setRejectCandidate(null); }}
+          onCompleted={() => { /* react-query will refetch on focus */ }}
+        />
       </main>
     </>
   );

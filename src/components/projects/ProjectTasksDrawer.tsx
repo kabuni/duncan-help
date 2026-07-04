@@ -387,14 +387,15 @@ export function ProjectTasksDrawer({
                         className="h-3.5 w-3.5 mt-1 shrink-0"
                         disabled={isPromoted}
                       />
-                      <span
+                      <EditableTitle
+                        value={it.title}
+                        disabled={isPromoted}
                         className={cn(
                           "flex-1 text-sm whitespace-pre-wrap break-words leading-relaxed",
                           isDone ? "line-through text-muted-foreground" : deadlinePast ? "text-destructive" : "text-foreground",
                         )}
-                      >
-                        {it.title}
-                      </span>
+                        onSave={(v) => patch(it.id, { title: v })}
+                      />
                       {!isPromoted && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>

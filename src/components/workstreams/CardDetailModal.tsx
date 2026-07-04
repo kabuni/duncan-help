@@ -692,8 +692,8 @@ function MetaField({ icon, label, value, children, alwaysEdit = false }: {
 }
 
 function TaskRow({
-  task, users, currentUserId, onToggle, onDelete, onUpdateAssignees, onUpdateDueDate, onSetStatus,
-  onAddSubtask, onToggleSubtask, onDeleteSubtask, onUpdateSubtaskDueDate, onUpdateSubtaskAssignees,
+  task, users, currentUserId, onToggle, onDelete, onUpdateAssignees, onUpdateDueDate, onUpdateTitle, onSetStatus,
+  onAddSubtask, onToggleSubtask, onDeleteSubtask, onUpdateSubtaskDueDate, onUpdateSubtaskAssignees, onUpdateSubtaskTitle,
 }: {
   task: WorkstreamTask;
   users: UserProfile[];
@@ -702,12 +702,14 @@ function TaskRow({
   onDelete: () => void;
   onUpdateAssignees: (ids: string[]) => void;
   onUpdateDueDate: (date: string | null) => void;
+  onUpdateTitle?: (title: string) => void;
   onSetStatus: (status: CardStatus) => void;
   onAddSubtask?: (title: string) => void;
   onToggleSubtask?: (sub: WorkstreamTask) => void;
   onDeleteSubtask?: (sub: WorkstreamTask) => void;
   onUpdateSubtaskDueDate?: (sub: WorkstreamTask, date: string | null) => void;
   onUpdateSubtaskAssignees?: (sub: WorkstreamTask, ids: string[]) => void;
+  onUpdateSubtaskTitle?: (sub: WorkstreamTask, title: string) => void;
 }) {
   const subtasks = task.subtasks || [];
   const isSubtask = !!task.parent_task_id;

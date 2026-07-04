@@ -718,6 +718,15 @@ function TaskRow({
   const initialExpanded = (task.comments_count || 0) > 0;
   const [expanded, setExpanded] = useState(initialExpanded);
   const [newComment, setNewComment] = useState("");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(task.title);
+  useEffect(() => { setTitleDraft(task.title); }, [task.title]);
+  const saveTitle = () => {
+    const v = titleDraft.trim();
+    if (!v || v === task.title) { setEditingTitle(false); setTitleDraft(task.title); return; }
+    onUpdateTitle?.(v);
+    setEditingTitle(false);
+  };
   const { data: taskComments = [] } = useTaskComments(expanded ? task.id : null);
   const addTaskComment = useAddTaskComment();
   const deleteTaskComment = useDeleteTaskComment();

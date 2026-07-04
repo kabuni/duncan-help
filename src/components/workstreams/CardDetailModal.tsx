@@ -897,6 +897,7 @@ function TaskRow({
               onDelete={() => onDeleteSubtask?.(sub)}
               onUpdateDueDate={(d) => onUpdateSubtaskDueDate?.(sub, d)}
               onUpdateAssignees={(ids) => onUpdateSubtaskAssignees?.(sub, ids)}
+              onUpdateTitle={(title) => onUpdateSubtaskTitle?.(sub, title)}
             />
           ))}
 

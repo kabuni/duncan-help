@@ -644,3 +644,50 @@ export function ProjectTasksDrawer({
     </Sheet>
   );
 }
+
+function EditableTitle({
+  value,
+  onSave,
+  disabled,
+  className,
+}: {
+  value: string;
+  onSave: (v: string) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => { setDraft(value); }, [value]);
+  const save = () => {
+    const v = draft.trim();
+    if (!v || v === value) { setEditing(false); setDraft(value); return; }
+    onSave(v);
+    setEditing(false);
+  };
+  if (editing && !disabled) {
+    return (
+      <Input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); save(); }
+          if (e.key === "Escape") { setEditing(false); setDraft(value); }
+        }}
+        className="h-8 text-sm flex-1"
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => !disabled && setEditing(true)}
+      className={cn(className, "text-left", !disabled && "hover:text-primary transition-colors cursor-text")}
+      title={disabled ? undefined : "Click to edit"}
+    >
+      {value}
+    </button>
+  );
+}

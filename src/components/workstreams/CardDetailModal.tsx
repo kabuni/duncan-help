@@ -751,9 +751,28 @@ function TaskRow({
           )}
         </button>
         <div className="flex-1 min-w-0">
-          <span className={`text-sm ${task.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
-            {task.title}
-          </span>
+          {editingTitle && onUpdateTitle ? (
+            <Input
+              autoFocus
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={saveTitle}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); saveTitle(); }
+                if (e.key === "Escape") { setEditingTitle(false); setTitleDraft(task.title); }
+              }}
+              className="h-7 text-sm"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => onUpdateTitle && setEditingTitle(true)}
+              className={`text-sm text-left w-full truncate ${task.completed ? "line-through text-muted-foreground" : "text-foreground"} ${onUpdateTitle ? "hover:text-primary transition-colors" : ""}`}
+              title={onUpdateTitle ? "Click to edit" : undefined}
+            >
+              {task.title}
+            </button>
+          )}
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             <TaskStatusPicker status={task.status} onChange={onSetStatus} />
             {(task.assignees || []).map(a => (

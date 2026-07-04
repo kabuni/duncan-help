@@ -1126,7 +1126,7 @@ function TaskCommentRow({
 }
 
 function SubtaskRow({
-  sub, users, onToggle, onDelete, onUpdateDueDate, onUpdateAssignees,
+  sub, users, onToggle, onDelete, onUpdateDueDate, onUpdateAssignees, onUpdateTitle,
 }: {
   sub: WorkstreamTask;
   users: UserProfile[];
@@ -1134,8 +1134,18 @@ function SubtaskRow({
   onDelete: () => void;
   onUpdateDueDate: (date: string | null) => void;
   onUpdateAssignees: (ids: string[]) => void;
+  onUpdateTitle?: (title: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(sub.title);
+  useEffect(() => { setTitleDraft(sub.title); }, [sub.title]);
+  const saveTitle = () => {
+    const v = titleDraft.trim();
+    if (!v || v === sub.title) { setEditingTitle(false); setTitleDraft(sub.title); return; }
+    onUpdateTitle?.(v);
+    setEditingTitle(false);
+  };
   return (
     <div className="group/sub rounded-md py-0.5">
       <div className="flex items-center gap-2">
@@ -1146,9 +1156,28 @@ function SubtaskRow({
             <Circle className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
           )}
         </button>
-        <span className={`flex-1 text-xs ${sub.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
-          {sub.title}
-        </span>
+        {editingTitle && onUpdateTitle ? (
+          <Input
+            autoFocus
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={saveTitle}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); saveTitle(); }
+              if (e.key === "Escape") { setEditingTitle(false); setTitleDraft(sub.title); }
+            }}
+            className="h-6 text-xs flex-1"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => onUpdateTitle && setEditingTitle(true)}
+            className={`flex-1 text-xs text-left truncate ${sub.completed ? "line-through text-muted-foreground" : "text-foreground"} ${onUpdateTitle ? "hover:text-primary transition-colors" : ""}`}
+            title={onUpdateTitle ? "Click to edit" : undefined}
+          >
+            {sub.title}
+          </button>
+        )}
         {(sub.assignees || []).slice(0, 2).map(a => (
           <Badge key={a.user_id} variant="secondary" className="text-[10px] py-0 px-1.5">
             {(a.display_name || "?").split(" ")[0]}

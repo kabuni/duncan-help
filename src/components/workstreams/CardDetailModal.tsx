@@ -561,12 +561,14 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                               onDelete={() => deleteTask.mutate({ id: task.id, card_id: task.card_id })}
                               onUpdateAssignees={(ids) => updateTaskAssignees.mutate({ taskId: task.id, cardId: task.card_id, userIds: ids })}
                               onUpdateDueDate={(d) => updateTask.mutate({ id: task.id, card_id: task.card_id, due_date: d })}
+                              onUpdateTitle={(title) => updateTask.mutate({ id: task.id, card_id: task.card_id, title })}
                               onSetStatus={(s) => handleSetTaskStatus(task, s)}
                               onAddSubtask={(title) => handleAddSubtask(task.id, title, (task.subtasks || []).length)}
                               onToggleSubtask={(sub) => handleToggleTask(sub)}
                               onDeleteSubtask={(sub) => deleteTask.mutate({ id: sub.id, card_id: sub.card_id })}
                               onUpdateSubtaskDueDate={(sub, d) => updateTask.mutate({ id: sub.id, card_id: sub.card_id, due_date: d })}
                               onUpdateSubtaskAssignees={(sub, ids) => updateTaskAssignees.mutate({ taskId: sub.id, cardId: sub.card_id, userIds: ids })}
+                              onUpdateSubtaskTitle={(sub, title) => updateTask.mutate({ id: sub.id, card_id: sub.card_id, title })}
                             />
                           ))}
                         </div>

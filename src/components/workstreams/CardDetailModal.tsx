@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   X, CalendarDays, User, Flag, Tag, Plus, Trash2, CheckCircle2,
@@ -514,12 +514,14 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                         onDelete={() => deleteTask.mutate({ id: task.id, card_id: task.card_id })}
                         onUpdateAssignees={(ids) => updateTaskAssignees.mutate({ taskId: task.id, cardId: task.card_id, userIds: ids })}
                         onUpdateDueDate={(d) => updateTask.mutate({ id: task.id, card_id: task.card_id, due_date: d })}
+                        onUpdateTitle={(title) => updateTask.mutate({ id: task.id, card_id: task.card_id, title })}
                         onSetStatus={(s) => handleSetTaskStatus(task, s)}
                         onAddSubtask={(title) => handleAddSubtask(task.id, title, (task.subtasks || []).length)}
                         onToggleSubtask={(sub) => handleToggleTask(sub)}
                         onDeleteSubtask={(sub) => deleteTask.mutate({ id: sub.id, card_id: sub.card_id })}
                         onUpdateSubtaskDueDate={(sub, d) => updateTask.mutate({ id: sub.id, card_id: sub.card_id, due_date: d })}
                         onUpdateSubtaskAssignees={(sub, ids) => updateTaskAssignees.mutate({ taskId: sub.id, cardId: sub.card_id, userIds: ids })}
+                        onUpdateSubtaskTitle={(sub, title) => updateTask.mutate({ id: sub.id, card_id: sub.card_id, title })}
                       />
                     ))}
 
@@ -559,12 +561,14 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                               onDelete={() => deleteTask.mutate({ id: task.id, card_id: task.card_id })}
                               onUpdateAssignees={(ids) => updateTaskAssignees.mutate({ taskId: task.id, cardId: task.card_id, userIds: ids })}
                               onUpdateDueDate={(d) => updateTask.mutate({ id: task.id, card_id: task.card_id, due_date: d })}
+                              onUpdateTitle={(title) => updateTask.mutate({ id: task.id, card_id: task.card_id, title })}
                               onSetStatus={(s) => handleSetTaskStatus(task, s)}
                               onAddSubtask={(title) => handleAddSubtask(task.id, title, (task.subtasks || []).length)}
                               onToggleSubtask={(sub) => handleToggleTask(sub)}
                               onDeleteSubtask={(sub) => deleteTask.mutate({ id: sub.id, card_id: sub.card_id })}
                               onUpdateSubtaskDueDate={(sub, d) => updateTask.mutate({ id: sub.id, card_id: sub.card_id, due_date: d })}
                               onUpdateSubtaskAssignees={(sub, ids) => updateTaskAssignees.mutate({ taskId: sub.id, cardId: sub.card_id, userIds: ids })}
+                              onUpdateSubtaskTitle={(sub, title) => updateTask.mutate({ id: sub.id, card_id: sub.card_id, title })}
                             />
                           ))}
                         </div>
@@ -688,8 +692,8 @@ function MetaField({ icon, label, value, children, alwaysEdit = false }: {
 }
 
 function TaskRow({
-  task, users, currentUserId, onToggle, onDelete, onUpdateAssignees, onUpdateDueDate, onSetStatus,
-  onAddSubtask, onToggleSubtask, onDeleteSubtask, onUpdateSubtaskDueDate, onUpdateSubtaskAssignees,
+  task, users, currentUserId, onToggle, onDelete, onUpdateAssignees, onUpdateDueDate, onUpdateTitle, onSetStatus,
+  onAddSubtask, onToggleSubtask, onDeleteSubtask, onUpdateSubtaskDueDate, onUpdateSubtaskAssignees, onUpdateSubtaskTitle,
 }: {
   task: WorkstreamTask;
   users: UserProfile[];
@@ -698,12 +702,14 @@ function TaskRow({
   onDelete: () => void;
   onUpdateAssignees: (ids: string[]) => void;
   onUpdateDueDate: (date: string | null) => void;
+  onUpdateTitle?: (title: string) => void;
   onSetStatus: (status: CardStatus) => void;
   onAddSubtask?: (title: string) => void;
   onToggleSubtask?: (sub: WorkstreamTask) => void;
   onDeleteSubtask?: (sub: WorkstreamTask) => void;
   onUpdateSubtaskDueDate?: (sub: WorkstreamTask, date: string | null) => void;
   onUpdateSubtaskAssignees?: (sub: WorkstreamTask, ids: string[]) => void;
+  onUpdateSubtaskTitle?: (sub: WorkstreamTask, title: string) => void;
 }) {
   const subtasks = task.subtasks || [];
   const isSubtask = !!task.parent_task_id;
@@ -712,6 +718,15 @@ function TaskRow({
   const initialExpanded = (task.comments_count || 0) > 0;
   const [expanded, setExpanded] = useState(initialExpanded);
   const [newComment, setNewComment] = useState("");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(task.title);
+  useEffect(() => { setTitleDraft(task.title); }, [task.title]);
+  const saveTitle = () => {
+    const v = titleDraft.trim();
+    if (!v || v === task.title) { setEditingTitle(false); setTitleDraft(task.title); return; }
+    onUpdateTitle?.(v);
+    setEditingTitle(false);
+  };
   const { data: taskComments = [] } = useTaskComments(expanded ? task.id : null);
   const addTaskComment = useAddTaskComment();
   const deleteTaskComment = useDeleteTaskComment();
@@ -736,9 +751,28 @@ function TaskRow({
           )}
         </button>
         <div className="flex-1 min-w-0">
-          <span className={`text-sm ${task.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
-            {task.title}
-          </span>
+          {editingTitle && onUpdateTitle ? (
+            <Input
+              autoFocus
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={saveTitle}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); saveTitle(); }
+                if (e.key === "Escape") { setEditingTitle(false); setTitleDraft(task.title); }
+              }}
+              className="h-7 text-sm"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => onUpdateTitle && setEditingTitle(true)}
+              className={`text-sm text-left w-full truncate ${task.completed ? "line-through text-muted-foreground" : "text-foreground"} ${onUpdateTitle ? "hover:text-primary transition-colors" : ""}`}
+              title={onUpdateTitle ? "Click to edit" : undefined}
+            >
+              {task.title}
+            </button>
+          )}
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             <TaskStatusPicker status={task.status} onChange={onSetStatus} />
             {(task.assignees || []).map(a => (
@@ -863,6 +897,7 @@ function TaskRow({
               onDelete={() => onDeleteSubtask?.(sub)}
               onUpdateDueDate={(d) => onUpdateSubtaskDueDate?.(sub, d)}
               onUpdateAssignees={(ids) => onUpdateSubtaskAssignees?.(sub, ids)}
+              onUpdateTitle={(title) => onUpdateSubtaskTitle?.(sub, title)}
             />
           ))}
 
@@ -1091,7 +1126,7 @@ function TaskCommentRow({
 }
 
 function SubtaskRow({
-  sub, users, onToggle, onDelete, onUpdateDueDate, onUpdateAssignees,
+  sub, users, onToggle, onDelete, onUpdateDueDate, onUpdateAssignees, onUpdateTitle,
 }: {
   sub: WorkstreamTask;
   users: UserProfile[];
@@ -1099,8 +1134,18 @@ function SubtaskRow({
   onDelete: () => void;
   onUpdateDueDate: (date: string | null) => void;
   onUpdateAssignees: (ids: string[]) => void;
+  onUpdateTitle?: (title: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(sub.title);
+  useEffect(() => { setTitleDraft(sub.title); }, [sub.title]);
+  const saveTitle = () => {
+    const v = titleDraft.trim();
+    if (!v || v === sub.title) { setEditingTitle(false); setTitleDraft(sub.title); return; }
+    onUpdateTitle?.(v);
+    setEditingTitle(false);
+  };
   return (
     <div className="group/sub rounded-md py-0.5">
       <div className="flex items-center gap-2">
@@ -1111,9 +1156,28 @@ function SubtaskRow({
             <Circle className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
           )}
         </button>
-        <span className={`flex-1 text-xs ${sub.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
-          {sub.title}
-        </span>
+        {editingTitle && onUpdateTitle ? (
+          <Input
+            autoFocus
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={saveTitle}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); saveTitle(); }
+              if (e.key === "Escape") { setEditingTitle(false); setTitleDraft(sub.title); }
+            }}
+            className="h-6 text-xs flex-1"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => onUpdateTitle && setEditingTitle(true)}
+            className={`flex-1 text-xs text-left truncate ${sub.completed ? "line-through text-muted-foreground" : "text-foreground"} ${onUpdateTitle ? "hover:text-primary transition-colors" : ""}`}
+            title={onUpdateTitle ? "Click to edit" : undefined}
+          >
+            {sub.title}
+          </button>
+        )}
         {(sub.assignees || []).slice(0, 2).map(a => (
           <Badge key={a.user_id} variant="secondary" className="text-[10px] py-0 px-1.5">
             {(a.display_name || "?").split(" ")[0]}

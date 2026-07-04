@@ -387,14 +387,15 @@ export function ProjectTasksDrawer({
                         className="h-3.5 w-3.5 mt-1 shrink-0"
                         disabled={isPromoted}
                       />
-                      <span
+                      <EditableTitle
+                        value={it.title}
+                        disabled={isPromoted}
                         className={cn(
                           "flex-1 text-sm whitespace-pre-wrap break-words leading-relaxed",
                           isDone ? "line-through text-muted-foreground" : deadlinePast ? "text-destructive" : "text-foreground",
                         )}
-                      >
-                        {it.title}
-                      </span>
+                        onSave={(v) => patch(it.id, { title: v })}
+                      />
                       {!isPromoted && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -641,5 +642,52 @@ export function ProjectTasksDrawer({
         onImported={load}
       />
     </Sheet>
+  );
+}
+
+function EditableTitle({
+  value,
+  onSave,
+  disabled,
+  className,
+}: {
+  value: string;
+  onSave: (v: string) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => { setDraft(value); }, [value]);
+  const save = () => {
+    const v = draft.trim();
+    if (!v || v === value) { setEditing(false); setDraft(value); return; }
+    onSave(v);
+    setEditing(false);
+  };
+  if (editing && !disabled) {
+    return (
+      <Input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); save(); }
+          if (e.key === "Escape") { setEditing(false); setDraft(value); }
+        }}
+        className="h-8 text-sm flex-1"
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => !disabled && setEditing(true)}
+      className={cn(className, "text-left", !disabled && "hover:text-primary transition-colors cursor-text")}
+      title={disabled ? undefined : "Click to edit"}
+    >
+      {value}
+    </button>
   );
 }

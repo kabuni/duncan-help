@@ -126,6 +126,7 @@ serve(async (req) => {
       assignedCards,
       assignedTasks,
       projectTasks,
+      onboardingBlockers,
     ] = await Promise.all([
       withStatus("calendar", () => fetchCalendarEvents(supabaseUrl, supabaseAdmin, authHeader, user.id)),
       withStatus("meetings", async () => {
@@ -163,6 +164,7 @@ serve(async (req) => {
       withStatus("workstream_cards", () => fetchAssignedCards(supabaseAdmin, user.id)),
       withStatus("workstream_tasks", () => fetchAssignedTasks(supabaseAdmin, user.id)),
       withStatus("project_tasks", () => fetchProjectTasks(supabaseAdmin, user.id)),
+      withStatus("onboarding_blockers", () => fetchOnboardingBlockers(supabaseAdmin)),
     ]);
 
     const contextMs = Date.now() - contextStartedAt;
@@ -172,7 +174,7 @@ serve(async (req) => {
       ["calendar", calendar], ["meetings", meetings], ["work_items", workItems],
       ["token_usage", myTokenUsage], ["leaderboard", leaderboard],
       ["workstream_cards", assignedCards], ["workstream_tasks", assignedTasks],
-      ["project_tasks", projectTasks],
+      ["project_tasks", projectTasks], ["onboarding_blockers", onboardingBlockers],
     ] as const) {
       if (src.status === "failed") degradedSources.push(name);
     }

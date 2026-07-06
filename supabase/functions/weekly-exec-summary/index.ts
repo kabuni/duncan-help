@@ -804,32 +804,39 @@ Deno.serve(async (req) => {
     const reportWeek = buildReportWeek(asOfDate && !isNaN(asOfDate.getTime()) ? asOfDate : undefined);
     const weekRange = reportWeek.label;
 
-    // Pull source data — meetings + workstreams in last-week window.
-    const [meetings, ws] = await Promise.all([
+    // Pull source data — meetings + workstreams + inbox signals + duncan weekly-report emails.
+    const [meetings, ws, inboxAgg, weeklyReportEmailsBlock] = await Promise.all([
       fetchMeetings(admin, reportWeek),
       fetchWorkstreamCards(admin, reportWeek),
+      scanAllOptedInInboxes(admin, reportWeek),
+      fetchDuncanWeeklyReports(admin, reportWeek),
     ]);
 
     const meetingsBlock = formatMeetingsBlock(meetings);
     const workstreamsBlock = formatWorkstreamBlock(ws.cards, ws.tasks);
+    const inboxBlock = formatInboxSignalsBlock(inboxAgg);
 
     await admin.from("exec_summary_runs").update({
       file_count: meetings.length + ws.cards.length,
       files_processed: {
         meetings: meetings.map((m) => ({ id: m.id, title: m.title, date: m.meeting_date, source: m.source })),
         cards: ws.cards.map((c) => ({ id: c.id, title: c.title, status: c.status })),
+        inbox_mailboxes: inboxAgg.per_mailbox,
+        inbox_emails_scanned: inboxAgg.emails_scanned,
       },
     }).eq("id", runId);
 
-    if (meetings.length === 0 && ws.cards.length === 0) {
+    if (meetings.length === 0 && ws.cards.length === 0 && inboxAgg.emails_scanned === 0 && weeklyReportEmailsBlock.startsWith("No emails")) {
       throw new Error(
-        `No meetings or workstream activity found between ${reportWeek.monday.toISOString().slice(0, 10)} and ${reportWeek.friday.toISOString().slice(0, 10)}.`,
+        `No meetings, workstream activity, inbox signals, or weekly-report emails found between ${reportWeek.monday.toISOString().slice(0, 10)} and ${reportWeek.sunday.toISOString().slice(0, 10)}.`,
       );
     }
 
     const summaryMd = await buildSummaryMarkdown(
       meetingsBlock,
       workstreamsBlock,
+      inboxBlock,
+      weeklyReportEmailsBlock,
       meetings.length,
       ws.cards.length,
       reportWeek,
@@ -842,6 +849,28 @@ Deno.serve(async (req) => {
     await admin.from("exec_summary_runs").update({
       summary_chars: summaryMd.length,
     }).eq("id", runId);
+
+    // Dry-run mode: return the composed markdown without emailing.
+    if (body?.dry_run === true) {
+      await admin.from("exec_summary_runs").update({
+        status: "succeeded",
+        finished_at: new Date().toISOString(),
+        error: "dry_run — email not sent",
+      }).eq("id", runId);
+      return json({
+        success: true,
+        dry_run: true,
+        run_id: runId,
+        subject,
+        week_range: `${weekRange} ${reportWeek.year}`,
+        meetings: meetings.length,
+        workstream_cards: ws.cards.length,
+        inbox_mailboxes_scanned: inboxAgg.mailboxes_scanned,
+        inbox_emails_scanned: inboxAgg.emails_scanned,
+        weekly_report_emails_preview: weeklyReportEmailsBlock.slice(0, 400),
+        summary_markdown: summaryMd,
+      });
+    }
 
     const gmailToken = await getGmailSenderToken(admin);
     if (!gmailToken) throw new Error("Gmail sender token (duncan@kabuni.com) unavailable");
@@ -866,6 +895,8 @@ Deno.serve(async (req) => {
       run_id: runId,
       meetings: meetings.length,
       workstream_cards: ws.cards.length,
+      inbox_mailboxes_scanned: inboxAgg.mailboxes_scanned,
+      inbox_emails_scanned: inboxAgg.emails_scanned,
       recipients: effectiveRecipients,
       subject,
       week_range: `${weekRange} ${reportWeek.year}`,

@@ -404,44 +404,148 @@ Deno.serve(async (req) => {
     }
     stages.attachments_linked = attachmentRefs.length;
 
-    // ── 4. Welcome email (via gmail-api with the triggering user's tokens) ──
+    // ── 4. Company-signed welcome email (via duncan_gmail_tokens) ──
+    // Sent from duncan@kabuni.com, signed "The Kabuni Team". If an offer
+    // letter was uploaded, it is attached as a PDF.
     let emailResult: any = { sent: false };
     if (candidate.email) {
       try {
-        const startNice = new Date(startDate + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+        const { data: gmailRow } = await admin
+          .from("duncan_gmail_tokens").select("*").limit(1).maybeSingle();
+        if (!gmailRow) throw new Error("duncan gmail not connected");
+        const gmailAccess = await refreshDuncanGmailToken(admin, gmailRow);
+        if (!gmailAccess) throw new Error("could not refresh duncan gmail token");
+        const fromAddress = gmailRow.google_account_email;
+
+        const startNice = new Date(startDate + "T00:00:00Z").toLocaleDateString("en-GB", {
+          weekday: "long", year: "numeric", month: "long", day: "numeric",
+        });
+        const firstName = fullName.split(" ")[0];
         const emailBody =
-`Hi ${fullName.split(" ")[0]},
+`Hi ${firstName},
 
-Welcome to the team! We're thrilled to have you joining us as ${roleTitle}.
+Welcome to Kabuni — we're delighted you're joining us as ${roleTitle}.
 
-Your start date is ${startNice}. Ahead of Day 1 we'll be in touch with:
+Your start date is ${startNice}. In the coming days we'll be in touch with:
   • Day-1 orientation logistics (90 min, morning of your first day)
   • Account provisioning for the tools you'll need
-  • A welcome from your hiring manager
+  • A welcome from your hiring manager${offerLetterPath ? "\n\nYour signed offer letter is attached to this email for your records." : ""}
 
 If you have any questions before then, just reply to this email.
 
 Looking forward to working with you.
 
-The Team`;
+The Kabuni Team`;
 
-        const sendRes = await admin.functions.invoke("gmail-api", {
-          body: {
-            action: "send",
-            to: candidate.email,
-            subject: `Welcome to the team, ${fullName.split(" ")[0]} — start date ${startDate}`,
-            body: emailBody,
-          },
-          headers: { Authorization: authHeader },
+        const subject = `Welcome to Kabuni, ${firstName} — start date ${startDate}`;
+        const boundary = `----=_KabuniOnboarding_${crypto.randomUUID()}`;
+
+        // Optional: fetch offer letter bytes for attachment
+        let offerAttachment: { bytes: Uint8Array; filename: string } | null = null;
+        if (offerLetterPath) {
+          const dl = await downloadFromBucket(admin, "offer-letters", offerLetterPath);
+          if (dl) {
+            offerAttachment = {
+              bytes: dl.bytes,
+              filename: `${(fullName || "new_hire").replace(/\s+/g, "_")}_Offer_Letter.pdf`,
+            };
+          }
+        }
+
+        let mime: string;
+        if (offerAttachment) {
+          const b64 = b64urlEncode(offerAttachment.bytes)
+            .replace(/-/g, "+").replace(/_/g, "/"); // undo url-safe for MIME base64
+          // Re-wrap raw base64 for MIME (standard, not url-safe) at 76-char lines
+          const stdB64 = btoa(String.fromCharCode(...offerAttachment.bytes));
+          const wrapped = stdB64.match(/.{1,76}/g)?.join("\r\n") ?? stdB64;
+          void b64;
+          mime = [
+            `From: The Kabuni Team <${fromAddress}>`,
+            `To: ${candidate.email}`,
+            `Subject: ${subject}`,
+            `MIME-Version: 1.0`,
+            `Content-Type: multipart/mixed; boundary="${boundary}"`,
+            ``,
+            `--${boundary}`,
+            `Content-Type: text/plain; charset="UTF-8"`,
+            `Content-Transfer-Encoding: 7bit`,
+            ``,
+            emailBody,
+            ``,
+            `--${boundary}`,
+            `Content-Type: application/pdf; name="${offerAttachment.filename}"`,
+            `Content-Disposition: attachment; filename="${offerAttachment.filename}"`,
+            `Content-Transfer-Encoding: base64`,
+            ``,
+            wrapped,
+            ``,
+            `--${boundary}--`,
+          ].join("\r\n");
+        } else {
+          mime = [
+            `From: The Kabuni Team <${fromAddress}>`,
+            `To: ${candidate.email}`,
+            `Subject: ${subject}`,
+            `MIME-Version: 1.0`,
+            `Content-Type: text/plain; charset="UTF-8"`,
+            ``,
+            emailBody,
+          ].join("\r\n");
+        }
+
+        const raw = b64urlEncode(mime);
+        const mailRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${gmailAccess}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ raw }),
         });
-        emailResult = { sent: !sendRes.error, error: sendRes.error?.message, messageId: (sendRes.data as any)?.messageId };
+        if (!mailRes.ok) {
+          const errTxt = await mailRes.text();
+          throw new Error(`Gmail send ${mailRes.status}: ${errTxt.slice(0, 240)}`);
+        }
+        const j = await mailRes.json();
+        emailResult = {
+          sent: true,
+          from: fromAddress,
+          message_id: j.id,
+          offer_letter_attached: !!offerAttachment,
+        };
       } catch (e: any) {
-        emailResult = { sent: false, error: e?.message };
+        emailResult = { sent: false, error: e?.message || "welcome email failed" };
       }
     } else {
       emailResult = { sent: false, error: "no candidate email on file" };
     }
     stages.welcome_email = emailResult;
+
+    // ── 4b. Slack welcome post to shared channel (from app_settings) ──
+    let slackResult: any = { sent: false, skipped: true };
+    if (body.send_slack_welcome !== false) {
+      try {
+        const { data: chSetting } = await admin
+          .from("app_settings").select("value").eq("key", "onboarding_welcome_slack_channel").maybeSingle();
+        const raw = chSetting?.value;
+        let channel: string | null = null;
+        if (typeof raw === "string" && raw.length > 0) channel = raw;
+        else if (raw && typeof raw === "object" && typeof (raw as any).channel === "string") channel = (raw as any).channel;
+        if (channel) {
+          const channelName = channel.startsWith("#") ? channel : `#${channel}`;
+          const firstName = fullName.split(" ")[0];
+          const text = [
+            `:wave: Everyone please welcome *${fullName}* — joining us as *${roleTitle}* on *${startDate}*.`,
+            ``,
+            `Say hi and help ${firstName} feel at home. Their onboarding card is live in Duncan.`,
+          ].join("\n");
+          slackResult = await sendSlackChannelPost(channelName, text);
+        } else {
+          slackResult = { sent: false, error: "no welcome channel configured" };
+        }
+      } catch (e: any) {
+        slackResult = { sent: false, error: e?.message || "slack post failed" };
+      }
+    }
+    stages.slack_welcome = slackResult;
 
     // ── 5. Calendar events — using HIRING MANAGER's calendar tokens ──
     const calendarEvents: any[] = [];

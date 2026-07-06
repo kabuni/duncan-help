@@ -371,30 +371,28 @@ Deno.serve(async (req) => {
 });
 
 // ── Pre-due nudges for onboarding tasks ──
-// For each incomplete task on an "Onboarding" card whose due date falls into
-// the [70h, 74h] or [22h, 26h] window from now, DM the assignee with a
-// per-window dedup key so each nudge fires at most once per user+task+window.
+// `workstream_tasks.due_date` is a DATE column (day precision), so hour-based
+// windows collapse to calendar dates when Postgres casts the ISO timestamp
+// bounds. We therefore treat the two reminder windows as calendar-day offsets:
+//   • "72h" nudge → task due exactly 3 days from today
+//   • "24h" nudge → task due exactly 1 day from today
+// Dedup key is per-window+task+user with a 26h lookback, so the hourly cron
+// (or a manual re-run) can only fire each nudge once per calendar day.
+function addDaysUTC(date: Date, days: number): string {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
 async function sendOnboardingPreDueNudges(
   supabase: any,
   slackMap: Record<string, string>,
   appUrl: string
 ): Promise<number> {
-  const now = Date.now();
-  const windows: Array<{ label: string; hours: number; from: string; to: string; dedupWindowHours: number }> = [
-    {
-      label: "72h",
-      hours: 72,
-      from: new Date(now + 70 * 3600_000).toISOString(),
-      to:   new Date(now + 74 * 3600_000).toISOString(),
-      dedupWindowHours: 6,
-    },
-    {
-      label: "24h",
-      hours: 24,
-      from: new Date(now + 22 * 3600_000).toISOString(),
-      to:   new Date(now + 26 * 3600_000).toISOString(),
-      dedupWindowHours: 6,
-    },
+  const today = new Date();
+  const windows: Array<{ label: string; hours: number; targetDate: string; dedupWindowHours: number }> = [
+    { label: "72h", hours: 72, targetDate: addDaysUTC(today, 3), dedupWindowHours: 26 },
+    { label: "24h", hours: 24, targetDate: addDaysUTC(today, 1), dedupWindowHours: 26 },
   ];
 
   let sent = 0;
@@ -417,9 +415,9 @@ async function sendOnboardingPreDueNudges(
       .select("id, title, due_date, card_id, assignee_id")
       .in("card_id", onbCardIds)
       .eq("completed", false)
-      .gte("due_date", win.from)
-      .lte("due_date", win.to);
+      .eq("due_date", win.targetDate);
     if (!upcoming || upcoming.length === 0) continue;
+
 
     // Fetch co-assignees
     const upcomingIds = upcoming.map((t: any) => t.id);

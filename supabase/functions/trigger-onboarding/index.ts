@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
     const employmentType = body.employment_type || candidate.employment_type || "full_time";
     const workLocation = body.work_location || candidate.work_location || "hybrid";
 
-    // Update candidate hire metadata
+    // Update candidate hire metadata (including offer letter path if provided)
     await admin.from("candidates").update({
       status: "hired",
       hired_at: new Date().toISOString(),
@@ -199,7 +199,20 @@ Deno.serve(async (req) => {
       employment_type: employmentType,
       work_location: workLocation,
       preferred_name: candidate.preferred_name || body.preferred_name || null,
+      offer_letter_storage_path: body.offer_letter_storage_path || candidate.offer_letter_storage_path || null,
     }).eq("id", candidate.id);
+    const offerLetterPath = body.offer_letter_storage_path || candidate.offer_letter_storage_path || null;
+
+    // Load Ops co-owner (from app_settings) — added as second assignee on
+    // provisioning + policy tasks so IT/Ops has explicit accountability.
+    let opsOwnerId: string | null = null;
+    try {
+      const { data: opsSetting } = await admin
+        .from("app_settings").select("value").eq("key", "onboarding_ops_owner_user_id").maybeSingle();
+      const raw = opsSetting?.value;
+      if (typeof raw === "string" && raw.length > 20) opsOwnerId = raw;
+      else if (raw && typeof raw === "object" && typeof (raw as any).user_id === "string") opsOwnerId = (raw as any).user_id;
+    } catch { /* ignore */ }
 
     // Create onboarding_runs row
     const { data: runRow } = await admin.from("onboarding_runs").insert({

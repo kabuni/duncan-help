@@ -454,12 +454,16 @@ The Kabuni Team`;
 
         let mime: string;
         if (offerAttachment) {
-          const b64 = b64urlEncode(offerAttachment.bytes)
-            .replace(/-/g, "+").replace(/_/g, "/"); // undo url-safe for MIME base64
-          // Re-wrap raw base64 for MIME (standard, not url-safe) at 76-char lines
-          const stdB64 = btoa(String.fromCharCode(...offerAttachment.bytes));
+          // Chunked binary→base64 (spreading a large Uint8Array into
+          // String.fromCharCode blows the call stack for real PDFs).
+          const bytes = offerAttachment.bytes;
+          let binary = "";
+          const CHUNK = 0x8000;
+          for (let i = 0; i < bytes.length; i += CHUNK) {
+            binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)));
+          }
+          const stdB64 = btoa(binary);
           const wrapped = stdB64.match(/.{1,76}/g)?.join("\r\n") ?? stdB64;
-          void b64;
           mime = [
             `From: The Kabuni Team <${fromAddress}>`,
             `To: ${candidate.email}`,

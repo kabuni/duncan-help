@@ -33,9 +33,10 @@ Output rules:
   2. ✅ Action items assigned to you (from meetings)
   3. 📌 Outstanding planner tasks
   4. 🗂️ Workstream cards & tasks assigned to you
-  5. 🛠️ Recently changed work items
-  6. 📝 Recent meeting summaries (1-line each, max 3)
-  7. 📈 Your AI usage today + 30-day top 3 leaderboard (always include if token_usage data is present)
+  5. 🎓 Onboarding blockers (only if onboarding_blockers is non-empty — list red cards + overdue onboarding tasks with the new hire name)
+  6. 🛠️ Recently changed work items
+  7. 📝 Recent meeting summaries (1-line each, max 3)
+  8. 📈 Your AI usage today + 30-day top 3 leaderboard (always include if token_usage data is present)
 - Keep it tight. Bullets over paragraphs. Highlight blockers and overdue items.
 - DATA COVERAGE: If the context object contains a "degraded_sources" array, add a short note at the end ("⚠️ Some data unavailable: …") naming the failed sources. Do not invent data for missing sections.
 - Never speculate beyond what the context shows. Never mention "tools" or "I cannot access".`;

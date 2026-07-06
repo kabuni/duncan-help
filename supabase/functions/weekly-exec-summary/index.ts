@@ -10,6 +10,8 @@
 //   6. Log the run in exec_summary_runs.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.3";
+import JSZip from "https://esm.sh/jszip@3.10.1";
+import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -417,12 +419,19 @@ function decodeBase64Url(s: string): string {
   } catch { return ""; }
 }
 
-function walkPartsForText(part: any, out: string[], attachments: Array<{ name: string; mime: string; size: number }>) {
+interface AttachmentRef {
+  name: string;
+  mime: string;
+  size: number;
+  attachmentId: string;
+}
+
+function walkPartsForText(part: any, out: string[], attachments: AttachmentRef[]) {
   if (!part) return;
   const mime = part.mimeType || "";
   const filename = part.filename || "";
   if (filename && part.body?.attachmentId) {
-    attachments.push({ name: filename, mime, size: part.body?.size ?? 0 });
+    attachments.push({ name: filename, mime, size: part.body?.size ?? 0, attachmentId: part.body.attachmentId });
   }
   if (mime === "text/plain" && part.body?.data) {
     out.push(decodeBase64Url(part.body.data));
@@ -433,12 +442,68 @@ function walkPartsForText(part: any, out: string[], attachments: Array<{ name: s
   if (Array.isArray(part.parts)) for (const p of part.parts) walkPartsForText(p, out, attachments);
 }
 
+function base64UrlToBytes(s: string): Uint8Array {
+  const b = s.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = b.length % 4 ? b + "=".repeat(4 - (b.length % 4)) : b;
+  const bin = atob(pad);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+async function extractDocxText(bytes: Uint8Array): Promise<string> {
+  try {
+    const zip = await JSZip.loadAsync(bytes);
+    const xml = await zip.file("word/document.xml")?.async("string");
+    if (!xml) return "";
+    return xml
+      .replace(/<w:tab\/>/g, "\t")
+      .replace(/<w:br\/>/g, "\n")
+      .replace(/<w:p[^>]*>/g, "\n")
+      .replace(/<\/w:p>/g, "\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  } catch (e) { console.error("docx extract failed", e); return ""; }
+}
+
+async function extractPdfTextBytes(bytes: Uint8Array): Promise<string> {
+  try {
+    const pdf = await getDocumentProxy(bytes);
+    const { text } = await extractText(pdf, { mergePages: true });
+    return (Array.isArray(text) ? text.join("\n\n") : String(text || "")).trim();
+  } catch (e) { console.error("pdf extract failed", e); return ""; }
+}
+
+async function fetchAndExtractAttachment(
+  token: string, msgId: string, a: AttachmentRef,
+): Promise<string> {
+  const lower = a.name.toLowerCase();
+  const isDocx = lower.endsWith(".docx");
+  const isPdf = lower.endsWith(".pdf") || a.mime === "application/pdf";
+  if (!isDocx && !isPdf) return "";
+  // Skip huge attachments (>15MB) to stay in memory/time budget
+  if (a.size > 15 * 1024 * 1024) return `[skipped ${a.name}: ${Math.round(a.size/1024/1024)}MB too large]`;
+  const r = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}/attachments/${a.attachmentId}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!r.ok) return `[failed to download ${a.name}: ${r.status}]`;
+  const j = await r.json();
+  if (!j.data) return `[no data for ${a.name}]`;
+  const bytes = base64UrlToBytes(j.data);
+  const text = isDocx ? await extractDocxText(bytes) : await extractPdfTextBytes(bytes);
+  if (!text) return `[no text extracted from ${a.name}]`;
+  return truncate(text, 20_000);
+}
+
 async function fetchDuncanWeeklyReports(admin: any, w: ReportWeek): Promise<string> {
   const token = await getGmailSenderToken(admin);
   if (!token) return "duncan@kabuni.com Gmail token unavailable — skipped weekly-report scan.";
   const after = Math.floor(w.monday.getTime() / 1000);
   const before = Math.floor(w.saturdayExcl.getTime() / 1000);
-  // Broad match: subject OR body contains "weekly report"
   const q = `after:${after} before:${before} ("weekly report" OR subject:"weekly report")`;
   const listRes = await fetch(
     `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=25&q=${encodeURIComponent(q)}`,
@@ -461,13 +526,29 @@ async function fetchDuncanWeeklyReports(admin: any, w: ReportWeek): Promise<stri
     const subj = gmailHeader(headers, "Subject");
     const date = gmailHeader(headers, "Date");
     const textParts: string[] = [];
-    const atts: Array<{ name: string; mime: string; size: number }> = [];
+    const atts: AttachmentRef[] = [];
     walkPartsForText(m.payload, textParts, atts);
-    const body = truncate(textParts.join("\n").trim(), 6000);
+    const body = truncate(textParts.join("\n").trim(), 4000);
+
+    // Download + extract text from docx/pdf attachments
+    const attachmentSections: string[] = [];
+    for (const a of atts) {
+      const lower = a.name.toLowerCase();
+      if (!(lower.endsWith(".docx") || lower.endsWith(".pdf") || a.mime === "application/pdf")) {
+        attachmentSections.push(`#### Attachment: ${a.name} (${a.mime}, ${Math.round(a.size/1024)}KB)\n[unsupported format — metadata only]`);
+        continue;
+      }
+      const extracted = await fetchAndExtractAttachment(token, id, a);
+      attachmentSections.push(
+        `#### Attachment: ${a.name} (${a.mime}, ${Math.round(a.size/1024)}KB)\n${extracted || "[no text]"}`
+      );
+    }
+
     const attLine = atts.length
-      ? `\nAttachments: ${atts.map((a) => `${a.name} (${a.mime}, ${Math.round(a.size / 1024)}KB)`).join(" · ")}`
+      ? `\nAttachments: ${atts.map((a) => `${a.name} (${Math.round(a.size / 1024)}KB)`).join(" · ")}`
       : "";
-    blocks.push(`### ${date} — ${subj}\nFrom: ${from}${attLine}\n\n${body || "(no text body)"}`);
+    const attBlock = attachmentSections.length ? `\n\n${attachmentSections.join("\n\n")}` : "";
+    blocks.push(`### ${date} — ${subj}\nFrom: ${from}${attLine}\n\n${body || "(no text body)"}${attBlock}`);
   }
   return blocks.join("\n\n---\n\n");
 }

@@ -351,8 +351,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Overdue check complete: ${notifiedCount} notifications sent`);
-    return new Response(JSON.stringify({ success: true, notified: notifiedCount, total_overdue: overdueTasks.length, results }), {
+    // ── 8. Pre-due onboarding nudges (72h + 24h before due) ──
+    // Only for tasks belonging to an "Onboarding" workstream card — new hire
+    // slippage costs are highest during pre-boarding & Day-1 windows.
+    const onboardingNudged = await sendOnboardingPreDueNudges(supabase, slackMap, appUrl);
+
+    console.log(`Overdue check complete: ${notifiedCount} notifications sent, ${onboardingNudged} onboarding nudges sent`);
+    return new Response(JSON.stringify({ success: true, notified: notifiedCount, onboarding_nudges: onboardingNudged, total_overdue: overdueTasks.length, results }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -364,3 +369,120 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+// ── Pre-due nudges for onboarding tasks ──
+// For each incomplete task on an "Onboarding" card whose due date falls into
+// the [70h, 74h] or [22h, 26h] window from now, DM the assignee with a
+// per-window dedup key so each nudge fires at most once per user+task+window.
+async function sendOnboardingPreDueNudges(
+  supabase: any,
+  slackMap: Record<string, string>,
+  appUrl: string
+): Promise<number> {
+  const now = Date.now();
+  const windows: Array<{ label: string; hours: number; from: string; to: string; dedupWindowHours: number }> = [
+    {
+      label: "72h",
+      hours: 72,
+      from: new Date(now + 70 * 3600_000).toISOString(),
+      to:   new Date(now + 74 * 3600_000).toISOString(),
+      dedupWindowHours: 6,
+    },
+    {
+      label: "24h",
+      hours: 24,
+      from: new Date(now + 22 * 3600_000).toISOString(),
+      to:   new Date(now + 26 * 3600_000).toISOString(),
+      dedupWindowHours: 6,
+    },
+  ];
+
+  let sent = 0;
+
+  // Onboarding cards (incomplete)
+  const { data: onbCards } = await supabase
+    .from("workstream_cards")
+    .select("id, title")
+    .eq("project_tag", "Onboarding")
+    .neq("status", "done")
+    .is("archived_at", null);
+  if (!onbCards || onbCards.length === 0) return 0;
+  const onbCardIds = onbCards.map((c: any) => c.id);
+  const onbCardMap: Record<string, { id: string; title: string }> = {};
+  onbCards.forEach((c: any) => { onbCardMap[c.id] = c; });
+
+  for (const win of windows) {
+    const { data: upcoming } = await supabase
+      .from("workstream_tasks")
+      .select("id, title, due_date, card_id, assignee_id")
+      .in("card_id", onbCardIds)
+      .eq("completed", false)
+      .gte("due_date", win.from)
+      .lte("due_date", win.to);
+    if (!upcoming || upcoming.length === 0) continue;
+
+    // Fetch co-assignees
+    const upcomingIds = upcoming.map((t: any) => t.id);
+    const { data: coAssignees } = await supabase
+      .from("workstream_task_assignees")
+      .select("task_id, user_id")
+      .in("task_id", upcomingIds);
+
+    const taskUserMap: Record<string, Set<string>> = {};
+    upcoming.forEach((t: any) => {
+      taskUserMap[t.id] = new Set<string>();
+      if (t.assignee_id) taskUserMap[t.id].add(t.assignee_id);
+    });
+    (coAssignees || []).forEach((a: any) => {
+      if (!taskUserMap[a.task_id]) taskUserMap[a.task_id] = new Set<string>();
+      taskUserMap[a.task_id].add(a.user_id);
+    });
+
+    // Resolve user_id → profile.id
+    const allUids = new Set<string>();
+    Object.values(taskUserMap).forEach((s) => s.forEach((u) => allUids.add(u)));
+    if (allUids.size === 0) continue;
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, user_id")
+      .in("user_id", Array.from(allUids));
+    const profileByUser: Record<string, string> = {};
+    (profiles || []).forEach((p: any) => { profileByUser[p.user_id] = p.id; });
+
+    for (const task of upcoming) {
+      const card = onbCardMap[task.card_id];
+      if (!card) continue;
+      const users = Array.from(taskUserMap[task.id] || []);
+      if (users.length === 0) continue;
+      const dueNice = new Date(task.due_date).toLocaleDateString("en-GB", {
+        day: "numeric", month: "long", year: "numeric",
+      });
+      for (const uid of users) {
+        const profId = profileByUser[uid];
+        const slackId = profId ? slackMap[profId] : null;
+        if (!slackId) continue;
+        const key = `onboarding-predue-${win.label}-${task.id}-${uid}`;
+        const dup = await isDuplicate(supabase, key, win.dedupWindowHours);
+        if (dup) continue;
+        const msg = [
+          `⏳ *Onboarding reminder — due in ~${win.hours}h*`,
+          ``,
+          `*${task.title}* on onboarding card *${card.title}* is due *${dueNice}*.`,
+          ``,
+          `👉 <${appUrl}/workstreams|Open in Duncan> to complete or reassign.`,
+        ].join("\n");
+        const ok = await sendSlackDM(slackId, msg);
+        await logNotification(supabase, slackId, {
+          type: "onboarding_predue",
+          window: win.label,
+          task_id: task.id,
+          task_title: task.title,
+          card_title: card.title,
+          due_date: task.due_date,
+        }, ok, key, uid);
+        if (ok) sent++;
+      }
+    }
+  }
+  return sent;
+}

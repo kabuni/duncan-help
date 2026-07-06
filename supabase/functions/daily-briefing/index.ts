@@ -33,9 +33,10 @@ Output rules:
   2. ✅ Action items assigned to you (from meetings)
   3. 📌 Outstanding planner tasks
   4. 🗂️ Workstream cards & tasks assigned to you
-  5. 🛠️ Recently changed work items
-  6. 📝 Recent meeting summaries (1-line each, max 3)
-  7. 📈 Your AI usage today + 30-day top 3 leaderboard (always include if token_usage data is present)
+  5. 🎓 Onboarding blockers (only if onboarding_blockers is non-empty — list red cards + overdue onboarding tasks with the new hire name)
+  6. 🛠️ Recently changed work items
+  7. 📝 Recent meeting summaries (1-line each, max 3)
+  8. 📈 Your AI usage today + 30-day top 3 leaderboard (always include if token_usage data is present)
 - Keep it tight. Bullets over paragraphs. Highlight blockers and overdue items.
 - DATA COVERAGE: If the context object contains a "degraded_sources" array, add a short note at the end ("⚠️ Some data unavailable: …") naming the failed sources. Do not invent data for missing sections.
 - Never speculate beyond what the context shows. Never mention "tools" or "I cannot access".`;
@@ -125,6 +126,7 @@ serve(async (req) => {
       assignedCards,
       assignedTasks,
       projectTasks,
+      onboardingBlockers,
     ] = await Promise.all([
       withStatus("calendar", () => fetchCalendarEvents(supabaseUrl, supabaseAdmin, authHeader, user.id)),
       withStatus("meetings", async () => {
@@ -162,6 +164,7 @@ serve(async (req) => {
       withStatus("workstream_cards", () => fetchAssignedCards(supabaseAdmin, user.id)),
       withStatus("workstream_tasks", () => fetchAssignedTasks(supabaseAdmin, user.id)),
       withStatus("project_tasks", () => fetchProjectTasks(supabaseAdmin, user.id)),
+      withStatus("onboarding_blockers", () => fetchOnboardingBlockers(supabaseAdmin)),
     ]);
 
     const contextMs = Date.now() - contextStartedAt;
@@ -171,7 +174,7 @@ serve(async (req) => {
       ["calendar", calendar], ["meetings", meetings], ["work_items", workItems],
       ["token_usage", myTokenUsage], ["leaderboard", leaderboard],
       ["workstream_cards", assignedCards], ["workstream_tasks", assignedTasks],
-      ["project_tasks", projectTasks],
+      ["project_tasks", projectTasks], ["onboarding_blockers", onboardingBlockers],
     ] as const) {
       if (src.status === "failed") degradedSources.push(name);
     }
@@ -243,6 +246,11 @@ serve(async (req) => {
           status: (myTokenUsage.status === "ok" && leaderboard.status === "ok") ? "ok" : "failed",
           my_today: myTokenUsage.data,
           leaderboard: leaderboard.data || [],
+        },
+        onboarding_blockers: {
+          status: onboardingBlockers.status,
+          error: onboardingBlockers.error,
+          items: onboardingBlockers.data || [],
         },
       },
     };
@@ -602,4 +610,79 @@ async function fetchProjectTasks(supabaseAdmin: any, userId: string | null) {
     overdue_deadline: !!(t.deadline && t.deadline < today),
     overdue_due: !!(t.due_date && t.due_date < today),
   }));
+}
+
+// ── Helper: Onboarding blockers (company-wide visibility) ──
+// Surfaces onboarding cards that are red OR have overdue tasks, so leadership
+// sees new-hire risks in the morning briefing. Includes candidate name where
+// available and joins the linked candidate for context.
+async function fetchOnboardingBlockers(supabaseAdmin: any) {
+  const nowIso = new Date().toISOString();
+  const today = nowIso.split("T")[0];
+
+  // Active onboarding runs → cards
+  const { data: runs, error: rErr } = await supabaseAdmin
+    .from("onboarding_runs")
+    .select("id, candidate_id, card_id, status, created_at")
+    .not("card_id", "is", null)
+    .in("status", ["provisioning", "completed"]);
+  if (rErr) throw rErr;
+  if (!runs || runs.length === 0) return [];
+
+  const cardIds = runs.map((r: any) => r.card_id);
+  const candidateIds = runs.map((r: any) => r.candidate_id);
+  const [{ data: cards }, { data: candidates }, { data: overdueTasks }] = await Promise.all([
+    supabaseAdmin
+      .from("workstream_cards")
+      .select("id, title, status, due_date")
+      .in("id", cardIds)
+      .neq("status", "done")
+      .is("archived_at", null),
+    supabaseAdmin
+      .from("candidates")
+      .select("id, name, preferred_name, start_date")
+      .in("id", candidateIds),
+    supabaseAdmin
+      .from("workstream_tasks")
+      .select("id, title, due_date, card_id, completed")
+      .in("card_id", cardIds)
+      .eq("completed", false)
+      .lt("due_date", today),
+  ]);
+
+  const cardMap: Record<string, any> = {};
+  (cards || []).forEach((c: any) => { cardMap[c.id] = c; });
+  const candMap: Record<string, any> = {};
+  (candidates || []).forEach((c: any) => { candMap[c.id] = c; });
+
+  const overdueByCard: Record<string, any[]> = {};
+  (overdueTasks || []).forEach((t: any) => {
+    (overdueByCard[t.card_id] ||= []).push(t);
+  });
+
+  const items: any[] = [];
+  for (const run of runs) {
+    const card = cardMap[run.card_id];
+    if (!card) continue;
+    const cand = candMap[run.candidate_id];
+    const overdue = overdueByCard[run.card_id] || [];
+    if (card.status !== "red" && overdue.length === 0) continue;
+    items.push({
+      new_hire: cand?.preferred_name || cand?.name || "Unknown hire",
+      start_date: cand?.start_date || null,
+      card_title: card.title,
+      card_status: card.status,
+      card_due_date: card.due_date,
+      overdue_task_count: overdue.length,
+      overdue_task_titles: overdue.slice(0, 3).map((t: any) => t.title),
+    });
+  }
+  // Sort worst-first: red before amber, then by overdue count
+  items.sort((a, b) => {
+    const rank = (s: string) => (s === "red" ? 0 : s === "amber" ? 1 : 2);
+    const dr = rank(a.card_status) - rank(b.card_status);
+    if (dr !== 0) return dr;
+    return b.overdue_task_count - a.overdue_task_count;
+  });
+  return items;
 }

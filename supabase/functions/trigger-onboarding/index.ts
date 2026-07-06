@@ -281,8 +281,9 @@ Deno.serve(async (req) => {
     await admin.from("candidates").update({ onboarding_card_id: card.id }).eq("id", candidate.id);
     await admin.from("onboarding_runs").update({ card_id: card.id }).eq("id", runId);
 
-    // Assignees: hiring manager + creator (if different)
+    // Assignees: hiring manager + creator + Ops co-owner (deduped)
     const assignees = new Set<string>([hiringManagerId, user.id]);
+    if (opsOwnerId) assignees.add(opsOwnerId);
     await admin.from("workstream_card_assignees").insert(
       Array.from(assignees).map((uid) => ({ card_id: card.id, user_id: uid }))
     );
@@ -291,22 +292,26 @@ Deno.serve(async (req) => {
       card_id: card.id,
       user_id: user.id,
       action: "created",
-      details: { source: "trigger-onboarding", candidate_id: candidate.id, role: roleTitle },
+      details: { source: "trigger-onboarding", candidate_id: candidate.id, role: roleTitle, ops_owner_id: opsOwnerId },
     });
 
     // ── 3. Build tasks ──
-    const tasks: Task[] = [
+    // `coAssignees` on a task are added via workstream_task_assignees (many-to-many)
+    // in addition to `assignee` (single legacy field). Used for Ops co-ownership.
+    type TaskEx = Task & { coAssignees?: (string | null)[] };
+    const opsCoOwn = opsOwnerId ? [opsOwnerId] : [];
+    const tasks: TaskEx[] = [
       // Pre-boarding (before start)
-      { group: "Pre-boarding", title: "Send welcome email + offer letter", offsetDays: -7, assignee: user.id },
-      ...provisioningTools.map((t) => ({ group: "Pre-boarding", title: `Provision access: ${t}`, offsetDays: -3, assignee: null as any })),
-      { group: "Pre-boarding", title: "Order equipment / confirm remote setup", offsetDays: -5, assignee: hiringManagerId },
-      { group: "Pre-boarding", title: `Add to Slack: #general and #${department.toLowerCase().replace(/\s+/g, "-")}`, offsetDays: -1, assignee: null },
+      { group: "Pre-boarding", title: "Send welcome email + offer letter", offsetDays: -7, assignee: user.id, coAssignees: opsCoOwn },
+      ...provisioningTools.map((t) => ({ group: "Pre-boarding", title: `Provision access: ${t}`, offsetDays: -3, assignee: opsOwnerId, coAssignees: [] as string[] })),
+      { group: "Pre-boarding", title: "Order equipment / confirm remote setup", offsetDays: -5, assignee: hiringManagerId, coAssignees: opsCoOwn },
+      { group: "Pre-boarding", title: `Add to Slack: #general and #${department.toLowerCase().replace(/\s+/g, "-")}`, offsetDays: -1, assignee: opsOwnerId, coAssignees: [] },
 
       // Day 1
-      { group: "Day 1", title: "Day-1 orientation (90 min)", offsetDays: 0, assignee: hiringManagerId },
+      { group: "Day 1", title: "Day-1 orientation (90 min)", offsetDays: 0, assignee: hiringManagerId, coAssignees: opsCoOwn },
       { group: "Day 1", title: "Manager intro 1:1 (30 min)", offsetDays: 0, assignee: hiringManagerId },
-      { group: "Day 1", title: "Sign policy acknowledgements (handbook, security, IP)", offsetDays: 0, assignee: null },
-      { group: "Day 1", title: "Device & security check", offsetDays: 0, assignee: null },
+      { group: "Day 1", title: "Sign policy acknowledgements (handbook, security, IP)", offsetDays: 0, assignee: opsOwnerId, coAssignees: [] },
+      { group: "Day 1", title: "Device & security check", offsetDays: 0, assignee: opsOwnerId, coAssignees: [] },
 
       // Week 1
       { group: "Week 1", title: "Leadership intros — schedule 15-30 min with each leader (within 10 working days)", offsetDays: 5, assignee: hiringManagerId },
@@ -334,8 +339,70 @@ Deno.serve(async (req) => {
       sort_order: i,
       completed: false,
     }));
-    await admin.from("workstream_tasks").insert(taskRows);
-    stages.tasks_created = taskRows.length;
+    const { data: insertedTasks } = await admin
+      .from("workstream_tasks")
+      .insert(taskRows)
+      .select("id, title, sort_order");
+    stages.tasks_created = (insertedTasks || []).length;
+
+    // Insert co-assignees (many-to-many) for tasks that specify them
+    const coAssigneeRows: any[] = [];
+    (insertedTasks || []).forEach((row: any) => {
+      const t = tasks[row.sort_order];
+      const extras = (t?.coAssignees || []).filter((x): x is string => !!x && x !== (t.assignee || ""));
+      for (const uid of extras) {
+        coAssigneeRows.push({ task_id: row.id, user_id: uid });
+      }
+    });
+    if (coAssigneeRows.length > 0) {
+      await admin.from("workstream_task_assignees").insert(coAssigneeRows);
+    }
+
+    // ── 3b. Attach CV, JD, and offer letter to the Pre-boarding welcome task
+    // as REFERENCES (source_bucket points at each file's native bucket — no
+    // duplication, so any re-parse or JD edit stays reflected).
+    const preboardTask = (insertedTasks || []).find((t: any) => (t.title || "").includes("Send welcome email + offer letter"));
+    const attachmentRefs: any[] = [];
+    const refUploader = user.id;
+    if (preboardTask) {
+      if (candidate.cv_storage_path) {
+        attachmentRefs.push({
+          task_id: preboardTask.id,
+          uploaded_by: refUploader,
+          file_name: candidate.attachment_filename || `${(candidate.name || "candidate").replace(/\s+/g, "_")}_CV.pdf`,
+          storage_path: candidate.cv_storage_path,
+          source_bucket: "cvs",
+          mime_type: "application/pdf",
+          size_bytes: null,
+        });
+      }
+      if (role?.jd_storage_path) {
+        attachmentRefs.push({
+          task_id: preboardTask.id,
+          uploaded_by: refUploader,
+          file_name: `${(role.title || "role").replace(/\s+/g, "_")}_JD.pdf`,
+          storage_path: role.jd_storage_path,
+          source_bucket: "job-descriptions",
+          mime_type: "application/pdf",
+          size_bytes: null,
+        });
+      }
+      if (offerLetterPath) {
+        attachmentRefs.push({
+          task_id: preboardTask.id,
+          uploaded_by: refUploader,
+          file_name: `${(fullName || "new_hire").replace(/\s+/g, "_")}_Offer_Letter.pdf`,
+          storage_path: offerLetterPath,
+          source_bucket: "offer-letters",
+          mime_type: "application/pdf",
+          size_bytes: null,
+        });
+      }
+      if (attachmentRefs.length > 0) {
+        await admin.from("workstream_task_attachments").insert(attachmentRefs);
+      }
+    }
+    stages.attachments_linked = attachmentRefs.length;
 
     // ── 4. Welcome email (via gmail-api with the triggering user's tokens) ──
     let emailResult: any = { sent: false };

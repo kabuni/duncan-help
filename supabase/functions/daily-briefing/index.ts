@@ -247,6 +247,11 @@ serve(async (req) => {
           my_today: myTokenUsage.data,
           leaderboard: leaderboard.data || [],
         },
+        onboarding_blockers: {
+          status: onboardingBlockers.status,
+          error: onboardingBlockers.error,
+          items: onboardingBlockers.data || [],
+        },
       },
     };
 

@@ -58,15 +58,16 @@ function ukNowParts() {
   };
 }
 
-// ─── Report week (previous Mon–Fri, UK) ────────────────────────────────────
+// ─── Report week (previous Mon–Sun, UK) ────────────────────────────────────
 interface ReportWeek {
-  monday: Date;          // last week Monday 00:00 UTC (representing UK-day boundary)
-  saturdayExcl: Date;    // exclusive upper bound (Saturday 00:00) — covers Mon–Fri
-  friday: Date;          // last week Friday for labels
+  monday: Date;          // last week Monday 00:00 UTC
+  saturdayExcl: Date;    // EXCLUSIVE upper bound = next Monday 00:00 (kept name for compat; covers Mon–Sun)
+  friday: Date;          // last week Friday (kept for label back-compat)
+  sunday: Date;          // last week Sunday
   year: number;
-  label: string;         // "22nd June - 26th June"
-  isoLabel: string;      // "2026-06-22/2026-06-26"
-  todayLabel: string;    // "Monday 29 June 2026"
+  label: string;         // "29th June - 5th July"
+  isoLabel: string;      // "2026-06-29/2026-07-05"
+  todayLabel: string;    // "Monday 6 July 2026"
 }
 
 function ordinalNum(n: number) {
@@ -92,20 +93,22 @@ function buildReportWeek(asOf?: Date): ReportWeek {
   monday.setUTCDate(thisMon.getUTCDate() - 7);      // last week Monday
   const friday = new Date(monday);
   friday.setUTCDate(monday.getUTCDate() + 4);       // last week Friday
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);       // last week Sunday
   const saturdayExcl = new Date(monday);
-  saturdayExcl.setUTCDate(monday.getUTCDate() + 5); // exclusive Sat 00:00
+  saturdayExcl.setUTCDate(monday.getUTCDate() + 7); // exclusive next-Mon 00:00 → covers Mon–Sun
 
   const monMonth = monday.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
-  const friMonth = friday.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
-  const label = monMonth === friMonth
-    ? `${ordinalNum(monday.getUTCDate())} ${monMonth} - ${ordinalNum(friday.getUTCDate())} ${friMonth}`
-    : `${ordinalNum(monday.getUTCDate())} ${monMonth} - ${ordinalNum(friday.getUTCDate())} ${friMonth}`;
-  const isoLabel = `${monday.toISOString().slice(0, 10)}/${friday.toISOString().slice(0, 10)}`;
+  const sunMonth = sunday.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  const label = monMonth === sunMonth
+    ? `${ordinalNum(monday.getUTCDate())} - ${ordinalNum(sunday.getUTCDate())} ${sunMonth}`
+    : `${ordinalNum(monday.getUTCDate())} ${monMonth} - ${ordinalNum(sunday.getUTCDate())} ${sunMonth}`;
+  const isoLabel = `${monday.toISOString().slice(0, 10)}/${sunday.toISOString().slice(0, 10)}`;
   const todayLabel = ukToday.toLocaleDateString("en-GB", {
     weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
   });
   return {
-    monday, saturdayExcl, friday,
+    monday, saturdayExcl, friday, sunday,
     year: monday.getUTCFullYear(),
     label, isoLabel, todayLabel,
   };

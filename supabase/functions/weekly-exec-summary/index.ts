@@ -227,16 +227,264 @@ function formatWorkstreamBlock(cards: CardRow[], tasks: any[]): string {
   }).join("\n\n");
 }
 
+// ─── Inbox scan across all opted-in users (Mon–Sun) ────────────────────────
+async function refreshGmailAccess(refreshToken: string) {
+  const r = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      refresh_token: refreshToken,
+      client_id: Deno.env.get("GMAIL_CLIENT_ID")!,
+      client_secret: Deno.env.get("GMAIL_CLIENT_SECRET")!,
+      grant_type: "refresh_token",
+    }),
+  });
+  if (!r.ok) return null;
+  return r.json() as Promise<{ access_token: string; expires_in: number }>;
+}
+
+async function getValidUserGmailToken(admin: any, row: any): Promise<string | null> {
+  const expiry = new Date(row.token_expiry).getTime();
+  if (expiry - Date.now() < 5 * 60 * 1000) {
+    const j = await refreshGmailAccess(row.refresh_token);
+    if (!j) return null;
+    const newExpiry = new Date(Date.now() + j.expires_in * 1000).toISOString();
+    await admin.from("gmail_tokens")
+      .update({ access_token: j.access_token, token_expiry: newExpiry })
+      .eq("id", row.id);
+    return j.access_token;
+  }
+  return row.access_token;
+}
+
+function gmailHeader(hs: any[], name: string): string {
+  return hs?.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value || "";
+}
+
+async function fetchMailboxLastWeek(accessToken: string, w: ReportWeek) {
+  const after = Math.floor(w.monday.getTime() / 1000);
+  const before = Math.floor(w.saturdayExcl.getTime() / 1000);
+  const q = `after:${after} before:${before} (in:inbox OR in:sent) -category:promotions -category:social`;
+  const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=80&q=${encodeURIComponent(q)}`;
+  const listRes = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!listRes.ok) return [];
+  const listData = await listRes.json();
+  const ids: string[] = (listData.messages || []).map((m: any) => m.id).slice(0, 80);
+  if (!ids.length) return [];
+  const msgs = await Promise.all(ids.map(async (id) => {
+    const r = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!r.ok) return null;
+    const m = await r.json();
+    const h = m.payload?.headers || [];
+    return {
+      id: m.id,
+      from: gmailHeader(h, "From"),
+      to: gmailHeader(h, "To"),
+      subject: gmailHeader(h, "Subject"),
+      date: gmailHeader(h, "Date"),
+      snippet: m.snippet || "",
+      direction: (m.labelIds || []).includes("SENT") ? "sent" : "received",
+    };
+  }));
+  return msgs.filter(Boolean) as any[];
+}
+
+async function extractSignalsLLM(owner: string, messages: any[]): Promise<any> {
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  const empty = { commitments: [], risks: [], escalations: [], board_mentions: [], customer_issues: [], vendor_signals: [] };
+  if (!apiKey || !messages.length) return empty;
+  const compact = messages.map((m) => ({
+    from: m.from, to: m.to, subject: m.subject, date: m.date, direction: m.direction, snippet: m.snippet,
+  }));
+  const sys = `You extract executive signals from one mailbox (owner: ${owner}) over a 7-day window. Return ONLY raw JSON, no markdown.`;
+  const usr = `Messages (last week):
+${JSON.stringify(compact).slice(0, 60000)}
+
+Return JSON:
+{
+  "commitments":[{"owner":string,"what":string,"due":string|null}],
+  "risks":[{"severity":"low"|"medium"|"high"|"critical","summary":string,"who_flagged":string}],
+  "escalations":[{"from":string,"to":string,"topic":string,"urgency":"low"|"medium"|"high"}],
+  "board_mentions":[{"topic":string,"sender":string}],
+  "customer_issues":[{"company":string,"issue":string,"severity":"low"|"medium"|"high"}],
+  "vendor_signals":[{"vendor":string,"signal":string,"amount":string|null}]
+}
+RULES: Empty arrays OK. Skip newsletters, calendar invites, recruiter spam, personal. Under 20 words each.`;
+  try {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+        messages: [{ role: "system", content: sys }, { role: "user", content: usr }],
+      }),
+    });
+    if (!r.ok) return empty;
+    const j = await r.json();
+    const parsed = JSON.parse(j.choices?.[0]?.message?.content || "{}");
+    return { ...empty, ...parsed };
+  } catch { return empty; }
+}
+
+interface InboxAggregate {
+  mailboxes_scanned: number;
+  emails_scanned: number;
+  per_mailbox: Array<{ mailbox: string; emails: number; status: string }>;
+  signals: {
+    commitments: any[]; risks: any[]; escalations: any[];
+    board_mentions: any[]; customer_issues: any[]; vendor_signals: any[];
+  };
+}
+
+async function scanAllOptedInInboxes(admin: any, w: ReportWeek): Promise<InboxAggregate> {
+  const empty: InboxAggregate = {
+    mailboxes_scanned: 0, emails_scanned: 0, per_mailbox: [],
+    signals: { commitments: [], risks: [], escalations: [], board_mentions: [], customer_issues: [], vendor_signals: [] },
+  };
+  const { data: tokens } = await admin
+    .from("gmail_tokens")
+    .select("id, connected_by, email_address, access_token, refresh_token, token_expiry");
+  if (!tokens?.length) return empty;
+  const { data: profs } = await admin
+    .from("gmail_writing_profiles")
+    .select("user_id, ceo_briefing_optin");
+  const optin = new Set((profs || []).filter((p: any) => p.ceo_briefing_optin).map((p: any) => p.user_id));
+  const eligible = tokens.filter((t: any) => optin.has(t.connected_by));
+  const per: any[] = [];
+  const agg = { commitments: [] as any[], risks: [] as any[], escalations: [] as any[], board_mentions: [] as any[], customer_issues: [] as any[], vendor_signals: [] as any[] };
+  let totalEmails = 0;
+  const results = await Promise.all(eligible.map(async (t: any) => {
+    try {
+      const tok = await getValidUserGmailToken(admin, t);
+      if (!tok) return { mailbox: t.email_address, emails: 0, status: "auth_failed", sig: null };
+      const msgs = await fetchMailboxLastWeek(tok, w);
+      const sig = await extractSignalsLLM(t.email_address || "unknown", msgs);
+      return { mailbox: t.email_address || "unknown", emails: msgs.length, status: "ok", sig };
+    } catch (e: any) {
+      return { mailbox: t.email_address, emails: 0, status: `error:${e?.message || e}`, sig: null };
+    }
+  }));
+  for (const r of results) {
+    per.push({ mailbox: r.mailbox, emails: r.emails, status: r.status });
+    totalEmails += r.emails;
+    if (!r.sig) continue;
+    const tag = (arr: any[]) => arr.map((x) => ({ ...x, _mailbox: r.mailbox }));
+    agg.commitments.push(...tag(r.sig.commitments || []));
+    agg.risks.push(...tag(r.sig.risks || []));
+    agg.escalations.push(...tag(r.sig.escalations || []));
+    agg.board_mentions.push(...tag(r.sig.board_mentions || []));
+    agg.customer_issues.push(...tag(r.sig.customer_issues || []));
+    agg.vendor_signals.push(...tag(r.sig.vendor_signals || []));
+  }
+  return { mailboxes_scanned: eligible.length, emails_scanned: totalEmails, per_mailbox: per, signals: agg };
+}
+
+function formatInboxSignalsBlock(agg: InboxAggregate): string {
+  if (agg.mailboxes_scanned === 0) return "No opted-in mailboxes were scanned for inbox signals.";
+  const parts: string[] = [];
+  parts.push(`Scanned **${agg.mailboxes_scanned}** mailboxes · **${agg.emails_scanned}** emails.`);
+  const s = agg.signals;
+  const dump = (label: string, arr: any[]) => {
+    if (!arr.length) return;
+    parts.push(`\n**${label}** (${arr.length}):`);
+    for (const item of arr.slice(0, 25)) {
+      parts.push(`- ${JSON.stringify(item)}`);
+    }
+  };
+  dump("Commitments", s.commitments);
+  dump("Risks", s.risks);
+  dump("Escalations", s.escalations);
+  dump("Board mentions", s.board_mentions);
+  dump("Customer issues", s.customer_issues);
+  dump("Vendor signals", s.vendor_signals);
+  if (parts.length === 1) parts.push("No material signals surfaced this week.");
+  return parts.join("\n");
+}
+
+// ─── duncan@kabuni.com "weekly report" emails scan ─────────────────────────
+function decodeBase64Url(s: string): string {
+  try {
+    const b = s.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = b.length % 4 ? b + "=".repeat(4 - (b.length % 4)) : b;
+    const bin = atob(pad);
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  } catch { return ""; }
+}
+
+function walkPartsForText(part: any, out: string[], attachments: Array<{ name: string; mime: string; size: number }>) {
+  if (!part) return;
+  const mime = part.mimeType || "";
+  const filename = part.filename || "";
+  if (filename && part.body?.attachmentId) {
+    attachments.push({ name: filename, mime, size: part.body?.size ?? 0 });
+  }
+  if (mime === "text/plain" && part.body?.data) {
+    out.push(decodeBase64Url(part.body.data));
+  } else if (mime === "text/html" && part.body?.data && out.length === 0) {
+    const html = decodeBase64Url(part.body.data);
+    out.push(html.replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
+  }
+  if (Array.isArray(part.parts)) for (const p of part.parts) walkPartsForText(p, out, attachments);
+}
+
+async function fetchDuncanWeeklyReports(admin: any, w: ReportWeek): Promise<string> {
+  const token = await getGmailSenderToken(admin);
+  if (!token) return "duncan@kabuni.com Gmail token unavailable — skipped weekly-report scan.";
+  const after = Math.floor(w.monday.getTime() / 1000);
+  const before = Math.floor(w.saturdayExcl.getTime() / 1000);
+  // Broad match: subject OR body contains "weekly report"
+  const q = `after:${after} before:${before} ("weekly report" OR subject:"weekly report")`;
+  const listRes = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=25&q=${encodeURIComponent(q)}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!listRes.ok) return `Weekly-report scan failed (${listRes.status}).`;
+  const listJson = await listRes.json();
+  const ids: string[] = (listJson.messages || []).map((m: any) => m.id);
+  if (!ids.length) return "No emails containing 'weekly report' found in duncan@kabuni.com for this window.";
+  const blocks: string[] = [];
+  for (const id of ids) {
+    const r = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!r.ok) continue;
+    const m = await r.json();
+    const headers = m.payload?.headers || [];
+    const from = gmailHeader(headers, "From");
+    const subj = gmailHeader(headers, "Subject");
+    const date = gmailHeader(headers, "Date");
+    const textParts: string[] = [];
+    const atts: Array<{ name: string; mime: string; size: number }> = [];
+    walkPartsForText(m.payload, textParts, atts);
+    const body = truncate(textParts.join("\n").trim(), 6000);
+    const attLine = atts.length
+      ? `\nAttachments: ${atts.map((a) => `${a.name} (${a.mime}, ${Math.round(a.size / 1024)}KB)`).join(" · ")}`
+      : "";
+    blocks.push(`### ${date} — ${subj}\nFrom: ${from}${attLine}\n\n${body || "(no text body)"}`);
+  }
+  return blocks.join("\n\n---\n\n");
+}
+
 // ─── OpenAI summary ───────────────────────────────────────────────────────
 async function buildSummaryMarkdown(
   meetingsBlock: string,
   workstreamsBlock: string,
+  inboxBlock: string,
+  weeklyReportEmailsBlock: string,
   meetingsCount: number,
   cardsCount: number,
   reportWeek: ReportWeek,
 ): Promise<string> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
+
 
   const dateGrounding =
     `\n\n=== AUTHORITATIVE DATE CONTEXT (USE EXACTLY — DO NOT ALTER) ===\n` +

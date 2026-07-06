@@ -644,25 +644,32 @@ The Kabuni Team`;
       plan_30_60_90: plan,
     }).eq("id", runId);
 
-    // ── 8. Notification ──
-    try {
-      await admin.from("notifications").insert({
-        user_id: hiringManagerId,
-        title: `Onboarding started for ${fullName}`,
-        body: `Card created with ${taskRows.length} tasks. Welcome email ${emailResult.sent ? "sent" : "not sent"}. ${calendarEvents.filter((e) => e.id).length} calendar events created.`,
-        link: `/workstreams?card=${card.id}`,
-        kind: "onboarding",
-      });
-    } catch (e) { console.warn("notification insert failed", e); }
+    // ── 8. Notifications ──
+    // Notify hiring manager + Ops co-owner (deduped)
+    const notifTargets = Array.from(new Set([hiringManagerId, opsOwnerId].filter(Boolean))) as string[];
+    for (const uid of notifTargets) {
+      try {
+        await admin.from("notifications").insert({
+          user_id: uid,
+          title: `Onboarding started for ${fullName}`,
+          body: `Card created with ${taskRows.length} tasks. Welcome email ${emailResult.sent ? "sent" : "not sent"}. Slack welcome ${slackResult.sent ? "posted" : (slackResult.skipped ? "skipped" : "failed")}. ${calendarEvents.filter((e) => e.id).length} calendar events.`,
+          link: `/workstreams?card=${card.id}`,
+          kind: "onboarding",
+        });
+      } catch (e) { console.warn("notification insert failed", e); }
+    }
 
     return new Response(JSON.stringify({
       success: true,
       card_id: card.id,
       run_id: runId,
       tasks_created: taskRows.length,
+      attachments_linked: attachmentRefs.length,
       welcome_email: emailResult,
+      slack_welcome: slackResult,
       calendar_events: calendarEvents,
       plan_generated: !!plan,
+      ops_owner_id: opsOwnerId,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (err: any) {

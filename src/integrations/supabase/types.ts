@@ -411,6 +411,7 @@ export type Database = {
           is_score_locked: boolean
           job_role_id: string | null
           name: string
+          offer_letter_storage_path: string | null
           onboarding_card_id: string | null
           preferred_name: string | null
           rejected_at: string | null
@@ -451,6 +452,7 @@ export type Database = {
           is_score_locked?: boolean
           job_role_id?: string | null
           name: string
+          offer_letter_storage_path?: string | null
           onboarding_card_id?: string | null
           preferred_name?: string | null
           rejected_at?: string | null
@@ -491,6 +493,7 @@ export type Database = {
           is_score_locked?: boolean
           job_role_id?: string | null
           name?: string
+          offer_letter_storage_path?: string | null
           onboarding_card_id?: string | null
           preferred_name?: string | null
           rejected_at?: string | null
@@ -4403,6 +4406,7 @@ export type Database = {
           id: string
           mime_type: string | null
           size_bytes: number | null
+          source_bucket: string
           storage_path: string
           task_id: string
           uploaded_by: string
@@ -4413,6 +4417,7 @@ export type Database = {
           id?: string
           mime_type?: string | null
           size_bytes?: number | null
+          source_bucket?: string
           storage_path: string
           task_id: string
           uploaded_by: string
@@ -4423,6 +4428,7 @@ export type Database = {
           id?: string
           mime_type?: string | null
           size_bytes?: number | null
+          source_bucket?: string
           storage_path?: string
           task_id?: string
           uploaded_by?: string

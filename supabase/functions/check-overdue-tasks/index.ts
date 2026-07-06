@@ -351,8 +351,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Overdue check complete: ${notifiedCount} notifications sent`);
-    return new Response(JSON.stringify({ success: true, notified: notifiedCount, total_overdue: overdueTasks.length, results }), {
+    // ── 8. Pre-due onboarding nudges (72h + 24h before due) ──
+    // Only for tasks belonging to an "Onboarding" workstream card — new hire
+    // slippage costs are highest during pre-boarding & Day-1 windows.
+    const onboardingNudged = await sendOnboardingPreDueNudges(supabase, slackMap, appUrl);
+
+    console.log(`Overdue check complete: ${notifiedCount} notifications sent, ${onboardingNudged} onboarding nudges sent`);
+    return new Response(JSON.stringify({ success: true, notified: notifiedCount, onboarding_nudges: onboardingNudged, total_overdue: overdueTasks.length, results }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

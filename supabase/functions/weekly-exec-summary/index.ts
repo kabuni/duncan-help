@@ -489,29 +489,31 @@ async function buildSummaryMarkdown(
   const dateGrounding =
     `\n\n=== AUTHORITATIVE DATE CONTEXT (USE EXACTLY — DO NOT ALTER) ===\n` +
     `TODAY (UK): ${reportWeek.todayLabel}\n` +
-    `REPORT WEEK (Mon–Fri being summarised): ${reportWeek.label} ${reportWeek.year}\n` +
+    `REPORT WEEK (Mon–Sun being summarised): ${reportWeek.label} ${reportWeek.year}\n` +
     `CURRENT YEAR: ${reportWeek.year}\n` +
     `RULES:\n` +
     `- The H1 MUST read exactly: "Weekly Executive Summary — ${reportWeek.label} ${reportWeek.year}".\n` +
     `- Do NOT invent or shift years. The only year that may appear is ${reportWeek.year}.\n` +
-    `- Use ONLY the meetings and workstream activity provided below. Do not invent items.\n`;
+    `- Use ONLY the meetings, workstream activity, inbox signals, and duncan@kabuni.com weekly-report emails provided below. Do not invent items.\n`;
 
   const system =
     "You are Duncan, Kabuni's executive intelligence engine. " +
-    "Produce a board-ready weekly executive summary in clean Markdown, grounded strictly in the meetings (Gemini/Plaud) and workstream-card activity provided. " +
+    "Produce a board-ready weekly executive summary in clean Markdown, grounded strictly in: (1) Gemini/Plaud meeting notes, (2) workstream-card activity, (3) inbox signals extracted from opted-in team mailboxes, and (4) any 'weekly report' emails sent to duncan@kabuni.com (including their attached documents). " +
     "Use H1 for the report title, H2 for sections, bullets where useful, and Markdown tables when comparing items. " +
     "Sections (in order): Executive Snapshot, Meetings This Week (key discussions & decisions), " +
-    "Workstream Progress (RYG table: card · status · update), Wins of the Week, Risks & Blockers (with mitigations), Action Items & Owners, Key Decisions Needed. " +
+    "Workstream Progress (RYG table: card · status · update), Team Signals from Inboxes (commitments, risks, escalations, board mentions, customer/vendor signals — with the mailbox that surfaced them), Weekly Reports Received (summarise each report email + its attachments), Wins of the Week, Risks & Blockers (with mitigations), Action Items & Owners, Key Decisions Needed. " +
     "Be concise, factual, decision-oriented. Never invent figures or events. " +
     "If a section has no data, state 'No activity recorded this week.' instead of fabricating." +
     dateGrounding;
 
   const user =
-    `Report week: ${reportWeek.label} ${reportWeek.year} (Monday–Friday)\n` +
+    `Report week: ${reportWeek.label} ${reportWeek.year} (Monday–Sunday)\n` +
     `Today: ${reportWeek.todayLabel}\n` +
     `Meetings ingested: ${meetingsCount} · Workstream cards with activity: ${cardsCount}\n\n` +
-    `=== MEETINGS (Gemini / Plaud) ===\n${meetingsBlock}\n\n` +
-    `=== WORKSTREAM CARD ACTIVITY ===\n${workstreamsBlock}\n`;
+    `=== MEETINGS (Gemini / Plaud — all users incl. duncan@kabuni.com) ===\n${meetingsBlock}\n\n` +
+    `=== WORKSTREAM CARD ACTIVITY ===\n${workstreamsBlock}\n\n` +
+    `=== TEAM INBOX SIGNALS (last 7 days, opted-in mailboxes) ===\n${inboxBlock}\n\n` +
+    `=== WEEKLY-REPORT EMAILS TO duncan@kabuni.com ===\n${weeklyReportEmailsBlock}\n`;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",

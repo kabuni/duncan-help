@@ -611,3 +611,78 @@ async function fetchProjectTasks(supabaseAdmin: any, userId: string | null) {
     overdue_due: !!(t.due_date && t.due_date < today),
   }));
 }
+
+// ── Helper: Onboarding blockers (company-wide visibility) ──
+// Surfaces onboarding cards that are red OR have overdue tasks, so leadership
+// sees new-hire risks in the morning briefing. Includes candidate name where
+// available and joins the linked candidate for context.
+async function fetchOnboardingBlockers(supabaseAdmin: any) {
+  const nowIso = new Date().toISOString();
+  const today = nowIso.split("T")[0];
+
+  // Active onboarding runs → cards
+  const { data: runs, error: rErr } = await supabaseAdmin
+    .from("onboarding_runs")
+    .select("id, candidate_id, card_id, status, created_at")
+    .not("card_id", "is", null)
+    .in("status", ["provisioning", "completed"]);
+  if (rErr) throw rErr;
+  if (!runs || runs.length === 0) return [];
+
+  const cardIds = runs.map((r: any) => r.card_id);
+  const candidateIds = runs.map((r: any) => r.candidate_id);
+  const [{ data: cards }, { data: candidates }, { data: overdueTasks }] = await Promise.all([
+    supabaseAdmin
+      .from("workstream_cards")
+      .select("id, title, status, due_date")
+      .in("id", cardIds)
+      .neq("status", "done")
+      .is("archived_at", null),
+    supabaseAdmin
+      .from("candidates")
+      .select("id, name, preferred_name, start_date")
+      .in("id", candidateIds),
+    supabaseAdmin
+      .from("workstream_tasks")
+      .select("id, title, due_date, card_id, completed")
+      .in("card_id", cardIds)
+      .eq("completed", false)
+      .lt("due_date", today),
+  ]);
+
+  const cardMap: Record<string, any> = {};
+  (cards || []).forEach((c: any) => { cardMap[c.id] = c; });
+  const candMap: Record<string, any> = {};
+  (candidates || []).forEach((c: any) => { candMap[c.id] = c; });
+
+  const overdueByCard: Record<string, any[]> = {};
+  (overdueTasks || []).forEach((t: any) => {
+    (overdueByCard[t.card_id] ||= []).push(t);
+  });
+
+  const items: any[] = [];
+  for (const run of runs) {
+    const card = cardMap[run.card_id];
+    if (!card) continue;
+    const cand = candMap[run.candidate_id];
+    const overdue = overdueByCard[run.card_id] || [];
+    if (card.status !== "red" && overdue.length === 0) continue;
+    items.push({
+      new_hire: cand?.preferred_name || cand?.name || "Unknown hire",
+      start_date: cand?.start_date || null,
+      card_title: card.title,
+      card_status: card.status,
+      card_due_date: card.due_date,
+      overdue_task_count: overdue.length,
+      overdue_task_titles: overdue.slice(0, 3).map((t: any) => t.title),
+    });
+  }
+  // Sort worst-first: red before amber, then by overdue count
+  items.sort((a, b) => {
+    const rank = (s: string) => (s === "red" ? 0 : s === "amber" ? 1 : 2);
+    const dr = rank(a.card_status) - rank(b.card_status);
+    if (dr !== 0) return dr;
+    return b.overdue_task_count - a.overdue_task_count;
+  });
+  return items;
+}

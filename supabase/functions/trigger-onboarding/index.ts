@@ -19,6 +19,71 @@ interface Body {
   employment_type?: string;   // full_time | part_time | contractor
   work_location?: string;     // remote | office | hybrid
   preferred_name?: string;
+  offer_letter_storage_path?: string;
+  send_slack_welcome?: boolean;
+}
+
+const SLACK_GATEWAY_URL = "https://connector-gateway.lovable.dev/slack/api";
+
+async function refreshDuncanGmailToken(admin: any, row: any): Promise<string | null> {
+  const clientId = Deno.env.get("GMAIL_CLIENT_ID");
+  const clientSecret = Deno.env.get("GMAIL_CLIENT_SECRET");
+  if (!clientId || !clientSecret) return null;
+  if (new Date(row.token_expiry).getTime() - Date.now() > 60_000) return row.access_token;
+  const r = await fetch(GOOGLE_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId, client_secret: clientSecret,
+      refresh_token: row.refresh_token, grant_type: "refresh_token",
+    }),
+  });
+  if (!r.ok) return null;
+  const j = await r.json();
+  const expiry = new Date(Date.now() + j.expires_in * 1000).toISOString();
+  await admin.from("duncan_gmail_tokens").update({ access_token: j.access_token, token_expiry: expiry }).eq("id", row.id);
+  return j.access_token;
+}
+
+function b64urlEncode(bytes: Uint8Array | string): string {
+  let bin = "";
+  if (typeof bytes === "string") {
+    bin = unescape(encodeURIComponent(bytes));
+  } else {
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  }
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function downloadFromBucket(admin: any, bucket: string, path: string): Promise<{ bytes: Uint8Array; mime: string } | null> {
+  try {
+    const { data, error } = await admin.storage.from(bucket).download(path);
+    if (error || !data) return null;
+    const buf = new Uint8Array(await data.arrayBuffer());
+    return { bytes: buf, mime: (data as Blob).type || "application/octet-stream" };
+  } catch { return null; }
+}
+
+async function sendSlackChannelPost(channel: string, text: string): Promise<{ ok: boolean; error?: string }> {
+  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+  const slackKey = Deno.env.get("SLACK_API_KEY");
+  if (!lovableKey || !slackKey) return { ok: false, error: "slack not configured" };
+  try {
+    const r = await fetch(`${SLACK_GATEWAY_URL}/chat.postMessage`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${lovableKey}`,
+        "X-Connection-Api-Key": slackKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ channel, text, username: "Duncan", icon_emoji: ":wave:" }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) return { ok: false, error: j.error || `HTTP ${r.status}` };
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "slack post threw" };
+  }
 }
 
 type Task = { title: string; description?: string; group: string; offsetDays?: number; assignee?: string | null };

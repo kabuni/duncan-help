@@ -22,7 +22,10 @@ interface Attachment {
   mime_type: string | null;
   size_bytes: number | null;
   created_at: string;
+  source_bucket?: string | null;
 }
+
+const DEFAULT_BUCKET = "workstream-task-attachments";
 
 export function TaskAttachments({ taskId, compact = false }: { taskId: string; compact?: boolean }) {
   const [items, setItems] = useState<Attachment[]>([]);
@@ -32,7 +35,7 @@ export function TaskAttachments({ taskId, compact = false }: { taskId: string; c
   async function load() {
     const { data, error } = await supabase
       .from("workstream_task_attachments" as any)
-      .select("id, file_name, storage_path, mime_type, size_bytes, created_at")
+      .select("id, file_name, storage_path, mime_type, size_bytes, created_at, source_bucket")
       .eq("task_id", taskId)
       .order("created_at", { ascending: false });
     if (error) return;
@@ -70,18 +73,24 @@ export function TaskAttachments({ taskId, compact = false }: { taskId: string; c
   }
 
   async function download(att: Attachment) {
+    const bucket = att.source_bucket || DEFAULT_BUCKET;
     const { data, error } = await supabase.storage
-      .from("workstream-task-attachments")
+      .from(bucket)
       .createSignedUrl(att.storage_path, 60);
     if (error || !data?.signedUrl) { toast.error("Could not generate link"); return; }
     window.open(data.signedUrl, "_blank");
   }
 
   async function remove(att: Attachment) {
-    if (!confirm(`Delete ${att.file_name}?`)) return;
-    await supabase.storage.from("workstream-task-attachments").remove([att.storage_path]);
+    if (!confirm(`Remove ${att.file_name}?`)) return;
+    const bucket = att.source_bucket || DEFAULT_BUCKET;
+    // Only delete the underlying blob when it lives in the task-attachments bucket
+    // (files in other buckets — CV, JD, offer letters — are references, not copies).
+    if (bucket === DEFAULT_BUCKET) {
+      await supabase.storage.from(bucket).remove([att.storage_path]);
+    }
     const { error } = await supabase.from("workstream_task_attachments" as any).delete().eq("id", att.id);
-    if (error) { toast.error("Delete failed"); return; }
+    if (error) { toast.error("Remove failed"); return; }
     load();
   }
 

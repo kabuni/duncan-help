@@ -38,6 +38,7 @@ const KIND_LABEL: Record<ApprovalKind, string> = {
   hire: "Hire",
   contract: "Contract",
   travel: "Travel",
+  onboarding_plan: "Onboarding plan",
   other: "Other",
 };
 

@@ -267,14 +267,11 @@ export function OnboardingPlanDialog() {
     );
   }, [revisions, planParam]);
 
-  const isApprover = !!current && current.status === "pending_review" && (
-    // Best-effort: any authenticated user in the approval flow can act via the
-    // approvals inbox; here we allow the assigned approver_user_id (if set on
-    // the mirrored approvals row we don't have here) or fall back to letting
-    // any admin/recruitment_admin action from the panel. For safety in v1 the
-    // panel-side action is unrestricted; RLS on the update policy still gates it.
-    true
-  );
+  const isApprover =
+    !!current &&
+    !!user &&
+    (current.status === "pending_review" || current.status === "changes_requested") &&
+    current.approver_user_id === user.id;
 
   const close = () => {
     const next = new URLSearchParams(params);

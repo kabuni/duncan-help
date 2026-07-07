@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
-export type ApprovalKind = "cost" | "event_date" | "release" | "hire" | "contract" | "travel" | "other";
+export type ApprovalKind = "cost" | "event_date" | "release" | "hire" | "contract" | "travel" | "onboarding_plan" | "other";
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "changes_requested" | "cancelled";
 
 export interface ApprovalRow {
@@ -144,6 +144,19 @@ export function useDecideApproval() {
         const { error } = await supabase
           .from("travel_requests" as any)
           .update(update)
+          .eq("id", row.source_id);
+        if (error) throw error;
+      } else if (row.source_table === "onboarding_plan_revisions") {
+        // Write the decision to the revision — DB trigger mirrors it back
+        // to the approvals row.
+        const { error } = await supabase
+          .from("onboarding_plan_revisions" as any)
+          .update({
+            status,
+            decision_note: note ?? null,
+            approver_user_id: user!.id,
+            decided_at: new Date().toISOString(),
+          })
           .eq("id", row.source_id);
         if (error) throw error;
       } else {

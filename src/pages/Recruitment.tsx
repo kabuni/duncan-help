@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import { JobRolesManager } from "@/components/recruitment/JobRolesManager";
 import { MarkAsHiredDialog } from "@/components/recruitment/MarkAsHiredDialog";
 import { RejectCandidateDialog } from "@/components/recruitment/RejectCandidateDialog";
+import { OnboardingPlanDialog } from "@/components/recruitment/OnboardingPlanDialog";
+import { useSearchParams } from "react-router-dom";
 
 const VALUE_LABELS = [
   { key: "sweat_the_detail", label: "Detail", emoji: "🔍" },
@@ -697,12 +699,27 @@ const Recruitment = () => {
                                 </div>
                               )}
                               {c.status === "hired" && c.onboarding_card_id && (
-                                <a
-                                  href={`/workstreams?card=${c.onboarding_card_id}`}
-                                  className="text-[10px] text-primary underline inline-flex items-center gap-1"
-                                >
-                                  <ExternalLink className="h-3 w-3" /> Onboarding
-                                </a>
+                                <div className="flex flex-col gap-1">
+                                  <a
+                                    href={`/workstreams?card=${c.onboarding_card_id}`}
+                                    className="text-[10px] text-primary underline inline-flex items-center gap-1"
+                                  >
+                                    <ExternalLink className="h-3 w-3" /> Onboarding
+                                  </a>
+                                  <button
+                                    type="button"
+                                    className="text-[10px] text-primary underline text-left"
+                                    onClick={() => {
+                                      const next = new URLSearchParams(window.location.search);
+                                      next.set("candidate", c.id);
+                                      next.set("view", "plan");
+                                      window.history.pushState({}, "", `${window.location.pathname}?${next.toString()}`);
+                                      window.dispatchEvent(new PopStateEvent("popstate"));
+                                    }}
+                                  >
+                                    30/60/90 plan
+                                  </button>
+                                </div>
                               )}
                             </div>
                           </TableCell>
@@ -1015,6 +1032,8 @@ const Recruitment = () => {
           onOpenChange={(v) => { if (!v) setRejectCandidate(null); }}
           onCompleted={() => { /* react-query will refetch on focus */ }}
         />
+
+        <OnboardingPlanDialog />
       </main>
     </>
   );

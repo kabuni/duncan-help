@@ -642,11 +642,32 @@ The Kabuni Team`;
     }
 
     // ── 7. Finalise run ──
+    // NOTE: plan_30_60_90 on onboarding_runs is now a *cache* of the latest approved
+    // revision, kept in sync by the sync_approved_plan_to_run() trigger.
+    // We no longer write it here directly — instead we insert revision 1 as
+    // pending_review below, which flows through the approval workflow.
     await admin.from("onboarding_runs").update({
       status: "completed",
       stages,
-      plan_30_60_90: plan,
     }).eq("id", runId);
+
+    // ── 7b. Insert plan as revision 1 (pending_review) ──
+    if (plan && typeof plan === "object") {
+      try {
+        const { error: revErr } = await admin
+          .from("onboarding_plan_revisions")
+          .insert({
+            candidate_id: candidate.id,
+            onboarding_run_id: runId,
+            plan,
+            status: "pending_review",
+            authored_by: null, // AI-authored
+            authored_source: "ai_draft",
+            change_summary: "AI-drafted 30/60/90 plan awaiting review.",
+          });
+        if (revErr) console.warn("plan revision insert failed", revErr);
+      } catch (e) { console.warn("plan revision insert threw", e); }
+    }
 
     // ── 8. Notifications ──
     // Notify hiring manager + Ops co-owner (deduped)

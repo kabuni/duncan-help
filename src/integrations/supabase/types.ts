@@ -2699,6 +2699,75 @@ export type Database = {
         }
         Relationships: []
       }
+      onboarding_plan_revisions: {
+        Row: {
+          approver_user_id: string | null
+          authored_by: string | null
+          authored_source: string
+          candidate_id: string
+          change_summary: string | null
+          created_at: string
+          decided_at: string | null
+          decision_note: string | null
+          diff_from_previous: Json | null
+          id: string
+          onboarding_run_id: string | null
+          plan: Json
+          revision_number: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approver_user_id?: string | null
+          authored_by?: string | null
+          authored_source: string
+          candidate_id: string
+          change_summary?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decision_note?: string | null
+          diff_from_previous?: Json | null
+          id?: string
+          onboarding_run_id?: string | null
+          plan: Json
+          revision_number: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approver_user_id?: string | null
+          authored_by?: string | null
+          authored_source?: string
+          candidate_id?: string
+          change_summary?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decision_note?: string | null
+          diff_from_previous?: Json | null
+          id?: string
+          onboarding_run_id?: string | null
+          plan?: Json
+          revision_number?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_plan_revisions_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_plan_revisions_onboarding_run_id_fkey"
+            columns: ["onboarding_run_id"]
+            isOneToOne: false
+            referencedRelation: "onboarding_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       onboarding_runs: {
         Row: {
           candidate_id: string
@@ -4940,6 +5009,7 @@ export type Database = {
         | "hire"
         | "contract"
         | "other"
+        | "onboarding_plan"
       approval_status:
         | "pending"
         | "approved"
@@ -5110,6 +5180,7 @@ export const Constants = {
         "hire",
         "contract",
         "other",
+        "onboarding_plan",
       ],
       approval_status: [
         "pending",

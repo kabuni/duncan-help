@@ -71,7 +71,7 @@ export function useDecideApproval() {
       note,
     }: {
       row: ApprovalRow;
-      status: "approved" | "rejected";
+      status: "approved" | "rejected" | "changes_requested";
       note?: string;
     }) => {
       // Mirror decision back into source table so the source remains the truth.

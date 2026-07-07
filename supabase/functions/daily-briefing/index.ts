@@ -613,63 +613,95 @@ async function fetchProjectTasks(supabaseAdmin: any, userId: string | null) {
 }
 
 // ── Helper: Onboarding blockers (company-wide visibility) ──
-// Surfaces onboarding cards that are red OR have overdue tasks, so leadership
-// sees new-hire risks in the morning briefing. Includes candidate name where
-// available and joins the linked candidate for context.
+// Surfaces onboarding-plan approval friction + onboarding card/task risk so
+// leadership and stakeholders see new-hire blockers in the morning briefing.
+// Each item carries severity (red/amber) + audience tags for the LLM prompt.
+// Items disappear automatically once the underlying condition clears —
+// no separate notification system, no state to reconcile.
 async function fetchOnboardingBlockers(supabaseAdmin: any) {
-  const nowIso = new Date().toISOString();
-  const today = nowIso.split("T")[0];
+  const now = new Date();
+  const today = now.toISOString().split("T")[0];
+  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  // Active onboarding runs → cards
+  const items: any[] = [];
+
+  // ── A. Onboarding runs → card/task blockers ──
   const { data: runs, error: rErr } = await supabaseAdmin
     .from("onboarding_runs")
     .select("id, candidate_id, card_id, status, created_at")
-    .not("card_id", "is", null)
     .in("status", ["provisioning", "completed"]);
   if (rErr) throw rErr;
-  if (!runs || runs.length === 0) return [];
 
-  const cardIds = runs.map((r: any) => r.card_id);
-  const candidateIds = runs.map((r: any) => r.candidate_id);
-  const [{ data: cards }, { data: candidates }, { data: overdueTasks }] = await Promise.all([
-    supabaseAdmin
-      .from("workstream_cards")
-      .select("id, title, status, due_date")
-      .in("id", cardIds)
-      .neq("status", "done")
-      .is("archived_at", null),
-    supabaseAdmin
-      .from("candidates")
-      .select("id, name, preferred_name, start_date")
-      .in("id", candidateIds),
-    supabaseAdmin
-      .from("workstream_tasks")
-      .select("id, title, due_date, card_id, completed")
-      .in("card_id", cardIds)
-      .eq("completed", false)
-      .lt("due_date", today),
+  const activeRuns = runs || [];
+  const cardIds = activeRuns.map((r: any) => r.card_id).filter(Boolean);
+  const runCandidateIds = activeRuns.map((r: any) => r.candidate_id).filter(Boolean);
+
+  const [cardsRes, overdueRes] = await Promise.all([
+    cardIds.length
+      ? supabaseAdmin
+          .from("workstream_cards")
+          .select("id, title, status, due_date")
+          .in("id", cardIds)
+          .neq("status", "done")
+          .is("archived_at", null)
+      : Promise.resolve({ data: [] as any[] }),
+    cardIds.length
+      ? supabaseAdmin
+          .from("workstream_tasks")
+          .select("id, title, due_date, card_id, completed")
+          .in("card_id", cardIds)
+          .eq("completed", false)
+          .lt("due_date", today)
+      : Promise.resolve({ data: [] as any[] }),
   ]);
+  const cards = cardsRes.data || [];
+  const overdueTasks = overdueRes.data || [];
 
-  const cardMap: Record<string, any> = {};
-  (cards || []).forEach((c: any) => { cardMap[c.id] = c; });
+  // ── B. Plan-revision blockers (approvals workflow) ──
+  const { data: liveRevisions } = await supabaseAdmin
+    .from("onboarding_plan_revisions")
+    .select("id, candidate_id, onboarding_run_id, status, authored_source, approver_user_id, created_at, updated_at, is_current, revision_number")
+    .in("status", ["pending_review", "changes_requested", "approved"])
+    .is("purged_at", null);
+
+  const allCandidateIds = Array.from(new Set<string>([
+    ...runCandidateIds,
+    ...((liveRevisions || []).map((r: any) => r.candidate_id).filter(Boolean)),
+  ]));
+
+  const candRes = allCandidateIds.length
+    ? await supabaseAdmin
+        .from("candidates")
+        .select("id, name, preferred_name, start_date, hiring_manager_id")
+        .in("id", allCandidateIds)
+    : { data: [] as any[] };
+  const candidates = candRes.data || [];
+
   const candMap: Record<string, any> = {};
-  (candidates || []).forEach((c: any) => { candMap[c.id] = c; });
-
+  candidates.forEach((c: any) => { candMap[c.id] = c; });
+  const cardMap: Record<string, any> = {};
+  cards.forEach((c: any) => { cardMap[c.id] = c; });
   const overdueByCard: Record<string, any[]> = {};
-  (overdueTasks || []).forEach((t: any) => {
-    (overdueByCard[t.card_id] ||= []).push(t);
-  });
+  overdueTasks.forEach((t: any) => { (overdueByCard[t.card_id] ||= []).push(t); });
 
-  const items: any[] = [];
-  for (const run of runs) {
+  const hireLabel = (cid: string) => {
+    const c = candMap[cid];
+    return c?.preferred_name || c?.name || "Unknown hire";
+  };
+
+  // A.1 — overdue tasks / red cards (blocker #5)
+  for (const run of activeRuns) {
     const card = cardMap[run.card_id];
     if (!card) continue;
-    const cand = candMap[run.candidate_id];
     const overdue = overdueByCard[run.card_id] || [];
     if (card.status !== "red" && overdue.length === 0) continue;
     items.push({
-      new_hire: cand?.preferred_name || cand?.name || "Unknown hire",
-      start_date: cand?.start_date || null,
+      kind: "onboarding_task_risk",
+      severity: card.status === "red" ? "red" : "amber",
+      audience: ["hiring_manager", "admin"],
+      new_hire: hireLabel(run.candidate_id),
+      start_date: candMap[run.candidate_id]?.start_date || null,
       card_title: card.title,
       card_status: card.status,
       card_due_date: card.due_date,
@@ -677,12 +709,81 @@ async function fetchOnboardingBlockers(supabaseAdmin: any) {
       overdue_task_titles: overdue.slice(0, 3).map((t: any) => t.title),
     });
   }
-  // Sort worst-first: red before amber, then by overdue count
+
+  const approvedByCandidate: Record<string, any> = {};
+  for (const r of liveRevisions || []) {
+    if (r.status === "approved" && r.is_current) approvedByCandidate[r.candidate_id] = r;
+  }
+
+  // B.1 pending>3d, B.3 AI draft failure, B.6 missing approver
+  for (const r of liveRevisions || []) {
+    if (r.status === "pending_review") {
+      const isStale = r.created_at < threeDaysAgo;
+      const isVeryStale = r.created_at < sevenDaysAgo;
+      if (!r.approver_user_id) {
+        items.push({
+          kind: "onboarding_plan_missing_approver",
+          severity: "red",
+          audience: ["admin"],
+          new_hire: hireLabel(r.candidate_id),
+          revision: r.revision_number,
+          age_days: Math.floor((now.getTime() - new Date(r.created_at).getTime()) / 86400000),
+        });
+      } else if (isStale) {
+        items.push({
+          kind: "onboarding_plan_pending_approval",
+          severity: isVeryStale ? "red" : "amber",
+          audience: ["approver", "admin"],
+          new_hire: hireLabel(r.candidate_id),
+          revision: r.revision_number,
+          age_days: Math.floor((now.getTime() - new Date(r.created_at).getTime()) / 86400000),
+        });
+      }
+      if (r.authored_source === "ai_draft_failed") {
+        items.push({
+          kind: "onboarding_plan_ai_draft_failed",
+          severity: "red",
+          audience: ["hiring_manager", "admin"],
+          new_hire: hireLabel(r.candidate_id),
+          revision: r.revision_number,
+        });
+      }
+    }
+    // B.2 changes_requested stale
+    if (r.status === "changes_requested" && r.is_current && r.updated_at < threeDaysAgo) {
+      items.push({
+        kind: "onboarding_plan_changes_requested_stale",
+        severity: "amber",
+        audience: ["hiring_manager"],
+        new_hire: hireLabel(r.candidate_id),
+        revision: r.revision_number,
+        stale_days: Math.floor((now.getTime() - new Date(r.updated_at).getTime()) / 86400000),
+      });
+    }
+  }
+
+  // B.4 — active run without an approved current plan
+  for (const run of activeRuns) {
+    if (!approvedByCandidate[run.candidate_id]) {
+      const cand = candMap[run.candidate_id];
+      const startDate = cand?.start_date || null;
+      const startsSoon = startDate && startDate <= new Date(now.getTime() + 7 * 86400000).toISOString().split("T")[0];
+      items.push({
+        kind: "onboarding_run_no_approved_plan",
+        severity: startsSoon ? "red" : "amber",
+        audience: ["hiring_manager", "admin"],
+        new_hire: hireLabel(run.candidate_id),
+        start_date: startDate,
+        run_age_days: Math.floor((now.getTime() - new Date(run.created_at).getTime()) / 86400000),
+      });
+    }
+  }
+
   items.sort((a, b) => {
     const rank = (s: string) => (s === "red" ? 0 : s === "amber" ? 1 : 2);
-    const dr = rank(a.card_status) - rank(b.card_status);
+    const dr = rank(a.severity) - rank(b.severity);
     if (dr !== 0) return dr;
-    return b.overdue_task_count - a.overdue_task_count;
+    return String(a.kind).localeCompare(String(b.kind));
   });
   return items;
 }

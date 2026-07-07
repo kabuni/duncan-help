@@ -94,6 +94,19 @@ function addDays(base: Date, days: number): Date {
   return d;
 }
 
+// Working-day arithmetic (skips Sat/Sun). Bank holidays intentionally
+// ignored — leadership intros re-scheduled manually if they land on one.
+function workingDaysAdd(base: Date, n: number): Date {
+  const d = new Date(base);
+  let added = 0;
+  while (added < n) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    const day = d.getUTCDay();
+    if (day !== 0 && day !== 6) added++;
+  }
+  return d;
+}
+
 function ymd(d: Date) { return d.toISOString().slice(0, 10); }
 
 async function refreshGoogleToken(admin: any, row: any): Promise<string | null> {

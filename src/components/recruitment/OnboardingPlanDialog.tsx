@@ -344,6 +344,18 @@ export function OnboardingPlanDialog() {
                         <StatusBadge status={current.status} />
                       </div>
                       <ApproverActions revision={current} isApprover={isApprover} />
+                      {(current.status === "rejected" || current.status === "changes_requested") && (
+                        <div className="border-t border-border pt-3 mt-3 flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">
+                            {current.status === "rejected"
+                              ? "This revision was rejected. Draft a new revision to move forward."
+                              : "Changes requested. Draft a new revision addressing the feedback."}
+                          </p>
+                          <Button size="sm" variant="outline" onClick={() => setTab("edit")}>
+                            <Pencil className="h-3.5 w-3.5 mr-1" /> Draft new revision
+                          </Button>
+                        </div>
+                      )}
                     </Card>
 
                     <PlanView

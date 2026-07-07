@@ -181,14 +181,22 @@ export default function Approvals({ embedded = false }: { embedded?: boolean } =
                   >
                     <Check className="h-3.5 w-3.5" /> Approve
                   </Button>
+                  {r.kind === "onboarding_plan" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 gap-1 text-xs text-sky-600 border-sky-500/30 hover:bg-sky-500/10"
+                      onClick={() => { setRejectingId(r.id); setRejectMode("changes_requested"); setRejectNote(""); }}
+                      disabled={decide.isPending}
+                    >
+                      <CalendarClock className="h-3.5 w-3.5" /> Request changes
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="outline"
                     className="h-7 gap-1 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
-                    onClick={() => {
-                      setRejectingId(r.id);
-                      setRejectNote("");
-                    }}
+                    onClick={() => { setRejectingId(r.id); setRejectMode("rejected"); setRejectNote(""); }}
                     disabled={decide.isPending}
                   >
                     <X className="h-3.5 w-3.5" /> Reject

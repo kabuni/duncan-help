@@ -2704,15 +2704,17 @@ export type Database = {
           approver_user_id: string | null
           authored_by: string | null
           authored_source: string
-          candidate_id: string
+          candidate_id: string | null
           change_summary: string | null
           created_at: string
           decided_at: string | null
           decision_note: string | null
           diff_from_previous: Json | null
           id: string
+          is_current: boolean
           onboarding_run_id: string | null
           plan: Json
+          purged_at: string | null
           revision_number: number
           status: string
           updated_at: string
@@ -2721,15 +2723,17 @@ export type Database = {
           approver_user_id?: string | null
           authored_by?: string | null
           authored_source: string
-          candidate_id: string
+          candidate_id?: string | null
           change_summary?: string | null
           created_at?: string
           decided_at?: string | null
           decision_note?: string | null
           diff_from_previous?: Json | null
           id?: string
+          is_current?: boolean
           onboarding_run_id?: string | null
           plan: Json
+          purged_at?: string | null
           revision_number: number
           status?: string
           updated_at?: string
@@ -2738,15 +2742,17 @@ export type Database = {
           approver_user_id?: string | null
           authored_by?: string | null
           authored_source?: string
-          candidate_id?: string
+          candidate_id?: string | null
           change_summary?: string | null
           created_at?: string
           decided_at?: string | null
           decision_note?: string | null
           diff_from_previous?: Json | null
           id?: string
+          is_current?: boolean
           onboarding_run_id?: string | null
           plan?: Json
+          purged_at?: string | null
           revision_number?: number
           status?: string
           updated_at?: string
@@ -4845,6 +4851,10 @@ export type Database = {
       }
     }
     Functions: {
+      admin_purge_candidate: {
+        Args: { _candidate_id: string; _reason?: string }
+        Returns: Json
+      }
       backfill_meeting_ownership: {
         Args: never
         Returns: {
@@ -4860,6 +4870,14 @@ export type Database = {
       }
       can_access_project: {
         Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_edit_candidate_plan: {
+        Args: { _candidate_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_view_candidate_plan: {
+        Args: { _candidate_id: string; _user_id: string }
         Returns: boolean
       }
       can_view_holiday: {

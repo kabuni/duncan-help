@@ -71,7 +71,7 @@ export function useDecideApproval() {
       note,
     }: {
       row: ApprovalRow;
-      status: "approved" | "rejected";
+      status: "approved" | "rejected" | "changes_requested";
       note?: string;
     }) => {
       // Mirror decision back into source table so the source remains the truth.
@@ -148,15 +148,18 @@ export function useDecideApproval() {
         if (error) throw error;
       } else if (row.source_table === "onboarding_plan_revisions") {
         // Write the decision to the revision — DB trigger mirrors it back
-        // to the approvals row.
+        // to the approvals row and enforces "assigned approver only".
+        const patch: Record<string, unknown> = {
+          status,
+          decision_note: note ?? null,
+          approver_user_id: user!.id,
+        };
+        if (status === "approved" || status === "rejected") {
+          patch.decided_at = new Date().toISOString();
+        }
         const { error } = await supabase
           .from("onboarding_plan_revisions" as any)
-          .update({
-            status,
-            decision_note: note ?? null,
-            approver_user_id: user!.id,
-            decided_at: new Date().toISOString(),
-          })
+          .update(patch)
           .eq("id", row.source_id);
         if (error) throw error;
       } else {
@@ -178,7 +181,11 @@ export function useDecideApproval() {
       qc.invalidateQueries({ queryKey: ["purchase-orders"] });
       qc.invalidateQueries({ queryKey: ["travel-requests"] });
       qc.invalidateQueries({ queryKey: ["key-events"] });
-      toast.success(vars.status === "approved" ? "Approved" : "Rejected");
+      toast.success(
+        vars.status === "approved" ? "Approved" :
+        vars.status === "rejected" ? "Rejected" :
+        "Changes requested"
+      );
     },
     onError: (e: any) => toast.error(e.message),
   });

@@ -267,14 +267,11 @@ export function OnboardingPlanDialog() {
     );
   }, [revisions, planParam]);
 
-  const isApprover = !!current && current.status === "pending_review" && (
-    // Best-effort: any authenticated user in the approval flow can act via the
-    // approvals inbox; here we allow the assigned approver_user_id (if set on
-    // the mirrored approvals row we don't have here) or fall back to letting
-    // any admin/recruitment_admin action from the panel. For safety in v1 the
-    // panel-side action is unrestricted; RLS on the update policy still gates it.
-    true
-  );
+  const isApprover =
+    !!current &&
+    !!user &&
+    (current.status === "pending_review" || current.status === "changes_requested") &&
+    current.approver_user_id === user.id;
 
   const close = () => {
     const next = new URLSearchParams(params);
@@ -347,6 +344,18 @@ export function OnboardingPlanDialog() {
                         <StatusBadge status={current.status} />
                       </div>
                       <ApproverActions revision={current} isApprover={isApprover} />
+                      {(current.status === "rejected" || current.status === "changes_requested") && (
+                        <div className="border-t border-border pt-3 mt-3 flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">
+                            {current.status === "rejected"
+                              ? "This revision was rejected. Draft a new revision to move forward."
+                              : "Changes requested. Draft a new revision addressing the feedback."}
+                          </p>
+                          <Button size="sm" variant="outline" onClick={() => setTab("edit")}>
+                            <Pencil className="h-3.5 w-3.5 mr-1" /> Draft new revision
+                          </Button>
+                        </div>
+                      )}
                     </Card>
 
                     <PlanView

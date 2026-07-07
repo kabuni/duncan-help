@@ -60,6 +60,7 @@ export default function Approvals({ embedded = false }: { embedded?: boolean } =
   const [search, setSearch] = useState("");
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState("");
+  const [rejectMode, setRejectMode] = useState<"rejected" | "changes_requested">("rejected");
 
   const poCategoryById = useMemo(() => {
     const m = new Map<string, string>();
@@ -180,14 +181,22 @@ export default function Approvals({ embedded = false }: { embedded?: boolean } =
                   >
                     <Check className="h-3.5 w-3.5" /> Approve
                   </Button>
+                  {r.kind === "onboarding_plan" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 gap-1 text-xs text-sky-600 border-sky-500/30 hover:bg-sky-500/10"
+                      onClick={() => { setRejectingId(r.id); setRejectMode("changes_requested"); setRejectNote(""); }}
+                      disabled={decide.isPending}
+                    >
+                      <CalendarClock className="h-3.5 w-3.5" /> Request changes
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="outline"
                     className="h-7 gap-1 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
-                    onClick={() => {
-                      setRejectingId(r.id);
-                      setRejectNote("");
-                    }}
+                    onClick={() => { setRejectingId(r.id); setRejectMode("rejected"); setRejectNote(""); }}
                     disabled={decide.isPending}
                   >
                     <X className="h-3.5 w-3.5" /> Reject
@@ -200,7 +209,7 @@ export default function Approvals({ embedded = false }: { embedded?: boolean } =
           {isRejecting && (
             <div className="mt-2 flex flex-col gap-2 border-t border-border pt-2">
               <Textarea
-                placeholder="Reason (required)"
+                placeholder={rejectMode === "changes_requested" ? "What needs to change? (required)" : "Reason (required)"}
                 value={rejectNote}
                 onChange={(e) => setRejectNote(e.target.value)}
                 className="min-h-24 text-xs resize-y"
@@ -211,10 +220,7 @@ export default function Approvals({ embedded = false }: { embedded?: boolean } =
                   size="sm"
                   variant="outline"
                   className="h-8 text-xs"
-                  onClick={() => {
-                    setRejectingId(null);
-                    setRejectNote("");
-                  }}
+                  onClick={() => { setRejectingId(null); setRejectNote(""); }}
                 >
                   Cancel
                 </Button>
@@ -223,12 +229,12 @@ export default function Approvals({ embedded = false }: { embedded?: boolean } =
                   className="h-8 text-xs"
                   disabled={!rejectNote.trim() || decide.isPending}
                   onClick={async () => {
-                    await decide.mutateAsync({ row: r, status: "rejected", note: rejectNote.trim() });
+                    await decide.mutateAsync({ row: r, status: rejectMode, note: rejectNote.trim() });
                     setRejectingId(null);
                     setRejectNote("");
                   }}
                 >
-                  Confirm reject
+                  {rejectMode === "changes_requested" ? "Send changes request" : "Confirm reject"}
                 </Button>
               </div>
             </div>

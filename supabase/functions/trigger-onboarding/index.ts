@@ -652,22 +652,33 @@ The Kabuni Team`;
     }).eq("id", runId);
 
     // ── 7b. Insert plan as revision 1 (pending_review) ──
-    if (plan && typeof plan === "object") {
-      try {
-        const { error: revErr } = await admin
-          .from("onboarding_plan_revisions")
-          .insert({
+    // If AI draft failed, insert a placeholder pending revision so the HM knows
+    // to author it manually — never silently swallow the failure.
+    let plan_ok = false;
+    try {
+      const revBody: any = plan && typeof plan === "object"
+        ? {
             candidate_id: candidate.id,
             onboarding_run_id: runId,
             plan,
             status: "pending_review",
-            authored_by: null, // AI-authored
+            authored_by: null,
             authored_source: "ai_draft",
             change_summary: "AI-drafted 30/60/90 plan awaiting review.",
-          });
-        if (revErr) console.warn("plan revision insert failed", revErr);
-      } catch (e) { console.warn("plan revision insert threw", e); }
-    }
+          }
+        : {
+            candidate_id: candidate.id,
+            onboarding_run_id: runId,
+            plan: { days_30: {}, days_60: {}, days_90: {}, _ai_draft_failed: true },
+            status: "pending_review",
+            authored_by: null,
+            authored_source: "ai_draft",
+            change_summary: "AI draft failed — hiring manager must author this plan manually.",
+          };
+      const { error: revErr } = await admin.from("onboarding_plan_revisions").insert(revBody);
+      if (revErr) console.warn("plan revision insert failed", revErr);
+      else plan_ok = !!plan;
+    } catch (e) { console.warn("plan revision insert threw", e); }
 
     // ── 8. Notifications ──
     // Notify hiring manager + Ops co-owner (deduped)

@@ -181,7 +181,11 @@ export function useDecideApproval() {
       qc.invalidateQueries({ queryKey: ["purchase-orders"] });
       qc.invalidateQueries({ queryKey: ["travel-requests"] });
       qc.invalidateQueries({ queryKey: ["key-events"] });
-      toast.success(vars.status === "approved" ? "Approved" : "Rejected");
+      toast.success(
+        vars.status === "approved" ? "Approved" :
+        vars.status === "rejected" ? "Rejected" :
+        "Changes requested"
+      );
     },
     onError: (e: any) => toast.error(e.message),
   });

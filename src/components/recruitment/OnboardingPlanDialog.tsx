@@ -246,7 +246,7 @@ export function OnboardingPlanDialog() {
   const { user } = useAuth();
   const candidateId = params.get("candidate");
   const planParam = params.get("plan"); // optional — deep link to specific revision
-  const open = !!candidateId && params.get("view") === "plan";
+  const open = !!candidateId && (params.get("view") === "plan" || !!planParam);
 
   const [tab, setTab] = useState<"current" | "history" | "edit">("current");
   useEffect(() => { if (open) setTab("current"); }, [open, candidateId]);

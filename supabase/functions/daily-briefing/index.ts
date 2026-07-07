@@ -661,7 +661,7 @@ async function fetchOnboardingBlockers(supabaseAdmin: any) {
   // ── B. Plan-revision blockers (approvals workflow) ──
   const { data: liveRevisions } = await supabaseAdmin
     .from("onboarding_plan_revisions")
-    .select("id, candidate_id, onboarding_run_id, status, authored_source, approver_user_id, created_at, updated_at, is_current, revision_number")
+    .select("id, candidate_id, onboarding_run_id, status, authored_source, approver_user_id, created_at, updated_at, is_current, revision_number, plan, authored_by")
     .in("status", ["pending_review", "changes_requested", "approved"])
     .is("purged_at", null);
 
@@ -739,7 +739,7 @@ async function fetchOnboardingBlockers(supabaseAdmin: any) {
           age_days: Math.floor((now.getTime() - new Date(r.created_at).getTime()) / 86400000),
         });
       }
-      if (r.authored_source === "ai_draft_failed") {
+      if (r.authored_source === "ai_draft_failed" || (r.plan && r.plan._ai_draft_failed === true)) {
         items.push({
           kind: "onboarding_plan_ai_draft_failed",
           severity: "red",

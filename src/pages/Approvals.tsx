@@ -60,6 +60,7 @@ export default function Approvals({ embedded = false }: { embedded?: boolean } =
   const [search, setSearch] = useState("");
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState("");
+  const [rejectMode, setRejectMode] = useState<"rejected" | "changes_requested">("rejected");
 
   const poCategoryById = useMemo(() => {
     const m = new Map<string, string>();

@@ -371,6 +371,137 @@ Deno.serve(async (req) => {
       await admin.from("workstream_task_assignees").insert(coAssigneeRows);
     }
 
+    // ── 3c. Leadership intros (roster-driven; Option A) ──
+    // Roster lives in app_settings.onboarding.leadership_roster (jsonb array of
+    // { name, email, profile_id, duration_minutes, active }). For each active
+    // leader we create ONE workstream_task + ONE key_event, tagged by title
+    // prefix `[Leadership Intro · <name>]` and by `source=leadership_intro`
+    // in the description. Working-day offsets: 3, 6, 9. Idempotent by title.
+    const leadershipIntros: any[] = [];
+    try {
+      const { data: rosterSetting } = await admin
+        .from("app_settings").select("value").eq("key", "onboarding.leadership_roster").maybeSingle();
+      const rosterRaw: any = rosterSetting?.value;
+      const roster: any[] = Array.isArray(rosterRaw)
+        ? rosterRaw
+        : (rosterRaw && Array.isArray(rosterRaw.leaders) ? rosterRaw.leaders : []);
+      const dayOffsets = [3, 6, 9];
+
+      // Existing intro tasks on this card → per-leader idempotency
+      const { data: existingIntros } = await admin
+        .from("workstream_tasks")
+        .select("id, title")
+        .eq("card_id", card.id)
+        .ilike("title", "[Leadership Intro%");
+      const existingTitles = new Set((existingIntros || []).map((t: any) => (t.title || "").toLowerCase()));
+
+      // Hiring manager email + calendar tokens (shared across all leaders)
+      const mgrProfile = await admin.from("profiles").select("email").eq("id", hiringManagerId).maybeSingle();
+      const mgrEmail = (mgrProfile.data as any)?.email || null;
+      const { data: hmToken } = await admin
+        .from("google_calendar_tokens").select("*").eq("user_id", hiringManagerId).maybeSingle();
+      const hmAccess = hmToken ? await refreshGoogleToken(admin, hmToken) : null;
+
+      for (let i = 0; i < roster.length; i++) {
+        const leader = roster[i] || {};
+        if (leader.active === false || !leader.name) continue;
+        const offset = dayOffsets[Math.min(i, dayOffsets.length - 1)];
+        const targetDate = workingDaysAdd(start, offset);
+        const targetYmd = ymd(targetDate);
+        const taskTitle = `[Leadership Intro · ${leader.name}] 1:1 with ${fullName}`;
+
+        if (existingTitles.has(taskTitle.toLowerCase())) {
+          leadershipIntros.push({ leader: leader.name, skipped: "already exists" });
+          continue;
+        }
+
+        const durationMin = Number(leader.duration_minutes) || 30;
+        const startAt = new Date(targetYmd + "T10:00:00Z");
+        const endAt = new Date(startAt.getTime() + durationMin * 60_000);
+
+        // Calendar event via hiring manager's Google Calendar
+        let cal: any = { created: false };
+        if (hmAccess && leader.email) {
+          const attendees: any[] = [];
+          if (candidate.email) attendees.push({ email: candidate.email });
+          attendees.push({ email: leader.email });
+          if (mgrEmail && mgrEmail !== leader.email) attendees.push({ email: mgrEmail });
+          const ev = {
+            summary: `Leadership Intro: ${leader.name} × ${fullName}`,
+            start: { dateTime: startAt.toISOString(), timeZone: "Europe/London" },
+            end:   { dateTime: endAt.toISOString(),   timeZone: "Europe/London" },
+            description:
+              `Leadership intro between ${fullName} (new hire) and ${leader.name}.\n` +
+              `source=leadership_intro\nleader_name=${leader.name}\nleader_email=${leader.email}\n` +
+              `Onboarding card: ${card.id}`,
+            attendees,
+          };
+          try {
+            const r = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events?sendUpdates=all`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${hmAccess}`, "Content-Type": "application/json" },
+              body: JSON.stringify(ev),
+            });
+            if (r.ok) {
+              const j = await r.json();
+              cal = { created: true, google_event_id: j.id, html_link: j.htmlLink };
+              try {
+                await admin.from("key_events").insert({
+                  google_event_id: j.id,
+                  calendar_id: "primary",
+                  title: ev.summary,
+                  raw_description: ev.description,
+                  start_at: startAt.toISOString(),
+                  end_at: endAt.toISOString(),
+                  attendees,
+                  html_link: j.htmlLink,
+                  category: "LeadershipIntro",
+                  event_name: `Leadership Intro · ${leader.name}`,
+                  created_by: user.id,
+                });
+              } catch (e) { console.warn("key_events insert failed", e); }
+            } else {
+              cal = { created: false, error: (await r.text()).slice(0, 200) };
+            }
+          } catch (e: any) {
+            cal = { created: false, error: e?.message };
+          }
+        } else {
+          cal = { created: false, error: hmAccess ? "leader email missing" : "hiring manager has no calendar connected" };
+        }
+
+        const desc = [
+          `source=leadership_intro; leader_name=${leader.name}; leader_email=${leader.email || ""}`,
+          `Target: ${targetYmd} at 10:00 Europe/London (${durationMin} min)`,
+          cal.google_event_id
+            ? `Calendar event: ${cal.html_link || cal.google_event_id}`
+            : (cal.error ? `Calendar create failed: ${cal.error} — reschedule manually.` : ""),
+        ].filter(Boolean).join("\n");
+
+        const { data: taskIns } = await admin.from("workstream_tasks").insert({
+          card_id: card.id,
+          title: taskTitle,
+          description: desc,
+          assignee_id: hiringManagerId,
+          due_date: targetYmd,
+          sort_order: 1000 + i,
+          completed: false,
+        }).select("id").single();
+
+        leadershipIntros.push({
+          leader: leader.name,
+          email: leader.email,
+          target_date: targetYmd,
+          task_id: taskIns?.id,
+          calendar: cal,
+        });
+      }
+    } catch (e: any) {
+      console.warn("leadership intros failed", e);
+      leadershipIntros.push({ error: e?.message || "leadership intros failed" });
+    }
+    stages.leadership_intros = leadershipIntros;
+
     // ── 3b. Attach CV, JD, and offer letter to the Pre-boarding welcome task
     // as REFERENCES (source_bucket points at each file's native bucket — no
     // duplication, so any re-parse or JD edit stays reflected).

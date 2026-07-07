@@ -779,6 +779,69 @@ async function fetchOnboardingBlockers(supabaseAdmin: any) {
     }
   }
 
+  // ── C. Leadership intros aggregation (Option A) ──
+  // For each active run, look up leadership_intro tasks on its card and
+  // roll them up into ONE blocker per candidate. Amber if any intro is
+  // unscheduled (no calendar event) past working-day 3; Red if any is still
+  // incomplete past working-day 10.
+  try {
+    if (cardIds.length) {
+      const { data: introTasks } = await supabaseAdmin
+        .from("workstream_tasks")
+        .select("id, card_id, title, description, completed, due_date")
+        .in("card_id", cardIds)
+        .ilike("title", "[Leadership Intro%");
+      const introsByCard: Record<string, any[]> = {};
+      (introTasks || []).forEach((t: any) => { (introsByCard[t.card_id] ||= []).push(t); });
+
+      const workingDaysBetween = (fromYmd: string, toDate: Date): number => {
+        const from = new Date(fromYmd + "T00:00:00Z");
+        if (isNaN(from.getTime())) return 0;
+        let days = 0;
+        const cursor = new Date(from);
+        while (cursor < toDate) {
+          cursor.setUTCDate(cursor.getUTCDate() + 1);
+          const dow = cursor.getUTCDay();
+          if (dow !== 0 && dow !== 6) days++;
+        }
+        return days;
+      };
+
+      for (const run of activeRuns) {
+        const intros = introsByCard[run.card_id] || [];
+        if (!intros.length) continue;
+        const cand = candMap[run.candidate_id];
+        if (!cand?.start_date) continue;
+        if (cand.start_date > today) continue; // hasn't started yet
+        const elapsed = workingDaysBetween(cand.start_date, now);
+
+        const unscheduled: string[] = [];
+        const overdueIncomplete: string[] = [];
+        for (const t of intros) {
+          const leaderMatch = (t.title || "").match(/\[Leadership Intro · ([^\]]+)\]/);
+          const leaderName = leaderMatch ? leaderMatch[1] : "leader";
+          const hasEvent = /Calendar event:/i.test(t.description || "");
+          if (!t.completed && elapsed >= 10) overdueIncomplete.push(leaderName);
+          else if (!hasEvent && elapsed >= 3) unscheduled.push(leaderName);
+        }
+        if (!unscheduled.length && !overdueIncomplete.length) continue;
+
+        items.push({
+          kind: "onboarding_leadership_intros",
+          severity: overdueIncomplete.length ? "red" : "amber",
+          audience: ["hiring_manager", "admin"],
+          new_hire: hireLabel(run.candidate_id),
+          start_date: cand.start_date,
+          working_days_elapsed: elapsed,
+          unscheduled_leaders: unscheduled,
+          overdue_incomplete_leaders: overdueIncomplete,
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("leadership intro blockers failed", e);
+  }
+
   items.sort((a, b) => {
     const rank = (s: string) => (s === "red" ? 0 : s === "amber" ? 1 : 2);
     const dr = rank(a.severity) - rank(b.severity);

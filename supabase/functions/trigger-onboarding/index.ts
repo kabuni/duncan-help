@@ -327,7 +327,7 @@ Deno.serve(async (req) => {
       { group: "Day 1", title: "Device & security check", offsetDays: 0, assignee: opsOwnerId, coAssignees: [] },
 
       // Week 1
-      { group: "Week 1", title: "Leadership intros — schedule 15-30 min with each leader (within 10 working days)", offsetDays: 5, assignee: hiringManagerId },
+      // NOTE: Leadership intros are now roster-driven — see §3c below.
       { group: "Week 1", title: "Shadow 2 team meetings", offsetDays: 5, assignee: hiringManagerId },
       { group: "Week 1", title: "Complete required training modules", offsetDays: 5, assignee: null },
 

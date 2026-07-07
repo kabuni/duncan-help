@@ -739,7 +739,7 @@ async function fetchOnboardingBlockers(supabaseAdmin: any) {
           age_days: Math.floor((now.getTime() - new Date(r.created_at).getTime()) / 86400000),
         });
       }
-      if (r.authored_source === "ai_draft_failed") {
+      if (r.authored_source === "ai_draft_failed" || (r.plan && r.plan._ai_draft_failed === true)) {
         items.push({
           kind: "onboarding_plan_ai_draft_failed",
           severity: "red",

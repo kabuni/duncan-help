@@ -104,6 +104,7 @@ export const TOURS: Record<string, TourDefinition> = {
     eta: "~3 min",
     // Dynamic route — TourProvider will resolve /projects/:id from the current path or the first available project.
     route: "/projects",
+    matchRoute: (p) => /^\/projects\/[^/]+$/.test(p),
     steps: [
       {
         target: "pw-title",

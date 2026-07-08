@@ -359,7 +359,7 @@ export default function ProjectWorkspace() {
         {/* Header */}
         <header className="flex items-center gap-1.5 sm:gap-3 border-b border-border px-2 sm:px-4 py-3 shrink-0">
           
-          <button onClick={() => navigate("/projects")} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">
+          <button data-tour="pw-back" onClick={() => navigate("/projects")} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">
             <ArrowLeft className="h-4 w-4" />
           </button>
           <button
@@ -369,7 +369,7 @@ export default function ProjectWorkspace() {
           >
             <Menu className="h-4 w-4" />
           </button>
-          <div className="flex-1 min-w-0">
+          <div data-tour="pw-title" className="flex-1 min-w-0">
             <h1 className="text-sm font-semibold text-foreground truncate">{project.name}</h1>
             <p className="text-[10px] text-muted-foreground truncate hidden sm:block">
               {extractedCount > 0
@@ -377,15 +377,18 @@ export default function ProjectWorkspace() {
                 : project.system_prompt ? "Custom instructions active" : "Default instructions"}
             </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setShowFiles(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Files">
+          <div className="hidden lg:block">
+            <TutorialButton tourId="project_workspace" />
+          </div>
+          <Button data-tour="pw-files" variant="ghost" size="sm" onClick={() => setShowFiles(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Files">
             <FileText className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Files{files.length > 0 && ` (${files.length})`}</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowNotes(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Notes">
+          <Button data-tour="pw-notes" variant="ghost" size="sm" onClick={() => setShowNotes(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Notes">
             <StickyNote className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Notes</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowTasks(true)} className="gap-1.5 text-xs px-2 sm:px-3 relative" aria-label="Tasks">
+          <Button data-tour="pw-tasks" variant="ghost" size="sm" onClick={() => setShowTasks(true)} className="gap-1.5 text-xs px-2 sm:px-3 relative" aria-label="Tasks">
             <ListChecks className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Tasks{openTaskCount > 0 && ` (${openTaskCount})`}</span>
             {openTaskCount > 0 && (
@@ -394,11 +397,11 @@ export default function ProjectWorkspace() {
               </span>
             )}
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowCollaborate(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Collaborate">
+          <Button data-tour="pw-collaborate" variant="ghost" size="sm" onClick={() => setShowCollaborate(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Collaborate">
             <Users className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Collaborate</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={openSettings} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Settings">
+          <Button data-tour="pw-settings" variant="ghost" size="sm" onClick={openSettings} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Settings">
             <Settings2 className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Settings</span>
           </Button>

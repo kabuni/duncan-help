@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { TutorialButton } from "@/components/onboarding/TutorialButton";
 import { format } from "date-fns";
 
 export default function Projects() {
@@ -40,10 +41,13 @@ export default function Projects() {
               <p className="text-xs text-muted-foreground">Isolated AI workspaces with persistent context</p>
             </div>
           </div>
-          <Button onClick={() => setShowCreate(true)} size="sm" className="gap-2">
-            <Plus className="h-4 w-4" />
-            New Project
-          </Button>
+          <div className="flex items-center gap-2">
+            <TutorialButton tourId="projects" />
+            <Button data-tour="projects-new" onClick={() => setShowCreate(true)} size="sm" className="gap-2">
+              <Plus className="h-4 w-4" />
+              New Project
+            </Button>
+          </div>
         </header>
 
 

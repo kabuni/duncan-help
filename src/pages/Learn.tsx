@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowRight, PlayCircle } from "lucide-react";
 import { MODULES } from "@/components/onboarding/moduleContent";
 import MeetDuncanTour from "@/components/onboarding/MeetDuncanTour";
+import { TutorialsSection } from "@/components/onboarding/TutorialsSection";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
@@ -57,6 +58,8 @@ export default function Learn() {
             <PlayCircle className="h-3.5 w-3.5" /> Replay Meet Duncan tour
           </button>
         </div>
+
+        <TutorialsSection />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           {MODULES.map((m) => {

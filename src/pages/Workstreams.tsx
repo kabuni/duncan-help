@@ -18,6 +18,7 @@ import KanbanBoard from "@/components/workstreams/KanbanBoard";
 import CardDetailModal from "@/components/workstreams/CardDetailModal";
 import CreateCardDialog from "@/components/workstreams/CreateCardDialog";
 import { StatusBadge, priorityConfig, getStatusBorderClass } from "@/components/workstreams/StatusBadge";
+import { TutorialButton } from "@/components/onboarding/TutorialButton";
 import { format } from "date-fns";
 
 type ViewMode = "board" | "list" | "tasks";
@@ -111,12 +112,13 @@ const Workstreams = () => {
               <p className="text-xs text-muted-foreground font-mono">Track projects, tasks, and team progress</p>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <Button asChild variant="outline" className="gap-2 flex-1 sm:flex-none">
+              <TutorialButton tourId="workstreams" />
+              <Button asChild variant="outline" className="gap-2 flex-1 sm:flex-none" data-tour="ws-present">
                 <Link to="/workstreams/present">
                   <Presentation className="h-4 w-4" /> Present
                 </Link>
               </Button>
-              <Button onClick={() => setShowCreate(true)} className="gap-2 flex-1 sm:flex-none">
+              <Button data-tour="ws-new-card" onClick={() => setShowCreate(true)} className="gap-2 flex-1 sm:flex-none">
                 <Plus className="h-4 w-4" /> New Card
               </Button>
             </div>
@@ -235,7 +237,7 @@ const Workstreams = () => {
               </Button>
             </motion.div>
           ) : viewMode === "board" ? (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+            <motion.div data-tour="ws-board" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
               <KanbanBoard cards={displayCards} onCardClick={card => setSelectedCardId(card.id)} />
             </motion.div>
           ) : (

@@ -2838,6 +2838,7 @@ export type Database = {
           preferences: Json | null
           requested_role_title: string | null
           role_title: string | null
+          tutorial_progress: Json
           updated_at: string
           user_id: string
         }
@@ -2857,6 +2858,7 @@ export type Database = {
           preferences?: Json | null
           requested_role_title?: string | null
           role_title?: string | null
+          tutorial_progress?: Json
           updated_at?: string
           user_id: string
         }
@@ -2876,6 +2878,7 @@ export type Database = {
           preferences?: Json | null
           requested_role_title?: string | null
           role_title?: string | null
+          tutorial_progress?: Json
           updated_at?: string
           user_id?: string
         }

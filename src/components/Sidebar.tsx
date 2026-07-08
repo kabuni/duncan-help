@@ -166,6 +166,7 @@ const Sidebar = ({
 
         <RouterNavLink
           to="/workstreams"
+          data-tour="nav-workstreams"
           onClick={() => onMobileClose?.()}
           className={({ isActive }) =>
             cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
@@ -178,6 +179,7 @@ const Sidebar = ({
         </RouterNavLink>
         <RouterNavLink
           to="/diary"
+          data-tour="nav-diary"
           onClick={() => onMobileClose?.()}
           className={({ isActive }) =>
             cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
@@ -349,6 +351,7 @@ const Sidebar = ({
           <span className="ml-auto" aria-hidden>·</span>
           <button
             onClick={() => { navigate("/learn"); onMobileClose?.(); }}
+            data-tour="nav-learn"
             className="hover:text-foreground transition-colors"
           >
             Learn Duncan

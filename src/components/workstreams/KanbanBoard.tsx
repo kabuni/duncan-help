@@ -24,6 +24,9 @@ interface KanbanBoardProps {
 export default function KanbanBoard({ cards, onCardClick }: KanbanBoardProps) {
   const updateCard = useUpdateCard();
   const [dragOverCol, setDragOverCol] = useState<CardStatus | null>(null);
+  const [pages, setPages] = useState<Record<CardStatus, number>>({
+    not_started: 0, red: 0, amber: 0, green: 0, done: 0,
+  } as Record<CardStatus, number>);
 
   const handleDragStart = (e: React.DragEvent, card: WorkstreamCard) => {
     e.dataTransfer.setData("cardId", card.id);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { CalendarDays, Users, CheckCircle2, Circle, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
 import { Badge } from "@/components/ui/badge";

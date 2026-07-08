@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 
 import { DetailDrawer } from "@/components/diary/DetailDrawer";
 import { AddEventDialog } from "@/components/diary/AddEventDialog";
+import { TutorialButton } from "@/components/onboarding/TutorialButton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatTimeInTz } from "@/components/diary/TimezonePicker";
 import { CATEGORY_META, CATEGORY_GROUPS, getCategoryMeta } from "@/components/diary/categoryMeta";
@@ -452,7 +453,7 @@ export default function KeyEventsDiary() {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary glow-primary-sm shrink-0">
               <CalendarDays className="h-5 w-5" />
             </div>
-            <div>
+            <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl md:text-2xl font-bold tracking-tight">Duncan Planner</h1>
                 <Badge variant="outline" className="hidden sm:inline-flex font-mono text-[10px] uppercase">execution system</Badge>
@@ -461,6 +462,7 @@ export default function KeyEventsDiary() {
                 Strategic events synced from <span className="font-semibold">Duncan | Planner</span>. Goal target dates appear as pinned markers.
               </p>
             </div>
+            <TutorialButton tourId="planner" />
           </div>
         </header>
 

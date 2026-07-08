@@ -22,6 +22,7 @@ export default function Learn() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [tourOpen, setTourOpen] = useState(false);
+  const { start, progress } = useTour();
 
   const replay = async () => {
     if (user) {
@@ -66,11 +67,34 @@ export default function Learn() {
           </button>
         </div>
 
-        <TutorialsSection />
-
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           {MODULES.map((m) => {
             const Icon = m.icon;
+            const tourId = MODULE_TOUR_MAP[m.id];
+            const tour = tourId ? TOURS[tourId] : undefined;
+            const p = tourId ? progress[tourId] : undefined;
+            const status = p?.status ?? "not_started";
+            const pct =
+              p && tour
+                ? Math.min(100, Math.round(((p.step ?? 0) / (p.total || tour.steps.length)) * 100))
+                : 0;
+            const StatusIcon =
+              status === "completed" ? Check : status === "in_progress" ? Clock : CircleDashed;
+            const statusText =
+              status === "completed"
+                ? "Completed"
+                : status === "in_progress"
+                ? `In progress · ${pct}%`
+                : status === "skipped"
+                ? "Skipped"
+                : "Not started";
+            const cta =
+              status === "completed" || status === "skipped"
+                ? "Replay tutorial"
+                : status === "in_progress"
+                ? "Resume tutorial"
+                : "Start tutorial";
+
             return (
               <div
                 key={m.id}
@@ -100,6 +124,26 @@ export default function Learn() {
                     ))}
                   </ul>
                 )}
+
+                {tour && (
+                  <div className="mt-4 pt-3 border-t border-border/60">
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-2">
+                      <StatusIcon className="h-3 w-3" /> Interactive tutorial · {tour.eta} · {statusText}
+                    </div>
+                    <div className="h-1 w-full bg-border rounded-full overflow-hidden mb-3">
+                      <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                    <button
+                      onClick={() =>
+                        start(tour.id, { restart: status === "completed" || status === "skipped" })
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors self-start"
+                    >
+                      <PlayCircle className="h-3.5 w-3.5" /> {cta}
+                    </button>
+                  </div>
+                )}
+
                 {m.cta && (
                   <button
                     onClick={() => handleModuleCta(m.id, m.cta!.to)}
@@ -112,6 +156,7 @@ export default function Learn() {
             );
           })}
         </div>
+
 
         <div className="mt-10 rounded-xl border border-border bg-card p-5">
           <h3 className="text-sm font-semibold text-foreground mb-2">

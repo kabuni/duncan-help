@@ -18,6 +18,7 @@ import KanbanBoard from "@/components/workstreams/KanbanBoard";
 import CardDetailModal from "@/components/workstreams/CardDetailModal";
 import CreateCardDialog from "@/components/workstreams/CreateCardDialog";
 import { StatusBadge, priorityConfig, getStatusBorderClass } from "@/components/workstreams/StatusBadge";
+import { TutorialButton } from "@/components/onboarding/TutorialButton";
 import { format } from "date-fns";
 
 type ViewMode = "board" | "list" | "tasks";

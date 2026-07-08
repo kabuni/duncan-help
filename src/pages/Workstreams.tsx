@@ -237,7 +237,7 @@ const Workstreams = () => {
               </Button>
             </motion.div>
           ) : viewMode === "board" ? (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+            <motion.div data-tour="ws-board" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
               <KanbanBoard cards={displayCards} onCardClick={card => setSelectedCardId(card.id)} />
             </motion.div>
           ) : (

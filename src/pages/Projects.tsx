@@ -14,10 +14,21 @@ import { format } from "date-fns";
 export default function Projects() {
   const navigate = useNavigate();
   const { projects, loading, createProject, deleteProject } = useProjects();
+  const { start: startTour, progress: tourProgress } = useTour();
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPrompt, setNewPrompt] = useState("");
   const [creating, setCreating] = useState(false);
+
+  const launchWorkspaceTour = () => {
+    const first = projects[0];
+    if (!first) return;
+    const p = tourProgress["project_workspace"];
+    const restart = p?.status === "completed" || p?.status === "skipped";
+    navigate(`/projects/${first.id}`);
+    // Let the workspace mount before starting the tour.
+    setTimeout(() => startTour("project_workspace", { restart }), 400);
+  };
 
   const handleCreate = async () => {
     if (!newName.trim()) return;

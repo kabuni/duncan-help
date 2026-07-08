@@ -67,9 +67,10 @@ export function TourProvider({ children }: { children: ReactNode }) {
         !opts?.restart && existing?.status === "in_progress" ? Math.min(existing.step, tour.steps.length - 1) : 0;
       setActiveTourId(tourId);
       setActiveStep(startStep);
-      if (location.pathname !== tour.route && tour.steps[startStep]?.route) {
+      const matches = tour.matchRoute ? tour.matchRoute(location.pathname) : location.pathname === tour.route;
+      if (!matches && tour.steps[startStep]?.route) {
         navigate(tour.steps[startStep].route!);
-      } else if (location.pathname !== tour.route) {
+      } else if (!matches) {
         navigate(tour.route);
       }
       persist({

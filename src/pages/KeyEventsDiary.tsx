@@ -590,7 +590,7 @@ export default function KeyEventsDiary() {
         </div>
 
 
-        <Card className="p-2 sm:p-3 shrink-0 min-w-0 flex flex-col overflow-visible">
+        <Card data-tour="planner-calendar" className="p-2 sm:p-3 shrink-0 min-w-0 flex flex-col overflow-visible">
           {loading ? (
             <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
           ) : (

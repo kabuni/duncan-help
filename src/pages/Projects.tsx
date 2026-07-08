@@ -72,7 +72,7 @@ export default function Projects() {
               </Button>
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div data-tour="projects-list" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {projects.map(project => (
                 <div
                   key={project.id}

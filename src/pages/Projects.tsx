@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { TutorialButton } from "@/components/onboarding/TutorialButton";
+import { useTour } from "@/components/onboarding/tour/TourProvider";
+import { PlayCircle } from "lucide-react";
 import { format } from "date-fns";
 
 export default function Projects() {

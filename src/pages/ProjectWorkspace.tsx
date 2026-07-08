@@ -26,6 +26,7 @@ import { ProjectTasksDrawer } from "@/components/projects/ProjectTasksDrawer";
 import ChatInput from "@/components/chat/ChatInput";
 import type { ChatAttachment } from "@/hooks/useNormanChat";
 import { toast } from "sonner";
+import { TutorialButton } from "@/components/onboarding/TutorialButton";
 
 const CHECKLIST_RE = /^\s*[-*]\s*\[\s*[ xX]?\s*\]\s+/;
 const HEADING_RE = /^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/;

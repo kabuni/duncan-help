@@ -59,6 +59,8 @@ export default function Learn() {
           </button>
         </div>
 
+        <TutorialsSection />
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           {MODULES.map((m) => {
             const Icon = m.icon;

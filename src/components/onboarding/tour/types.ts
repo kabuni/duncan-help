@@ -13,7 +13,9 @@ export type TourDefinition = {
   name: string;
   description: string;
   eta: string; // e.g. "3 min"
-  route: string; // starting route
+  route: string; // starting/fallback route
+  /** Optional predicate — return true when the current path is a valid host for this tour. */
+  matchRoute?: (path: string) => boolean;
   steps: TourStep[];
 };
 

@@ -56,6 +56,21 @@ export default function Projects() {
           </div>
           <div className="flex items-center gap-2">
             <TutorialButton tourId="projects" />
+            {projects.length > 0 && (
+              <button
+                onClick={launchWorkspaceTour}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                title="Opens your first project and starts the workspace walkthrough"
+              >
+                <PlayCircle className="h-3.5 w-3.5" />
+                {(() => {
+                  const p = tourProgress["project_workspace"];
+                  if (p?.status === "completed" || p?.status === "skipped") return "Replay workspace tour";
+                  if (p?.status === "in_progress") return "Resume workspace tour";
+                  return "Workspace tour";
+                })()}
+              </button>
+            )}
             <Button data-tour="projects-new" onClick={() => setShowCreate(true)} size="sm" className="gap-2">
               <Plus className="h-4 w-4" />
               New Project

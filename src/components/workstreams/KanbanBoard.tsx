@@ -1,10 +1,12 @@
-import { useState } from "react";
-import { CalendarDays, Users, CheckCircle2, Circle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { CalendarDays, Users, CheckCircle2, Circle, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import type { WorkstreamCard, CardStatus } from "@/hooks/useWorkstreams";
 import { useUpdateCard } from "@/hooks/useWorkstreams";
 import { StatusBadge, getStatusBorderClass, priorityConfig } from "./StatusBadge";
+
+const PAGE_SIZE = 10;
 
 const COLUMNS: { status: CardStatus; label: string; emoji: string }[] = [
   { status: "not_started", label: "Not started", emoji: "⚪" },

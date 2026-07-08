@@ -56,10 +56,15 @@ export default function KanbanBoard({ cards, onCardClick }: KanbanBoardProps) {
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-5">
       {COLUMNS.map(col => {
         const colCards = cards.filter(c => c.status === col.status);
+        const totalPages = Math.max(1, Math.ceil(colCards.length / PAGE_SIZE));
+        const page = Math.min(pages[col.status] ?? 0, totalPages - 1);
+        const start = page * PAGE_SIZE;
+        const pageCards = colCards.slice(start, start + PAGE_SIZE);
+        const setPage = (p: number) => setPages(prev => ({ ...prev, [col.status]: p }));
         return (
           <div
             key={col.status}
-            className={`min-h-[200px] rounded-xl border transition-colors duration-200 ${
+            className={`min-h-[200px] rounded-xl border transition-colors duration-200 flex flex-col ${
               dragOverCol === col.status
                 ? "border-primary bg-primary/5"
                 : "border-border bg-card/30"
@@ -78,8 +83,8 @@ export default function KanbanBoard({ cards, onCardClick }: KanbanBoardProps) {
               </span>
             </div>
 
-            <div className="p-2 space-y-2">
-              {colCards.map(card => (
+            <div className="p-2 space-y-2 flex-1">
+              {pageCards.map(card => (
                 <KanbanCard key={card.id} card={card} onClick={() => onCardClick(card)} onDragStart={handleDragStart} />
               ))}
               {colCards.length === 0 && (
@@ -88,6 +93,30 @@ export default function KanbanBoard({ cards, onCardClick }: KanbanBoardProps) {
                 </div>
               )}
             </div>
+
+            {colCards.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-border/50">
+                <button
+                  onClick={() => setPage(Math.max(0, page - 1))}
+                  disabled={page === 0}
+                  className="flex items-center gap-0.5 rounded-md px-1.5 py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="h-3 w-3" /> Prev
+                </button>
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  {start + 1}–{Math.min(start + PAGE_SIZE, colCards.length)} of {colCards.length}
+                </span>
+                <button
+                  onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+                  disabled={page >= totalPages - 1}
+                  className="flex items-center gap-0.5 rounded-md px-1.5 py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+                  aria-label="Next page"
+                >
+                  Next <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
+            )}
           </div>
         );
       })}

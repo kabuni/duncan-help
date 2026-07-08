@@ -26,11 +26,12 @@ export const useTour = () => {
   return ctx;
 };
 
-const AUTOSTART_ROUTES: Record<string, string> = {
-  "/projects": "projects",
-  "/workstreams": "workstreams",
-  "/diary": "planner",
-};
+const AUTOSTART_MATCHERS: Array<{ test: (path: string) => boolean; tour: string }> = [
+  { test: (p) => p === "/projects", tour: "projects" },
+  { test: (p) => /^\/projects\/[^/]+$/.test(p), tour: "project_workspace" },
+  { test: (p) => p === "/workstreams", tour: "workstreams" },
+  { test: (p) => p === "/diary", tour: "planner" },
+];
 
 export function TourProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -66,9 +67,10 @@ export function TourProvider({ children }: { children: ReactNode }) {
         !opts?.restart && existing?.status === "in_progress" ? Math.min(existing.step, tour.steps.length - 1) : 0;
       setActiveTourId(tourId);
       setActiveStep(startStep);
-      if (location.pathname !== tour.route && tour.steps[startStep]?.route) {
+      const matches = tour.matchRoute ? tour.matchRoute(location.pathname) : location.pathname === tour.route;
+      if (!matches && tour.steps[startStep]?.route) {
         navigate(tour.steps[startStep].route!);
-      } else if (location.pathname !== tour.route) {
+      } else if (!matches) {
         navigate(tour.route);
       }
       persist({
@@ -152,7 +154,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!profile || activeTourId) return;
     if (!(profile as any).meet_duncan_tour_completed_at) return; // wait for meet tour
-    const tourId = AUTOSTART_ROUTES[location.pathname];
+    const tourId = AUTOSTART_MATCHERS.find((m) => m.test(location.pathname))?.tour;
     if (!tourId) return;
     if (autoStartedRef.current.has(tourId)) return;
     const p = progress[tourId];

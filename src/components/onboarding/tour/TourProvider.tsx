@@ -26,11 +26,12 @@ export const useTour = () => {
   return ctx;
 };
 
-const AUTOSTART_ROUTES: Record<string, string> = {
-  "/projects": "projects",
-  "/workstreams": "workstreams",
-  "/diary": "planner",
-};
+const AUTOSTART_MATCHERS: Array<{ test: (path: string) => boolean; tour: string }> = [
+  { test: (p) => p === "/projects", tour: "projects" },
+  { test: (p) => /^\/projects\/[^/]+$/.test(p), tour: "project_workspace" },
+  { test: (p) => p === "/workstreams", tour: "workstreams" },
+  { test: (p) => p === "/diary", tour: "planner" },
+];
 
 export function TourProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();

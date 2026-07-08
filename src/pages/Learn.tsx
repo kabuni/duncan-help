@@ -1,13 +1,20 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, PlayCircle } from "lucide-react";
+import { ArrowRight, PlayCircle, Check, Clock, CircleDashed } from "lucide-react";
 import { MODULES } from "@/components/onboarding/moduleContent";
 import MeetDuncanTour from "@/components/onboarding/MeetDuncanTour";
-import { TutorialsSection } from "@/components/onboarding/TutorialsSection";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSettingsPanel } from "@/hooks/SettingsPanelContext";
+import { useTour } from "@/components/onboarding/tour/TourProvider";
+import { TOURS } from "@/components/onboarding/tour/tours";
+
+const MODULE_TOUR_MAP: Record<string, string> = {
+  projects: "projects",
+  workstreams: "workstreams",
+  planner: "planner",
+};
 
 export default function Learn() {
   const navigate = useNavigate();

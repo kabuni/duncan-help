@@ -7,28 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { TutorialButton } from "@/components/onboarding/TutorialButton";
-import { useTour } from "@/components/onboarding/tour/TourProvider";
-import { PlayCircle } from "lucide-react";
 import { format } from "date-fns";
 
 export default function Projects() {
   const navigate = useNavigate();
   const { projects, loading, createProject, deleteProject } = useProjects();
-  const { start: startTour, progress: tourProgress } = useTour();
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPrompt, setNewPrompt] = useState("");
   const [creating, setCreating] = useState(false);
-
-  const launchWorkspaceTour = () => {
-    const first = projects[0];
-    if (!first) return;
-    const p = tourProgress["project_workspace"];
-    const restart = p?.status === "completed" || p?.status === "skipped";
-    navigate(`/projects/${first.id}`);
-    // Let the workspace mount before starting the tour.
-    setTimeout(() => startTour("project_workspace", { restart }), 400);
-  };
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -56,21 +43,6 @@ export default function Projects() {
           </div>
           <div className="flex items-center gap-2">
             <TutorialButton tourId="projects" />
-            {projects.length > 0 && (
-              <button
-                onClick={launchWorkspaceTour}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
-                title="Opens your first project and starts the workspace walkthrough"
-              >
-                <PlayCircle className="h-3.5 w-3.5" />
-                {(() => {
-                  const p = tourProgress["project_workspace"];
-                  if (p?.status === "completed" || p?.status === "skipped") return "Replay workspace tour";
-                  if (p?.status === "in_progress") return "Resume workspace tour";
-                  return "Workspace tour";
-                })()}
-              </button>
-            )}
             <Button data-tour="projects-new" onClick={() => setShowCreate(true)} size="sm" className="gap-2">
               <Plus className="h-4 w-4" />
               New Project

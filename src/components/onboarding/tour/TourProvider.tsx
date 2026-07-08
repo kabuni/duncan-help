@@ -153,7 +153,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!profile || activeTourId) return;
     if (!(profile as any).meet_duncan_tour_completed_at) return; // wait for meet tour
-    const tourId = AUTOSTART_ROUTES[location.pathname];
+    const tourId = AUTOSTART_MATCHERS.find((m) => m.test(location.pathname))?.tour;
     if (!tourId) return;
     if (autoStartedRef.current.has(tourId)) return;
     const p = progress[tourId];

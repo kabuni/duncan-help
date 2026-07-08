@@ -411,9 +411,9 @@ export default function ProjectWorkspace() {
         {/* Workspace */}
         <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* LEFT: Chat list (desktop) */}
-          <div className="w-56 shrink-0 border-r border-border flex-col bg-sidebar/50 hidden md:flex">
+          <div data-tour="pw-chat-list" className="w-56 shrink-0 border-r border-border flex-col bg-sidebar/50 hidden md:flex">
             <div className="p-3 border-b border-border">
-              <Button variant="outline" size="sm" onClick={handleNewChat} className="w-full gap-2 text-xs">
+              <Button data-tour="pw-new-chat" variant="outline" size="sm" onClick={handleNewChat} className="w-full gap-2 text-xs">
                 <Plus className="h-3.5 w-3.5" />
                 New Chat
               </Button>

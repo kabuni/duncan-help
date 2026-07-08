@@ -26,12 +26,10 @@ export const useTour = () => {
   return ctx;
 };
 
-const AUTOSTART_MATCHERS: Array<{ test: (path: string) => boolean; tour: string }> = [
-  { test: (p) => p === "/projects", tour: "projects" },
-  { test: (p) => /^\/projects\/[^/]+$/.test(p), tour: "project_workspace" },
-  { test: (p) => p === "/workstreams", tour: "workstreams" },
-  { test: (p) => p === "/diary", tour: "planner" },
-];
+// Module tours (Projects, Project Workspace, Workstreams, Planner) are launch-on-demand
+// only — via the in-page Tutorial button or Learn Duncan. We do NOT autostart them,
+// otherwise every first visit to each module fires a walkthrough and it feels constant.
+const AUTOSTART_MATCHERS: Array<{ test: (path: string) => boolean; tour: string }> = [];
 
 export function TourProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();

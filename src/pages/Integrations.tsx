@@ -472,6 +472,8 @@ const Integrations = () => {
     checkGmailConnection();
     checkAzureDevOpsConnection();
     checkGoogleDriveConnection();
+    checkGoogleDrivePersonalConnection();
+
     checkDuncanGmail();
   }, [checkCalendarConnection]);
 

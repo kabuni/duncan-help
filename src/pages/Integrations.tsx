@@ -743,8 +743,11 @@ const IntegrationDetail = ({
     status = isSlackConnected ? "connected" : "disconnected";
   } else if (isAzureDevOps) {
     status = isAzureDevOpsConnected ? "connected" : "disconnected";
-  } else if (isGoogleDrive) {
+  } else if (isGoogleDriveCompany) {
     status = isGoogleDriveConnected ? "connected" : "disconnected";
+  } else if (isGoogleDrivePersonal) {
+    status = isGoogleDrivePersonalConnected ? "connected" : "disconnected";
+
   } else {
     status = getStatus(integration, userIntegrations, companyIntegrations);
   }

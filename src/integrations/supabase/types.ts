@@ -1466,6 +1466,93 @@ export type Database = {
         }
         Relationships: []
       }
+      gmail_draft_feedback: {
+        Row: {
+          created_at: string
+          edit_distance: number | null
+          final_sent: string
+          gmail_draft_id: string | null
+          gmail_thread_id: string | null
+          id: string
+          original_draft: string
+          outcome: string
+          recipient_domain: string | null
+          recipient_email: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          edit_distance?: number | null
+          final_sent: string
+          gmail_draft_id?: string | null
+          gmail_thread_id?: string | null
+          id?: string
+          original_draft: string
+          outcome?: string
+          recipient_domain?: string | null
+          recipient_email?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          edit_distance?: number | null
+          final_sent?: string
+          gmail_draft_id?: string | null
+          gmail_thread_id?: string | null
+          id?: string
+          original_draft?: string
+          outcome?: string
+          recipient_domain?: string | null
+          recipient_email?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      gmail_style_samples: {
+        Row: {
+          created_at: string
+          gmail_message_id: string
+          id: string
+          recipient_domain: string | null
+          recipient_email: string | null
+          sample_text: string
+          sent_at: string | null
+          source: string
+          subject: string | null
+          user_id: string
+          weight: number
+          word_count: number | null
+        }
+        Insert: {
+          created_at?: string
+          gmail_message_id: string
+          id?: string
+          recipient_domain?: string | null
+          recipient_email?: string | null
+          sample_text: string
+          sent_at?: string | null
+          source?: string
+          subject?: string | null
+          user_id: string
+          weight?: number
+          word_count?: number | null
+        }
+        Update: {
+          created_at?: string
+          gmail_message_id?: string
+          id?: string
+          recipient_domain?: string | null
+          recipient_email?: string | null
+          sample_text?: string
+          sent_at?: string | null
+          source?: string
+          subject?: string | null
+          user_id?: string
+          weight?: number
+          word_count?: number | null
+        }
+        Relationships: []
+      }
       gmail_tokens: {
         Row: {
           access_token: string
@@ -1511,7 +1598,10 @@ export type Database = {
           common_phrases: Json
           created_at: string
           id: string
+          incremental_learn_cursor: string | null
+          last_incremental_run_at: string | null
           last_trained_at: string | null
+          per_recipient_style: Json
           sample_count: number
           sample_replies: Json
           style_summary: string
@@ -1530,7 +1620,10 @@ export type Database = {
           common_phrases?: Json
           created_at?: string
           id?: string
+          incremental_learn_cursor?: string | null
+          last_incremental_run_at?: string | null
           last_trained_at?: string | null
+          per_recipient_style?: Json
           sample_count?: number
           sample_replies?: Json
           style_summary?: string
@@ -1549,7 +1642,10 @@ export type Database = {
           common_phrases?: Json
           created_at?: string
           id?: string
+          incremental_learn_cursor?: string | null
+          last_incremental_run_at?: string | null
           last_trained_at?: string | null
+          per_recipient_style?: Json
           sample_count?: number
           sample_replies?: Json
           style_summary?: string

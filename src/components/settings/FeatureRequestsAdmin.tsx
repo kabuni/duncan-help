@@ -22,6 +22,17 @@ interface FeatureRequest {
   status: string;
   admin_notes: string | null;
   created_at: string;
+  triage_status: string | null;
+  clarification_round: number | null;
+  refined_title: string | null;
+  problem_statement: string | null;
+  proposed_solution: string | null;
+  acceptance_criteria: string | null;
+  category: string | null;
+  priority_band: string | null;
+  effort_band: string | null;
+  rice_score: number | null;
+  workstream_card_id: string | null;
   attachments?: Attachment[];
 }
 

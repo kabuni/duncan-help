@@ -108,12 +108,14 @@ async function processRequest(id: string) {
     .eq("feature_request_id", id)
     .order("created_at", { ascending: true });
 
-  const decision = await runLLM(fr, msgs ?? []);
+  const existing = await loadExistingContext(fr);
+  const decision = await runLLM(fr, msgs ?? [], existing);
 
   if (decision.action === "clarify") {
-    // Cap clarification rounds
-    if ((fr.clarification_round ?? 0) >= 2) {
-      // Force triage with a stub if still ambiguous
+    // Cap clarification rounds at 1 — if the user has replied at least once,
+    // force triage with best-effort assumptions rather than re-asking.
+    const userReplied = (msgs ?? []).some((m: any) => m.role === "user");
+    if ((fr.clarification_round ?? 0) >= 1 || userReplied) {
       return await fileTicket(fr, { ...decision, action: "triage" });
     }
     return await sendClarification(fr, decision);

@@ -2754,6 +2754,7 @@ export type Database = {
           sender_name: string
           status: string
           updated_at: string
+          user_id: string
         }
         Insert: {
           calendar_event_id?: string | null
@@ -2773,6 +2774,7 @@ export type Database = {
           sender_name: string
           status?: string
           updated_at?: string
+          user_id: string
         }
         Update: {
           calendar_event_id?: string | null
@@ -2792,6 +2794,7 @@ export type Database = {
           sender_name?: string
           status?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

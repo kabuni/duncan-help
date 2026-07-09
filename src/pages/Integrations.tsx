@@ -405,10 +405,17 @@ const Integrations = () => {
       toast.success("Azure DevOps connected successfully!");
       checkAzureDevOpsConnection();
       setSearchParams({});
-    } else if (searchParams.get("drive_connected") === "true") {
-      toast.success("Google Drive connected successfully!");
-      checkGoogleDriveConnection();
+    } else if (searchParams.get("drive_connected")) {
+      const connectedScope = searchParams.get("drive_connected");
+      if (connectedScope === "personal") {
+        toast.success("Personal Google Drive connected");
+        checkGoogleDrivePersonalConnection();
+      } else {
+        toast.success("Company Google Drive connected");
+        checkGoogleDriveConnection();
+      }
       setSearchParams({});
+
     } else if (searchParams.get("drive_error")) {
       const driveError = searchParams.get("drive_error");
       toast.error(driveErrorMessages[driveError || "unknown"] || `Google Drive connection failed: ${driveError}`);

@@ -124,8 +124,13 @@ export default function SettingsFeatureRequest() {
       setUploadingIdx(null);
     }
 
+    // Fire-and-forget: Duncan takes over from here.
+    supabase.functions.invoke("feature-request-agent", {
+      body: { feature_request_id: inserted.id },
+    }).catch((e) => console.warn("agent invoke failed", e));
+
     setSubmitting(false);
-    toast.success("Feature request submitted");
+    toast.success("Submitted — Duncan is reviewing it now");
     reset();
     setSubmitted(true);
   };
@@ -134,7 +139,7 @@ export default function SettingsFeatureRequest() {
     return (
       <div className="space-y-3">
         <h3 className="text-sm font-semibold text-foreground">Request a Feature</h3>
-        <p className="text-xs text-muted-foreground">Thanks — your request has been recorded.</p>
+        <p className="text-xs text-muted-foreground">Thanks — Duncan is reviewing your request and will email you if he needs more detail before filing it on the backlog.</p>
         <button
           onClick={() => setSubmitted(false)}
           className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary/60 transition-colors"

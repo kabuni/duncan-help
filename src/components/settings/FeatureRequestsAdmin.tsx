@@ -192,3 +192,41 @@ export default function FeatureRequestsAdmin() {
     </div>
   );
 }
+
+type PillTone = "muted" | "amber" | "red" | "green" | "blue";
+
+function Pill({ children, tone = "muted" }: { children: React.ReactNode; tone?: PillTone }) {
+  const toneClass: Record<PillTone, string> = {
+    muted: "bg-secondary/60 text-muted-foreground",
+    amber: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+    red: "bg-destructive/15 text-destructive",
+    green: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+    blue: "bg-primary/15 text-primary",
+  };
+  return (
+    <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ${toneClass[tone]}`}>
+      {children}
+    </span>
+  );
+}
+
+function priorityTone(p: string): PillTone {
+  if (p === "P0") return "red";
+  if (p === "P1") return "amber";
+  if (p === "P2") return "blue";
+  return "muted";
+}
+
+function TriageBadge({ status }: { status: string | null }) {
+  const s = status ?? "new";
+  const map: Record<string, { label: string; tone: PillTone }> = {
+    new: { label: "Duncan reviewing", tone: "blue" },
+    clarifying: { label: "Clarifying", tone: "amber" },
+    triaged: { label: "Triaged", tone: "blue" },
+    filed: { label: "Filed", tone: "green" },
+    dismissed: { label: "Dismissed", tone: "muted" },
+  };
+  const info = map[s] ?? map.new;
+  return <Pill tone={info.tone}>{info.label}</Pill>;
+}
+

@@ -666,12 +666,15 @@ const Integrations = () => {
               slackWorkspaceName={slackConnection.workspaceName}
               isAzureDevOpsConnected={isAzureDevOpsConnected}
               isGoogleDriveConnected={isGoogleDriveConnected}
+              isGoogleDrivePersonalConnected={isGoogleDrivePersonalConnected}
               googleDriveStatus={googleDriveStatus}
               onClose={() => {
                 setSelectedIntegration(null);
                 checkGmailConnection();
                 checkGoogleDriveConnection();
+                checkGoogleDrivePersonalConnection();
               }}
+
             />
           )}
         </AnimatePresence>

@@ -390,6 +390,7 @@ serve(async (req) => {
         if (!intent?.is_meeting_request) continue;
 
         const insertRow: any = {
+          user_id: NIMESH_USER_ID,
           sender_name: senderName,
           sender_email: senderEmail,
           gmail_thread_id: threadId,

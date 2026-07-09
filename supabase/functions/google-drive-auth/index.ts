@@ -17,6 +17,7 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Not authenticated");
 
@@ -27,13 +28,30 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) throw new Error("Unauthorized");
 
+    // scope: 'personal' (default) or 'company' (admin only)
+    let scope: "personal" | "company" = "personal";
+    try {
+      const body = await req.json();
+      if (body?.scope === "company") scope = "company";
+      else if (body?.scope === "personal") scope = "personal";
+    } catch { /* no body → personal */ }
+
+    if (scope === "company") {
+      const admin = createClient(supabaseUrl, supabaseServiceKey);
+      const { data: isAdmin } = await admin.rpc("has_role", {
+        _user_id: user.id,
+        _role: "admin",
+      });
+      if (!isAdmin) throw new Error("Admin access required to connect the company Google Drive");
+    }
+
     const redirectUri = `${supabaseUrl}/functions/v1/google-drive-callback`;
 
     const scopes = [
       "https://www.googleapis.com/auth/drive.readonly",
     ].join(" ");
 
-    const state = btoa(JSON.stringify({ user_id: user.id }));
+    const state = btoa(JSON.stringify({ user_id: user.id, scope }));
 
     const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     authUrl.searchParams.set("client_id", clientId);

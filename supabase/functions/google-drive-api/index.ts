@@ -351,7 +351,7 @@ Deno.serve(async (req) => {
       // Google Docs → export as plain text
       if (fileMimeType === "application/vnd.google-apps.document") {
         const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`,
+          `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain&supportsAllDrives=true`,
           { headers: driveHeaders }
         );
         if (!res.ok) throw new Error(`Export failed: ${await res.text()}`);
@@ -360,7 +360,7 @@ Deno.serve(async (req) => {
       // Google Sheets → export as CSV
       else if (fileMimeType === "application/vnd.google-apps.spreadsheet") {
         const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/csv`,
+          `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/csv&supportsAllDrives=true`,
           { headers: driveHeaders }
         );
         if (!res.ok) throw new Error(`Export failed: ${await res.text()}`);
@@ -369,7 +369,7 @@ Deno.serve(async (req) => {
       // Google Slides → export as plain text
       else if (fileMimeType === "application/vnd.google-apps.presentation") {
         const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`,
+          `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain&supportsAllDrives=true`,
           { headers: driveHeaders }
         );
         if (!res.ok) throw new Error(`Export failed: ${await res.text()}`);
@@ -378,7 +378,7 @@ Deno.serve(async (req) => {
       // Binary files (PDF, DOCX, etc.) → download raw bytes and return as text
       else {
         const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+          `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
           { headers: driveHeaders }
         );
         if (!res.ok) throw new Error(`Download failed: ${await res.text()}`);

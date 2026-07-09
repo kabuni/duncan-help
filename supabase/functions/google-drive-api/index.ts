@@ -124,9 +124,10 @@ async function getDriveHealth(accessToken: string) {
   }
 
   const filesRes = await fetch(
-    "https://www.googleapis.com/drive/v3/files?pageSize=5&fields=files(id,name,mimeType,modifiedTime)&orderBy=modifiedTime%20desc&q=trashed%20%3D%20false",
+    "https://www.googleapis.com/drive/v3/files?pageSize=5&fields=files(id,name,mimeType,modifiedTime)&orderBy=modifiedTime%20desc&q=trashed%20%3D%20false&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives",
     { headers }
   );
+
   const filesText = await filesRes.text();
   if (!filesRes.ok) {
     throw new Error(`Drive file listing failed [${filesRes.status}]: ${filesText}`);

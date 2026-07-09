@@ -319,9 +319,12 @@ Deno.serve(async (req) => {
 
       const params = new URLSearchParams({
         q,
-        fields: "files(id,name,mimeType,modifiedTime,size,parents)",
+        fields: "files(id,name,mimeType,modifiedTime,size,parents,driveId)",
         pageSize: "50",
+        ...sharedDriveParams,
+        corpora: "allDrives",
       });
+
 
       const res = await fetch(
         `https://www.googleapis.com/drive/v3/files?${params}`,

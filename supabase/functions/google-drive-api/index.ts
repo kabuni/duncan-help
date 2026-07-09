@@ -303,7 +303,7 @@ Deno.serve(async (req) => {
         if (typeof name !== "string" || name.length > 500) {
           return jsonResponse({ error: "Invalid name (max 500 chars)" }, 400);
         }
-        q += ` and name = '${escapeDriveLiteral(name)}'`;
+        q += ` and name contains '${escapeDriveLiteral(name)}'`;
       }
       if (mimeType) {
         if (typeof mimeType !== "string" || !/^[a-zA-Z0-9.+\-/]+$/.test(mimeType)) {

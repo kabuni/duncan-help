@@ -70,6 +70,16 @@ export default function FeatureRequestsAdmin() {
     toast.success("Deleted");
   };
 
+  const rerunTriage = async (id: string) => {
+    toast.info("Re-running Duncan…");
+    const { error } = await supabase.functions.invoke("feature-request-agent", {
+      body: { feature_request_id: id },
+    });
+    if (error) return toast.error(error.message);
+    toast.success("Duncan re-ran the triage");
+    load();
+  };
+
   const downloadAttachment = async (att: Attachment) => {
     setDownloadingId(att.id);
     const { data, error } = await supabase.storage

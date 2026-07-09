@@ -36,6 +36,7 @@ import Approvals from "./pages/Approvals";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import EAInbox from "./pages/EAInbox";
 import EmailApprovals from "./pages/EmailApprovals";
+import FeatureRequests from "./pages/FeatureRequests";
 
 import SlackCallback from "./pages/SlackCallback";
 import InstagramCallback from "./pages/InstagramCallback";

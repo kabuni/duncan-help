@@ -277,7 +277,9 @@ const Integrations = () => {
   const [isGmailConnected, setIsGmailConnected] = useState<boolean | null>(null);
   const [isAzureDevOpsConnected, setIsAzureDevOpsConnected] = useState<boolean | null>(null);
   const [isGoogleDriveConnected, setIsGoogleDriveConnected] = useState<boolean | null>(null);
+  const [isGoogleDrivePersonalConnected, setIsGoogleDrivePersonalConnected] = useState<boolean | null>(null);
   const [googleDriveStatus, setGoogleDriveStatus] = useState<GoogleDriveStatusDetail | null>(null);
+
   const [duncanGmail, setDuncanGmail] = useState<{ connected: boolean; email?: string | null }>({ connected: false });
   const [connectingDuncanGmail, setConnectingDuncanGmail] = useState(false);
 

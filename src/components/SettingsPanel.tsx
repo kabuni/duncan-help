@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Settings, User, Bug, Palette, Plug, Sparkles } from "lucide-react";
+import { X, Settings, User, Bug, Palette, Plug, Sparkles, Users } from "lucide-react";
 import SettingsGeneral from "./settings/SettingsGeneral";
 import SettingsProfile from "./settings/SettingsProfile";
 import SettingsBugReport from "./settings/SettingsBugReport";
 import SettingsAppearance from "./settings/SettingsAppearance";
 import SettingsFeatureRequest from "./settings/SettingsFeatureRequest";
 import SettingsIntegrations from "./settings/SettingsIntegrations";
+import AdminUserManagement from "./settings/AdminUserManagement";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import { cn } from "@/lib/utils";
 
 const baseSections = [
@@ -18,7 +20,7 @@ const baseSections = [
   { id: "bug", label: "Bug Report", icon: Bug },
 ] as const;
 
-type SectionId = "general" | "profile" | "appearance" | "integrations" | "request_feature" | "bug";
+type SectionId = "general" | "profile" | "appearance" | "integrations" | "request_feature" | "bug" | "user_management";
 
 
 interface SettingsPanelProps {
@@ -29,7 +31,10 @@ interface SettingsPanelProps {
 
 export default function SettingsPanel({ open, onClose, initialSection }: SettingsPanelProps) {
   const [active, setActive] = useState<SectionId>("profile");
-  const sections = baseSections;
+  const { isAdmin } = useIsAdmin();
+  const sections = isAdmin
+    ? [...baseSections, { id: "user_management", label: "User Management", icon: Users } as const]
+    : baseSections;
 
   useEffect(() => {
     if (open) {
@@ -53,6 +58,16 @@ export default function SettingsPanel({ open, onClose, initialSection }: Setting
         return <SettingsFeatureRequest />;
       case "bug":
         return <SettingsBugReport />;
+      case "user_management":
+        return (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-1">User Management</h3>
+              <p className="text-xs text-muted-foreground">Review registered users and export the full user roster.</p>
+            </div>
+            <AdminUserManagement />
+          </div>
+        );
     }
   };
 

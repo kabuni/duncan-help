@@ -402,104 +402,137 @@ async function processUser(
         }
       }
 
-      // Generate reply
-      const reply = await generateReply(profile.style_summary, threadCtx, myEmailLower);
-      if (!reply) { stats.errors++; continue; }
-
-      const draftBodyText = AUTO_DRAFT_PREFIX + reply;
-      const draftBodyHtml = draftBodyText
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\n/g, "<br>");
-
-      const replySubject = subject.startsWith("Re:") ? subject : `Re: ${subject}`;
-      const newRefs = referencesHeader
-        ? `${referencesHeader} ${messageIdHeader}`.trim()
-        : messageIdHeader;
-
-      const boundary = `=_duncan_${crypto.randomUUID().replace(/-/g, "")}`;
-      const mimeMessage = [
-        `From: ${myEmail}`,
-        `To: ${from}`,
-        `Subject: ${replySubject}`,
-        messageIdHeader ? `In-Reply-To: ${messageIdHeader}` : "",
-        newRefs ? `References: ${newRefs}` : "",
-        "MIME-Version: 1.0",
-        `Content-Type: multipart/alternative; boundary="${boundary}"`,
-        "",
-        `--${boundary}`,
-        'Content-Type: text/plain; charset="UTF-8"',
-        "Content-Transfer-Encoding: 7bit",
-        "",
-        draftBodyText,
-        "",
-        `--${boundary}`,
-        'Content-Type: text/html; charset="UTF-8"',
-        "Content-Transfer-Encoding: 7bit",
-        "",
-        `<div>${draftBodyHtml}</div>`,
-        "",
-        `--${boundary}--`,
-        "",
-      ].filter((l, i, arr) => {
-        // keep all except blank header lines that came from missing optional headers
-        if (l !== "") return true;
-        // keep blank line after headers (before first boundary) and inside parts
-        return true;
-      }).join("\r\n");
-
-      const draftRes = await fetch(
-        "https://gmail.googleapis.com/gmail/v1/users/me/drafts",
-        {
-          method: "POST",
-          headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: { raw: base64url(mimeMessage), threadId: msg.threadId },
-          }),
-        },
+      // Detect attachments and count thread participants for risk gating
+      const hasAttachments = (msg.payload?.parts || []).some(
+        (p: any) => p.filename && p.filename.length > 0,
       );
-      if (!draftRes.ok) {
-        console.error("Draft create failed:", await draftRes.text());
-        stats.errors++;
+      const participants = new Set<string>();
+      for (const tm of threadCtx) {
+        const em = extractSenderEmail(tm.from).email;
+        if (em) participants.add(em);
+      }
+
+      // Generate reply with self-confidence + risk assessment
+      const { email: senderEmail, name: senderName, domain: senderDomain } = extractSenderEmail(from);
+      const ai = await generateReply(
+        profile.style_summary,
+        (profile.per_recipient_style as Record<string, any>) || null,
+        threadCtx,
+        myEmailLower,
+        senderDomain,
+      );
+      if (!ai) { stats.errors++; continue; }
+
+      const route = await decideRoute(
+        supabaseAdmin, userId, profile, senderEmail, senderDomain,
+        { confidence: ai.confidence, risk_flags: ai.risk_flags },
+        participants.size, hasAttachments,
+      );
+
+      // Common label helper — mark the source message so we don't re-draft
+      const applyDuncanLabel = async () => {
+        try {
+          const labelsListRes = await fetch(
+            "https://gmail.googleapis.com/gmail/v1/users/me/labels", { headers });
+          const labelsData = await labelsListRes.json();
+          let label = (labelsData.labels || []).find((l: any) => l.name === DUNCAN_LABEL);
+          if (!label) {
+            const cr = await fetch(
+              "https://gmail.googleapis.com/gmail/v1/users/me/labels",
+              { method: "POST", headers: { ...headers, "Content-Type": "application/json" },
+                body: JSON.stringify({ name: DUNCAN_LABEL, labelListVisibility: "labelShow", messageListVisibility: "show" }) },
+            );
+            if (cr.ok) label = await cr.json();
+          }
+          if (label) {
+            await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}/modify`,
+              { method: "POST", headers: { ...headers, "Content-Type": "application/json" },
+                body: JSON.stringify({ addLabelIds: [label.id] }) });
+          }
+        } catch (e: any) { console.warn("Label apply failed:", e); }
+      };
+
+      if (route === "auto_send") {
+        // Queue in outbox — actual send happens after undo window
+        const undoSeconds = profile.auto_send_undo_seconds ?? 300;
+        const sendAfter = new Date(Date.now() + undoSeconds * 1000).toISOString();
+        await supabaseAdmin.from("gmail_auto_outbox").upsert({
+          user_id: userId,
+          gmail_message_id: m.id,
+          gmail_thread_id: msg.threadId,
+          sender_email: senderEmail,
+          subject,
+          body: ai.reply,
+          status: "queued",
+          send_after: sendAfter,
+        }, { onConflict: "user_id,gmail_message_id" });
+        await notifyUser(supabaseAdmin, userId,
+          `Duncan is about to reply to ${senderName || senderEmail}`,
+          `"${subject}" — sends in ${Math.round(undoSeconds/60)} min unless you undo.`,
+          `/gmail`);
+        await applyDuncanLabel();
+        stats.created++; draftsToday++;
         continue;
       }
 
-      // Add Duncan label so we don't re-draft
-      try {
-        const labelsListRes = await fetch(
-          "https://gmail.googleapis.com/gmail/v1/users/me/labels",
-          { headers },
-        );
-        const labelsData = await labelsListRes.json();
-        let label = (labelsData.labels || []).find((l: any) => l.name === DUNCAN_LABEL);
-        if (!label) {
-          const cr = await fetch(
-            "https://gmail.googleapis.com/gmail/v1/users/me/labels",
-            {
-              method: "POST",
-              headers: { ...headers, "Content-Type": "application/json" },
-              body: JSON.stringify({ name: DUNCAN_LABEL, labelListVisibility: "labelShow", messageListVisibility: "show" }),
-            },
-          );
-          if (cr.ok) label = await cr.json();
-        }
-        if (label) {
-          await fetch(
-            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}/modify`,
-            {
-              method: "POST",
-              headers: { ...headers, "Content-Type": "application/json" },
-              body: JSON.stringify({ addLabelIds: [label.id] }),
-            },
-          );
-        }
-      } catch (e: any) {
-        console.warn("Label apply failed:", e);
+      if (route === "approval") {
+        // Queue as pending approval for user decision (bell + Slack)
+        await supabaseAdmin.from("gmail_pending_approvals").upsert({
+          user_id: userId,
+          gmail_message_id: m.id,
+          gmail_thread_id: msg.threadId,
+          sender_email: senderEmail,
+          sender_name: senderName || null,
+          subject,
+          incoming_snippet: bodyText.slice(0, 500),
+          incoming_summary: ai.summary,
+          proposed_reply: ai.reply,
+          ai_confidence: ai.confidence,
+          risk_flags: ai.risk_flags,
+          status: "pending",
+        }, { onConflict: "user_id,gmail_message_id" });
+        await notifyUser(supabaseAdmin, userId,
+          `Reply ready for ${senderName || senderEmail}`,
+          `"${subject}" — review, edit or send.`,
+          `/gmail?approve=${m.id}`);
+        await applyDuncanLabel();
+        stats.created++; draftsToday++;
+        continue;
       }
 
-      stats.created++;
-      draftsToday++;
+      // Fallback: create a review-me draft in Gmail (existing behaviour)
+      const draftBodyText = AUTO_DRAFT_PREFIX + ai.reply;
+      const draftBodyHtml = draftBodyText
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+      const replySubject = subject.startsWith("Re:") ? subject : `Re: ${subject}`;
+      const newRefs = referencesHeader ? `${referencesHeader} ${messageIdHeader}`.trim() : messageIdHeader;
+      const boundary = `=_duncan_${crypto.randomUUID().replace(/-/g, "")}`;
+      const mimeMessage = [
+        `From: ${myEmail}`, `To: ${from}`, `Subject: ${replySubject}`,
+        messageIdHeader ? `In-Reply-To: ${messageIdHeader}` : "",
+        newRefs ? `References: ${newRefs}` : "",
+        "MIME-Version: 1.0",
+        `Content-Type: multipart/alternative; boundary="${boundary}"`, "",
+        `--${boundary}`, 'Content-Type: text/plain; charset="UTF-8"',
+        "Content-Transfer-Encoding: 7bit", "", draftBodyText, "",
+        `--${boundary}`, 'Content-Type: text/html; charset="UTF-8"',
+        "Content-Transfer-Encoding: 7bit", "", `<div>${draftBodyHtml}</div>`, "",
+        `--${boundary}--`, "",
+      ].filter(Boolean).join("\r\n");
+
+      const draftRes = await fetch(
+        "https://gmail.googleapis.com/gmail/v1/users/me/drafts",
+        { method: "POST", headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ message: { raw: base64url(mimeMessage), threadId: msg.threadId } }) },
+      );
+      if (!draftRes.ok) { console.error("Draft create failed:", await draftRes.text()); stats.errors++; continue; }
+      await applyDuncanLabel();
+      stats.created++; draftsToday++;
+    } catch (err: any) {
+      console.error(`Message ${m.id} processing failed:`, err);
+      stats.errors++;
+    }
+  }
     } catch (err: any) {
       console.error(`Message ${m.id} processing failed:`, err);
       stats.errors++;

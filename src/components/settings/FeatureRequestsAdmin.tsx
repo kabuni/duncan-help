@@ -99,19 +99,49 @@ export default function FeatureRequestsAdmin() {
         <div key={r.id} className="rounded-lg border border-border bg-background p-4 space-y-2">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <h4 className="text-sm font-semibold text-foreground">{r.title}</h4>
+              <h4 className="text-sm font-semibold text-foreground">{r.refined_title ?? r.title}</h4>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                {r.user_email ?? "—"} · {format(new Date(r.created_at), "MMM d, yyyy")} · Priority: {r.priority}
+                {r.user_email ?? "—"} · {format(new Date(r.created_at), "MMM d, yyyy")}
                 {r.attachments && r.attachments.length > 0 && (
                   <> · <Paperclip className="inline h-3 w-3 -mt-0.5" /> {r.attachments.length}</>
                 )}
               </p>
+              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                <TriageBadge status={r.triage_status} />
+                {r.priority_band && <Pill tone={priorityTone(r.priority_band)}>{r.priority_band}</Pill>}
+                {r.effort_band && <Pill tone="muted">Effort {r.effort_band}</Pill>}
+                {r.category && <Pill tone="muted">{r.category}</Pill>}
+                {r.rice_score != null && <Pill tone="muted">RICE {r.rice_score.toFixed(1)}</Pill>}
+                {r.clarification_round ? <Pill tone="amber">Clarifying · round {r.clarification_round}</Pill> : null}
+                {r.workstream_card_id && (
+                  <a href="/workstreams" className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline">
+                    <ExternalLink className="h-3 w-3" /> View card
+                  </a>
+                )}
+              </div>
             </div>
-            <button onClick={() => remove(r.id)} className="text-destructive hover:bg-destructive/10 rounded p-1.5 transition-colors" title="Delete">
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => rerunTriage(r.id)}
+                className="text-muted-foreground hover:text-foreground hover:bg-secondary/60 rounded p-1.5 transition-colors"
+                title="Re-run Duncan"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => remove(r.id)} className="text-destructive hover:bg-destructive/10 rounded p-1.5 transition-colors" title="Delete">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
-          <p className="text-xs text-foreground/90 whitespace-pre-wrap">{r.description}</p>
+          {r.problem_statement ? (
+            <div className="text-xs text-foreground/90 space-y-1.5">
+              <p className="whitespace-pre-wrap"><span className="font-medium">Problem: </span>{r.problem_statement}</p>
+              {r.proposed_solution && <p className="whitespace-pre-wrap"><span className="font-medium">Solution: </span>{r.proposed_solution}</p>}
+              {r.acceptance_criteria && <p className="whitespace-pre-wrap text-muted-foreground"><span className="font-medium">Acceptance: </span>{r.acceptance_criteria}</p>}
+            </div>
+          ) : (
+            <p className="text-xs text-foreground/90 whitespace-pre-wrap">{r.description}</p>
+          )}
           {r.use_case && (
             <p className="text-xs text-muted-foreground italic"><span className="font-medium">Use case:</span> {r.use_case}</p>
           )}

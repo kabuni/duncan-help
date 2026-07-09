@@ -1,157 +1,60 @@
 
-# Interactive Onboarding & Training System
+# Email Intelligence v2 — Plan
 
-Goal: an in-product, spotlight-and-tooltip walkthrough system (Notion/Linear/ClickUp style) integrated with Learn Duncan, with per-user persistence, replay, and dedicated tutorials for Projects, Workstreams, and Planner.
+Today the Gmail flow drafts every reply and waits for you in Gmail. This upgrade turns Duncan into a graded assistant: trusted senders get auto-sent replies, uncertain ones get pushed to you for one-tap approval, and meeting requests are handled EA-style with country/timezone awareness.
 
-## 1. Codebase Audit (what's there today)
+## 1. Trust engine (whitelist → auto-send)
 
-- Existing "Meet Duncan" tour (`src/components/onboarding/MeetDuncanTour.tsx`) is a **modal carousel** — no element highlighting. Completion tracked via `profiles.meet_duncan_tour_completed_at`. Replay wired in `src/pages/Learn.tsx`.
-- `Learn.tsx` renders `MODULES` cards from `src/components/onboarding/moduleContent.ts`. No progress/status/tutorial concept.
-- Target pages exist and are small enough to instrument: `Projects.tsx` (145), `Workstreams.tsx` (548), `KeyEventsDiary.tsx` (666), `Sidebar.tsx`.
-- **No** existing selectors/`data-*` attributes for tour targeting; **no** tour library installed.
-- Profile already has `dismissed_nudges jsonb` used for nudge state — reusable pattern for tutorial state.
+Extend `gmail_writing_profiles` and add a per-sender trust ledger:
 
-## 2. Architecture
+- New table `gmail_sender_trust(user_id, sender_email, sends_approved, sends_edited, sends_rejected, confidence 0–100, auto_send_enabled bool, last_updated)`.
+- Every time you send/edit/discard a Duncan draft, `gmail-api` logs the outcome and recomputes confidence (approved without edit ⇒ +, heavy edit ⇒ −, reject ⇒ hard reset).
+- `SettingsGmail` gets a **Trusted senders** panel: whitelist entries become auto-send-eligible once confidence ≥ threshold (default 80, configurable) AND ≥ 5 approved sends. Manual override to force-trust or force-review.
+- `gmail-auto-draft` splits into two paths:
+  - **Auto-send path** (whitelist + trusted + high AI self-confidence + no risky content flags: money, legal, unsubscribe, external new domain): sends immediately, labels `Duncan/Auto-Sent`, notifies via bell + Slack with "Undo (15 min)" that recalls via Gmail draft-of-record + reply-all warning.
+  - **Draft path** (current behaviour) for everything else.
+- Safety guards: never auto-send to first-time senders, replies with attachments, threads > N participants, or when AI self-reports low confidence.
 
-### 2a. Library choice
-Build a lightweight **custom** tour engine (~250 LoC) rather than pulling in Shepherd/driver.js/reactour. Reasons: existing framer-motion + Duncan styling already in the modal tour; full control over spotlight, mobile, and Duncan look; no extra dependency, no CSS injection conflicts with Tailwind tokens.
+## 2. Continuous tone learning
 
-Engine responsibilities:
-- Resolve targets by `data-tour="<id>"` attribute (stable, decoupled from class names).
-- Compute target bounding rect on scroll/resize; render SVG overlay with a cut-out (spotlight).
-- Position tooltip using floating placement (top/bottom/left/right auto-flip). No new dep — small utility.
-- Navigation (Next / Back / Skip / Close), progress ("Step X of Y"), waitForElement (polls up to N ms so steps can advance after user clicks).
-- Optional `action: 'click' | 'wait'` per step; optional `route: '/projects'` to navigate before the step.
+`gmail-train-style` runs once. We move to incremental learning:
 
-### 2b. Files to add
-```
-src/components/onboarding/tour/
-  TourProvider.tsx      # context + state machine + persistence
-  TourOverlay.tsx       # spotlight SVG + tooltip renderer
-  useTour.ts            # hook: start(id) / resume(id) / stop / next / back
-  tours.ts              # tour definitions (projects, workstreams, planner)
-  types.ts
-src/components/onboarding/TutorialsSection.tsx  # Learn Duncan tutorials grid
-src/hooks/useTutorialProgress.ts               # per-user progress read/write
-```
+- New cron `gmail-learn-incremental` (hourly): pulls newly-Sent messages since `last_trained_at`, cleans + redacts, appends to a rolling sample store (`gmail_style_samples` capped at ~500 latest).
+- Weekly re-summarise: regenerate `style_summary`, `tone_metrics`, `common_phrases` from the rolling window so drift is captured (holidays, new hires, tone shifts).
+- Per-recipient style: cluster samples by recipient domain/thread so tone to investors ≠ tone to team; drafts pick the closest cluster.
+- Feedback signal: when you edit a draft, diff old→new is stored as a "correction sample" weighted higher in the next retrain.
 
-### 2c. Persistence
-Single JSONB column on `profiles`: `tutorial_progress jsonb default '{}'`.
-Shape:
-```json
-{
-  "projects":    { "status":"in_progress","step":3,"total":10,"updated_at":"...","completed_at":null },
-  "workstreams": { "status":"completed","step":11,"total":11,"updated_at":"...","completed_at":"..." },
-  "planner":     { "status":"not_started","step":0,"total":8 }
-}
-```
-One migration: add column + default. No new table.
+## 3. "When in doubt" approval loop
 
-### 2d. First-time detection
-User is "first-time" for a tour if `tutorial_progress[id]` is missing/`not_started` **and** `meet_duncan_tour_completed_at` is set (so the existing Meet Duncan modal runs first, then the interactive walkthroughs start when they land on the module page). On first visit to `/projects`, `/workstreams`, `/diary`, auto-start the corresponding tour once. Never auto-start again after skip/complete.
+Today drafts sit silently in Gmail. New flow:
 
-### 2e. Replay buttons
-Small `<TutorialButton tourId="projects" />` component (icon + "Replay tour") wired into the page header of Projects, Workstreams, Planner. Same component used in Learn Duncan card actions.
+- When Duncan drafts a reply and confidence is medium (below auto-send but above spam), it posts an **approval card** via the existing `notifications` + Slack DM rails:
+  - Subject, sender, 3-line summary of the incoming email, the proposed reply, and buttons: **Send as-is**, **Edit & send**, **Discard**.
+  - "Edit & send" opens a lightweight edit sheet (Gmail composer already exists at `/gmail`); on submit it sends via `gmail-api` and logs an "edited" outcome to the trust ledger.
+- Reuses the notification bell + Slack pattern already used for approvals, so no new UI system.
 
-## 3. UI Instrumentation (data-tour targets)
+## 4. EA-style meeting triage (all users, not just Nimesh)
 
-Only additive changes — add `data-tour="…"` on existing elements.
+Current `ea-poll-inbox` is hardcoded to Nimesh and Duncan's central inbox. Generalise:
 
-**Sidebar:** `nav-projects`, `nav-workstreams`, `nav-diary`, `nav-learn`.
+- Per-user EA mode toggle in `SettingsGmail` ("Let Duncan act as my EA"). When on, `ea-poll-inbox` iterates all opted-in users using their own `gmail_tokens` + `google_calendar_tokens`.
+- Meeting-intent classifier already exists — extend to:
+  1. If sender didn't state purpose → auto-reply asking for purpose + rough duration, mark `awaiting_purpose`.
+  2. Once purpose is known → score urgency (P1–P4) using existing prompt, plus new signals: sender seniority (HubSpot lookup), keywords, and whether user's calendar has a hard block.
+  3. Propose slots against **user's** calendar honouring their working hours + timezone.
+- **Country/timezone awareness**: new `profiles.current_timezone` + `current_country` (auto-detected from most recent calendar event location / last login IP, overridable). Slot proposals, reply salutations, and "urgent" thresholds respect local working hours. When you're travelling, Duncan says "Nimesh is in Dubai this week (GMT+4)" in the reply.
+- Approval still required to send the invite (existing `ea-confirm-meeting`), but low-friction: appears in the same bell/Slack card as §3.
 
-**Projects (`Projects.tsx`):** `projects-new`, `projects-list`, `projects-card` (first card), `projects-search` (if present).
+## 5. Phasing
 
-**ProjectWorkspace:** `project-notes-tab`, `project-tasks-tab`, `project-files-tab`, `project-new-note`, `project-new-task`, `project-collab`, `project-delete`.
+- **Phase 1 (small):** Continuous learning cron + per-recipient clustering + edit-diff feedback.
+- **Phase 2 (medium):** Trust ledger, Settings UI, in-app/Slack approval card with Send/Edit/Discard.
+- **Phase 3 (medium):** Auto-send path with guards + 15-min undo.
+- **Phase 4 (medium):** Generalise EA meeting flow per user + timezone/country awareness.
 
-**Workstreams (`Workstreams.tsx` / `KanbanBoard.tsx`):** `ws-new-card`, `ws-column-todo`, `ws-card` (first), `ws-presentation-toggle`, `ws-project-filter`.
+## Open questions
 
-**CardDetailModal:** `card-title`, `card-status`, `card-assignees`, `card-tasks`, `card-subtasks`, `card-comments`, `card-attachments`, `card-tags`.
-
-**Planner (`KeyEventsDiary.tsx`):** `planner-view-toggle`, `planner-new-event`, `planner-event` (first), `planner-google-sync`, `planner-key-events-filter`.
-
-Any target that's rendered conditionally (modal contents) is handled by the engine's `waitForElement` polling.
-
-## 4. Tutorial Definitions
-
-Each step: `{ target, title, body, placement?, action?, route?, onBefore? }`.
-
-- **Projects (10 steps)** — Sidebar → Projects → New Project button → Create dialog fields → open project → Notes tab → New Note → Tasks tab → New Task → Files/Upload → Collaboration → Delete.
-- **Workstreams (11 steps)** — Sidebar → New Card → open card → Title/Status → Assignees → Tasks → Subtasks → Comments → Attachments → Project tag → Presentation view.
-- **Planner (8 steps)** — Sidebar → View toggle (day/week/month) → New Event → Edit event → Delete → Key Events highlight → Google Calendar sync banner → Ownership rules note.
-
-Steps mixing narration + a real click use `action:'click'` (advances when user actually clicks the highlighted element) with a "Skip step" affordance so users never feel trapped.
-
-## 5. User Journeys
-
-### First-time user
-1. Signs in → Meet Duncan modal runs (existing).
-2. Lands on Home → Getting Started card visible (existing).
-3. Navigates to Projects → tour auto-starts (once). Spotlight + tooltip guide through 10 steps.
-4. On completion, `tutorial_progress.projects = completed`. Same auto-start on first visit to Workstreams and Planner.
-5. Learn Duncan shows all three as ✓ Completed with dates.
-
-### Returning user
-- No auto-start. Tutorials sit in Learn Duncan with current status (Not started / In progress X% / Completed on Y).
-- Replay button in each page header always available.
-
-### Replay flow
-Click Replay → progress reset for that tour → engine starts at step 1, navigates to correct route if needed.
-
-### Resume flow
-If user closes mid-tour (not "Skip"), status stays `in_progress` with `step`. Next time they open the page or click "Resume" in Learn Duncan, engine offers "Resume from step N / Restart / Cancel".
-
-### Skip flow
-"Skip tutorial" marks it `skipped` (treated like completed for auto-start suppression), replay still available.
-
-## 6. Technical Details
-
-**Overlay implementation**
-- Full-viewport `<svg>` with a mask: a full rect minus a rounded rect around the target's bounding box (with 8px padding). Backdrop `bg-background/70`.
-- Tooltip is a positioned `div` (fixed) placed relative to target rect with 12px offset and 8px viewport padding; auto-flips placement.
-- Recomputes on `resize`, `scroll` (capture), and every 200ms while active (handles animated layouts).
-- Click-through disabled by default; when `action:'click'`, the spotlight area becomes click-through and the engine listens for the target's `click`.
-
-**Route handling**
-Steps may declare `route`. Engine uses `useNavigate`; waits for pathname match and target element before displaying.
-
-**Persistence writes**
-Debounced 500ms updates to `profiles.tutorial_progress` via `supabase.from('profiles').update({tutorial_progress: {...}})`. Optimistic local cache in `TourProvider`.
-
-**Learn Duncan section**
-New `TutorialsSection` above the existing modules grid:
-- Card per tutorial: name, description, ETA ("~3 min"), status pill, last completed date, progress bar, action button (Start/Resume/Replay).
-- Renders tour registry from `tours.ts` — no hardcoded duplication.
-
-**Mobile**
-- Tooltip max-width `min(320px, 92vw)`, positioned bottom when target is in top half, else top.
-- Spotlight padding shrinks on small screens.
-
-## 7. Migration
-
-```sql
-ALTER TABLE public.profiles
-  ADD COLUMN IF NOT EXISTS tutorial_progress jsonb NOT NULL DEFAULT '{}'::jsonb;
-```
-No new grants/policies needed (existing profile RLS covers it).
-
-## 8. Out of Scope (v1)
-
-- Cross-device real-time sync of in-progress step (writes are async but not realtime).
-- Analytics on tutorial funnel (can layer on later via existing token/usage tracking pattern).
-- Tutorials for modules other than Projects, Workstreams, Planner.
-
-## 9. Delivery Order
-
-1. Migration (`tutorial_progress` column).
-2. Tour engine (`TourProvider`, `TourOverlay`, `useTour`, `types`).
-3. `useTutorialProgress` hook + `TutorialButton`.
-4. Instrument Sidebar + target pages with `data-tour` attributes (additive only).
-5. Author `tours.ts` for Projects, Workstreams, Planner.
-6. `TutorialsSection` + integrate into `Learn.tsx`.
-7. Wire auto-start on first visit to each module page.
-8. QA on desktop + mobile viewports.
-
-Estimated: single implementation pass, no schema risk, isolated from business logic.
-
----
-**Approve to proceed** and I'll implement in the order above.
+1. **Confidence threshold defaults**: 80/100 and 5 approved sends before auto-send unlocks — OK, or stricter?
+2. **Undo window**: 15 minutes acceptable, or shorter?
+3. **Country detection**: derive from calendar/last login automatically, or require you to set it in Settings?
+4. **Approval channel**: Slack DM + in-app bell (both), or only one?

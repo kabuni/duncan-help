@@ -102,42 +102,139 @@ function getHeader(headers: any[], name: string): string {
 
 async function generateReply(
   styleSummary: string,
+  perRecipientStyle: Record<string, any> | null,
   threadContext: { from: string; date: string; body: string }[],
   userEmail: string,
-): Promise<string | null> {
+  senderDomain: string,
+): Promise<{ reply: string; confidence: number; risk_flags: string[]; summary: string } | null> {
   const conversation = threadContext
     .map((m) => `From: ${m.from}\nDate: ${m.date}\n\n${m.body.slice(0, 2000)}`)
     .join("\n\n---\n\n");
 
+  const clusterHint = perRecipientStyle && senderDomain && perRecipientStyle[senderDomain]
+    ? `\n\nTHIS RECIPIENT (${senderDomain}) — tone cluster:\n${JSON.stringify(perRecipientStyle[senderDomain])}\nMatch this cluster when it differs from the overall style.`
+    : "";
+
   const systemPrompt = `You are Duncan, drafting an email reply on behalf of ${userEmail}.
 
-USER'S WRITING STYLE (mimic this exactly):
-${styleSummary}
+USER'S OVERALL WRITING STYLE (mimic this):
+${styleSummary}${clusterHint}
 
 RULES:
-- Write a short, natural reply that the user would plausibly send.
+- Write a short, natural reply the user would plausibly send.
 - Match their tone, vocabulary, sentence length, and sign-off style.
 - If the incoming message is ambiguous or asks something you can't answer for the user, write a brief acknowledgement saying you'll follow up.
 - Do NOT include a subject line — only the reply body.
 - Do NOT include "Re:" prefix.
-- Do NOT add greetings like "Hi [Name]" unless that matches the user's style.
-- Keep it under 120 words unless the thread clearly needs detail.`;
+- Keep it under 120 words unless the thread clearly needs detail.
+
+You must also self-assess the reply. Return STRICT JSON with keys:
+  "reply": string,
+  "confidence": integer 0-100 (how sure you are the user would send this as-is),
+  "risk_flags": array of strings from ["money","legal","commitment","apology","attachment_requested","external_new_domain","sensitive","unclear_ask","none"],
+  "summary": one-sentence description of what the incoming email is asking.
+Respond with ONLY the JSON, no fences.`;
 
   try {
     const data = await callLLMWithFallback({
       workflow: "gmail-auto-draft",
-      temperature: 0.7,
-      max_tokens: 400,
+      temperature: 0.6,
+      max_tokens: 700,
+      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: `Draft a reply to this email thread:\n\n${conversation}` },
       ],
     });
-    return data.choices?.[0]?.message?.content?.trim() || null;
+    const raw = (data.choices?.[0]?.message?.content || "").trim()
+      .replace(/^```json\s*/i, "").replace(/\s*```$/i, "");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.reply) return null;
+    return {
+      reply: String(parsed.reply).trim(),
+      confidence: Math.max(0, Math.min(100, Number(parsed.confidence) || 0)),
+      risk_flags: Array.isArray(parsed.risk_flags)
+        ? parsed.risk_flags.filter((x: any) => typeof x === "string" && x !== "none")
+        : [],
+      summary: String(parsed.summary || "").slice(0, 400),
+    };
   } catch (err: any) {
     console.error("LLM error:", err?.status, err?.message);
     return null;
   }
+}
+
+// ---- Trust routing helpers ----------------------------------------------
+
+const HARD_BLOCK_FLAGS = ["money", "legal"];
+const DEFAULT_CONFIDENCE_THRESHOLD = 90;
+const DEFAULT_MIN_APPROVED = 10;
+const MEDIUM_CONFIDENCE_FOR_APPROVAL = 55;
+
+function extractSenderEmail(fromHeader: string): { email: string; name: string; domain: string } {
+  const m = fromHeader.match(/(.*?)<([^>]+)>/);
+  const email = (m ? m[2] : fromHeader).trim().toLowerCase();
+  const name = (m ? m[1] : "").trim().replace(/^"|"$/g, "");
+  const domain = email.includes("@") ? email.split("@")[1] : "";
+  return { email, name, domain };
+}
+
+async function decideRoute(
+  supabaseAdmin: any,
+  userId: string,
+  profile: any,
+  senderEmail: string,
+  senderDomain: string,
+  ai: { confidence: number; risk_flags: string[] },
+  threadParticipantCount: number,
+  hasAttachments: boolean,
+): Promise<"auto_send" | "approval" | "draft"> {
+  // Hard blocks: never auto-send
+  const blockedFlags = ai.risk_flags.some((f) => HARD_BLOCK_FLAGS.includes(f));
+  if (blockedFlags || hasAttachments || threadParticipantCount > 3) {
+    return ai.confidence >= MEDIUM_CONFIDENCE_FOR_APPROVAL ? "approval" : "draft";
+  }
+
+  const { data: trust } = await supabaseAdmin
+    .from("gmail_sender_trust")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("sender_email", senderEmail)
+    .maybeSingle();
+
+  if (trust?.force_review) return ai.confidence >= MEDIUM_CONFIDENCE_FOR_APPROVAL ? "approval" : "draft";
+
+  // Check whitelist (only whitelisted senders qualify for auto-send)
+  const filterList: string[] = Array.isArray(profile.auto_draft_filter_list)
+    ? profile.auto_draft_filter_list
+    : [];
+  const whitelisted = profile.auto_draft_filter_mode === "whitelist" && filterList.some((e) => {
+    const entry = String(e || "").trim().toLowerCase();
+    if (!entry) return false;
+    if (entry.startsWith("@")) return senderEmail.endsWith(entry);
+    if (entry.includes("@")) return senderEmail === entry;
+    return senderEmail.includes(entry);
+  });
+
+  const threshold = profile.auto_send_confidence_threshold ?? DEFAULT_CONFIDENCE_THRESHOLD;
+  const minApproved = profile.auto_send_min_approved ?? DEFAULT_MIN_APPROVED;
+
+  if (trust?.force_trust && ai.confidence >= 70) return "auto_send";
+  if (whitelisted && trust
+      && trust.confidence >= threshold
+      && trust.sends_approved >= minApproved
+      && ai.confidence >= threshold) {
+    return "auto_send";
+  }
+
+  return ai.confidence >= MEDIUM_CONFIDENCE_FOR_APPROVAL ? "approval" : "draft";
+}
+
+async function notifyUser(supabaseAdmin: any, userId: string, title: string, body: string, link: string) {
+  await supabaseAdmin.from("notifications").insert({
+    user_id: userId, title, message: body, link, kind: "email_action",
+  });
 }
 
 async function processUser(
@@ -305,104 +402,132 @@ async function processUser(
         }
       }
 
-      // Generate reply
-      const reply = await generateReply(profile.style_summary, threadCtx, myEmailLower);
-      if (!reply) { stats.errors++; continue; }
-
-      const draftBodyText = AUTO_DRAFT_PREFIX + reply;
-      const draftBodyHtml = draftBodyText
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\n/g, "<br>");
-
-      const replySubject = subject.startsWith("Re:") ? subject : `Re: ${subject}`;
-      const newRefs = referencesHeader
-        ? `${referencesHeader} ${messageIdHeader}`.trim()
-        : messageIdHeader;
-
-      const boundary = `=_duncan_${crypto.randomUUID().replace(/-/g, "")}`;
-      const mimeMessage = [
-        `From: ${myEmail}`,
-        `To: ${from}`,
-        `Subject: ${replySubject}`,
-        messageIdHeader ? `In-Reply-To: ${messageIdHeader}` : "",
-        newRefs ? `References: ${newRefs}` : "",
-        "MIME-Version: 1.0",
-        `Content-Type: multipart/alternative; boundary="${boundary}"`,
-        "",
-        `--${boundary}`,
-        'Content-Type: text/plain; charset="UTF-8"',
-        "Content-Transfer-Encoding: 7bit",
-        "",
-        draftBodyText,
-        "",
-        `--${boundary}`,
-        'Content-Type: text/html; charset="UTF-8"',
-        "Content-Transfer-Encoding: 7bit",
-        "",
-        `<div>${draftBodyHtml}</div>`,
-        "",
-        `--${boundary}--`,
-        "",
-      ].filter((l, i, arr) => {
-        // keep all except blank header lines that came from missing optional headers
-        if (l !== "") return true;
-        // keep blank line after headers (before first boundary) and inside parts
-        return true;
-      }).join("\r\n");
-
-      const draftRes = await fetch(
-        "https://gmail.googleapis.com/gmail/v1/users/me/drafts",
-        {
-          method: "POST",
-          headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: { raw: base64url(mimeMessage), threadId: msg.threadId },
-          }),
-        },
+      // Detect attachments and count thread participants for risk gating
+      const hasAttachments = (msg.payload?.parts || []).some(
+        (p: any) => p.filename && p.filename.length > 0,
       );
-      if (!draftRes.ok) {
-        console.error("Draft create failed:", await draftRes.text());
-        stats.errors++;
+      const participants = new Set<string>();
+      for (const tm of threadCtx) {
+        const em = extractSenderEmail(tm.from).email;
+        if (em) participants.add(em);
+      }
+
+      // Generate reply with self-confidence + risk assessment
+      const { email: senderEmail, name: senderName, domain: senderDomain } = extractSenderEmail(from);
+      const ai = await generateReply(
+        profile.style_summary,
+        (profile.per_recipient_style as Record<string, any>) || null,
+        threadCtx,
+        myEmailLower,
+        senderDomain,
+      );
+      if (!ai) { stats.errors++; continue; }
+
+      const route = await decideRoute(
+        supabaseAdmin, userId, profile, senderEmail, senderDomain,
+        { confidence: ai.confidence, risk_flags: ai.risk_flags },
+        participants.size, hasAttachments,
+      );
+
+      // Common label helper — mark the source message so we don't re-draft
+      const applyDuncanLabel = async () => {
+        try {
+          const labelsListRes = await fetch(
+            "https://gmail.googleapis.com/gmail/v1/users/me/labels", { headers });
+          const labelsData = await labelsListRes.json();
+          let label = (labelsData.labels || []).find((l: any) => l.name === DUNCAN_LABEL);
+          if (!label) {
+            const cr = await fetch(
+              "https://gmail.googleapis.com/gmail/v1/users/me/labels",
+              { method: "POST", headers: { ...headers, "Content-Type": "application/json" },
+                body: JSON.stringify({ name: DUNCAN_LABEL, labelListVisibility: "labelShow", messageListVisibility: "show" }) },
+            );
+            if (cr.ok) label = await cr.json();
+          }
+          if (label) {
+            await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}/modify`,
+              { method: "POST", headers: { ...headers, "Content-Type": "application/json" },
+                body: JSON.stringify({ addLabelIds: [label.id] }) });
+          }
+        } catch (e: any) { console.warn("Label apply failed:", e); }
+      };
+
+      if (route === "auto_send") {
+        // Queue in outbox — actual send happens after undo window
+        const undoSeconds = profile.auto_send_undo_seconds ?? 300;
+        const sendAfter = new Date(Date.now() + undoSeconds * 1000).toISOString();
+        await supabaseAdmin.from("gmail_auto_outbox").upsert({
+          user_id: userId,
+          gmail_message_id: m.id,
+          gmail_thread_id: msg.threadId,
+          sender_email: senderEmail,
+          subject,
+          body: ai.reply,
+          status: "queued",
+          send_after: sendAfter,
+        }, { onConflict: "user_id,gmail_message_id" });
+        await notifyUser(supabaseAdmin, userId,
+          `Duncan is about to reply to ${senderName || senderEmail}`,
+          `"${subject}" — sends in ${Math.round(undoSeconds/60)} min unless you undo.`,
+          `/gmail`);
+        await applyDuncanLabel();
+        stats.created++; draftsToday++;
         continue;
       }
 
-      // Add Duncan label so we don't re-draft
-      try {
-        const labelsListRes = await fetch(
-          "https://gmail.googleapis.com/gmail/v1/users/me/labels",
-          { headers },
-        );
-        const labelsData = await labelsListRes.json();
-        let label = (labelsData.labels || []).find((l: any) => l.name === DUNCAN_LABEL);
-        if (!label) {
-          const cr = await fetch(
-            "https://gmail.googleapis.com/gmail/v1/users/me/labels",
-            {
-              method: "POST",
-              headers: { ...headers, "Content-Type": "application/json" },
-              body: JSON.stringify({ name: DUNCAN_LABEL, labelListVisibility: "labelShow", messageListVisibility: "show" }),
-            },
-          );
-          if (cr.ok) label = await cr.json();
-        }
-        if (label) {
-          await fetch(
-            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}/modify`,
-            {
-              method: "POST",
-              headers: { ...headers, "Content-Type": "application/json" },
-              body: JSON.stringify({ addLabelIds: [label.id] }),
-            },
-          );
-        }
-      } catch (e: any) {
-        console.warn("Label apply failed:", e);
+      if (route === "approval") {
+        // Queue as pending approval for user decision (bell + Slack)
+        await supabaseAdmin.from("gmail_pending_approvals").upsert({
+          user_id: userId,
+          gmail_message_id: m.id,
+          gmail_thread_id: msg.threadId,
+          sender_email: senderEmail,
+          sender_name: senderName || null,
+          subject,
+          incoming_snippet: bodyText.slice(0, 500),
+          incoming_summary: ai.summary,
+          proposed_reply: ai.reply,
+          ai_confidence: ai.confidence,
+          risk_flags: ai.risk_flags,
+          status: "pending",
+        }, { onConflict: "user_id,gmail_message_id" });
+        await notifyUser(supabaseAdmin, userId,
+          `Reply ready for ${senderName || senderEmail}`,
+          `"${subject}" — review, edit or send.`,
+          `/gmail?approve=${m.id}`);
+        await applyDuncanLabel();
+        stats.created++; draftsToday++;
+        continue;
       }
 
-      stats.created++;
-      draftsToday++;
+      // Fallback: create a review-me draft in Gmail (existing behaviour)
+      const draftBodyText = AUTO_DRAFT_PREFIX + ai.reply;
+      const draftBodyHtml = draftBodyText
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+      const replySubject = subject.startsWith("Re:") ? subject : `Re: ${subject}`;
+      const newRefs = referencesHeader ? `${referencesHeader} ${messageIdHeader}`.trim() : messageIdHeader;
+      const boundary = `=_duncan_${crypto.randomUUID().replace(/-/g, "")}`;
+      const mimeMessage = [
+        `From: ${myEmail}`, `To: ${from}`, `Subject: ${replySubject}`,
+        messageIdHeader ? `In-Reply-To: ${messageIdHeader}` : "",
+        newRefs ? `References: ${newRefs}` : "",
+        "MIME-Version: 1.0",
+        `Content-Type: multipart/alternative; boundary="${boundary}"`, "",
+        `--${boundary}`, 'Content-Type: text/plain; charset="UTF-8"',
+        "Content-Transfer-Encoding: 7bit", "", draftBodyText, "",
+        `--${boundary}`, 'Content-Type: text/html; charset="UTF-8"',
+        "Content-Transfer-Encoding: 7bit", "", `<div>${draftBodyHtml}</div>`, "",
+        `--${boundary}--`, "",
+      ].filter(Boolean).join("\r\n");
+
+      const draftRes = await fetch(
+        "https://gmail.googleapis.com/gmail/v1/users/me/drafts",
+        { method: "POST", headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ message: { raw: base64url(mimeMessage), threadId: msg.threadId } }) },
+      );
+      if (!draftRes.ok) { console.error("Draft create failed:", await draftRes.text()); stats.errors++; continue; }
+      await applyDuncanLabel();
+      stats.created++; draftsToday++;
     } catch (err: any) {
       console.error(`Message ${m.id} processing failed:`, err);
       stats.errors++;

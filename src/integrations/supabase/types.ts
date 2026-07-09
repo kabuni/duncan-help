@@ -1466,6 +1466,57 @@ export type Database = {
         }
         Relationships: []
       }
+      gmail_auto_outbox: {
+        Row: {
+          body: string
+          created_at: string
+          error: string | null
+          gmail_message_id: string
+          gmail_thread_id: string
+          id: string
+          send_after: string
+          sender_email: string
+          sent_at: string | null
+          sent_message_id: string | null
+          status: string
+          subject: string | null
+          undone_at: string | null
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          error?: string | null
+          gmail_message_id: string
+          gmail_thread_id: string
+          id?: string
+          send_after: string
+          sender_email: string
+          sent_at?: string | null
+          sent_message_id?: string | null
+          status?: string
+          subject?: string | null
+          undone_at?: string | null
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          error?: string | null
+          gmail_message_id?: string
+          gmail_thread_id?: string
+          id?: string
+          send_after?: string
+          sender_email?: string
+          sent_at?: string | null
+          sent_message_id?: string | null
+          status?: string
+          subject?: string | null
+          undone_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       gmail_draft_feedback: {
         Row: {
           created_at: string
@@ -1504,6 +1555,123 @@ export type Database = {
           outcome?: string
           recipient_domain?: string | null
           recipient_email?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      gmail_pending_approvals: {
+        Row: {
+          ai_confidence: number | null
+          created_at: string
+          decided_at: string | null
+          decided_via: string | null
+          expires_at: string
+          final_reply: string | null
+          gmail_draft_id: string | null
+          gmail_message_id: string
+          gmail_thread_id: string
+          id: string
+          incoming_snippet: string | null
+          incoming_summary: string | null
+          proposed_reply: string
+          risk_flags: string[] | null
+          sender_email: string
+          sender_name: string | null
+          sent_message_id: string | null
+          status: string
+          subject: string | null
+          user_id: string
+        }
+        Insert: {
+          ai_confidence?: number | null
+          created_at?: string
+          decided_at?: string | null
+          decided_via?: string | null
+          expires_at?: string
+          final_reply?: string | null
+          gmail_draft_id?: string | null
+          gmail_message_id: string
+          gmail_thread_id: string
+          id?: string
+          incoming_snippet?: string | null
+          incoming_summary?: string | null
+          proposed_reply: string
+          risk_flags?: string[] | null
+          sender_email: string
+          sender_name?: string | null
+          sent_message_id?: string | null
+          status?: string
+          subject?: string | null
+          user_id: string
+        }
+        Update: {
+          ai_confidence?: number | null
+          created_at?: string
+          decided_at?: string | null
+          decided_via?: string | null
+          expires_at?: string
+          final_reply?: string | null
+          gmail_draft_id?: string | null
+          gmail_message_id?: string
+          gmail_thread_id?: string
+          id?: string
+          incoming_snippet?: string | null
+          incoming_summary?: string | null
+          proposed_reply?: string
+          risk_flags?: string[] | null
+          sender_email?: string
+          sender_name?: string | null
+          sent_message_id?: string | null
+          status?: string
+          subject?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      gmail_sender_trust: {
+        Row: {
+          auto_send_enabled: boolean
+          confidence: number
+          created_at: string
+          force_review: boolean
+          force_trust: boolean
+          id: string
+          last_updated: string
+          sender_domain: string | null
+          sender_email: string
+          sends_approved: number
+          sends_edited: number
+          sends_rejected: number
+          user_id: string
+        }
+        Insert: {
+          auto_send_enabled?: boolean
+          confidence?: number
+          created_at?: string
+          force_review?: boolean
+          force_trust?: boolean
+          id?: string
+          last_updated?: string
+          sender_domain?: string | null
+          sender_email: string
+          sends_approved?: number
+          sends_edited?: number
+          sends_rejected?: number
+          user_id: string
+        }
+        Update: {
+          auto_send_enabled?: boolean
+          confidence?: number
+          created_at?: string
+          force_review?: boolean
+          force_trust?: boolean
+          id?: string
+          last_updated?: string
+          sender_domain?: string | null
+          sender_email?: string
+          sends_approved?: number
+          sends_edited?: number
+          sends_rejected?: number
           user_id?: string
         }
         Relationships: []
@@ -1594,6 +1762,9 @@ export type Database = {
           auto_draft_last_run_at: string | null
           auto_drafts_counter_date: string
           auto_drafts_created_today: number
+          auto_send_confidence_threshold: number
+          auto_send_min_approved: number
+          auto_send_undo_seconds: number
           ceo_briefing_optin: boolean
           common_phrases: Json
           created_at: string
@@ -1616,6 +1787,9 @@ export type Database = {
           auto_draft_last_run_at?: string | null
           auto_drafts_counter_date?: string
           auto_drafts_created_today?: number
+          auto_send_confidence_threshold?: number
+          auto_send_min_approved?: number
+          auto_send_undo_seconds?: number
           ceo_briefing_optin?: boolean
           common_phrases?: Json
           created_at?: string
@@ -1638,6 +1812,9 @@ export type Database = {
           auto_draft_last_run_at?: string | null
           auto_drafts_counter_date?: string
           auto_drafts_created_today?: number
+          auto_send_confidence_threshold?: number
+          auto_send_min_approved?: number
+          auto_send_undo_seconds?: number
           ceo_briefing_optin?: boolean
           common_phrases?: Json
           created_at?: string
@@ -2577,6 +2754,7 @@ export type Database = {
           sender_name: string
           status: string
           updated_at: string
+          user_id: string
         }
         Insert: {
           calendar_event_id?: string | null
@@ -2596,6 +2774,7 @@ export type Database = {
           sender_name: string
           status?: string
           updated_at?: string
+          user_id: string
         }
         Update: {
           calendar_event_id?: string | null
@@ -2615,6 +2794,7 @@ export type Database = {
           sender_name?: string
           status?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -2923,10 +3103,14 @@ export type Database = {
           avatar_url: string | null
           bio: string | null
           created_at: string
+          current_country: string | null
+          current_timezone: string | null
           department: string | null
           dismissed_nudges: string[]
           display_name: string | null
+          ea_mode_enabled: boolean
           id: string
+          location_auto: boolean
           meet_duncan_tour_completed_at: string | null
           norman_context: string | null
           onboarding_completed_at: string | null
@@ -2943,10 +3127,14 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          current_country?: string | null
+          current_timezone?: string | null
           department?: string | null
           dismissed_nudges?: string[]
           display_name?: string | null
+          ea_mode_enabled?: boolean
           id?: string
+          location_auto?: boolean
           meet_duncan_tour_completed_at?: string | null
           norman_context?: string | null
           onboarding_completed_at?: string | null
@@ -2963,10 +3151,14 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          current_country?: string | null
+          current_timezone?: string | null
           department?: string | null
           dismissed_nudges?: string[]
           display_name?: string | null
+          ea_mode_enabled?: boolean
           id?: string
+          location_auto?: boolean
           meet_duncan_tour_completed_at?: string | null
           norman_context?: string | null
           onboarding_completed_at?: string | null

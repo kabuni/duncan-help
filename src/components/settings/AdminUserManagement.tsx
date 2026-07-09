@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, Trash2, Users, Search, AlertTriangle } from "lucide-react";
+import { Loader2, Trash2, Users, Search, AlertTriangle, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -143,6 +143,42 @@ export default function AdminUserManagement() {
             className="pl-8 h-9"
           />
         </div>
+        <button
+          disabled={users.length === 0}
+          onClick={() => {
+            const rows = [
+              ["Name", "Email", "Department", "Role", "Approval", "Created", "Last sign in", "Days inactive", "User ID"],
+              ...users.map((u) => [
+                u.display_name ?? "",
+                u.email ?? "",
+                u.department ?? "",
+                u.role_title ?? "",
+                u.approval_status ?? "",
+                u.created_at ?? "",
+                u.last_sign_in_at ?? "",
+                String(u.days_inactive ?? ""),
+                u.id,
+              ]),
+            ];
+            const csv = rows
+              .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+              .join("\n");
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `duncan-users-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            toast.success(`Exported ${users.length} users`);
+          }}
+          className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/50 transition-colors disabled:opacity-40"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export CSV
+        </button>
         <button
           disabled={selected.size === 0 || deleteMutation.isPending}
           onClick={() => setConfirmOpen(true)}

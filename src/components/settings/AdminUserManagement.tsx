@@ -144,6 +144,42 @@ export default function AdminUserManagement() {
           />
         </div>
         <button
+          disabled={users.length === 0}
+          onClick={() => {
+            const rows = [
+              ["Name", "Email", "Department", "Role", "Approval", "Created", "Last sign in", "Days inactive", "User ID"],
+              ...users.map((u) => [
+                u.display_name ?? "",
+                u.email ?? "",
+                u.department ?? "",
+                u.role_title ?? "",
+                u.approval_status ?? "",
+                u.created_at ?? "",
+                u.last_sign_in_at ?? "",
+                String(u.days_inactive ?? ""),
+                u.id,
+              ]),
+            ];
+            const csv = rows
+              .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+              .join("\n");
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `duncan-users-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            toast.success(`Exported ${users.length} users`);
+          }}
+          className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/50 transition-colors disabled:opacity-40"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export CSV
+        </button>
+        <button
           disabled={selected.size === 0 || deleteMutation.isPending}
           onClick={() => setConfirmOpen(true)}
           className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/20 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"

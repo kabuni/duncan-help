@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, Trash2, Users, Search, AlertTriangle } from "lucide-react";
+import { Loader2, Trash2, Users, Search, AlertTriangle, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";

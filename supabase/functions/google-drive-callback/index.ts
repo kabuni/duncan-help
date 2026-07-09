@@ -23,10 +23,14 @@ Deno.serve(async (req) => {
     }
 
     let userId: string | null = null;
+    let scope: "personal" | "company" = "personal";
     if (stateParam) {
       try {
         const stateData = JSON.parse(atob(stateParam));
         userId = stateData.user_id;
+        if (stateData.scope === "company" || stateData.scope === "personal") {
+          scope = stateData.scope;
+        }
       } catch {
         console.error("Failed to decode state parameter");
       }
@@ -86,10 +90,19 @@ Deno.serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Delete ALL existing tokens (singleton table) then insert fresh
-    await supabaseAdmin.from("google_drive_tokens").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    // Remove any existing token for this (scope, user-or-global) then insert fresh.
+    if (scope === "company") {
+      await supabaseAdmin.from("google_drive_tokens").delete().eq("scope", "company");
+    } else {
+      await supabaseAdmin
+        .from("google_drive_tokens")
+        .delete()
+        .eq("scope", "personal")
+        .eq("connected_by", userId);
+    }
 
     const { error: insertError } = await supabaseAdmin.from("google_drive_tokens").insert({
+      scope,
       connected_by: userId,
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token || "",
@@ -97,7 +110,7 @@ Deno.serve(async (req) => {
     });
 
     if (!insertError && (accountEmail || accountName)) {
-      console.info("Google Drive connected", { accountEmail, accountName });
+      console.info("Google Drive connected", { scope, accountEmail, accountName });
     }
 
     if (insertError) {
@@ -110,7 +123,7 @@ Deno.serve(async (req) => {
 
     return new Response(null, {
       status: 302,
-      headers: { Location: `${appUrl}/integrations?drive_connected=true` },
+      headers: { Location: `${appUrl}/integrations?drive_connected=${scope}` },
     });
   } catch (error: any) {
     console.error("Google Drive callback error:", error);

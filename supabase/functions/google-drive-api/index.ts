@@ -27,29 +27,52 @@ async function refreshAccessToken(
 
 async function getValidToken(
   supabaseAdmin: any,
-  userId: string
-): Promise<{ accessToken: string; tokenRow: any; usedFallback: boolean } | null> {
-  // First try user's own token, then fall back to any available token (shared resource)
+  userId: string,
+  preferredScope: "personal" | "company" | "auto" = "auto"
+): Promise<{ accessToken: string; tokenRow: any; usedFallback: boolean; scope: "personal" | "company" } | null> {
+  // Selection order:
+  //   - scope='personal' → user's personal token only
+  //   - scope='company'  → the shared company token only
+  //   - scope='auto'     → personal (if exists) else company fallback
+  let tokenRow: any = null;
   let usedFallback = false;
-  let { data: tokenRow, error } = await supabaseAdmin
-    .from("google_drive_tokens")
-    .select("*")
-    .eq("connected_by", userId)
-    .maybeSingle();
 
-  if (!tokenRow) {
-    const result = await supabaseAdmin
+  if (preferredScope === "company") {
+    const { data } = await supabaseAdmin
       .from("google_drive_tokens")
       .select("*")
-      .order("created_at", { ascending: false })
-      .limit(1)
+      .eq("scope", "company")
       .maybeSingle();
-    tokenRow = result.data;
-    error = result.error;
-    usedFallback = !!tokenRow;
+    tokenRow = data;
+  } else if (preferredScope === "personal") {
+    const { data } = await supabaseAdmin
+      .from("google_drive_tokens")
+      .select("*")
+      .eq("scope", "personal")
+      .eq("connected_by", userId)
+      .maybeSingle();
+    tokenRow = data;
+  } else {
+    const { data: personal } = await supabaseAdmin
+      .from("google_drive_tokens")
+      .select("*")
+      .eq("scope", "personal")
+      .eq("connected_by", userId)
+      .maybeSingle();
+    if (personal) {
+      tokenRow = personal;
+    } else {
+      const { data: company } = await supabaseAdmin
+        .from("google_drive_tokens")
+        .select("*")
+        .eq("scope", "company")
+        .maybeSingle();
+      tokenRow = company;
+      usedFallback = !!company;
+    }
   }
 
-  if (error || !tokenRow) return null;
+  if (!tokenRow) return null;
 
   const now = new Date();
   const expiry = new Date(tokenRow.token_expiry);
@@ -69,11 +92,17 @@ async function getValidToken(
       })
       .eq("id", tokenRow.id);
 
-    return { accessToken: refreshed.access_token, tokenRow: { ...tokenRow, token_expiry: newExpiry.toISOString() }, usedFallback };
+    return {
+      accessToken: refreshed.access_token,
+      tokenRow: { ...tokenRow, token_expiry: newExpiry.toISOString() },
+      usedFallback,
+      scope: tokenRow.scope,
+    };
   }
 
-  return { accessToken: tokenRow.access_token, tokenRow, usedFallback };
+  return { accessToken: tokenRow.access_token, tokenRow, usedFallback, scope: tokenRow.scope };
 }
+
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -95,9 +124,10 @@ async function getDriveHealth(accessToken: string) {
   }
 
   const filesRes = await fetch(
-    "https://www.googleapis.com/drive/v3/files?pageSize=5&fields=files(id,name,mimeType,modifiedTime)&orderBy=modifiedTime%20desc&q=trashed%20%3D%20false",
+    "https://www.googleapis.com/drive/v3/files?pageSize=5&fields=files(id,name,mimeType,modifiedTime)&orderBy=modifiedTime%20desc&q=trashed%20%3D%20false&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives",
     { headers }
   );
+
   const filesText = await filesRes.text();
   if (!filesRes.ok) {
     throw new Error(`Drive file listing failed [${filesRes.status}]: ${filesText}`);
@@ -141,31 +171,48 @@ Deno.serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     const body = await req.json();
     const { action } = body;
+    const requestedScope: "personal" | "company" | "auto" =
+      body?.scope === "personal" || body?.scope === "company" ? body.scope : "auto";
 
     // ─── DISCONNECT ───
     if (action === "disconnect") {
-      const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {
-        _user_id: user.id,
-        _role: "admin",
-      });
-      if (!isAdmin) {
-        return jsonResponse({ error: "Admin access required to disconnect Google Drive" }, 403);
+      const disconnectScope: "personal" | "company" =
+        body?.scope === "personal" ? "personal" : "company";
+      if (disconnectScope === "company") {
+        const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {
+          _user_id: user.id,
+          _role: "admin",
+        });
+        if (!isAdmin) {
+          return jsonResponse({ error: "Admin access required to disconnect the company Google Drive" }, 403);
+        }
+        await supabaseAdmin.from("google_drive_tokens").delete().eq("scope", "company");
+      } else {
+        await supabaseAdmin
+          .from("google_drive_tokens")
+          .delete()
+          .eq("scope", "personal")
+          .eq("connected_by", user.id);
       }
-      await supabaseAdmin.from("google_drive_tokens").delete().neq("id", "00000000-0000-0000-0000-000000000000");
       return jsonResponse({ success: true });
     }
 
-    const tokenInfo = await getValidToken(supabaseAdmin, user.id);
+    const tokenInfo = await getValidToken(supabaseAdmin, user.id, requestedScope);
     if (!tokenInfo) {
       return jsonResponse({
         status: "disconnected",
         connected: false,
-        error: "Google Drive is not connected, or the saved refresh token is no longer valid. Please reconnect Google Drive.",
+        scope: requestedScope,
+        error: "Google Drive is not connected for the requested scope.",
       }, action === "status" ? 200 : 401);
     }
 
-    const { accessToken, tokenRow, usedFallback } = tokenInfo;
+    const { accessToken, tokenRow, usedFallback, scope: activeScope } = tokenInfo;
     const driveHeaders = { Authorization: `Bearer ${accessToken}` };
+    const sharedDriveParams = {
+      supportsAllDrives: "true",
+      includeItemsFromAllDrives: "true",
+    };
 
     // ─── STATUS ───
     if (action === "status" || action === "test") {
@@ -174,7 +221,8 @@ Deno.serve(async (req) => {
         return jsonResponse({
           status: "connected",
           connected: true,
-          credential_source: usedFallback ? "shared_company_token" : "connected_user_token",
+          scope: activeScope,
+          credential_source: usedFallback ? "shared_company_token" : (activeScope === "personal" ? "personal_user_token" : "shared_company_token"),
           account_email: health.about?.user?.emailAddress ?? null,
           account_name: health.about?.user?.displayName ?? null,
           account_picture: health.about?.user?.photoLink ?? null,
@@ -184,6 +232,7 @@ Deno.serve(async (req) => {
           visible_file_count: health.files.length,
           sample_files: health.files.slice(0, 3),
         });
+
       } catch (error: any) {
         return jsonResponse({
           status: "degraded",
@@ -218,11 +267,14 @@ Deno.serve(async (req) => {
 
       const params = new URLSearchParams({
         q,
-        fields: "nextPageToken,files(id,name,mimeType,modifiedTime,size,parents)",
+        fields: "nextPageToken,files(id,name,mimeType,modifiedTime,size,parents,driveId)",
         pageSize: String(Math.min(Math.max(Number(pageSize) || 100, 1), 1000)),
         orderBy: "name",
+        ...sharedDriveParams,
+        corpora: "allDrives",
       });
       if (pageToken) params.set("pageToken", String(pageToken));
+
 
       const res = await fetch(
         `https://www.googleapis.com/drive/v3/files?${params}`,
@@ -268,9 +320,12 @@ Deno.serve(async (req) => {
 
       const params = new URLSearchParams({
         q,
-        fields: "files(id,name,mimeType,modifiedTime,size,parents)",
+        fields: "files(id,name,mimeType,modifiedTime,size,parents,driveId)",
         pageSize: "50",
+        ...sharedDriveParams,
+        corpora: "allDrives",
       });
+
 
       const res = await fetch(
         `https://www.googleapis.com/drive/v3/files?${params}`,
@@ -297,7 +352,7 @@ Deno.serve(async (req) => {
       // Google Docs → export as plain text
       if (fileMimeType === "application/vnd.google-apps.document") {
         const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`,
+          `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain&supportsAllDrives=true`,
           { headers: driveHeaders }
         );
         if (!res.ok) throw new Error(`Export failed: ${await res.text()}`);
@@ -306,7 +361,7 @@ Deno.serve(async (req) => {
       // Google Sheets → export as CSV
       else if (fileMimeType === "application/vnd.google-apps.spreadsheet") {
         const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/csv`,
+          `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/csv&supportsAllDrives=true`,
           { headers: driveHeaders }
         );
         if (!res.ok) throw new Error(`Export failed: ${await res.text()}`);
@@ -315,7 +370,7 @@ Deno.serve(async (req) => {
       // Google Slides → export as plain text
       else if (fileMimeType === "application/vnd.google-apps.presentation") {
         const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`,
+          `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain&supportsAllDrives=true`,
           { headers: driveHeaders }
         );
         if (!res.ok) throw new Error(`Export failed: ${await res.text()}`);
@@ -324,7 +379,7 @@ Deno.serve(async (req) => {
       // Binary files (PDF, DOCX, etc.) → download raw bytes and return as text
       else {
         const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+          `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
           { headers: driveHeaders }
         );
         if (!res.ok) throw new Error(`Download failed: ${await res.text()}`);

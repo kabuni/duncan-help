@@ -163,18 +163,33 @@ const integrations: Integration[] = [
   },
   {
     id: "google-drive",
-    name: "Google Drive",
-    description: "Shared Google Drive access for reading and searching files. Duncan can navigate folders, read documents, and synthesize reports across the connected workspace.",
+    name: "Company Google Drive",
+    description: "Shared company Google Drive (including Shared Drives). Admins connect once and every user can read, search, and synthesize files from it.",
     icon: HardDrive,
     category: "Productivity",
-    services: ["File Browsing", "Folder Navigation", "Document Reading", "Report Synthesis"],
+    services: ["Shared Drive Support", "File Browsing", "Document Reading", "Report Synthesis"],
     type: "company",
     setupSteps: [
-      "An admin clicks Connect Google Drive below",
-      "Sign in with Google and grant read-only access to the shared Drive workspace",
-      "You'll be redirected back to Duncan and the connection becomes available across the company",
+      "An admin clicks Connect below",
+      "Sign in with a Google account that is a member of the company Shared Drive",
+      "Grant read-only access; the connection becomes available across the company",
     ],
   },
+  {
+    id: "google-drive-personal",
+    name: "Personal Google Drive",
+    description: "Your own Google Drive. Duncan can read, search, and reason over your personal files on your behalf. Nobody else in the workspace can see them.",
+    icon: HardDrive,
+    category: "Productivity",
+    services: ["Personal File Access", "Shared Drive Support", "Document Reading"],
+    type: "user",
+    setupSteps: [
+      "Click Connect Personal Drive",
+      "Sign in with your Google account and grant read-only access",
+      "You'll be redirected back to Duncan; only you can use this connection",
+    ],
+  },
+
   {
     id: "hubspot",
     name: "HubSpot",
@@ -262,7 +277,9 @@ const Integrations = () => {
   const [isGmailConnected, setIsGmailConnected] = useState<boolean | null>(null);
   const [isAzureDevOpsConnected, setIsAzureDevOpsConnected] = useState<boolean | null>(null);
   const [isGoogleDriveConnected, setIsGoogleDriveConnected] = useState<boolean | null>(null);
+  const [isGoogleDrivePersonalConnected, setIsGoogleDrivePersonalConnected] = useState<boolean | null>(null);
   const [googleDriveStatus, setGoogleDriveStatus] = useState<GoogleDriveStatusDetail | null>(null);
+
   const [duncanGmail, setDuncanGmail] = useState<{ connected: boolean; email?: string | null }>({ connected: false });
   const [connectingDuncanGmail, setConnectingDuncanGmail] = useState(false);
 
@@ -342,7 +359,7 @@ const Integrations = () => {
     try {
       const { supabase } = await import("@/integrations/supabase/client");
       const { data, error } = await supabase.functions.invoke("google-drive-api", {
-        body: { action: "status" },
+        body: { action: "status", scope: "company" },
       });
       if (error) throw error;
       setGoogleDriveStatus(data as GoogleDriveStatusDetail);
@@ -356,6 +373,20 @@ const Integrations = () => {
       setIsGoogleDriveConnected(false);
     }
   };
+
+  const checkGoogleDrivePersonalConnection = async () => {
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data, error } = await supabase.functions.invoke("google-drive-api", {
+        body: { action: "status", scope: "personal" },
+      });
+      if (error) throw error;
+      setIsGoogleDrivePersonalConnected(data?.status === "connected" || data?.connected === true);
+    } catch {
+      setIsGoogleDrivePersonalConnected(false);
+    }
+  };
+
 
   // Handle OAuth callback
   useEffect(() => {
@@ -374,10 +405,17 @@ const Integrations = () => {
       toast.success("Azure DevOps connected successfully!");
       checkAzureDevOpsConnection();
       setSearchParams({});
-    } else if (searchParams.get("drive_connected") === "true") {
-      toast.success("Google Drive connected successfully!");
-      checkGoogleDriveConnection();
+    } else if (searchParams.get("drive_connected")) {
+      const connectedScope = searchParams.get("drive_connected");
+      if (connectedScope === "personal") {
+        toast.success("Personal Google Drive connected");
+        checkGoogleDrivePersonalConnection();
+      } else {
+        toast.success("Company Google Drive connected");
+        checkGoogleDriveConnection();
+      }
       setSearchParams({});
+
     } else if (searchParams.get("drive_error")) {
       const driveError = searchParams.get("drive_error");
       toast.error(driveErrorMessages[driveError || "unknown"] || `Google Drive connection failed: ${driveError}`);
@@ -434,6 +472,8 @@ const Integrations = () => {
     checkGmailConnection();
     checkAzureDevOpsConnection();
     checkGoogleDriveConnection();
+    checkGoogleDrivePersonalConnection();
+
     checkDuncanGmail();
   }, [checkCalendarConnection]);
 
@@ -447,6 +487,8 @@ const Integrations = () => {
       "azure-blob": isAzureBlobConnected,
       "azure-devops": isAzureDevOpsConnected,
       "google-drive": isGoogleDriveConnected,
+      "google-drive-personal": isGoogleDrivePersonalConnected,
+
     };
     if (integration.id in oauthMap) {
       const val = oauthMap[integration.id];
@@ -624,12 +666,15 @@ const Integrations = () => {
               slackWorkspaceName={slackConnection.workspaceName}
               isAzureDevOpsConnected={isAzureDevOpsConnected}
               isGoogleDriveConnected={isGoogleDriveConnected}
+              isGoogleDrivePersonalConnected={isGoogleDrivePersonalConnected}
               googleDriveStatus={googleDriveStatus}
               onClose={() => {
                 setSelectedIntegration(null);
                 checkGmailConnection();
                 checkGoogleDriveConnection();
+                checkGoogleDrivePersonalConnection();
               }}
+
             />
           )}
         </AnimatePresence>
@@ -651,6 +696,7 @@ const IntegrationDetail = ({
   slackWorkspaceName,
   isAzureDevOpsConnected,
   isGoogleDriveConnected,
+  isGoogleDrivePersonalConnected,
   googleDriveStatus,
   onClose,
 }: {
@@ -666,6 +712,7 @@ const IntegrationDetail = ({
   slackWorkspaceName: string | null;
   isAzureDevOpsConnected: boolean | null;
   isGoogleDriveConnected: boolean | null;
+  isGoogleDrivePersonalConnected: boolean | null;
   googleDriveStatus: GoogleDriveStatusDetail | null;
   onClose: () => void;
 }) => {
@@ -673,7 +720,10 @@ const IntegrationDetail = ({
   const isAzureBlob = integration.id === "azure-blob";
   const isGmail = integration.id === "gmail";
   const isAzureDevOps = integration.id === "azure-devops";
-  const isGoogleDrive = integration.id === "google-drive";
+  const isGoogleDriveCompany = integration.id === "google-drive";
+  const isGoogleDrivePersonal = integration.id === "google-drive-personal";
+  const isGoogleDrive = isGoogleDriveCompany || isGoogleDrivePersonal;
+
   const isSlack = integration.id === "slack";
   const isHubSpot = integration.id === "hubspot";
   const isGitHub = integration.id === "github";
@@ -693,8 +743,11 @@ const IntegrationDetail = ({
     status = isSlackConnected ? "connected" : "disconnected";
   } else if (isAzureDevOps) {
     status = isAzureDevOpsConnected ? "connected" : "disconnected";
-  } else if (isGoogleDrive) {
+  } else if (isGoogleDriveCompany) {
     status = isGoogleDriveConnected ? "connected" : "disconnected";
+  } else if (isGoogleDrivePersonal) {
+    status = isGoogleDrivePersonalConnected ? "connected" : "disconnected";
+
   } else {
     status = getStatus(integration, userIntegrations, companyIntegrations);
   }
@@ -827,17 +880,19 @@ const IntegrationDetail = ({
 
       if (isGoogleDrive) {
         setGoogleDriveLoading(true);
+        const scope = isGoogleDrivePersonal ? "personal" : "company";
         const { supabase } = await import("@/integrations/supabase/client");
         {
           const { error } = await supabase.functions.invoke("google-drive-api", {
-            body: { action: "disconnect" },
+            body: { action: "disconnect", scope },
           });
           if (error) throw error;
         }
-        toast.success("Google Drive disconnected");
+        toast.success(`${isGoogleDrivePersonal ? "Personal" : "Company"} Google Drive disconnected`);
         onClose();
         return;
       }
+
 
       if (isAzureDevOps) {
         const { supabase } = await import("@/integrations/supabase/client");
@@ -892,13 +947,17 @@ const IntegrationDetail = ({
         setAzureDevOpsLoading(false);
       } else if (isGoogleDrive) {
         setGoogleDriveLoading(true);
+        const scope = isGoogleDrivePersonal ? "personal" : "company";
         const { supabase } = await import("@/integrations/supabase/client");
-        const { data, error } = await supabase.functions.invoke<{ url?: string }>("google-drive-auth");
+        const { data, error } = await supabase.functions.invoke<{ url?: string }>("google-drive-auth", {
+          body: { scope },
+        });
         if (error) throw error;
         if (data?.url) window.location.href = data.url;
         else throw new Error("No auth URL returned");
         setGoogleDriveLoading(false);
       }
+
     } catch (err: any) {
       
       setGmailLoading(false);
@@ -1134,7 +1193,7 @@ const IntegrationDetail = ({
                     ) : (
                       <>
                         <ExternalLink className="h-4 w-4" />
-                        {isAzureDevOps ? "Connect Azure DevOps" : isGmail ? "Connect Gmail" : isSlack ? "Connect Slack" : isGoogleDrive ? "Connect Google Drive" : "Sign in with Google"}
+                        {isAzureDevOps ? "Connect Azure DevOps" : isGmail ? "Connect Gmail" : isSlack ? "Connect Slack" : isGoogleDrivePersonal ? "Connect Personal Drive" : isGoogleDriveCompany ? "Connect Company Drive" : "Sign in with Google"}
                       </>
                     )}
                   </button>

@@ -696,6 +696,7 @@ const IntegrationDetail = ({
   slackWorkspaceName,
   isAzureDevOpsConnected,
   isGoogleDriveConnected,
+  isGoogleDrivePersonalConnected,
   googleDriveStatus,
   onClose,
 }: {
@@ -711,6 +712,7 @@ const IntegrationDetail = ({
   slackWorkspaceName: string | null;
   isAzureDevOpsConnected: boolean | null;
   isGoogleDriveConnected: boolean | null;
+  isGoogleDrivePersonalConnected: boolean | null;
   googleDriveStatus: GoogleDriveStatusDetail | null;
   onClose: () => void;
 }) => {
@@ -718,7 +720,10 @@ const IntegrationDetail = ({
   const isAzureBlob = integration.id === "azure-blob";
   const isGmail = integration.id === "gmail";
   const isAzureDevOps = integration.id === "azure-devops";
-  const isGoogleDrive = integration.id === "google-drive";
+  const isGoogleDriveCompany = integration.id === "google-drive";
+  const isGoogleDrivePersonal = integration.id === "google-drive-personal";
+  const isGoogleDrive = isGoogleDriveCompany || isGoogleDrivePersonal;
+
   const isSlack = integration.id === "slack";
   const isHubSpot = integration.id === "hubspot";
   const isGitHub = integration.id === "github";

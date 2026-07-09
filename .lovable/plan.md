@@ -1,60 +1,122 @@
 
-# Email Intelligence v2 — Plan
+## Goal
 
-Today the Gmail flow drafts every reply and waits for you in Gmail. This upgrade turns Duncan into a graded assistant: trusted senders get auto-sent replies, uncertain ones get pushed to you for one-tap approval, and meeting requests are handled EA-style with country/timezone awareness.
+When a user submits a Feature Request, Duncan takes over end-to-end:
+1. Reads the request, decides if it has enough detail.
+2. If not, emails the requester with targeted clarifying questions (Gmail) and mirrors the thread in-app.
+3. Once answered (or if already clear), scores it with a RICE-style rubric, writes a triaged spec, files a card on a dedicated **Product Backlog** workstream, and re-orders the backlog by priority score.
+4. Notifies the requester + admins in-app when the ticket is filed.
 
-## 1. Trust engine (whitelist → auto-send)
+Fully autonomous — no admin approval gate.
 
-Extend `gmail_writing_profiles` and add a per-sender trust ledger:
+---
 
-- New table `gmail_sender_trust(user_id, sender_email, sends_approved, sends_edited, sends_rejected, confidence 0–100, auto_send_enabled bool, last_updated)`.
-- Every time you send/edit/discard a Duncan draft, `gmail-api` logs the outcome and recomputes confidence (approved without edit ⇒ +, heavy edit ⇒ −, reject ⇒ hard reset).
-- `SettingsGmail` gets a **Trusted senders** panel: whitelist entries become auto-send-eligible once confidence ≥ threshold (default 80, configurable) AND ≥ 5 approved sends. Manual override to force-trust or force-review.
-- `gmail-auto-draft` splits into two paths:
-  - **Auto-send path** (whitelist + trusted + high AI self-confidence + no risky content flags: money, legal, unsubscribe, external new domain): sends immediately, labels `Duncan/Auto-Sent`, notifies via bell + Slack with "Undo (15 min)" that recalls via Gmail draft-of-record + reply-all warning.
-  - **Draft path** (current behaviour) for everything else.
-- Safety guards: never auto-send to first-time senders, replies with attachments, threads > N participants, or when AI self-reports low confidence.
+## User Journey
 
-## 2. Continuous tone learning
+1. **Submit** — User fills the existing form at Settings → Request a Feature.
+2. **Acknowledge** — Instant in-app notification: *"Duncan is reviewing your request."*
+3. **Clarify (if needed)** — Duncan emails the requester 1–4 targeted questions from `duncan@kabuni.com`. Requester replies by email OR answers inline in a new **My Feature Requests** view. Up to 2 clarification rounds; then Duncan proceeds with best-effort assumptions.
+4. **Triage** — Duncan produces: refined title, problem statement, proposed solution, acceptance criteria, RICE score, priority band (P0–P3), effort estimate (S/M/L/XL), category tag.
+5. **File** — Card created in "Product Backlog" workstream, status = Yellow (Planned), assigned to Product owner (configurable), tagged with priority + category, linked back to `feature_requests.id`.
+6. **Rank** — Backlog re-sorted by RICE score; card order stored on the card.
+7. **Close loop** — Requester notified with the ticket link + estimated priority band.
 
-`gmail-train-style` runs once. We move to incremental learning:
+---
 
-- New cron `gmail-learn-incremental` (hourly): pulls newly-Sent messages since `last_trained_at`, cleans + redacts, appends to a rolling sample store (`gmail_style_samples` capped at ~500 latest).
-- Weekly re-summarise: regenerate `style_summary`, `tone_metrics`, `common_phrases` from the rolling window so drift is captured (holidays, new hires, tone shifts).
-- Per-recipient style: cluster samples by recipient domain/thread so tone to investors ≠ tone to team; drafts pick the closest cluster.
-- Feedback signal: when you edit a draft, diff old→new is stored as a "correction sample" weighted higher in the next retrain.
+## Architecture
 
-## 3. "When in doubt" approval loop
+### Schema changes (migration)
 
-Today drafts sit silently in Gmail. New flow:
+Extend `feature_requests`:
+- `triage_status` text — `new | clarifying | triaged | filed | dismissed` (default `new`)
+- `clarification_round` int default 0
+- `rice_reach`, `rice_impact`, `rice_confidence`, `rice_effort` numeric
+- `rice_score` numeric (generated: reach*impact*confidence/effort)
+- `priority_band` text — `P0|P1|P2|P3`
+- `effort_band` text — `S|M|L|XL`
+- `category` text
+- `refined_title`, `problem_statement`, `proposed_solution`, `acceptance_criteria` text
+- `workstream_card_id` uuid → `workstream_cards.id`
+- `email_thread_id` text (Gmail thread id for clarification)
+- `last_agent_run_at` timestamptz
 
-- When Duncan drafts a reply and confidence is medium (below auto-send but above spam), it posts an **approval card** via the existing `notifications` + Slack DM rails:
-  - Subject, sender, 3-line summary of the incoming email, the proposed reply, and buttons: **Send as-is**, **Edit & send**, **Discard**.
-  - "Edit & send" opens a lightweight edit sheet (Gmail composer already exists at `/gmail`); on submit it sends via `gmail-api` and logs an "edited" outcome to the trust ledger.
-- Reuses the notification bell + Slack pattern already used for approvals, so no new UI system.
+New table `feature_request_messages` (thread log):
+- `id`, `feature_request_id`, `role` (`agent|user`), `channel` (`email|in_app`), `body`, `gmail_message_id?`, `created_at`
+- RLS: requester + admins can read; only service role writes.
 
-## 4. EA-style meeting triage (all users, not just Nimesh)
+`app_settings` additions (single-row config, no schema change):
+- `feature_request_backlog_workstream_id`
+- `feature_request_default_assignee`
+- `feature_request_sender_email` (default `duncan@kabuni.com`)
 
-Current `ea-poll-inbox` is hardcoded to Nimesh and Duncan's central inbox. Generalise:
+### Edge functions
 
-- Per-user EA mode toggle in `SettingsGmail` ("Let Duncan act as my EA"). When on, `ea-poll-inbox` iterates all opted-in users using their own `gmail_tokens` + `google_calendar_tokens`.
-- Meeting-intent classifier already exists — extend to:
-  1. If sender didn't state purpose → auto-reply asking for purpose + rough duration, mark `awaiting_purpose`.
-  2. Once purpose is known → score urgency (P1–P4) using existing prompt, plus new signals: sender seniority (HubSpot lookup), keywords, and whether user's calendar has a hard block.
-  3. Propose slots against **user's** calendar honouring their working hours + timezone.
-- **Country/timezone awareness**: new `profiles.current_timezone` + `current_country` (auto-detected from most recent calendar event location / last login IP, overridable). Slot proposals, reply salutations, and "urgent" thresholds respect local working hours. When you're travelling, Duncan says "Nimesh is in Dubai this week (GMT+4)" in the reply.
-- Approval still required to send the invite (existing `ea-confirm-meeting`), but low-friction: appears in the same bell/Slack card as §3.
+1. **`feature-request-agent`** (main orchestrator) — invoked by:
+   - DB trigger on `feature_requests` insert (via `pg_net`), OR simpler: called from the existing submit path in `SettingsFeatureRequest.tsx` after insert.
+   - Cron every 10 min to sweep `triage_status IN ('new','clarifying')` that stalled.
+   
+   Logic (LLM via Lovable AI Gateway, `openai/gpt-5.5`, structured Output schema):
+   - Load request + prior messages.
+   - Decide `action ∈ {clarify, triage, dismiss}`.
+   - If `clarify`: generate ≤4 questions, send Gmail via existing Gmail infra to requester email, log message, set status = `clarifying`, save `email_thread_id`.
+   - If `triage`: generate refined fields + RICE scores + priority + effort. Persist. Create workstream card. Set status = `filed`. Send in-app notification + closing email.
 
-## 5. Phasing
+2. **`feature-request-inbound`** — Gmail push/poll handler (piggybacks on existing recruitment Gmail poller pattern). Matches inbound replies by `email_thread_id`, appends to `feature_request_messages`, bumps `clarification_round`, re-invokes `feature-request-agent`.
 
-- **Phase 1 (small):** Continuous learning cron + per-recipient clustering + edit-diff feedback.
-- **Phase 2 (medium):** Trust ledger, Settings UI, in-app/Slack approval card with Send/Edit/Discard.
-- **Phase 3 (medium):** Auto-send path with guards + 15-min undo.
-- **Phase 4 (medium):** Generalise EA meeting flow per user + timezone/country awareness.
+3. **`feature-request-rerank`** — cron (hourly). Recomputes rank/order for all filed cards by `rice_score` and updates card `position` on the backlog workstream.
 
-## Open questions
+### Frontend
 
-1. **Confidence threshold defaults**: 80/100 and 5 approved sends before auto-send unlocks — OK, or stricter?
-2. **Undo window**: 15 minutes acceptable, or shorter?
-3. **Country detection**: derive from calendar/last login automatically, or require you to set it in Settings?
-4. **Approval channel**: Slack DM + in-app bell (both), or only one?
+- **New page: `/feature-requests`** (accessible from Sidebar for all users)
+  - "My Requests" tab: submitter sees own requests + Duncan's questions inline (answer here as alternative to email).
+  - "All Requests" tab (admin only): full triage board grouped by `priority_band`, with RICE scores and links to the workstream card.
+- **`FeatureRequestsAdmin.tsx`** (existing) — extended to show RICE, priority, linked card, thread log; add "Re-run triage" and "Dismiss" buttons.
+- **`SettingsFeatureRequest.tsx`** — after submit, toast: *"Duncan is reviewing your request and will follow up by email if it needs more detail."*
+- **`NotificationsBell`** — new notification types: `feature_request_clarify`, `feature_request_filed`.
+
+### Backlog workstream
+
+- On first run, `feature-request-agent` ensures a workstream named **"Product Backlog"** exists (create if missing) and stores its id in `app_settings.feature_request_backlog_workstream_id`.
+- Cards use existing `workstream_cards` schema; RICE score stored as tag `RICE:<score>` for visibility; `position` column used for rank.
+
+---
+
+## Technical details
+
+- **LLM**: `openai/gpt-5.5` via `_shared/ai-gateway.ts` with `Output.object` schema for triage. No schema bounds (per `ai-sdk-agent-patterns`); wrap in `NoObjectGeneratedError` fallback.
+- **Email**: reuse existing Gmail sending path used by recruitment (`duncan@kabuni.com` centralized mailbox). Subject: `[Feature Request] <title>`. Replies threaded via `In-Reply-To` header.
+- **Inbound polling**: extend existing recruitment Gmail poller with a second query filter (`subject:[Feature Request]`) OR add a dedicated poller cron.
+- **Idempotency**: `feature-request-agent` uses `last_agent_run_at` and `fetch_locks` to prevent concurrent runs on the same request.
+- **Auth**: Edge functions `verify_jwt = false`, use service role for DB writes, validate JWT for user-triggered calls.
+- **Rate limits**: max 2 clarification rounds; then Duncan triages with best-effort and notes assumptions in the ticket.
+- **RLS**: requesters read own rows; admins read all; agent writes as service role.
+
+---
+
+## Rollout plan
+
+**Phase 1 — Core loop (this build)**
+- Migration (schema extensions + new message table + RLS + grants).
+- `feature-request-agent` edge function with clarify + triage + card creation.
+- Wire submit path to invoke agent.
+- Extend admin UI to show triage output.
+- Notification hooks.
+
+**Phase 2 — Inbound + rerank**
+- `feature-request-inbound` Gmail poller.
+- `feature-request-rerank` hourly cron.
+- Public `/feature-requests` page with My Requests tab.
+
+**Phase 3 — Polish**
+- "Re-run triage" / "Dismiss" admin actions.
+- Duplicate detection (embed refined_title, cosine match against existing filed requests, merge suggestion).
+- Weekly digest of new backlog items to leadership.
+
+---
+
+## Open confirmations (non-blocking, sensible defaults chosen)
+
+- Backlog workstream name: **"Product Backlog"** — auto-created if missing.
+- Default assignee: first admin user unless configured in `app_settings`.
+- Sender: `duncan@kabuni.com`.
+- Clarification cap: **2 rounds**, then triage with assumptions noted.

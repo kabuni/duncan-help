@@ -359,7 +359,7 @@ const Integrations = () => {
     try {
       const { supabase } = await import("@/integrations/supabase/client");
       const { data, error } = await supabase.functions.invoke("google-drive-api", {
-        body: { action: "status" },
+        body: { action: "status", scope: "company" },
       });
       if (error) throw error;
       setGoogleDriveStatus(data as GoogleDriveStatusDetail);
@@ -373,6 +373,20 @@ const Integrations = () => {
       setIsGoogleDriveConnected(false);
     }
   };
+
+  const checkGoogleDrivePersonalConnection = async () => {
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data, error } = await supabase.functions.invoke("google-drive-api", {
+        body: { action: "status", scope: "personal" },
+      });
+      if (error) throw error;
+      setIsGoogleDrivePersonalConnected(data?.status === "connected" || data?.connected === true);
+    } catch {
+      setIsGoogleDrivePersonalConnected(false);
+    }
+  };
+
 
   // Handle OAuth callback
   useEffect(() => {

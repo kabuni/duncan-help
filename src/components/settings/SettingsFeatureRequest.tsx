@@ -124,8 +124,13 @@ export default function SettingsFeatureRequest() {
       setUploadingIdx(null);
     }
 
+    // Fire-and-forget: Duncan takes over from here.
+    supabase.functions.invoke("feature-request-agent", {
+      body: { feature_request_id: inserted.id },
+    }).catch((e) => console.warn("agent invoke failed", e));
+
     setSubmitting(false);
-    toast.success("Feature request submitted");
+    toast.success("Submitted — Duncan is reviewing it now");
     reset();
     setSubmitted(true);
   };

@@ -2008,6 +2008,7 @@ export type Database = {
           created_at: string
           id: string
           refresh_token: string
+          scope: string
           token_expiry: string
           updated_at: string
         }
@@ -2017,6 +2018,7 @@ export type Database = {
           created_at?: string
           id?: string
           refresh_token: string
+          scope?: string
           token_expiry: string
           updated_at?: string
         }
@@ -2026,6 +2028,7 @@ export type Database = {
           created_at?: string
           id?: string
           refresh_token?: string
+          scope?: string
           token_expiry?: string
           updated_at?: string
         }

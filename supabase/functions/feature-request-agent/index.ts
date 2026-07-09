@@ -139,23 +139,54 @@ async function processRequest(id: string) {
   return await fileTicket(fr, decision);
 }
 
-async function runLLM(fr: any, thread: any[]): Promise<TriageDecision> {
+async function loadExistingContext(fr: any) {
+  // Existing backlog cards (what's already planned or shipped)
+  const { data: cards } = await admin
+    .from("workstream_cards")
+    .select("title, status, priority, project_tag, category")
+    .order("created_at", { ascending: false })
+    .limit(120);
+
+  // Prior feature requests (so Duncan can spot near-duplicates)
+  const { data: prior } = await admin
+    .from("feature_requests")
+    .select("refined_title, title, triage_status, priority_band")
+    .neq("id", fr.id)
+    .in("triage_status", ["filed", "clarifying", "triaged", "dismissed"])
+    .order("created_at", { ascending: false })
+    .limit(80);
+
+  return {
+    backlog: (cards ?? []).map((c: any) => ({
+      title: c.title, status: c.status, tag: c.project_tag, category: c.category,
+    })),
+    prior_requests: (prior ?? []).map((p: any) => ({
+      title: p.refined_title ?? p.title, status: p.triage_status, priority: p.priority_band,
+    })),
+  };
+}
+
+async function runLLM(fr: any, thread: any[], existing: { backlog: any[]; prior_requests: any[] }): Promise<TriageDecision> {
   const system = `You are Duncan, the operational intelligence for Kabuni.
 You triage internal feature requests before they enter the engineering backlog.
 
+CRITICAL RULES:
+1. Before deciding, scan the provided "existing_backlog" and "prior_requests" lists. If the new request duplicates or is already covered by an item there, dismiss it with a dismiss_reason that names the matching item.
+2. Read the "thread" carefully. Every "user" message is an answer from the requester. NEVER re-ask a question the requester has already answered, and NEVER ask a question that is already substantially answered by the original request, use_case, or description.
+3. Prefer to triage with reasonable assumptions. Only clarify when a missing fact would meaningfully change scope, priority, or acceptance criteria — and cap yourself at ONE round of clarification total.
+4. If the requester has replied at all, you MUST triage or dismiss — do not clarify again.
+
 Return STRICT JSON with keys:
 - action: "clarify" | "triage" | "dismiss"
-- If clarify: questions (array of 1-4 concise questions — only ask what actually blocks scoring; skip if the request is already clear enough to score).
-- If dismiss: dismiss_reason (string — only dismiss for duplicates, spam, out-of-scope for Duncan, or nonsense).
+- If clarify: questions (array of 1-3 concise questions the requester has NOT already answered).
+- If dismiss: dismiss_reason (string — cite the duplicate backlog item or reason).
 - If triage: refined_title (<= 90 chars), problem_statement, proposed_solution, acceptance_criteria (bullet list as one string), category (one of: ui, ai, integration, workflow, reporting, ops, infra, other), rice_reach (1-10 users/week), rice_impact (0.25|0.5|1|2|3), rice_confidence (0-1), rice_effort (person-weeks, 0.25-8), priority_band (P0|P1|P2|P3), effort_band (S|M|L|XL).
 
 Priority rules of thumb:
 - P0: painful blocker for many users or execs, small effort.
 - P1: clear value, worth doing next quarter.
 - P2: nice-to-have, revisit later.
-- P3: parking lot.
-
-Only ask questions if the answer would change the score or the ticket. Prefer to triage with reasonable assumptions.`;
+- P3: parking lot.`;
 
   const userPayload = {
     request: {
@@ -166,6 +197,8 @@ Only ask questions if the answer would change the score or the ticket. Prefer to
       requester_stated_priority: fr.priority,
       clarification_round: fr.clarification_round,
     },
+    existing_backlog: existing.backlog,
+    prior_requests: existing.prior_requests,
     thread: thread.map((m) => ({ role: m.role, channel: m.channel, body: m.body })),
   };
 

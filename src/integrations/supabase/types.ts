@@ -1344,47 +1344,147 @@ export type Database = {
           },
         ]
       }
+      feature_request_messages: {
+        Row: {
+          body: string
+          channel: string
+          created_at: string
+          feature_request_id: string
+          gmail_message_id: string | null
+          gmail_thread_id: string | null
+          id: string
+          role: string
+        }
+        Insert: {
+          body: string
+          channel: string
+          created_at?: string
+          feature_request_id: string
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
+          id?: string
+          role: string
+        }
+        Update: {
+          body?: string
+          channel?: string
+          created_at?: string
+          feature_request_id?: string
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
+          id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_request_messages_feature_request_id_fkey"
+            columns: ["feature_request_id"]
+            isOneToOne: false
+            referencedRelation: "feature_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feature_requests: {
         Row: {
+          acceptance_criteria: string | null
           admin_notes: string | null
+          category: string | null
+          clarification_round: number
           created_at: string
           description: string
+          effort_band: string | null
+          email_thread_id: string | null
           id: string
+          last_agent_run_at: string | null
           priority: string
+          priority_band: string | null
+          problem_statement: string | null
+          proposed_solution: string | null
+          refined_title: string | null
+          rice_confidence: number | null
+          rice_effort: number | null
+          rice_impact: number | null
+          rice_reach: number | null
+          rice_score: number | null
           status: string
           title: string
+          triage_status: string
           updated_at: string
           use_case: string | null
           user_email: string | null
           user_id: string
+          workstream_card_id: string | null
         }
         Insert: {
+          acceptance_criteria?: string | null
           admin_notes?: string | null
+          category?: string | null
+          clarification_round?: number
           created_at?: string
           description: string
+          effort_band?: string | null
+          email_thread_id?: string | null
           id?: string
+          last_agent_run_at?: string | null
           priority?: string
+          priority_band?: string | null
+          problem_statement?: string | null
+          proposed_solution?: string | null
+          refined_title?: string | null
+          rice_confidence?: number | null
+          rice_effort?: number | null
+          rice_impact?: number | null
+          rice_reach?: number | null
+          rice_score?: number | null
           status?: string
           title: string
+          triage_status?: string
           updated_at?: string
           use_case?: string | null
           user_email?: string | null
           user_id: string
+          workstream_card_id?: string | null
         }
         Update: {
+          acceptance_criteria?: string | null
           admin_notes?: string | null
+          category?: string | null
+          clarification_round?: number
           created_at?: string
           description?: string
+          effort_band?: string | null
+          email_thread_id?: string | null
           id?: string
+          last_agent_run_at?: string | null
           priority?: string
+          priority_band?: string | null
+          problem_statement?: string | null
+          proposed_solution?: string | null
+          refined_title?: string | null
+          rice_confidence?: number | null
+          rice_effort?: number | null
+          rice_impact?: number | null
+          rice_reach?: number | null
+          rice_score?: number | null
           status?: string
           title?: string
+          triage_status?: string
           updated_at?: string
           use_case?: string | null
           user_email?: string | null
           user_id?: string
+          workstream_card_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "feature_requests_workstream_card_id_fkey"
+            columns: ["workstream_card_id"]
+            isOneToOne: false
+            referencedRelation: "workstream_cards"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fetch_locks: {
         Row: {

@@ -170,31 +170,48 @@ Deno.serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     const body = await req.json();
     const { action } = body;
+    const requestedScope: "personal" | "company" | "auto" =
+      body?.scope === "personal" || body?.scope === "company" ? body.scope : "auto";
 
     // ─── DISCONNECT ───
     if (action === "disconnect") {
-      const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {
-        _user_id: user.id,
-        _role: "admin",
-      });
-      if (!isAdmin) {
-        return jsonResponse({ error: "Admin access required to disconnect Google Drive" }, 403);
+      const disconnectScope: "personal" | "company" =
+        body?.scope === "personal" ? "personal" : "company";
+      if (disconnectScope === "company") {
+        const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {
+          _user_id: user.id,
+          _role: "admin",
+        });
+        if (!isAdmin) {
+          return jsonResponse({ error: "Admin access required to disconnect the company Google Drive" }, 403);
+        }
+        await supabaseAdmin.from("google_drive_tokens").delete().eq("scope", "company");
+      } else {
+        await supabaseAdmin
+          .from("google_drive_tokens")
+          .delete()
+          .eq("scope", "personal")
+          .eq("connected_by", user.id);
       }
-      await supabaseAdmin.from("google_drive_tokens").delete().neq("id", "00000000-0000-0000-0000-000000000000");
       return jsonResponse({ success: true });
     }
 
-    const tokenInfo = await getValidToken(supabaseAdmin, user.id);
+    const tokenInfo = await getValidToken(supabaseAdmin, user.id, requestedScope);
     if (!tokenInfo) {
       return jsonResponse({
         status: "disconnected",
         connected: false,
-        error: "Google Drive is not connected, or the saved refresh token is no longer valid. Please reconnect Google Drive.",
+        scope: requestedScope,
+        error: "Google Drive is not connected for the requested scope.",
       }, action === "status" ? 200 : 401);
     }
 
-    const { accessToken, tokenRow, usedFallback } = tokenInfo;
+    const { accessToken, tokenRow, usedFallback, scope: activeScope } = tokenInfo;
     const driveHeaders = { Authorization: `Bearer ${accessToken}` };
+    const sharedDriveParams = {
+      supportsAllDrives: "true",
+      includeItemsFromAllDrives: "true",
+    };
 
     // ─── STATUS ───
     if (action === "status" || action === "test") {
@@ -203,7 +220,8 @@ Deno.serve(async (req) => {
         return jsonResponse({
           status: "connected",
           connected: true,
-          credential_source: usedFallback ? "shared_company_token" : "connected_user_token",
+          scope: activeScope,
+          credential_source: usedFallback ? "shared_company_token" : (activeScope === "personal" ? "personal_user_token" : "shared_company_token"),
           account_email: health.about?.user?.emailAddress ?? null,
           account_name: health.about?.user?.displayName ?? null,
           account_picture: health.about?.user?.photoLink ?? null,
@@ -213,6 +231,7 @@ Deno.serve(async (req) => {
           visible_file_count: health.files.length,
           sample_files: health.files.slice(0, 3),
         });
+
       } catch (error: any) {
         return jsonResponse({
           status: "degraded",

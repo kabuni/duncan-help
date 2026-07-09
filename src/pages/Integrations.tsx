@@ -947,13 +947,17 @@ const IntegrationDetail = ({
         setAzureDevOpsLoading(false);
       } else if (isGoogleDrive) {
         setGoogleDriveLoading(true);
+        const scope = isGoogleDrivePersonal ? "personal" : "company";
         const { supabase } = await import("@/integrations/supabase/client");
-        const { data, error } = await supabase.functions.invoke<{ url?: string }>("google-drive-auth");
+        const { data, error } = await supabase.functions.invoke<{ url?: string }>("google-drive-auth", {
+          body: { scope },
+        });
         if (error) throw error;
         if (data?.url) window.location.href = data.url;
         else throw new Error("No auth URL returned");
         setGoogleDriveLoading(false);
       }
+
     } catch (err: any) {
       
       setGmailLoading(false);

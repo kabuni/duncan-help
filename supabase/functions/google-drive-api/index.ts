@@ -266,11 +266,14 @@ Deno.serve(async (req) => {
 
       const params = new URLSearchParams({
         q,
-        fields: "nextPageToken,files(id,name,mimeType,modifiedTime,size,parents)",
+        fields: "nextPageToken,files(id,name,mimeType,modifiedTime,size,parents,driveId)",
         pageSize: String(Math.min(Math.max(Number(pageSize) || 100, 1), 1000)),
         orderBy: "name",
+        ...sharedDriveParams,
+        corpora: "allDrives",
       });
       if (pageToken) params.set("pageToken", String(pageToken));
+
 
       const res = await fetch(
         `https://www.googleapis.com/drive/v3/files?${params}`,

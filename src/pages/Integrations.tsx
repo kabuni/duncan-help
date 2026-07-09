@@ -880,17 +880,19 @@ const IntegrationDetail = ({
 
       if (isGoogleDrive) {
         setGoogleDriveLoading(true);
+        const scope = isGoogleDrivePersonal ? "personal" : "company";
         const { supabase } = await import("@/integrations/supabase/client");
         {
           const { error } = await supabase.functions.invoke("google-drive-api", {
-            body: { action: "disconnect" },
+            body: { action: "disconnect", scope },
           });
           if (error) throw error;
         }
-        toast.success("Google Drive disconnected");
+        toast.success(`${isGoogleDrivePersonal ? "Personal" : "Company"} Google Drive disconnected`);
         onClose();
         return;
       }
+
 
       if (isAzureDevOps) {
         const { supabase } = await import("@/integrations/supabase/client");

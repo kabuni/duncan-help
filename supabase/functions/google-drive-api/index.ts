@@ -27,29 +27,52 @@ async function refreshAccessToken(
 
 async function getValidToken(
   supabaseAdmin: any,
-  userId: string
-): Promise<{ accessToken: string; tokenRow: any; usedFallback: boolean } | null> {
-  // First try user's own token, then fall back to any available token (shared resource)
+  userId: string,
+  preferredScope: "personal" | "company" | "auto" = "auto"
+): Promise<{ accessToken: string; tokenRow: any; usedFallback: boolean; scope: "personal" | "company" } | null> {
+  // Selection order:
+  //   - scope='personal' → user's personal token only
+  //   - scope='company'  → the shared company token only
+  //   - scope='auto'     → personal (if exists) else company fallback
+  let tokenRow: any = null;
   let usedFallback = false;
-  let { data: tokenRow, error } = await supabaseAdmin
-    .from("google_drive_tokens")
-    .select("*")
-    .eq("connected_by", userId)
-    .maybeSingle();
 
-  if (!tokenRow) {
-    const result = await supabaseAdmin
+  if (preferredScope === "company") {
+    const { data } = await supabaseAdmin
       .from("google_drive_tokens")
       .select("*")
-      .order("created_at", { ascending: false })
-      .limit(1)
+      .eq("scope", "company")
       .maybeSingle();
-    tokenRow = result.data;
-    error = result.error;
-    usedFallback = !!tokenRow;
+    tokenRow = data;
+  } else if (preferredScope === "personal") {
+    const { data } = await supabaseAdmin
+      .from("google_drive_tokens")
+      .select("*")
+      .eq("scope", "personal")
+      .eq("connected_by", userId)
+      .maybeSingle();
+    tokenRow = data;
+  } else {
+    const { data: personal } = await supabaseAdmin
+      .from("google_drive_tokens")
+      .select("*")
+      .eq("scope", "personal")
+      .eq("connected_by", userId)
+      .maybeSingle();
+    if (personal) {
+      tokenRow = personal;
+    } else {
+      const { data: company } = await supabaseAdmin
+        .from("google_drive_tokens")
+        .select("*")
+        .eq("scope", "company")
+        .maybeSingle();
+      tokenRow = company;
+      usedFallback = !!company;
+    }
   }
 
-  if (error || !tokenRow) return null;
+  if (!tokenRow) return null;
 
   const now = new Date();
   const expiry = new Date(tokenRow.token_expiry);
@@ -69,11 +92,17 @@ async function getValidToken(
       })
       .eq("id", tokenRow.id);
 
-    return { accessToken: refreshed.access_token, tokenRow: { ...tokenRow, token_expiry: newExpiry.toISOString() }, usedFallback };
+    return {
+      accessToken: refreshed.access_token,
+      tokenRow: { ...tokenRow, token_expiry: newExpiry.toISOString() },
+      usedFallback,
+      scope: tokenRow.scope,
+    };
   }
 
-  return { accessToken: tokenRow.access_token, tokenRow, usedFallback };
+  return { accessToken: tokenRow.access_token, tokenRow, usedFallback, scope: tokenRow.scope };
 }
+
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {

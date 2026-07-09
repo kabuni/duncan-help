@@ -269,6 +269,19 @@ const Sidebar = ({
           </RouterNavLink>
         )}
 
+        <RouterNavLink
+          to="/email-approvals"
+          onClick={() => onMobileClose?.()}
+          className={({ isActive }) =>
+            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )
+          }
+        >
+          <Mail className="h-4 w-4" />
+          Email approvals
+        </RouterNavLink>
+
         {canViewBriefing(user?.email) && (
           <RouterNavLink
             to="/team-briefing"

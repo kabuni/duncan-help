@@ -139,7 +139,7 @@ export default function SettingsFeatureRequest() {
     return (
       <div className="space-y-3">
         <h3 className="text-sm font-semibold text-foreground">Request a Feature</h3>
-        <p className="text-xs text-muted-foreground">Thanks — your request has been recorded.</p>
+        <p className="text-xs text-muted-foreground">Thanks — Duncan is reviewing your request and will email you if he needs more detail before filing it on the backlog.</p>
         <button
           onClick={() => setSubmitted(false)}
           className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary/60 transition-colors"

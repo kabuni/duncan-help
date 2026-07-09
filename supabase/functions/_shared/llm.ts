@@ -621,21 +621,38 @@ export async function callLLMWithFallback(opts: CallLLMOptions): Promise<Normali
  * the first SSE byte (with timeout) before returning the stream so transient
  * upstream failures surface as a normal error instead of a half-open stream.
  */
-const STREAM_FIRST_CHUNK_TIMEOUT_MS = 30_000;
+const STREAM_FIRST_CHUNK_TIMEOUT_MS = 60_000;
 
 export async function streamLLM(opts: CallLLMOptions): Promise<ReadableStream<Uint8Array>> {
   // Force OpenAI for streaming regardless of route.
   const provider: Provider = "openai";
-  const start = Date.now();
-  try {
-    const stream = await openaiStream(opts, pickModel("openai", opts));
-    const buffered = await bufferFirstChunk(stream, STREAM_FIRST_CHUNK_TIMEOUT_MS);
-    log(opts.workflow, provider, 1, "ok", Date.now() - start, "stream=open");
-    return buffered;
-  } catch (err: any) {
-    log(opts.workflow, provider, 1, "fail", Date.now() - start, `status=${err?.status}`);
-    throw classifyLLMError(provider, err?.status, err?.message || String(err));
+  const model = pickModel("openai", opts);
+
+  // Attempt 1, then a single retry on transient upstream failures
+  // (504/timeout, 429, 5xx). Safe because nothing has been forwarded to the
+  // client yet — bufferFirstChunk hasn't returned. Once the stream is handed
+  // back to the caller we can't rewind, so retries only happen here.
+  const MAX_ATTEMPTS = 2;
+  let lastErr: any;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const start = Date.now();
+    try {
+      const stream = await openaiStream(opts, model);
+      const buffered = await bufferFirstChunk(stream, STREAM_FIRST_CHUNK_TIMEOUT_MS);
+      log(opts.workflow, provider, attempt, "ok", Date.now() - start, "stream=open");
+      return buffered;
+    } catch (err: any) {
+      lastErr = err;
+      const status = Number(err?.status ?? 0);
+      const retryable = status === 0 || status === 429 || status === 504 || status >= 500;
+      log(opts.workflow, provider, attempt, "fail", Date.now() - start, `status=${status}${retryable && attempt < MAX_ATTEMPTS ? " retry" : ""}`);
+      if (!retryable || attempt >= MAX_ATTEMPTS) break;
+      // Small backoff before retrying; keeps total wall-clock well under the
+      // 150s edge idle timeout even in the worst case (60s + backoff + 60s).
+      await new Promise((r) => setTimeout(r, 500));
+    }
   }
+  throw classifyLLMError(provider, lastErr?.status, lastErr?.message || String(lastErr));
 }
 
 /**

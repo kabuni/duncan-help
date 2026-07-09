@@ -487,6 +487,8 @@ const Integrations = () => {
       "azure-blob": isAzureBlobConnected,
       "azure-devops": isAzureDevOpsConnected,
       "google-drive": isGoogleDriveConnected,
+      "google-drive-personal": isGoogleDrivePersonalConnected,
+
     };
     if (integration.id in oauthMap) {
       const val = oauthMap[integration.id];

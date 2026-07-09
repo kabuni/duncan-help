@@ -533,11 +533,6 @@ async function processUser(
       stats.errors++;
     }
   }
-    } catch (err: any) {
-      console.error(`Message ${m.id} processing failed:`, err);
-      stats.errors++;
-    }
-  }
 
   // Update profile
   await supabaseAdmin

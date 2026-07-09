@@ -36,6 +36,7 @@ import Approvals from "./pages/Approvals";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import EAInbox from "./pages/EAInbox";
 import EmailApprovals from "./pages/EmailApprovals";
+import FeatureRequests from "./pages/FeatureRequests";
 
 import SlackCallback from "./pages/SlackCallback";
 import InstagramCallback from "./pages/InstagramCallback";
@@ -107,7 +108,8 @@ const AppContent = () => {
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/purchase-orders" element={<PurchaseOrders />} />
             <Route path="/ea-inbox" element={<EAInbox />} />
-            <Route path="/email-approvals" element={<EmailApprovals />} />
+           <Route path="/email-approvals" element={<EmailApprovals />} />
+           <Route path="/feature-requests" element={<FeatureRequests />} />
             <Route path="/knowledge-base" element={<KnowledgeBase />} />
             <Route path="/learn" element={<Learn />} />
             <Route path="/registrations" element={<Registrations />} />

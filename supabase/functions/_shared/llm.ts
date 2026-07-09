@@ -250,6 +250,7 @@ async function callOpenAI(opts: CallLLMOptions, model: string): Promise<Normalis
   const body: any = {
     model,
     messages: opts.messages,
+    service_tier: "priority",
   };
   if (opts.tools) body.tools = opts.tools;
   if (opts.tool_choice) body.tool_choice = opts.tool_choice;
@@ -710,6 +711,7 @@ async function openaiStream(opts: CallLLMOptions, model: string): Promise<Readab
     model,
     messages: opts.messages,
     stream: true,
+    service_tier: "priority",
   };
   if (opts.tools) body.tools = opts.tools;
   if (opts.tool_choice) body.tool_choice = opts.tool_choice;

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from "react";
 
-type SectionId = "general" | "profile" | "appearance" | "integrations" | "request_feature" | "bug";
+type SectionId = "general" | "profile" | "appearance" | "integrations" | "request_feature" | "bug" | "user_management";
 
 interface SettingsPanelContextValue {
   open: boolean;

@@ -1161,7 +1161,7 @@ const GOOGLE_DRIVE_TOOLS = [
       parameters: {
         type: "object",
         properties: {
-          name: { type: "string", description: "Exact name of the file or folder to find." },
+          name: { type: "string", description: "Keyword(s) to match against the file/folder name (case-insensitive substring). Pass 1–3 salient words from the user's question." },
           mimeType: { type: "string", description: "MIME type filter (e.g., 'application/vnd.google-apps.folder' for folders)." },
           parentId: { type: "string", description: "Optional parent folder ID to scope the search." },
         },

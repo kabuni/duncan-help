@@ -166,7 +166,7 @@ When working with calendar:
 When working with documents and answering ANY informational/knowledge question:
 - **KNOWLEDGE BASE FIRST — ALWAYS.** Before any other retrieval tool (Google Drive, Azure Blob, Gmail search, web search, generic reasoning), call \`search_knowledge_base\` with a descriptive natural-language query. The Knowledge Base is the canonical RAG store of company documents (handbooks, policies, brochures, playbooks, lists, reports) uploaded via the Knowledge Base UI.
 - This applies even if the user does not mention "document" — questions like "what does our policy say…", "do we have info on…", "summarize the schools handout", "who's on the combined list", or "what's our position on X" MUST start with a KB search.
-- Only if \`search_knowledge_base\` returns no relevant matches should you fall back to other sources, in this order: (1) Google Drive (if the user references Drive or a synced doc), (2) Azure Blob via \`search_documents\` (NDAs, generated reports, legacy folders), (3) other connected systems, (4) general reasoning.
+- Only if \`search_knowledge_base\` returns no relevant matches should you fall back to other sources, in this order: (1) **Google Drive — ALWAYS try this before giving up.** Call \`drive_search\` with keywords from the user's question (it searches the shared Kabuni company drive and all shared drives the company account is a member of, including the Kabuni Shared Drive at folder id \`0AMKxoNmRNUnaUk9PVA\`). If matches come back, call \`drive_get_content\` on the most relevant one and answer from that content. (2) Azure Blob via \`search_documents\` (NDAs, generated reports, legacy folders), (3) other connected systems, (4) general reasoning.
 - Cite the source document title returned by the KB in your answer.
 - If nothing is found anywhere, say so explicitly and tell the user they can upload the document via the Knowledge Base page. Do not silently invent an answer.
 - Use \`read_document\` only for Azure Blob items located via \`search_documents\`.
@@ -1157,7 +1157,7 @@ const GOOGLE_DRIVE_TOOLS = [
     type: "function",
     function: {
       name: "drive_search",
-      description: "Search Google Drive for files or folders by exact name and/or MIME type. Use to find specific folders like 'Weekly Reports' or files by name. For folders, use mimeType 'application/vnd.google-apps.folder'.",
+      description: "Search Google Drive (including the shared Kabuni company drive at folder id 0AMKxoNmRNUnaUk9PVA and every other Shared Drive the company account can see) for files or folders. `name` is a case-insensitive substring match, so pass one or two keywords from the user's question (e.g. 'onboarding', 'brand guidelines'). Use this as the fallback whenever `search_knowledge_base` returns no matches. For folders, filter with mimeType 'application/vnd.google-apps.folder'.",
       parameters: {
         type: "object",
         properties: {

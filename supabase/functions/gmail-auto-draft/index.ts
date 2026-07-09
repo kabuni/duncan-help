@@ -102,42 +102,139 @@ function getHeader(headers: any[], name: string): string {
 
 async function generateReply(
   styleSummary: string,
+  perRecipientStyle: Record<string, any> | null,
   threadContext: { from: string; date: string; body: string }[],
   userEmail: string,
-): Promise<string | null> {
+  senderDomain: string,
+): Promise<{ reply: string; confidence: number; risk_flags: string[]; summary: string } | null> {
   const conversation = threadContext
     .map((m) => `From: ${m.from}\nDate: ${m.date}\n\n${m.body.slice(0, 2000)}`)
     .join("\n\n---\n\n");
 
+  const clusterHint = perRecipientStyle && senderDomain && perRecipientStyle[senderDomain]
+    ? `\n\nTHIS RECIPIENT (${senderDomain}) — tone cluster:\n${JSON.stringify(perRecipientStyle[senderDomain])}\nMatch this cluster when it differs from the overall style.`
+    : "";
+
   const systemPrompt = `You are Duncan, drafting an email reply on behalf of ${userEmail}.
 
-USER'S WRITING STYLE (mimic this exactly):
-${styleSummary}
+USER'S OVERALL WRITING STYLE (mimic this):
+${styleSummary}${clusterHint}
 
 RULES:
-- Write a short, natural reply that the user would plausibly send.
+- Write a short, natural reply the user would plausibly send.
 - Match their tone, vocabulary, sentence length, and sign-off style.
 - If the incoming message is ambiguous or asks something you can't answer for the user, write a brief acknowledgement saying you'll follow up.
 - Do NOT include a subject line — only the reply body.
 - Do NOT include "Re:" prefix.
-- Do NOT add greetings like "Hi [Name]" unless that matches the user's style.
-- Keep it under 120 words unless the thread clearly needs detail.`;
+- Keep it under 120 words unless the thread clearly needs detail.
+
+You must also self-assess the reply. Return STRICT JSON with keys:
+  "reply": string,
+  "confidence": integer 0-100 (how sure you are the user would send this as-is),
+  "risk_flags": array of strings from ["money","legal","commitment","apology","attachment_requested","external_new_domain","sensitive","unclear_ask","none"],
+  "summary": one-sentence description of what the incoming email is asking.
+Respond with ONLY the JSON, no fences.`;
 
   try {
     const data = await callLLMWithFallback({
       workflow: "gmail-auto-draft",
-      temperature: 0.7,
-      max_tokens: 400,
+      temperature: 0.6,
+      max_tokens: 700,
+      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: `Draft a reply to this email thread:\n\n${conversation}` },
       ],
     });
-    return data.choices?.[0]?.message?.content?.trim() || null;
+    const raw = (data.choices?.[0]?.message?.content || "").trim()
+      .replace(/^```json\s*/i, "").replace(/\s*```$/i, "");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.reply) return null;
+    return {
+      reply: String(parsed.reply).trim(),
+      confidence: Math.max(0, Math.min(100, Number(parsed.confidence) || 0)),
+      risk_flags: Array.isArray(parsed.risk_flags)
+        ? parsed.risk_flags.filter((x: any) => typeof x === "string" && x !== "none")
+        : [],
+      summary: String(parsed.summary || "").slice(0, 400),
+    };
   } catch (err: any) {
     console.error("LLM error:", err?.status, err?.message);
     return null;
   }
+}
+
+// ---- Trust routing helpers ----------------------------------------------
+
+const HARD_BLOCK_FLAGS = ["money", "legal"];
+const DEFAULT_CONFIDENCE_THRESHOLD = 90;
+const DEFAULT_MIN_APPROVED = 10;
+const MEDIUM_CONFIDENCE_FOR_APPROVAL = 55;
+
+function extractSenderEmail(fromHeader: string): { email: string; name: string; domain: string } {
+  const m = fromHeader.match(/(.*?)<([^>]+)>/);
+  const email = (m ? m[2] : fromHeader).trim().toLowerCase();
+  const name = (m ? m[1] : "").trim().replace(/^"|"$/g, "");
+  const domain = email.includes("@") ? email.split("@")[1] : "";
+  return { email, name, domain };
+}
+
+async function decideRoute(
+  supabaseAdmin: any,
+  userId: string,
+  profile: any,
+  senderEmail: string,
+  senderDomain: string,
+  ai: { confidence: number; risk_flags: string[] },
+  threadParticipantCount: number,
+  hasAttachments: boolean,
+): Promise<"auto_send" | "approval" | "draft"> {
+  // Hard blocks: never auto-send
+  const blockedFlags = ai.risk_flags.some((f) => HARD_BLOCK_FLAGS.includes(f));
+  if (blockedFlags || hasAttachments || threadParticipantCount > 3) {
+    return ai.confidence >= MEDIUM_CONFIDENCE_FOR_APPROVAL ? "approval" : "draft";
+  }
+
+  const { data: trust } = await supabaseAdmin
+    .from("gmail_sender_trust")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("sender_email", senderEmail)
+    .maybeSingle();
+
+  if (trust?.force_review) return ai.confidence >= MEDIUM_CONFIDENCE_FOR_APPROVAL ? "approval" : "draft";
+
+  // Check whitelist (only whitelisted senders qualify for auto-send)
+  const filterList: string[] = Array.isArray(profile.auto_draft_filter_list)
+    ? profile.auto_draft_filter_list
+    : [];
+  const whitelisted = profile.auto_draft_filter_mode === "whitelist" && filterList.some((e) => {
+    const entry = String(e || "").trim().toLowerCase();
+    if (!entry) return false;
+    if (entry.startsWith("@")) return senderEmail.endsWith(entry);
+    if (entry.includes("@")) return senderEmail === entry;
+    return senderEmail.includes(entry);
+  });
+
+  const threshold = profile.auto_send_confidence_threshold ?? DEFAULT_CONFIDENCE_THRESHOLD;
+  const minApproved = profile.auto_send_min_approved ?? DEFAULT_MIN_APPROVED;
+
+  if (trust?.force_trust && ai.confidence >= 70) return "auto_send";
+  if (whitelisted && trust
+      && trust.confidence >= threshold
+      && trust.sends_approved >= minApproved
+      && ai.confidence >= threshold) {
+    return "auto_send";
+  }
+
+  return ai.confidence >= MEDIUM_CONFIDENCE_FOR_APPROVAL ? "approval" : "draft";
+}
+
+async function notifyUser(supabaseAdmin: any, userId: string, title: string, body: string, link: string) {
+  await supabaseAdmin.from("notifications").insert({
+    user_id: userId, title, message: body, link, kind: "email_action",
+  });
 }
 
 async function processUser(

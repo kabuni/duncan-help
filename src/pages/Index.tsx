@@ -593,14 +593,16 @@ const Index = () => {
         </div>
 
 
-        {/* Prompt input */}
-        <ChatInput
-          onSubmit={handleChatSubmit}
-          isLoading={isLoading}
-          extractionProgress={extractionProgress}
-          onVoiceToggle={() => setVoiceOpen((v) => !v)}
-          isVoiceActive={voiceOpen}
-        />
+        {/* Prompt input — only render inside an active chat, not on the dashboard */}
+        {(hasMessages || newChatMode) && (
+          <ChatInput
+            onSubmit={handleChatSubmit}
+            isLoading={isLoading}
+            extractionProgress={extractionProgress}
+            onVoiceToggle={() => setVoiceOpen((v) => !v)}
+            isVoiceActive={voiceOpen}
+          />
+        )}
       </main>
       
       <VoiceModeOverlay

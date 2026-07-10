@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Loader2, Upload, Paperclip, X } from "lucide-react";
+import { Loader2, Upload, Paperclip, X, Plus, Inbox } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { toast } from "sonner";
 import FeatureRequestsAdmin from "./FeatureRequestsAdmin";
+import MyFeatureRequestsList from "./MyFeatureRequestsList";
+import { cn } from "@/lib/utils";
 
 const schema = z.object({
   title: z.string().trim().min(3, "Please provide a short title").max(120),
@@ -37,6 +39,7 @@ function validateFile(file: File): string | null {
 export default function SettingsFeatureRequest() {
   const { user } = useAuth();
   const { isAdmin } = useIsAdmin();
+  const [tab, setTab] = useState<"submit" | "mine">("submit");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [useCase, setUseCase] = useState("");
@@ -135,115 +138,166 @@ export default function SettingsFeatureRequest() {
     setSubmitted(true);
   };
 
+  const tabs = (
+    <div className="flex items-center gap-1 rounded-lg bg-secondary/40 p-1 w-fit">
+      <button
+        type="button"
+        onClick={() => setTab("submit")}
+        className={cn(
+          "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+          tab === "submit" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+        )}
+      >
+        <Plus className="h-3.5 w-3.5" /> Submit
+      </button>
+      <button
+        type="button"
+        onClick={() => setTab("mine")}
+        className={cn(
+          "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+          tab === "mine" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+        )}
+      >
+        <Inbox className="h-3.5 w-3.5" /> My Requests
+      </button>
+    </div>
+  );
+
+  if (tab === "mine") {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground mb-1">Feature Requests</h3>
+          <p className="text-xs text-muted-foreground">Track everything you've asked Duncan to build.</p>
+        </div>
+        {tabs}
+        <MyFeatureRequestsList />
+        {isAdmin && (
+          <div className="pt-6 border-t border-border space-y-3">
+            <h4 className="text-sm font-semibold text-foreground">All Feature Requests (Admin)</h4>
+            <FeatureRequestsAdmin />
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (submitted) {
     return (
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-foreground">Request a Feature</h3>
-        <p className="text-xs text-muted-foreground">Thanks — Duncan is reviewing your request and will email you if he needs more detail before filing it on the backlog.</p>
-        <button
-          onClick={() => setSubmitted(false)}
-          className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary/60 transition-colors"
-        >
-          Submit another
-        </button>
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground mb-1">Feature Requests</h3>
+          <p className="text-xs text-muted-foreground">Thanks — Duncan is reviewing your request and will email you if he needs more detail before filing it on the backlog.</p>
+        </div>
+        {tabs}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setSubmitted(false)}
+            className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary/60 transition-colors"
+          >
+            Submit another
+          </button>
+          <button
+            onClick={() => { setSubmitted(false); setTab("mine"); }}
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            View my requests
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-semibold text-foreground mb-1">Request a Feature</h3>
+        <h3 className="text-sm font-semibold text-foreground mb-1">Feature Requests</h3>
         <p className="text-xs text-muted-foreground">Tell us what you'd like Duncan to do next.</p>
       </div>
-
-      <div>
-        <label className="text-xs font-medium text-muted-foreground">Title *</label>
-        <input
-          value={title} onChange={(e) => setTitle(e.target.value)}
-          maxLength={120} required
-          placeholder="Short summary of the feature"
-          className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        />
-      </div>
-      <div>
-        <label className="text-xs font-medium text-muted-foreground">Description *</label>
-        <textarea
-          value={description} onChange={(e) => setDescription(e.target.value)}
-          maxLength={2000} required rows={4}
-          placeholder="What should it do? How should it work?"
-          className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y"
-        />
-      </div>
-      <div>
-        <label className="text-xs font-medium text-muted-foreground">Use case (optional)</label>
-        <textarea
-          value={useCase} onChange={(e) => setUseCase(e.target.value)}
-          maxLength={1000} rows={3}
-          placeholder="What problem does this solve for you?"
-          className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y"
-        />
-      </div>
-      <div>
-        <label className="text-xs font-medium text-muted-foreground">Priority</label>
-        <select
-          value={priority} onChange={(e) => setPriority(e.target.value as "Low" | "Medium" | "High")}
-          className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          <option value="Low">Low</option>
-          <option value="Medium">Medium</option>
-          <option value="High">High</option>
-        </select>
-      </div>
-
-      <div>
-        <label className="text-xs font-medium text-muted-foreground">Attachments (optional)</label>
-        <label className="mt-1 flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground hover:bg-secondary/40 transition-colors">
-          <Upload className="h-3.5 w-3.5" />
-          Choose files (PDF, PNG, JPG, WEBP, DOCX, TXT · max 15MB · up to {MAX_FILES})
+      {tabs}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Title *</label>
           <input
-            type="file" multiple className="hidden"
-            accept={ALLOWED_EXT.join(",")}
-            onChange={handleFileChange}
-            disabled={submitting}
+            value={title} onChange={(e) => setTitle(e.target.value)}
+            maxLength={120} required
+            placeholder="Short summary of the feature"
+            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
-        </label>
-        {files.length > 0 && (
-          <ul className="mt-2 space-y-1.5">
-            {files.map((f, i) => (
-              <li key={i} className="flex items-center justify-between gap-2 rounded-md bg-secondary/60 px-2.5 py-1.5 text-[11px] text-foreground">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  {uploadingIdx === i
-                    ? <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />
-                    : <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />}
-                  <span className="truncate">{f.name}</span>
-                  <span className="text-muted-foreground shrink-0">({(f.size / 1024).toFixed(1)} KB)</span>
-                </div>
-                <button type="button" onClick={() => removeFile(i)} disabled={submitting} className="text-muted-foreground hover:text-foreground disabled:opacity-40">
-                  <X className="h-3 w-3" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="flex justify-end pt-2">
-        <button
-          type="submit" disabled={submitting}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-        >
-          {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          {submitting ? (uploadingIdx !== null ? `Uploading ${uploadingIdx + 1}/${files.length}…` : "Submitting…") : "Submit Request"}
-        </button>
-      </div>
-
-      {isAdmin && (
-        <div className="pt-6 border-t border-border space-y-3">
-          <h4 className="text-sm font-semibold text-foreground">Feature Requests</h4>
-          <FeatureRequestsAdmin />
         </div>
-      )}
-    </form>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Description *</label>
+          <textarea
+            value={description} onChange={(e) => setDescription(e.target.value)}
+            maxLength={2000} required rows={4}
+            placeholder="What should it do? How should it work?"
+            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Use case (optional)</label>
+          <textarea
+            value={useCase} onChange={(e) => setUseCase(e.target.value)}
+            maxLength={1000} rows={3}
+            placeholder="What problem does this solve for you?"
+            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Priority</label>
+          <select
+            value={priority} onChange={(e) => setPriority(e.target.value as "Low" | "Medium" | "High")}
+            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Attachments (optional)</label>
+          <label className="mt-1 flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground hover:bg-secondary/40 transition-colors">
+            <Upload className="h-3.5 w-3.5" />
+            Choose files (PDF, PNG, JPG, WEBP, DOCX, TXT · max 15MB · up to {MAX_FILES})
+            <input
+              type="file" multiple className="hidden"
+              accept={ALLOWED_EXT.join(",")}
+              onChange={handleFileChange}
+              disabled={submitting}
+            />
+          </label>
+          {files.length > 0 && (
+            <ul className="mt-2 space-y-1.5">
+              {files.map((f, i) => (
+                <li key={i} className="flex items-center justify-between gap-2 rounded-md bg-secondary/60 px-2.5 py-1.5 text-[11px] text-foreground">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {uploadingIdx === i
+                      ? <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />
+                      : <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />}
+                    <span className="truncate">{f.name}</span>
+                    <span className="text-muted-foreground shrink-0">({(f.size / 1024).toFixed(1)} KB)</span>
+                  </div>
+                  <button type="button" onClick={() => removeFile(i)} disabled={submitting} className="text-muted-foreground hover:text-foreground disabled:opacity-40">
+                    <X className="h-3 w-3" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="flex justify-end pt-2">
+          <button
+            type="submit" disabled={submitting}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+          >
+            {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {submitting ? (uploadingIdx !== null ? `Uploading ${uploadingIdx + 1}/${files.length}…` : "Submitting…") : "Submit Request"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
+

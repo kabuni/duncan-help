@@ -547,6 +547,7 @@ const Index = () => {
                   Ask me anything, or start with what's on your mind.
                 </p>
               </div>
+            ) : (
               <PersonalBriefingDashboard userName={userDisplayName} />
             )
           ) : (

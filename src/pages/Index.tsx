@@ -263,25 +263,10 @@ const Index = () => {
     }
   }, [setMessages]);
 
-  useEffect(() => {
-    if (briefingTriggered.current) return;
+  // Auto-briefing into chat is disabled — the Home page now renders the
+  // personal briefing dashboard instead of appending a briefing message.
+  // runBriefing() remains available for manual retry from the error banner.
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (!session || briefingTriggered.current) return;
-        await runBriefing();
-      }
-    );
-
-    (async () => {
-      if (briefingTriggered.current) return;
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session || briefingTriggered.current) return;
-      await runBriefing();
-    })();
-
-    return () => subscription.unsubscribe();
-  }, [runBriefing]);
 
   useEffect(() => {
     if (!navigator.geolocation) return;

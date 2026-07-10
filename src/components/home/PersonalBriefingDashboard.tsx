@@ -90,13 +90,14 @@ type ProjectTask = {
 
 function useMyProjectTasks() {
   const { user } = useAuth();
-  const { profile } = useProfile();
   return useQuery<ProjectTask[]>({
-    queryKey: ["home-briefing", "my-project-tasks", user?.id, profile?.id],
+    queryKey: ["home-briefing", "my-project-tasks", user?.id],
     enabled: !!user,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const ids = [user!.id, profile?.id].filter(Boolean) as string[];
+      const ids = [user!.id];
+      const { data: prof } = await supabase.from("profiles").select("id").eq("user_id", user!.id).maybeSingle();
+      if (prof?.id) ids.push(prof.id);
       const { data, error } = await supabase
         .from("project_chat_plan_items")
         .select("id,title,status,due_date,project_id,projects(name)")

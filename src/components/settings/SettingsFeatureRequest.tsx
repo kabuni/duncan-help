@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Loader2, Upload, Paperclip, X } from "lucide-react";
+import { Loader2, Upload, Paperclip, X, Plus, Inbox } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { toast } from "sonner";
 import FeatureRequestsAdmin from "./FeatureRequestsAdmin";
+import MyFeatureRequestsList from "./MyFeatureRequestsList";
+import { cn } from "@/lib/utils";
 
 const schema = z.object({
   title: z.string().trim().min(3, "Please provide a short title").max(120),

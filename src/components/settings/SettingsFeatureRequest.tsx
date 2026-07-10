@@ -6,6 +6,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { toast } from "sonner";
 import FeatureRequestsAdmin from "./FeatureRequestsAdmin";
+import MyFeatureRequestsList from "./MyFeatureRequestsList";
+import { cn } from "@/lib/utils";
 
 const schema = z.object({
   title: z.string().trim().min(3, "Please provide a short title").max(120),

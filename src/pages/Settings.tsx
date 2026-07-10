@@ -1,14 +1,18 @@
 import { motion } from "framer-motion";
-import { Settings as SettingsIcon, User, UserCheck, Users, Mail } from "lucide-react";
+import { Settings as SettingsIcon, User, UserCheck, Users, Mail, Lightbulb } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { LogOut } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import AccountApprovals from "@/components/settings/AccountApprovals";
 import AdminUserManagement from "@/components/settings/AdminUserManagement";
 import WorkspaceWelcomeAutomation from "@/components/settings/WorkspaceWelcomeAutomation";
+import SettingsRequestFeature from "@/components/settings/SettingsRequestFeature";
+
 
 
 

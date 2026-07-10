@@ -101,43 +101,6 @@ const Sidebar = ({
         </button>
       </div>
 
-      {/* Segmented tabs: Chat / Projects */}
-      <div className="px-3 pb-2">
-        <div className="flex items-center rounded-lg border border-border bg-card p-1">
-          <button
-            onClick={() => {
-              chatOps.startNewChat();
-              onNewChat?.();
-              navigate("/", { state: { newChat: true } });
-              onMobileClose?.();
-            }}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-              isChatRoute
-                ? "bg-primary/10 text-primary glow-primary-sm"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
-            )}
-          >
-            <MessageSquare className="h-3.5 w-3.5" />
-            Chat
-          </button>
-          <button
-            onClick={() => {
-              navigate("/projects");
-              onMobileClose?.();
-            }}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-              isProjectsRoute
-                ? "bg-primary/10 text-primary glow-primary-sm"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
-            )}
-          >
-            <Layers className="h-3.5 w-3.5" />
-            Projects
-          </button>
-        </div>
-      </div>
 
       {/* Nav */}
 
@@ -161,6 +124,19 @@ const Sidebar = ({
         >
           <Home className="h-4 w-4" />
           Home
+        </RouterNavLink>
+
+        <RouterNavLink
+          to="/projects"
+          onClick={() => onMobileClose?.()}
+          className={({ isActive }) =>
+            cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150",
+              isActive ? "bg-primary/10 text-primary glow-primary-sm" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )
+          }
+        >
+          <Layers className="h-4 w-4" />
+          Projects
         </RouterNavLink>
 
 

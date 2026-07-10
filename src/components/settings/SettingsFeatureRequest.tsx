@@ -138,22 +138,26 @@ export default function SettingsFeatureRequest() {
     setSubmitted(true);
   };
 
-  if (submitted) {
-    return (
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-foreground">Request a Feature</h3>
-        <p className="text-xs text-muted-foreground">Thanks — Duncan is reviewing your request and will email you if he needs more detail before filing it on the backlog.</p>
+  const submitForm = submitted ? (
+    <div className="space-y-3">
+      <h3 className="text-sm font-semibold text-foreground">Request a Feature</h3>
+      <p className="text-xs text-muted-foreground">Thanks — Duncan is reviewing your request and will email you if he needs more detail before filing it on the backlog.</p>
+      <div className="flex gap-2">
         <button
           onClick={() => setSubmitted(false)}
           className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary/60 transition-colors"
         >
           Submit another
         </button>
+        <button
+          onClick={() => { setSubmitted(false); setTab("mine"); }}
+          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          View my requests
+        </button>
       </div>
-    );
-  }
-
-  return (
+    </div>
+  ) : (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <h3 className="text-sm font-semibold text-foreground mb-1">Request a Feature</h3>
@@ -240,13 +244,35 @@ export default function SettingsFeatureRequest() {
           {submitting ? (uploadingIdx !== null ? `Uploading ${uploadingIdx + 1}/${files.length}…` : "Submitting…") : "Submit Request"}
         </button>
       </div>
+    </form>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="inline-flex rounded-lg border border-border bg-background p-0.5">
+        {(["submit", "mine"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+              tab === t ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {t === "submit" ? "Submit" : "My Requests"}
+          </button>
+        ))}
+      </div>
+
+      {tab === "submit" ? submitForm : <MyFeatureRequestsList />}
 
       {isAdmin && (
         <div className="pt-6 border-t border-border space-y-3">
-          <h4 className="text-sm font-semibold text-foreground">Feature Requests</h4>
+          <h4 className="text-sm font-semibold text-foreground">All Feature Requests (Admin)</h4>
           <FeatureRequestsAdmin />
         </div>
       )}
-    </form>
+    </div>
   );
 }

@@ -100,6 +100,24 @@ const Settings = () => {
             </motion.section>
           )}
 
+          {/* Request Feature */}
+          <motion.section
+            id="feature-requests"
+            ref={featureRef}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.09 }}
+            className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-6 scroll-mt-8"
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <Lightbulb className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold text-foreground">Request Feature</h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Submit a new request or track the ones Duncan is already working on.
+            </p>
+            <SettingsRequestFeature />
+          </motion.section>
 
 
           {/* Account Section */}

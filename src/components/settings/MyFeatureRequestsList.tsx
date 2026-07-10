@@ -37,7 +37,7 @@ const STATUS_META: Record<string, { icon: any; label: string; tone: string }> = 
   dismissed: { icon: XCircle, label: "Closed", tone: "text-muted-foreground" },
 };
 
-export default function FeatureRequests() {
+export default function MyFeatureRequestsList() {
   const { user } = useAuth();
   const [requests, setRequests] = useState<FeatureRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,11 +93,9 @@ export default function FeatureRequests() {
       return;
     }
     setReply("");
-    // Ask Duncan to re-evaluate now that new info is in
     supabase.functions.invoke("feature-request-agent", {
       body: { feature_request_id: active.id },
     }).catch((e) => console.warn("agent invoke", e));
-    // reload thread
     const { data } = await supabase
       .from("feature_request_messages")
       .select("id, role, channel, body, created_at")
@@ -106,30 +104,27 @@ export default function FeatureRequests() {
     setThread((data as any) ?? []);
     setSending(false);
     toast.success("Sent — Duncan is re-reviewing");
-    // refresh status pill after a beat
     setTimeout(load, 4000);
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-4">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground flex items-center gap-2">
-            <Inbox className="h-5 w-5 text-primary" /> My Feature Requests
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Track everything you've asked Duncan to build. Duncan reviews, asks questions when needed, and files a backlog ticket.
-          </p>
-        </div>
-      </header>
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Inbox className="h-4 w-4 text-primary" /> My Feature Requests
+        </h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          Track everything you've asked Duncan to build. Duncan reviews, asks questions when needed, and files a backlog ticket.
+        </p>
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(280px,340px)_1fr] gap-4">
-        <aside className="rounded-xl border border-border bg-card/60 backdrop-blur p-2 max-h-[70vh] overflow-y-auto">
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(240px,300px)_1fr] gap-3">
+        <aside className="rounded-lg border border-border bg-background p-2 max-h-[60vh] overflow-y-auto">
           {loading ? (
             <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
           ) : requests.length === 0 ? (
             <p className="text-xs text-muted-foreground p-4 text-center">
-              No requests yet. Submit one from Settings → Feature Request.
+              No requests yet. Use the Submit tab to create one.
             </p>
           ) : (
             <ul className="space-y-1">
@@ -163,16 +158,16 @@ export default function FeatureRequests() {
           )}
         </aside>
 
-        <section className="rounded-xl border border-border bg-card/60 backdrop-blur p-5 min-h-[400px]">
+        <section className="rounded-lg border border-border bg-background p-4 min-h-[320px]">
           {!active ? (
-            <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+            <div className="h-full flex items-center justify-center text-sm text-muted-foreground text-center">
               Select a request to see Duncan's conversation.
             </div>
           ) : (
             <div className="space-y-4">
               <div>
                 <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-base font-semibold text-foreground">
+                  <h2 className="text-sm font-semibold text-foreground">
                     {active.refined_title ?? active.title}
                   </h2>
                   <StatusPill status={active.triage_status} priority={active.priority_band} />

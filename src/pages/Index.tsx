@@ -477,9 +477,13 @@ const Index = () => {
             <button onClick={() => navigate("/knowledge-base")} className="flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
               <BookOpen className="h-3 w-3" /> <span className="hidden sm:inline">Knowledge Base</span>
             </button>
-            {hasMessages && (
+            {hasMessages ? (
               <button onClick={handleClearChat} className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2 sm:px-3 py-1.5 sm:py-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
                 <Trash2 className="h-3 w-3" /> <span className="hidden sm:inline">New Chat</span>
+              </button>
+            ) : !newChatMode && (
+              <button onClick={() => setNewChatMode(true)} className="flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
+                <MessageSquare className="h-3 w-3" /> <span className="hidden sm:inline">Chat with Duncan</span>
               </button>
             )}
           </div>

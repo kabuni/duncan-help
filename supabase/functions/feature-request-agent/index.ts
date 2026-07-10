@@ -132,7 +132,7 @@ async function processRequest(id: string) {
       kind: "feature_request_dismissed",
       title: "Feature request closed",
       body: decision.dismiss_reason ?? "Duncan decided not to add this to the backlog.",
-      link: "/feature-requests",
+      link: "/settings#feature-requests",
     });
     return { dismissed: true };
   }

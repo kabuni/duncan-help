@@ -1,14 +1,18 @@
 import { motion } from "framer-motion";
-import { Settings as SettingsIcon, User, UserCheck, Users, Mail } from "lucide-react";
+import { Settings as SettingsIcon, User, UserCheck, Users, Mail, Lightbulb } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { LogOut } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import AccountApprovals from "@/components/settings/AccountApprovals";
 import AdminUserManagement from "@/components/settings/AdminUserManagement";
 import WorkspaceWelcomeAutomation from "@/components/settings/WorkspaceWelcomeAutomation";
+import SettingsRequestFeature from "@/components/settings/SettingsRequestFeature";
+
 
 
 
@@ -17,6 +21,16 @@ const Settings = () => {
   const { user, signOut } = useAuth();
   const { profile } = useProfile();
   const { isAdmin } = useIsAdmin();
+  const location = useLocation();
+  const featureRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (location.hash === "#feature-requests" && featureRef.current) {
+      featureRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [location.hash]);
+
+
 
   return (
     <>
@@ -86,6 +100,24 @@ const Settings = () => {
             </motion.section>
           )}
 
+          {/* Request Feature */}
+          <motion.section
+            id="feature-requests"
+            ref={featureRef}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.09 }}
+            className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-6 scroll-mt-8"
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <Lightbulb className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold text-foreground">Request Feature</h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Submit a new request or track the ones Duncan is already working on.
+            </p>
+            <SettingsRequestFeature />
+          </motion.section>
 
 
           {/* Account Section */}

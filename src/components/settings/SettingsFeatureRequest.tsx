@@ -39,6 +39,7 @@ function validateFile(file: File): string | null {
 export default function SettingsFeatureRequest() {
   const { user } = useAuth();
   const { isAdmin } = useIsAdmin();
+  const [tab, setTab] = useState<"submit" | "mine">("submit");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [useCase, setUseCase] = useState("");

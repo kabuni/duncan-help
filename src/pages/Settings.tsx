@@ -21,6 +21,16 @@ const Settings = () => {
   const { user, signOut } = useAuth();
   const { profile } = useProfile();
   const { isAdmin } = useIsAdmin();
+  const location = useLocation();
+  const featureRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (location.hash === "#feature-requests" && featureRef.current) {
+      featureRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [location.hash]);
+
+
 
   return (
     <>

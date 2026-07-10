@@ -547,12 +547,7 @@ const Index = () => {
                   Ask me anything, or start with what's on your mind.
                 </p>
               </div>
-            ) : (
-              <div className="mx-auto w-full max-w-6xl space-y-3 sm:space-y-4">
-                <AdoptionNudges />
-                <GettingStartedCard onReplayTour={() => setTourOpen(true)} />
-                <HomeDashboard userName={userDisplayName.split(" ")[0] || "you"} />
-              </div>
+              <PersonalBriefingDashboard userName={userDisplayName} />
             )
           ) : (
             <div className="mx-auto max-w-3xl space-y-6 sm:space-y-8">

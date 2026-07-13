@@ -55,15 +55,18 @@ const queryClient = new QueryClient();
 // Shared shell: mounts ProtectedRoute + GeneralChatsProvider + AppLayout once
 // and keeps Sidebar / chat state alive across navigations between authed pages.
 import { TourProvider } from "@/components/onboarding/tour/TourProvider";
+import { NormanChatProvider } from "@/hooks/NormanChatContext";
 
 const ProtectedShell = () => (
   <ProtectedRoute>
     <GeneralChatsProvider>
-      <TourProvider>
-        <AppLayout>
-          <Outlet />
-        </AppLayout>
-      </TourProvider>
+      <NormanChatProvider>
+        <TourProvider>
+          <AppLayout>
+            <Outlet />
+          </AppLayout>
+        </TourProvider>
+      </NormanChatProvider>
     </GeneralChatsProvider>
   </ProtectedRoute>
 );

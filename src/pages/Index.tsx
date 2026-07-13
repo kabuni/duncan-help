@@ -10,7 +10,7 @@ import duncanAvatar from "@/assets/duncan-avatar.jpeg";
 import remarkGfm from "remark-gfm";
 import { useNavigate, useLocation } from "react-router-dom";
 import WelcomeModal from "@/components/WelcomeModal";
-import { useNormanChat } from "@/hooks/useNormanChat";
+import { useNormanChatContext } from "@/hooks/NormanChatContext";
 import type { ChatAttachment } from "@/hooks/useNormanChat";
 import ChatInput from "@/components/chat/ChatInput";
 import PendingWriteCard from "@/components/chat/PendingWriteCard";
@@ -136,7 +136,7 @@ MessageBubble.displayName = "MessageBubble";
 
 /* ── Main Page ── */
 const Index = () => {
-  const { messages, isLoading, extractionProgress, pendingWrites, toolStatuses, lastError, send, clearMessages, setMessages, confirmWrite, cancelWrite, retryLastTurn } = useNormanChat();
+  const { messages, isLoading, extractionProgress, pendingWrites, toolStatuses, lastError, send, clearMessages, setMessages, confirmWrite, cancelWrite, retryLastTurn } = useNormanChatContext();
   const navigate = useNavigate();
   const briefingTriggered = useRef(false);
   const [briefingError, setBriefingError] = useState(false);

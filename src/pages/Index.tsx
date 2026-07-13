@@ -453,7 +453,7 @@ const Index = () => {
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="flex h-full bg-background">
+    <div className="flex h-dvh bg-background">
       <WelcomeModal />
       <main className="flex-1 flex flex-col h-full w-full">
         <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />

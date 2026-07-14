@@ -1,33 +1,27 @@
-## Problem
+## Goal
+Deliver a downloadable zip containing full CSV dumps of the 5 tables that feed the Home page "This week · your activity" tile and the Team leaderboard.
 
-On the Home page, the `ChatInput` composer is rendered as the last flex child of `<main>` in `src/pages/Index.tsx`, but the page root uses `h-full` inside an `AppLayout` wrapper whose column uses `min-h-dvh` (not a fixed height). Because `height: 100%` only resolves against a parent with a defined height (not `min-height`), the Home page effectively grows with its content instead of being viewport-capped. Result: the `PersonalBriefingDashboard` pushes the composer below the fold, forcing the user to scroll to reach it.
+## Tables (and what they power)
+1. `token_usage` — Tokens used, Hours saved (via request_count), and the entire leaderboard (`get_token_leaderboard` RPC reads only this table + profiles).
+2. `workstream_tasks` — Tasks completed (workstream side).
+3. `project_chat_plan_items` — Tasks completed (project side).
+4. `meetings` — Meetings ingested.
+5. `profiles` — display_name + avatar_url joined to leaderboard rows.
 
-## Fix (scope: frontend only, Home page)
+## Approach
+Since these tables are not currently wired into the existing `export-all-tables` edge function's on-demand UI, I'll generate the CSVs directly from the database using `psql \COPY` in the sandbox and bundle them into a single zip written to `/mnt/documents/` so it's immediately downloadable via a `<presentation-artifact>` tag.
 
-Constrain the Home page to the viewport height so the internal content area (`scrollRef` div with `overflow-y-auto`) scrolls, and the `ChatInput` naturally stays pinned at the bottom of the viewport.
+Steps:
+1. Run `psql -c "COPY (SELECT * FROM public.<table>) TO STDOUT WITH CSV HEADER"` for each of the 5 tables, writing each to `/tmp/dashboard-activity-tables/<table>.csv`.
+2. Zip the folder into `/mnt/documents/dashboard-activity-tables.zip` using `zip -j`.
+3. Emit a `<presentation-artifact>` tag for the zip.
 
-### Change
+No code or schema changes. No new edge function. Pure read/export.
 
-In `src/pages/Index.tsx`, update the root wrapper of the Home page:
-
-```tsx
-// before
-<div className="flex h-full bg-background">
-
-// after
-<div className="flex h-dvh bg-background">
-```
-
-This gives the flex column a real, viewport-bound height. The existing structure already does the right thing once height is bounded:
-- Header (fixed content)
-- Briefing banners (fixed content)
-- `scrollRef` content area with `flex-1 overflow-y-auto` (scrolls internally)
-- `ChatInput` (always visible at the bottom)
-
-No other files need to change. `AppLayout` continues to use `min-h-dvh` for other routes, so this fix is isolated to Home.
-
-### Verification
-
-- On desktop and mobile, load `/`: composer visible at the bottom without scrolling, dashboard scrolls inside the middle region.
-- Send a message: transcript scrolls internally, composer remains pinned.
-- Mobile safe-area insets on `AppLayout` still apply (bottom padding preserved).
+## Deliverable
+`dashboard-activity-tables.zip` containing:
+- `token_usage.csv`
+- `workstream_tasks.csv`
+- `project_chat_plan_items.csv`
+- `meetings.csv`
+- `profiles.csv`

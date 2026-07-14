@@ -542,38 +542,6 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
 
                   {/* Comments Tab */}
                   <TabsContent value="comments" className="space-y-3">
-                    {/* Tasks panel — visible & editable while reviewing comments */}
-                    {tasks.length > 0 && (
-                      <div className="rounded-lg border border-border/60 bg-secondary/20 p-2.5 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                            <CheckCircle2 className="h-3 w-3" /> Tasks ({tasks.length})
-                          </span>
-                        </div>
-                        <div className="space-y-1.5 max-h-[260px] overflow-y-auto pr-1">
-                          {tasks.map(task => (
-                            <TaskRow
-                              key={task.id}
-                              task={task}
-                              users={users || []}
-                              currentUserId={user?.id}
-                              onToggle={() => handleToggleTask(task)}
-                              onDelete={() => deleteTask.mutate({ id: task.id, card_id: task.card_id })}
-                              onUpdateAssignees={(ids) => updateTaskAssignees.mutate({ taskId: task.id, cardId: task.card_id, userIds: ids })}
-                              onUpdateDueDate={(d) => updateTask.mutate({ id: task.id, card_id: task.card_id, due_date: d })}
-                              onUpdateTitle={(title) => updateTask.mutate({ id: task.id, card_id: task.card_id, title })}
-                              onSetStatus={(s) => handleSetTaskStatus(task, s)}
-                              onAddSubtask={(title) => handleAddSubtask(task.id, title, (task.subtasks || []).length)}
-                              onToggleSubtask={(sub) => handleToggleTask(sub)}
-                              onDeleteSubtask={(sub) => deleteTask.mutate({ id: sub.id, card_id: sub.card_id })}
-                              onUpdateSubtaskDueDate={(sub, d) => updateTask.mutate({ id: sub.id, card_id: sub.card_id, due_date: d })}
-                              onUpdateSubtaskAssignees={(sub, ids) => updateTaskAssignees.mutate({ taskId: sub.id, cardId: sub.card_id, userIds: ids })}
-                              onUpdateSubtaskTitle={(sub, title) => updateTask.mutate({ id: sub.id, card_id: sub.card_id, title })}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
 
                     {comments.map(c => (
                       <CardCommentRow

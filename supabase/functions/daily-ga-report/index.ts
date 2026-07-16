@@ -302,6 +302,7 @@ serve(async (req) => {
   const url = new URL(req.url);
   const dryRun = url.searchParams.get("dryRun") === "true";
   const force = url.searchParams.get("force") === "true";
+  const toOverride = url.searchParams.get("to");
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -316,8 +317,8 @@ serve(async (req) => {
       });
     }
 
-    // Idempotency
-    if (!force) {
+    // Idempotency (skip when a one-off override recipient is provided)
+    if (!force && !toOverride) {
       const { data: existing } = await admin
         .from("ga_daily_report_log")
         .select("report_date, status")
@@ -330,10 +331,16 @@ serve(async (req) => {
       }
     }
 
-    // Recipients
-    const { data: recRow } = await admin.from("app_settings").select("value").eq("key", "daily_ga_report_recipients").maybeSingle();
-    const recipients: string[] = Array.isArray(recRow?.value) ? recRow!.value.filter((x: unknown) => typeof x === "string") : [];
+    // Recipients (override wins when provided)
+    let recipients: string[] = [];
+    if (toOverride) {
+      recipients = toOverride.split(",").map((s) => s.trim()).filter(Boolean);
+    } else {
+      const { data: recRow } = await admin.from("app_settings").select("value").eq("key", "daily_ga_report_recipients").maybeSingle();
+      recipients = Array.isArray(recRow?.value) ? recRow!.value.filter((x: unknown) => typeof x === "string") : [];
+    }
     if (recipients.length === 0) throw new Error("No recipients configured in app_settings.daily_ga_report_recipients");
+
 
     const accessToken = await getGmailSenderToken(admin);
     if (!accessToken) throw new Error("Gmail sender token unavailable (duncan@kabuni.com)");

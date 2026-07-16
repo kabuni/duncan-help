@@ -356,14 +356,17 @@ serve(async (req) => {
     }
 
     const status = errors.length && errors.length === recipients.length ? "failed" : "sent";
-    await admin.from("ga_daily_report_log").upsert({
-      report_date: payload.reportDate,
-      recipients,
-      payload,
-      status,
-      error: errors.length ? errors.join("\n") : null,
-      sent_at: new Date().toISOString(),
-    }, { onConflict: "report_date" });
+    if (!toOverride) {
+      await admin.from("ga_daily_report_log").upsert({
+        report_date: payload.reportDate,
+        recipients,
+        payload,
+        status,
+        error: errors.length ? errors.join("\n") : null,
+        sent_at: new Date().toISOString(),
+      }, { onConflict: "report_date" });
+    }
+
 
     return new Response(JSON.stringify({ ok: status === "sent", status, recipients, errors }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -273,17 +273,26 @@ function base64url(str: string): string {
   return btoa(unescape(encodeURIComponent(str))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+function encodeSubject(subject: string): string {
+  // RFC 2047 encoded-word so non-ASCII (·, —) render correctly in mail clients
+  // eslint-disable-next-line no-control-regex
+  if (!/[^\x00-\x7F]/.test(subject)) return subject;
+  const b64 = btoa(unescape(encodeURIComponent(subject)));
+  return `=?UTF-8?B?${b64}?=`;
+}
+
 function buildRFC2822(to: string, subject: string, htmlBody: string): string {
   return [
     "From: Duncan <duncan@kabuni.com>",
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodeSubject(subject)}`,
     "MIME-Version: 1.0",
     'Content-Type: text/html; charset="UTF-8"',
     "",
     htmlBody,
   ].join("\r\n");
 }
+
 
 async function sendEmail(accessToken: string, to: string, subject: string, html: string) {
   const raw = base64url(buildRFC2822(to, subject, html));

@@ -1510,6 +1510,33 @@ export type Database = {
         }
         Relationships: []
       }
+      ga_daily_report_log: {
+        Row: {
+          error: string | null
+          payload: Json
+          recipients: Json
+          report_date: string
+          sent_at: string
+          status: string
+        }
+        Insert: {
+          error?: string | null
+          payload: Json
+          recipients: Json
+          report_date: string
+          sent_at?: string
+          status?: string
+        }
+        Update: {
+          error?: string | null
+          payload?: Json
+          recipients?: Json
+          report_date?: string
+          sent_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       general_chat_messages: {
         Row: {
           chat_id: string

@@ -30,7 +30,50 @@ export interface AnalyticsDashboard {
   generatedAt: string;
 }
 
-export function useGoogleAnalytics() {
+export type WeeklyFilters = {
+  country?: string;
+  device?: "desktop" | "mobile" | "tablet";
+  channel?: string;
+  source?: string;
+  medium?: string;
+  dateRange?: { start: string; end: string };
+};
+
+export interface WeeklyDelta {
+  activeUsers: number | null;
+  sessions: number | null;
+  pageViews: number | null;
+  engagementRate: number | null;
+  avgSessionDurationSec: number | null;
+}
+
+export interface WeeklyReport {
+  schemaVersion: number;
+  connected: boolean;
+  propertyId: string;
+  dateRange: { start: string; end: string };
+  priorWeek: { start: string; end: string };
+  priorMonth: { start: string; end: string };
+  filters: WeeklyFilters;
+  summary: {
+    current: { activeUsers: number; sessions: number; pageViews: number; engagementRate: number; avgSessionDurationSec: number };
+    priorWeek: { activeUsers: number; sessions: number; pageViews: number; engagementRate: number; avgSessionDurationSec: number };
+    priorMonth: { activeUsers: number; sessions: number; pageViews: number; engagementRate: number; avgSessionDurationSec: number };
+    wowDeltaPct: WeeklyDelta;
+    momDeltaPct: WeeklyDelta;
+  };
+  sparkline: Array<{ date: string; users: number; sessions: number; pageViews: number }>;
+  acquisition: Array<{ channel: string; sessions: number; users: number; wowDeltaPct: number | null; configured: boolean }>;
+  topPages: Array<{ title: string; path: string; views: number; users: number }>;
+  landingPages: Array<{ landing: string; sessions: number; users: number }>;
+  notFound: { total: number; rows: Array<{ path: string; title: string; hits: number }> };
+  countries: Array<{ label: string; users: number; sessions: number }>;
+  cities: Array<{ label: string; users: number; sessions: number }>;
+  devices: Array<{ label: string; users: number; sessions: number }>;
+  generatedAt: string;
+}
+
+export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
   const { session } = useAuth();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
@@ -60,6 +103,27 @@ export function useGoogleAnalytics() {
       return data as AnalyticsDashboard;
     },
   });
+
+  const weeklyFiltersKey = JSON.stringify(weeklyFilters ?? {});
+  const weeklyQuery = useQuery({
+    queryKey: ["google-analytics-weekly", session?.user?.id, weeklyFiltersKey],
+    enabled: !!session,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const response = await fetch(ANALYTICS_API_URL, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ action: "weekly_report", filters: weeklyFilters ?? {} }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (data.code === "NOT_CONNECTED" || data.connected === false) return null;
+      if (!response.ok) throw new Error(data.error || "Failed to load weekly analytics");
+      return data as WeeklyReport;
+    },
+  });
+
+
 
   const initiateOAuth = useCallback(async () => {
     setIsConnecting(true);
@@ -108,6 +172,10 @@ export function useGoogleAnalytics() {
     isLoading: dashboardQuery.isLoading,
     error: dashboardQuery.error,
     refetch: dashboardQuery.refetch,
+    weekly: weeklyQuery.data ?? null,
+    isWeeklyLoading: weeklyQuery.isLoading,
+    weeklyError: weeklyQuery.error,
+    refetchWeekly: weeklyQuery.refetch,
     initiateOAuth,
     isConnecting,
     askQuestion,

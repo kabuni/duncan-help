@@ -728,63 +728,233 @@ const Operations = () => {
                 </div>
               ) : analytics.dashboard ? (
                 <>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    {[
-                      { label: "Active users", value: analytics.dashboard.summary.activeUsers.toLocaleString(), icon: Users },
-                      { label: "Sessions", value: analytics.dashboard.summary.sessions.toLocaleString(), icon: Activity },
-                      { label: "Page views", value: analytics.dashboard.summary.pageViews.toLocaleString(), icon: MousePointerClick },
-                      { label: "Engagement", value: `${Math.round(analytics.dashboard.summary.engagementRate * 100)}%`, icon: BarChart3 },
-                    ].map((item) => (
-                      <div key={item.label} className="rounded-xl border border-border bg-card p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <item.icon className="h-4 w-4 text-primary" />
-                          <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{item.label}</span>
-                        </div>
-                        <p className="text-2xl font-bold text-foreground">{item.value}</p>
-                      </div>
-                    ))}
+                  {/* Filters */}
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3">
+                    <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground mr-2">Filters</span>
+                    <Select value={weeklyFilters.country ?? "__all"} onValueChange={(v) => setWeeklyFilters((f) => ({ ...f, country: v === "__all" ? undefined : v }))}>
+                      <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Country" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all">All countries</SelectItem>
+                        {(analytics.weekly?.countries ?? analytics.dashboard.reach.countries).slice(0, 20).map((c: any) => (
+                          <SelectItem key={c.label} value={c.label}>{c.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={weeklyFilters.device ?? "__all"} onValueChange={(v) => setWeeklyFilters((f) => ({ ...f, device: v === "__all" ? undefined : (v as any) }))}>
+                      <SelectTrigger className="h-8 w-32"><SelectValue placeholder="Device" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all">All devices</SelectItem>
+                        <SelectItem value="desktop">Desktop</SelectItem>
+                        <SelectItem value="mobile">Mobile</SelectItem>
+                        <SelectItem value="tablet">Tablet</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={weeklyFilters.channel ?? "__all"} onValueChange={(v) => setWeeklyFilters((f) => ({ ...f, channel: v === "__all" ? undefined : v }))}>
+                      <SelectTrigger className="h-8 w-44"><SelectValue placeholder="Channel" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all">All channels</SelectItem>
+                        {(analytics.weekly?.acquisition ?? []).map((c) => (
+                          <SelectItem key={c.channel} value={c.channel}>{c.channel}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {(weeklyFilters.country || weeklyFilters.device || weeklyFilters.channel) && (
+                      <button onClick={() => setWeeklyFilters({})} className="text-xs text-muted-foreground hover:text-foreground underline">Reset</button>
+                    )}
+                    <div className="ml-auto text-xs text-muted-foreground">
+                      {analytics.weekly ? `Week: ${analytics.weekly.dateRange.start} → ${analytics.weekly.dateRange.end}` : "Last 30 days"}
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="rounded-xl border border-border bg-card p-4">
-                      <div className="flex items-center gap-2 mb-4"><Globe2 className="h-4 w-4 text-primary" /><h3 className="font-semibold text-foreground">Highest reach</h3></div>
-                      <div className="space-y-2">
-                        {analytics.dashboard.reach.countries.map((country) => (
-                          <div key={country.label} className="flex items-center justify-between text-sm">
-                            <span className="text-foreground">{country.label}</span>
-                            <span className="font-mono text-muted-foreground">{country.users.toLocaleString()} users</span>
+                  {/* KPI tiles with WoW/MoM */}
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                    {(() => {
+                      const w = analytics.weekly;
+                      const cur = w?.summary.current;
+                      const wow = w?.summary.wowDeltaPct;
+                      const mom = w?.summary.momDeltaPct;
+                      const fmtDelta = (n: number | null | undefined) => n === null || n === undefined ? "—" : `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
+                      const deltaClass = (n: number | null | undefined) => n === null || n === undefined ? "text-muted-foreground" : n > 0 ? "text-norman-success" : n < 0 ? "text-destructive" : "text-muted-foreground";
+                      const tiles = [
+                        { label: "Active users", icon: Users, value: cur ? cur.activeUsers.toLocaleString() : analytics.dashboard.summary.activeUsers.toLocaleString(), wow: wow?.activeUsers, mom: mom?.activeUsers },
+                        { label: "Sessions", icon: Activity, value: cur ? cur.sessions.toLocaleString() : analytics.dashboard.summary.sessions.toLocaleString(), wow: wow?.sessions, mom: mom?.sessions },
+                        { label: "Page views", icon: MousePointerClick, value: cur ? cur.pageViews.toLocaleString() : analytics.dashboard.summary.pageViews.toLocaleString(), wow: wow?.pageViews, mom: mom?.pageViews },
+                        { label: "Engagement", icon: BarChart3, value: `${Math.round((cur?.engagementRate ?? analytics.dashboard.summary.engagementRate) * 100)}%`, wow: wow?.engagementRate, mom: mom?.engagementRate },
+                        { label: "Avg session", icon: Clock, value: cur ? `${Math.round(cur.avgSessionDurationSec)}s` : "—", wow: wow?.avgSessionDurationSec, mom: mom?.avgSessionDurationSec },
+                      ];
+                      return tiles.map((item) => (
+                        <div key={item.label} className="rounded-xl border border-border bg-card p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <item.icon className="h-4 w-4 text-primary" />
+                            <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{item.label}</span>
                           </div>
-                        ))}
+                          <p className="text-2xl font-bold text-foreground">{item.value}</p>
+                          <div className="mt-2 flex items-center gap-3 text-xs">
+                            <span className={deltaClass(item.wow)}>WoW {fmtDelta(item.wow)}</span>
+                            <span className={deltaClass(item.mom)}>MoM {fmtDelta(item.mom)}</span>
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+
+                  {/* Acquisition (9 channels) */}
+                  <div className="rounded-xl border border-border bg-card p-4">
+                    <div className="flex items-center gap-2 mb-4"><Globe2 className="h-4 w-4 text-primary" /><h3 className="font-semibold text-foreground">Acquisition · 9 channels</h3></div>
+                    {analytics.isWeeklyLoading ? (
+                      <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                    ) : analytics.weekly ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="text-xs uppercase tracking-wider text-muted-foreground">
+                            <tr className="border-b border-border">
+                              <th className="text-left py-2 pr-4 font-medium">Channel</th>
+                              <th className="text-right py-2 px-2 font-medium">Sessions</th>
+                              <th className="text-right py-2 px-2 font-medium">Users</th>
+                              <th className="text-right py-2 pl-2 font-medium">WoW</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {analytics.weekly.acquisition.map((c) => (
+                              <tr key={c.channel} className="border-b border-border/40">
+                                <td className="py-2 pr-4">
+                                  {c.channel}
+                                  {!c.configured && <span className="ml-2 text-[10px] text-muted-foreground">not configured</span>}
+                                </td>
+                                <td className="py-2 px-2 text-right font-mono tabular-nums">{c.sessions.toLocaleString()}</td>
+                                <td className="py-2 px-2 text-right font-mono tabular-nums">{c.users.toLocaleString()}</td>
+                                <td className={`py-2 pl-2 text-right font-mono tabular-nums ${c.wowDeltaPct === null ? "text-muted-foreground" : c.wowDeltaPct > 0 ? "text-norman-success" : c.wowDeltaPct < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                                  {c.wowDeltaPct === null ? "—" : `${c.wowDeltaPct >= 0 ? "+" : ""}${c.wowDeltaPct.toFixed(1)}%`}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-                    </div>
+                    ) : <p className="text-sm text-muted-foreground">No channel data.</p>}
+                  </div>
+
+                  {/* Top pages + Top landing pages */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div className="rounded-xl border border-border bg-card p-4">
                       <div className="flex items-center gap-2 mb-4"><MousePointerClick className="h-4 w-4 text-primary" /><h3 className="font-semibold text-foreground">Top pages</h3></div>
                       <div className="space-y-2">
-                        {analytics.dashboard.topPages.map((page) => (
-                          <div key={page.page} className="flex items-center justify-between gap-4 text-sm">
-                            <span className="text-foreground truncate">{page.page}</span>
-                            <span className="font-mono text-muted-foreground shrink-0">{page.views.toLocaleString()} views</span>
+                        {(analytics.weekly?.topPages && analytics.weekly.topPages.length > 0
+                          ? analytics.weekly.topPages.map((page) => (
+                              <div key={`${page.title}-${page.path}`} className="flex items-start justify-between gap-4 text-sm">
+                                <div className="min-w-0">
+                                  <div className="text-foreground truncate font-medium">{page.title || "—"}</div>
+                                  <div className="text-xs text-muted-foreground truncate font-mono">{page.path}</div>
+                                </div>
+                                <span className="font-mono text-muted-foreground shrink-0">{page.views.toLocaleString()} views</span>
+                              </div>
+                            ))
+                          : analytics.dashboard.topPages.map((page) => (
+                              <div key={page.page} className="flex items-center justify-between gap-4 text-sm">
+                                <span className="text-foreground truncate">{page.page}</span>
+                                <span className="font-mono text-muted-foreground shrink-0">{page.views.toLocaleString()} views</span>
+                              </div>
+                            ))
+                        )}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex items-center gap-2 mb-4"><Globe2 className="h-4 w-4 text-primary" /><h3 className="font-semibold text-foreground">Top landing pages</h3></div>
+                      <div className="space-y-2">
+                        {analytics.weekly?.landingPages && analytics.weekly.landingPages.length > 0 ? (
+                          analytics.weekly.landingPages.map((lp) => (
+                            <div key={lp.landing} className="flex items-center justify-between gap-4 text-sm">
+                              <span className="text-foreground truncate font-mono text-xs">{lp.landing}</span>
+                              <span className="font-mono text-muted-foreground shrink-0">{lp.sessions.toLocaleString()} sessions</span>
+                            </div>
+                          ))
+                        ) : <p className="text-sm text-muted-foreground">No landing page data.</p>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 404s + Countries + Cities + Devices */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <AlertTriangle className="h-4 w-4 text-norman-warning" />
+                        <h3 className="font-semibold text-foreground">404 hits</h3>
+                      </div>
+                      <p className="text-2xl font-bold text-foreground mb-2">{(analytics.weekly?.notFound.total ?? 0).toLocaleString()}</p>
+                      <div className="space-y-1">
+                        {(analytics.weekly?.notFound.rows ?? []).slice(0, 5).map((r) => (
+                          <div key={r.path} className="flex justify-between text-xs">
+                            <span className="truncate font-mono text-muted-foreground">{r.path}</span>
+                            <span className="font-mono text-muted-foreground shrink-0 ml-2">{r.hits}</span>
+                          </div>
+                        ))}
+                        {(analytics.weekly?.notFound.rows ?? []).length === 0 && (
+                          <p className="text-xs text-muted-foreground">None detected.</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <h3 className="font-semibold text-foreground mb-4">Countries</h3>
+                      <div className="space-y-2">
+                        {(analytics.weekly?.countries ?? analytics.dashboard.reach.countries).slice(0, 6).map((country: any) => (
+                          <div key={country.label} className="flex justify-between text-sm">
+                            <span>{country.label}</span>
+                            <span className="font-mono text-muted-foreground">{country.users.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <h3 className="font-semibold text-foreground mb-4">Cities</h3>
+                      <div className="space-y-2">
+                        {(analytics.weekly?.cities ?? analytics.dashboard.reach.cities).slice(0, 6).map((city: any) => (
+                          <div key={city.label} className="flex justify-between text-sm">
+                            <span>{city.label}</span>
+                            <span className="font-mono text-muted-foreground">{city.users}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <h3 className="font-semibold text-foreground mb-4">Devices</h3>
+                      <div className="space-y-2">
+                        {(analytics.weekly?.devices ?? analytics.dashboard.devices).map((device: any) => (
+                          <div key={device.label} className="flex justify-between text-sm">
+                            <span className="capitalize">{device.label}</span>
+                            <span className="font-mono text-muted-foreground">{device.users}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="rounded-xl border border-border bg-card p-4">
-                      <h3 className="font-semibold text-foreground mb-4">Cities</h3>
-                      <div className="space-y-2">{analytics.dashboard.reach.cities.slice(0, 6).map((city) => <div key={city.label} className="flex justify-between text-sm"><span>{city.label}</span><span className="font-mono text-muted-foreground">{city.users}</span></div>)}</div>
-                    </div>
-                    <div className="rounded-xl border border-border bg-card p-4">
-                      <h3 className="font-semibold text-foreground mb-4">Devices</h3>
-                      <div className="space-y-2">{analytics.dashboard.devices.map((device) => <div key={device.label} className="flex justify-between text-sm"><span className="capitalize">{device.label}</span><span className="font-mono text-muted-foreground">{device.users}</span></div>)}</div>
-                    </div>
-                    <div className="rounded-xl border border-border bg-card p-4">
-                      <h3 className="font-semibold text-foreground mb-4">Demographics</h3>
-                      {analytics.dashboard.demographics.available ? (
-                        <div className="space-y-2">{analytics.dashboard.demographics.rows.slice(0, 6).map((row) => <div key={`${row.age}-${row.gender}`} className="flex justify-between text-sm"><span>{row.age} · {row.gender}</span><span className="font-mono text-muted-foreground">{row.users}</span></div>)}</div>
-                      ) : <p className="text-sm text-muted-foreground">Demographics are not available for this GA4 property yet.</p>}
-                    </div>
+                  {/* Additional insights (collapsed): Demographics */}
+                  <div className="rounded-xl border border-border bg-card">
+                    <button
+                      onClick={() => setAdditionalOpen((v) => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-foreground hover:bg-secondary/40 transition-colors"
+                    >
+                      <span className="flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                        Additional insights
+                      </span>
+                      <span className="text-xs text-muted-foreground">{additionalOpen ? "Hide" : "Show"}</span>
+                    </button>
+                    {additionalOpen && (
+                      <div className="px-4 pb-4 pt-1 border-t border-border">
+                        <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-3">Demographics</h4>
+                        {analytics.dashboard.demographics.available ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {analytics.dashboard.demographics.rows.slice(0, 10).map((row) => (
+                              <div key={`${row.age}-${row.gender}`} className="flex justify-between text-sm">
+                                <span>{row.age} · {row.gender}</span>
+                                <span className="font-mono text-muted-foreground">{row.users}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : <p className="text-sm text-muted-foreground">Demographics are not available for this GA4 property yet.</p>}
+                      </div>
+                    )}
                   </div>
 
                   <div className="rounded-xl border border-border bg-card p-4">

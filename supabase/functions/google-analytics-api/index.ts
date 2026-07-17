@@ -811,6 +811,81 @@ serve(async (req) => {
       return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (action === "channel_audit") {
+      // 90-day configuration audit: real channel groups + source/medium + campaigns + paid product links
+      const today = new Date();
+      const end = today.toISOString().slice(0, 10);
+      const startD = new Date(today); startD.setUTCDate(startD.getUTCDate() - 90);
+      const start = startD.toISOString().slice(0, 10);
+
+      const [channels, sourceMedium, campaigns] = await Promise.all([
+        runReport(accessToken, propertyId, {
+          dateRanges: [{ startDate: start, endDate: end }],
+          dimensions: [{ name: "sessionDefaultChannelGroup" }],
+          metrics: [{ name: "sessions" }, { name: "totalUsers" }],
+          orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+          limit: 50,
+        }),
+        runReport(accessToken, propertyId, {
+          dateRanges: [{ startDate: start, endDate: end }],
+          dimensions: [{ name: "sessionSource" }, { name: "sessionMedium" }],
+          metrics: [{ name: "sessions" }],
+          orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+          limit: 100,
+        }),
+        runReport(accessToken, propertyId, {
+          dateRanges: [{ startDate: start, endDate: end }],
+          dimensions: [{ name: "sessionCampaignName" }, { name: "sessionMedium" }],
+          metrics: [{ name: "sessions" }],
+          orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+          limit: 50,
+        }),
+      ]);
+
+      // GA4 Admin API: paid product links (Google Ads, DV360, SA360)
+      async function adminGet(path: string) {
+        const res = await fetch(`https://analyticsadmin.googleapis.com/v1beta/properties/${propertyId}/${path}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!res.ok) return { error: `${res.status} ${await res.text()}` };
+        return await res.json();
+      }
+      const [googleAdsLinks, dv360Links, sa360Links, dataStreams] = await Promise.all([
+        adminGet("googleAdsLinks"),
+        adminGet("displayVideo360AdvertiserLinks"),
+        adminGet("searchAds360Links"),
+        adminGet("dataStreams"),
+      ]);
+
+      return new Response(JSON.stringify({
+        propertyId,
+        dateRange: { start, end },
+        channels: (channels.rows ?? []).map((r: any) => ({
+          channel: dimensionValue(r, 0),
+          sessions: metricValue(r, 0),
+          users: metricValue(r, 1),
+        })),
+        sourceMedium: (sourceMedium.rows ?? []).map((r: any) => ({
+          source: dimensionValue(r, 0),
+          medium: dimensionValue(r, 1),
+          sessions: metricValue(r, 0),
+        })),
+        campaigns: (campaigns.rows ?? []).map((r: any) => ({
+          campaign: dimensionValue(r, 0),
+          medium: dimensionValue(r, 1),
+          sessions: metricValue(r, 0),
+        })),
+        adminLinks: {
+          googleAdsLinks,
+          displayVideo360AdvertiserLinks: dv360Links,
+          searchAds360Links: sa360Links,
+          dataStreams,
+        },
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+
+
 
     if (action === "dashboard") {
       return new Response(JSON.stringify(dashboard), { headers: { ...corsHeaders, "Content-Type": "application/json" } });

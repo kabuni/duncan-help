@@ -774,6 +774,13 @@ serve(async (req) => {
       return new Response(JSON.stringify({ answer, dashboard }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (action === "weekly_report") {
+      const body = (await req.clone().json().catch(() => ({}))) as any;
+      const filters: WeeklyFilters = body?.filters ?? {};
+      const result = await getWeeklyReport(accessToken, propertyId, filters);
+      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (action === "dashboard") {
       return new Response(JSON.stringify(dashboard), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }

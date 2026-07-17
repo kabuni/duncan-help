@@ -775,11 +775,11 @@ serve(async (req) => {
     }
 
     if (action === "weekly_report") {
-      const body = (await req.clone().json().catch(() => ({}))) as any;
-      const filters: WeeklyFilters = body?.filters ?? {};
+      const filters: WeeklyFilters = (filtersInput ?? {}) as WeeklyFilters;
       const result = await getWeeklyReport(accessToken, propertyId, filters);
       return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
 
     if (action === "dashboard") {
       return new Response(JSON.stringify(dashboard), { headers: { ...corsHeaders, "Content-Type": "application/json" } });

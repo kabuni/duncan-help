@@ -704,6 +704,7 @@ serve(async (req) => {
     const bearer = authHeader.replace(/^Bearer\s+/i, "");
     const isServiceRole = bearer === supabaseServiceKey;
 
+    let userId: string | null = null;
     if (!isServiceRole) {
       const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
         global: { headers: { Authorization: authHeader } },
@@ -712,7 +713,9 @@ serve(async (req) => {
       if (userError || !user) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
+      userId = user.id;
     }
+
 
 
     const { action, question, pages, filters: filtersInput } = await req.json();

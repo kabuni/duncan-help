@@ -100,11 +100,13 @@ const Operations = () => {
   const { data: approvalRows = [] } = useApprovals();
   const { data: pos = [] } = usePurchaseOrders();
   const { data: travelReqs = [] } = useTravelRequests();
-  const analytics = useGoogleAnalytics();
+  const [weeklyFilters, setWeeklyFilters] = useState<{ country?: string; device?: "desktop"|"mobile"|"tablet"; channel?: string }>({});
+  const analytics = useGoogleAnalytics(weeklyFilters);
   const { isAdmin } = useIsAdmin();
   const [syncing, setSyncing] = useState<string | null>(null);
   const [analyticsQuestion, setAnalyticsQuestion] = useState("Where do we have the most website reach?");
   const [analyticsAnswer, setAnalyticsAnswer] = useState<string | null>(null);
+  const [additionalOpen, setAdditionalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("work-items");
 
   type SectionId = "azure" | "approvals-auth" | "suppliers" | "analytics" | "sync-logs";

@@ -73,7 +73,7 @@ export interface WeeklyReport {
   generatedAt: string;
 }
 
-export function useGoogleAnalytics() {
+export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
   const { session } = useAuth();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isAsking, setIsAsking] = useState(false);

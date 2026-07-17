@@ -917,15 +917,32 @@ const Operations = () => {
                     </div>
                     <div className="rounded-xl border border-border bg-card p-4">
                       <h3 className="font-semibold text-foreground mb-4">Devices</h3>
-                      <div className="space-y-2">
-                        {(analytics.weekly?.devices ?? analytics.dashboard.devices).map((device: any) => (
-                          <div key={device.label} className="flex justify-between text-sm">
-                            <span className="capitalize">{device.label}</span>
-                            <span className="font-mono text-muted-foreground">{device.users}</span>
+                      {(() => {
+                        const rows = (analytics.weekly?.devices ?? analytics.dashboard.devices) as Array<{ label: string; users: number }>;
+                        const total = rows.reduce((a, r) => a + (r.users || 0), 0);
+                        return (
+                          <div className="space-y-2">
+                            {rows.map((device) => {
+                              const pct = total > 0 ? (device.users / total) * 100 : 0;
+                              return (
+                                <div key={device.label}>
+                                  <div className="flex justify-between text-sm">
+                                    <span className="capitalize">{device.label}</span>
+                                    <span className="font-mono text-muted-foreground tabular-nums">
+                                      {device.users.toLocaleString()} · {pct.toFixed(1)}%
+                                    </span>
+                                  </div>
+                                  <div className="mt-1 h-1 bg-muted rounded-full overflow-hidden">
+                                    <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })()}
                     </div>
+
                   </div>
 
                   {/* Additional insights (collapsed): Demographics */}

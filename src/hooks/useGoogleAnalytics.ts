@@ -104,6 +104,27 @@ export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
     },
   });
 
+  const weeklyFiltersKey = JSON.stringify(weeklyFilters ?? {});
+  const weeklyQuery = useQuery({
+    queryKey: ["google-analytics-weekly", session?.user?.id, weeklyFiltersKey],
+    enabled: !!session,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const response = await fetch(ANALYTICS_API_URL, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ action: "weekly_report", filters: weeklyFilters ?? {} }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (data.code === "NOT_CONNECTED" || data.connected === false) return null;
+      if (!response.ok) throw new Error(data.error || "Failed to load weekly analytics");
+      return data as WeeklyReport;
+    },
+  });
+
+
+
   const initiateOAuth = useCallback(async () => {
     setIsConnecting(true);
     try {

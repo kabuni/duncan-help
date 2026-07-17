@@ -435,6 +435,260 @@ async function answerQuestion(question: string, dashboard: any) {
   return data.choices?.[0]?.message?.content ?? "I couldn't generate an analytics answer from the available data.";
 }
 
+// ---------- Weekly report ----------
+type WeeklyFilters = {
+  country?: string;
+  device?: "desktop" | "mobile" | "tablet";
+  channel?: string;
+  source?: string;
+  medium?: string;
+  dateRange?: { start: string; end: string };
+};
+
+const CHANNELS_9 = [
+  "Direct",
+  "Organic Search",
+  "Paid Search",
+  "Organic Social",
+  "Paid Social",
+  "Email",
+  "Referral",
+  "Display",
+  "Affiliates",
+];
+
+function stringFilter(field: string, value: string) {
+  return { filter: { fieldName: field, stringFilter: { matchType: "EXACT", value, caseSensitive: false } } };
+}
+
+function buildDimensionFilter(f: WeeklyFilters) {
+  const clauses: any[] = [];
+  if (f.country) clauses.push(stringFilter("country", f.country));
+  if (f.device) clauses.push(stringFilter("deviceCategory", f.device));
+  if (f.channel) clauses.push(stringFilter("sessionDefaultChannelGroup", f.channel));
+  if (f.source) clauses.push(stringFilter("sessionSource", f.source));
+  if (f.medium) clauses.push(stringFilter("sessionMedium", f.medium));
+  if (clauses.length === 0) return undefined;
+  if (clauses.length === 1) return clauses[0];
+  return { andGroup: { expressions: clauses } };
+}
+
+function isoWeekRange(): { start: string; end: string } {
+  const now = new Date();
+  const day = now.getUTCDay();
+  const daysSinceMonday = (day + 6) % 7;
+  const thisMonday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysSinceMonday));
+  const lastMonday = new Date(thisMonday.getTime() - 7 * 86400000);
+  const lastSunday = new Date(thisMonday.getTime() - 86400000);
+  return { start: lastMonday.toISOString().slice(0, 10), end: lastSunday.toISOString().slice(0, 10) };
+}
+
+function shiftRange(start: string, end: string, days: number): { start: string; end: string } {
+  const s = new Date(start + "T00:00:00Z");
+  const e = new Date(end + "T00:00:00Z");
+  const ns = new Date(s.getTime() + days * 86400000);
+  const ne = new Date(e.getTime() + days * 86400000);
+  return { start: ns.toISOString().slice(0, 10), end: ne.toISOString().slice(0, 10) };
+}
+
+async function getWeeklyReport(accessToken: string, propertyId: string, filters: WeeklyFilters) {
+  const range = filters.dateRange ?? isoWeekRange();
+  const prevWeek = shiftRange(range.start, range.end, -7);
+  const prevMonth = shiftRange(range.start, range.end, -28);
+  const dimensionFilter = buildDimensionFilter(filters);
+
+  const currentRange = [{ startDate: range.start, endDate: range.end }];
+  const allRanges = [
+    { startDate: range.start, endDate: range.end, name: "current" },
+    { startDate: prevWeek.start, endDate: prevWeek.end, name: "prior_week" },
+    { startDate: prevMonth.start, endDate: prevMonth.end, name: "prior_month" },
+  ];
+
+  const [summary, dailyRow, channels, topPages, landingPages, notFound, countries, cities, devices] = await runLimited(2, [
+    () => runReport(accessToken, propertyId, {
+      dateRanges: allRanges,
+      metrics: [
+        { name: "activeUsers" },
+        { name: "sessions" },
+        { name: "screenPageViews" },
+        { name: "engagementRate" },
+        { name: "averageSessionDuration" },
+      ],
+      ...(dimensionFilter ? { dimensionFilter } : {}),
+    }),
+    () => runReport(accessToken, propertyId, {
+      dateRanges: currentRange,
+      dimensions: [{ name: "date" }],
+      metrics: [{ name: "activeUsers" }, { name: "sessions" }, { name: "screenPageViews" }],
+      orderBys: [{ dimension: { dimensionName: "date" } }],
+      ...(dimensionFilter ? { dimensionFilter } : {}),
+      limit: 14,
+    }),
+    () => runReport(accessToken, propertyId, {
+      dateRanges: allRanges,
+      dimensions: [{ name: "sessionDefaultChannelGroup" }],
+      metrics: [{ name: "sessions" }, { name: "activeUsers" }],
+      orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+      ...(dimensionFilter ? { dimensionFilter } : {}),
+      limit: 20,
+    }),
+    () => runReport(accessToken, propertyId, {
+      dateRanges: currentRange,
+      dimensions: [{ name: "pageTitle" }, { name: "pagePath" }],
+      metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
+      orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
+      ...(dimensionFilter ? { dimensionFilter } : {}),
+      limit: 8,
+    }),
+    () => runReport(accessToken, propertyId, {
+      dateRanges: currentRange,
+      dimensions: [{ name: "landingPage" }],
+      metrics: [{ name: "sessions" }, { name: "activeUsers" }],
+      orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+      ...(dimensionFilter ? { dimensionFilter } : {}),
+      limit: 8,
+    }).catch(() => ({ rows: [] })),
+    () => runReport(accessToken, propertyId, {
+      dateRanges: currentRange,
+      dimensions: [{ name: "pagePath" }, { name: "pageTitle" }],
+      metrics: [{ name: "screenPageViews" }],
+      orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
+      dimensionFilter: {
+        orGroup: {
+          expressions: [
+            { filter: { fieldName: "pageTitle", stringFilter: { matchType: "CONTAINS", value: "404", caseSensitive: false } } },
+            { filter: { fieldName: "pageTitle", stringFilter: { matchType: "CONTAINS", value: "not found", caseSensitive: false } } },
+          ],
+        },
+      },
+      limit: 10,
+    }).catch(() => ({ rows: [] })),
+    () => runReport(accessToken, propertyId, {
+      dateRanges: currentRange,
+      dimensions: [{ name: "country" }],
+      metrics: [{ name: "activeUsers" }, { name: "sessions" }],
+      orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
+      ...(dimensionFilter ? { dimensionFilter } : {}),
+      limit: 8,
+    }),
+    () => runReport(accessToken, propertyId, {
+      dateRanges: currentRange,
+      dimensions: [{ name: "city" }],
+      metrics: [{ name: "activeUsers" }, { name: "sessions" }],
+      orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
+      ...(dimensionFilter ? { dimensionFilter } : {}),
+      limit: 8,
+    }),
+    () => runReport(accessToken, propertyId, {
+      dateRanges: currentRange,
+      dimensions: [{ name: "deviceCategory" }],
+      metrics: [{ name: "activeUsers" }, { name: "sessions" }],
+      orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
+      ...(dimensionFilter ? { dimensionFilter } : {}),
+      limit: 5,
+    }),
+  ]);
+
+  const summaryByRange: Record<string, any> = {};
+  for (const row of summary.rows ?? []) {
+    const rangeName = row.dimensionValues?.[0]?.value ?? "current";
+    summaryByRange[rangeName] = {
+      activeUsers: metricValue(row, 0),
+      sessions: metricValue(row, 1),
+      pageViews: metricValue(row, 2),
+      engagementRate: metricValue(row, 3),
+      avgSessionDurationSec: metricValue(row, 4),
+    };
+  }
+  const empty = { activeUsers: 0, sessions: 0, pageViews: 0, engagementRate: 0, avgSessionDurationSec: 0 };
+  const cur = summaryByRange["date_range_0"] ?? summaryByRange["current"] ?? empty;
+  const wow = summaryByRange["date_range_1"] ?? summaryByRange["prior_week"] ?? empty;
+  const mom = summaryByRange["date_range_2"] ?? summaryByRange["prior_month"] ?? empty;
+
+  const pctDelta = (curV: number, prevV: number): number | null =>
+    prevV > 0 ? ((curV - prevV) / prevV) * 100 : (curV > 0 ? null : 0);
+
+  const buildDelta = (a: any, b: any) => ({
+    activeUsers: pctDelta(a.activeUsers, b.activeUsers),
+    sessions: pctDelta(a.sessions, b.sessions),
+    pageViews: pctDelta(a.pageViews, b.pageViews),
+    engagementRate: pctDelta(a.engagementRate, b.engagementRate),
+    avgSessionDurationSec: pctDelta(a.avgSessionDurationSec, b.avgSessionDurationSec),
+  });
+
+  const channelCurrent = new Map<string, { sessions: number; users: number }>();
+  const channelPrior = new Map<string, { sessions: number; users: number }>();
+  for (const row of channels.rows ?? []) {
+    const rangeName = row.dimensionValues?.[0]?.value ?? "date_range_0";
+    const label = String(row.dimensionValues?.[1]?.value ?? "");
+    const bucket = rangeName === "date_range_1" ? channelPrior : rangeName === "date_range_2" ? null : channelCurrent;
+    if (!bucket || !label) continue;
+    bucket.set(label, { sessions: metricValue(row, 0), users: metricValue(row, 1) });
+  }
+  const acquisition = CHANNELS_9.map((name) => {
+    const c = channelCurrent.get(name) ?? { sessions: 0, users: 0 };
+    const p = channelPrior.get(name) ?? { sessions: 0, users: 0 };
+    return {
+      channel: name,
+      sessions: c.sessions,
+      users: c.users,
+      wowDeltaPct: pctDelta(c.sessions, p.sessions),
+      configured: channelCurrent.has(name) || channelPrior.has(name),
+    };
+  });
+
+  const sparkline = (dailyRow.rows ?? []).map((row: any) => ({
+    date: dimensionValue(row, 0),
+    users: metricValue(row, 0),
+    sessions: metricValue(row, 1),
+    pageViews: metricValue(row, 2),
+  }));
+
+  const notFoundRows = (notFound.rows ?? []).map((r: any) => ({
+    path: dimensionValue(r, 0),
+    title: dimensionValue(r, 1),
+    hits: metricValue(r, 0),
+  }));
+
+  return {
+    schemaVersion: 1,
+    connected: true,
+    propertyId,
+    dateRange: range,
+    priorWeek: prevWeek,
+    priorMonth: prevMonth,
+    filters,
+    summary: {
+      current: cur,
+      priorWeek: wow,
+      priorMonth: mom,
+      wowDeltaPct: buildDelta(cur, wow),
+      momDeltaPct: buildDelta(cur, mom),
+    },
+    sparkline,
+    acquisition,
+    topPages: (topPages.rows ?? []).map((r: any) => ({
+      title: dimensionValue(r, 0),
+      path: dimensionValue(r, 1),
+      views: metricValue(r, 0),
+      users: metricValue(r, 1),
+    })),
+    landingPages: (landingPages.rows ?? []).map((r: any) => ({
+      landing: dimensionValue(r, 0),
+      sessions: metricValue(r, 0),
+      users: metricValue(r, 1),
+    })),
+    notFound: {
+      total: notFoundRows.reduce((a: number, r: any) => a + r.hits, 0),
+      rows: notFoundRows,
+    },
+    countries: (countries.rows ?? []).map((r: any) => ({ label: dimensionValue(r, 0), users: metricValue(r, 0), sessions: metricValue(r, 1) })),
+    cities: (cities.rows ?? []).map((r: any) => ({ label: dimensionValue(r, 0), users: metricValue(r, 0), sessions: metricValue(r, 1) })),
+    devices: (devices.rows ?? []).map((r: any) => ({ label: dimensionValue(r, 0), users: metricValue(r, 0), sessions: metricValue(r, 1) })),
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 

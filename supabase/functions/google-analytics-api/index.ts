@@ -616,16 +616,34 @@ async function getWeeklyReport(accessToken: string, propertyId: string, filters:
     avgSessionDurationSec: pctDelta(a.avgSessionDurationSec, b.avgSessionDurationSec),
   });
 
+  // GA4 appends the auto-injected `dateRange` dimension AFTER the requested
+  // dimensions when multiple dateRanges are used. So for a query with
+  // dimensions=[sessionDefaultChannelGroup] and 3 dateRanges, the row shape is:
+  //   dimensionValues[0] = channel label
+  //   dimensionValues[1] = date range name (date_range_0 / _1 / _2)
   const channelCurrent = new Map<string, { sessions: number; users: number }>();
   const channelPrior = new Map<string, { sessions: number; users: number }>();
   for (const row of channels.rows ?? []) {
-    const rangeName = row.dimensionValues?.[0]?.value ?? "date_range_0";
-    const label = String(row.dimensionValues?.[1]?.value ?? "");
+    const label = String(row.dimensionValues?.[0]?.value ?? "").trim();
+    const rangeName = row.dimensionValues?.[1]?.value ?? "date_range_0";
+    if (!label) continue;
     const bucket = rangeName === "date_range_1" ? channelPrior : rangeName === "date_range_2" ? null : channelCurrent;
-    if (!bucket || !label) continue;
+    if (!bucket) continue;
     bucket.set(label, { sessions: metricValue(row, 0), users: metricValue(row, 1) });
   }
-  const acquisition = CHANNELS_9.map((name) => {
+  // Preserve the canonical 9-channel order, then append any additional channels
+  // GA4 reported (Unassigned, Cross-network, Organic Video, Organic Shopping,
+  // Paid Video, Paid Shopping, Paid Other, Audio, SMS, Mobile Push Notifications, etc.)
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const name of CHANNELS_9) { ordered.push(name); seen.add(name); }
+  const extras: { name: string; sessions: number }[] = [];
+  for (const [name, v] of channelCurrent) if (!seen.has(name)) extras.push({ name, sessions: v.sessions });
+  for (const [name, v] of channelPrior) if (!seen.has(name) && !extras.find((e) => e.name === name)) extras.push({ name, sessions: v.sessions });
+  extras.sort((a, b) => b.sessions - a.sessions);
+  for (const e of extras) { ordered.push(e.name); seen.add(e.name); }
+
+  const acquisition = ordered.map((name) => {
     const c = channelCurrent.get(name) ?? { sessions: 0, users: 0 };
     const p = channelPrior.get(name) ?? { sessions: 0, users: 0 };
     return {

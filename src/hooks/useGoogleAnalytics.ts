@@ -30,6 +30,49 @@ export interface AnalyticsDashboard {
   generatedAt: string;
 }
 
+export type WeeklyFilters = {
+  country?: string;
+  device?: "desktop" | "mobile" | "tablet";
+  channel?: string;
+  source?: string;
+  medium?: string;
+  dateRange?: { start: string; end: string };
+};
+
+export interface WeeklyDelta {
+  activeUsers: number | null;
+  sessions: number | null;
+  pageViews: number | null;
+  engagementRate: number | null;
+  avgSessionDurationSec: number | null;
+}
+
+export interface WeeklyReport {
+  schemaVersion: number;
+  connected: boolean;
+  propertyId: string;
+  dateRange: { start: string; end: string };
+  priorWeek: { start: string; end: string };
+  priorMonth: { start: string; end: string };
+  filters: WeeklyFilters;
+  summary: {
+    current: { activeUsers: number; sessions: number; pageViews: number; engagementRate: number; avgSessionDurationSec: number };
+    priorWeek: { activeUsers: number; sessions: number; pageViews: number; engagementRate: number; avgSessionDurationSec: number };
+    priorMonth: { activeUsers: number; sessions: number; pageViews: number; engagementRate: number; avgSessionDurationSec: number };
+    wowDeltaPct: WeeklyDelta;
+    momDeltaPct: WeeklyDelta;
+  };
+  sparkline: Array<{ date: string; users: number; sessions: number; pageViews: number }>;
+  acquisition: Array<{ channel: string; sessions: number; users: number; wowDeltaPct: number | null; configured: boolean }>;
+  topPages: Array<{ title: string; path: string; views: number; users: number }>;
+  landingPages: Array<{ landing: string; sessions: number; users: number }>;
+  notFound: { total: number; rows: Array<{ path: string; title: string; hits: number }> };
+  countries: Array<{ label: string; users: number; sessions: number }>;
+  cities: Array<{ label: string; users: number; sessions: number }>;
+  devices: Array<{ label: string; users: number; sessions: number }>;
+  generatedAt: string;
+}
+
 export function useGoogleAnalytics() {
   const { session } = useAuth();
   const [isConnecting, setIsConnecting] = useState(false);

@@ -627,8 +627,13 @@ async function getWeeklyReport(accessToken: string, propertyId: string, filters:
     const label = String(row.dimensionValues?.[0]?.value ?? "").trim();
     const rangeName = row.dimensionValues?.[1]?.value ?? "date_range_0";
     if (!label) continue;
-    const bucket = rangeName === "date_range_1" ? channelPrior : rangeName === "date_range_2" ? null : channelCurrent;
-    if (!bucket) continue;
+    // GA4 echoes back the explicit `name` we set on each dateRange
+    // ("current" / "prior_week" / "prior_month"); fall back to positional
+    // "date_range_N" for older payloads.
+    const isPrior = rangeName === "prior_week" || rangeName === "date_range_1";
+    const isMonth = rangeName === "prior_month" || rangeName === "date_range_2";
+    if (isMonth) continue;
+    const bucket = isPrior ? channelPrior : channelCurrent;
     bucket.set(label, { sessions: metricValue(row, 0), users: metricValue(row, 1) });
   }
   // Preserve the canonical 9-channel order, then append any additional channels

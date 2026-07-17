@@ -1512,6 +1512,7 @@ export type Database = {
       }
       ga_daily_report_log: {
         Row: {
+          cadence: string
           error: string | null
           payload: Json
           recipients: Json
@@ -1520,6 +1521,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          cadence?: string
           error?: string | null
           payload: Json
           recipients: Json
@@ -1528,6 +1530,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          cadence?: string
           error?: string | null
           payload?: Json
           recipients?: Json
@@ -5379,6 +5382,13 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_registrations_rollup: {
+        Args: { _end: string; _start: string }
+        Returns: {
+          count: number
+          day: string
+        }[]
       }
       get_token_leaderboard: {
         Args: never

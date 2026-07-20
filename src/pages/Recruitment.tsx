@@ -37,19 +37,62 @@ const INTERVIEW_METRICS = [
   { key: "conciseness_focus", label: "Conciseness", emoji: "🎯" },
 ];
 
-function ScorePill({ score, label, justification }: { score: number; label: string; justification?: string }) {
-  const color = score >= 4 ? "bg-primary/15 text-primary border-primary/20" : score >= 3 ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" : "bg-destructive/10 text-destructive border-destructive/20";
+type EvidenceState = "demonstrated" | "partially_demonstrated" | "not_demonstrated" | "inaccessible";
+
+function ScorePill({
+  score,
+  label,
+  justification,
+  evidenceState,
+}: {
+  score: number | null | undefined;
+  label: string;
+  justification?: string;
+  evidenceState?: EvidenceState;
+}) {
+  // Evidence-normalized states: never render a numeric score for missing evidence.
+  const isNotDemonstrated = evidenceState === "not_demonstrated";
+  const isInaccessible = evidenceState === "inaccessible";
+  const isPartial = evidenceState === "partially_demonstrated";
+  const numeric = typeof score === "number" && Number.isFinite(score);
+
+  let color: string;
+  let body: JSX.Element;
+  let stateLabel = "";
+  if (isNotDemonstrated) {
+    color = "bg-muted/40 text-muted-foreground border-dashed border-border";
+    body = <span className="italic">n/e</span>;
+    stateLabel = "Not demonstrated in portfolio.";
+  } else if (isInaccessible) {
+    color = "bg-muted/40 text-muted-foreground border-dashed border-border";
+    body = <span className="italic">n/a</span>;
+    stateLabel = "Portfolio evidence could not be assessed.";
+  } else if (!numeric) {
+    color = "bg-muted/40 text-muted-foreground border-dashed border-border";
+    body = <span className="italic">—</span>;
+  } else {
+    color = (score as number) >= 4
+      ? "bg-primary/15 text-primary border-primary/20"
+      : (score as number) >= 3
+      ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+      : "bg-destructive/10 text-destructive border-destructive/20";
+    body = <span className="font-bold">{isPartial ? `${score}*` : score}</span>;
+    if (isPartial) stateLabel = "Partially demonstrated (inferred).";
+  }
+
   return (
     <TooltipProvider delayDuration={200}>
       <Tooltip>
         <TooltipTrigger asChild>
           <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded border ${color} cursor-default`}>
-            {label}<span className="font-bold">{score}</span>
+            {label}
+            {body}
           </span>
         </TooltipTrigger>
-        {justification && (
-          <TooltipContent side="top" className="max-w-xs text-xs">
-            {justification}
+        {(justification || stateLabel) && (
+          <TooltipContent side="top" className="max-w-xs text-xs space-y-1">
+            {stateLabel && <p className="font-medium">{stateLabel}</p>}
+            {justification && <p className="text-muted-foreground">{justification}</p>}
           </TooltipContent>
         )}
       </Tooltip>
@@ -88,6 +131,8 @@ function getCandidateCompetencyScore(candidate: any): number | null {
     return null;
   }
 
+  // Evidence-normalized: only include numeric scores (skips nulls from
+  // not_demonstrated / inaccessible so absence of evidence never depresses the mean).
   const scores = Object.values(competencies)
     .map((entry: any) => entry?.score)
     .filter((score): score is number => typeof score === "number" && Number.isFinite(score));
@@ -622,6 +667,8 @@ const Recruitment = () => {
                       const vals = details?.values;
                       const comps = details?.competencies;
                       const compEntries = comps ? (Object.entries(comps) as [string, any][]) : [];
+                      const portfolioMeta = details?.portfolio_meta;
+                      const isPortfolioOnly = c.is_portfolio_only === true || !!portfolioMeta;
                         const competencyScore = getCandidateCompetencyScore(c);
                         const hireflixLink = c.hireflix_playback_url ?? c.hireflix_interview_url;
                       const isEligible = isInviteEligible(c);
@@ -802,7 +849,8 @@ const Recruitment = () => {
                                 {compEntries.map(([name, data]) => (
                                   <ScorePill
                                     key={name}
-                                    score={data?.score || 0}
+                                    score={typeof data?.score === "number" ? data.score : null}
+                                    evidenceState={data?.evidence_state as EvidenceState | undefined}
                                     label={name.split(" ").map((w: string) => w[0]).join("")}
                                     justification={`${name}: ${data?.justification || ""}`}
                                   />
@@ -817,11 +865,27 @@ const Recruitment = () => {
                           <TableCell>
                             <div className="flex items-center justify-center gap-3">
                               <ScoreRing score={c.values_score} label="Values" />
-                              <ScoreRing
-                                score={competencyScore}
-                                label="Comp."
-                                displayValue={competencyScore != null ? competencyScore.toFixed(1) : undefined}
-                              />
+                              <div className="flex flex-col items-center">
+                                <ScoreRing
+                                  score={competencyScore}
+                                  label={isPortfolioOnly ? "Portfolio" : "Comp."}
+                                  displayValue={competencyScore != null ? competencyScore.toFixed(1) : undefined}
+                                />
+                                {isPortfolioOnly && portfolioMeta && (
+                                  <TooltipProvider delayDuration={200}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="text-[10px] text-muted-foreground mt-0.5 cursor-default border-b border-dashed border-border">
+                                          {portfolioMeta.assessed}/{portfolioMeta.total} assessed
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top" className="max-w-xs text-xs">
+                                        Evidence-normalized score. Only competencies with demonstrated / partially demonstrated portfolio evidence count toward the mean.
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                              </div>
                               <div className="flex flex-col items-center border-l border-border/50 pl-3">
                                 <span className={`text-xl font-bold ${c.total_score >= 4 ? "text-primary" : c.total_score >= 3 ? "text-yellow-500" : "text-destructive"}`}>
                                   {c.total_score ?? "—"}
@@ -830,6 +894,7 @@ const Recruitment = () => {
                               </div>
                             </div>
                           </TableCell>
+
 
                           {/* Hireflix status */}
                           <TableCell className="text-center">

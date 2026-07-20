@@ -647,6 +647,32 @@ const Recruitment = () => {
                               <div className="min-w-0">
                                 <p className="font-medium text-sm truncate">{c.name}</p>
                                 <p className="text-[11px] text-muted-foreground truncate">{c.email}</p>
+                                {(c.linkedin_url || c.portfolio_url || c.website_url) && (
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    {c.linkedin_url && (
+                                      <a
+                                        href={c.linkedin_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[10px] text-primary hover:underline inline-flex items-center gap-0.5"
+                                        title="LinkedIn profile"
+                                      >
+                                        <ExternalLink className="h-2.5 w-2.5" /> LinkedIn
+                                      </a>
+                                    )}
+                                    {(c.portfolio_url || c.website_url) && (
+                                      <a
+                                        href={c.portfolio_url || c.website_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[10px] text-primary hover:underline inline-flex items-center gap-0.5"
+                                        title="Portfolio"
+                                      >
+                                        <ExternalLink className="h-2.5 w-2.5" /> Portfolio
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </TableCell>

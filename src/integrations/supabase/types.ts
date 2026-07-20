@@ -408,6 +408,7 @@ export type Database = {
           interview_scored_at: string | null
           interview_scores: Json | null
           interview_transcript: string | null
+          is_portfolio_only: boolean
           is_score_locked: boolean
           job_role_id: string | null
           linkedin_url: string | null
@@ -453,6 +454,7 @@ export type Database = {
           interview_scored_at?: string | null
           interview_scores?: Json | null
           interview_transcript?: string | null
+          is_portfolio_only?: boolean
           is_score_locked?: boolean
           job_role_id?: string | null
           linkedin_url?: string | null
@@ -498,6 +500,7 @@ export type Database = {
           interview_scored_at?: string | null
           interview_scores?: Json | null
           interview_transcript?: string | null
+          is_portfolio_only?: boolean
           is_score_locked?: boolean
           job_role_id?: string | null
           linkedin_url?: string | null

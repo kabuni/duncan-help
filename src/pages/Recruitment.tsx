@@ -849,7 +849,8 @@ const Recruitment = () => {
                                 {compEntries.map(([name, data]) => (
                                   <ScorePill
                                     key={name}
-                                    score={data?.score || 0}
+                                    score={typeof data?.score === "number" ? data.score : null}
+                                    evidenceState={data?.evidence_state as EvidenceState | undefined}
                                     label={name.split(" ").map((w: string) => w[0]).join("")}
                                     justification={`${name}: ${data?.justification || ""}`}
                                   />
@@ -864,11 +865,27 @@ const Recruitment = () => {
                           <TableCell>
                             <div className="flex items-center justify-center gap-3">
                               <ScoreRing score={c.values_score} label="Values" />
-                              <ScoreRing
-                                score={competencyScore}
-                                label="Comp."
-                                displayValue={competencyScore != null ? competencyScore.toFixed(1) : undefined}
-                              />
+                              <div className="flex flex-col items-center">
+                                <ScoreRing
+                                  score={competencyScore}
+                                  label={isPortfolioOnly ? "Portfolio" : "Comp."}
+                                  displayValue={competencyScore != null ? competencyScore.toFixed(1) : undefined}
+                                />
+                                {isPortfolioOnly && portfolioMeta && (
+                                  <TooltipProvider delayDuration={200}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="text-[10px] text-muted-foreground mt-0.5 cursor-default border-b border-dashed border-border">
+                                          {portfolioMeta.assessed}/{portfolioMeta.total} assessed
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top" className="max-w-xs text-xs">
+                                        Evidence-normalized score. Only competencies with demonstrated / partially demonstrated portfolio evidence count toward the mean.
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                              </div>
                               <div className="flex flex-col items-center border-l border-border/50 pl-3">
                                 <span className={`text-xl font-bold ${c.total_score >= 4 ? "text-primary" : c.total_score >= 3 ? "text-yellow-500" : "text-destructive"}`}>
                                   {c.total_score ?? "—"}
@@ -877,6 +894,7 @@ const Recruitment = () => {
                               </div>
                             </div>
                           </TableCell>
+
 
                           {/* Hireflix status */}
                           <TableCell className="text-center">

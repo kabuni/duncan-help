@@ -37,19 +37,62 @@ const INTERVIEW_METRICS = [
   { key: "conciseness_focus", label: "Conciseness", emoji: "🎯" },
 ];
 
-function ScorePill({ score, label, justification }: { score: number; label: string; justification?: string }) {
-  const color = score >= 4 ? "bg-primary/15 text-primary border-primary/20" : score >= 3 ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" : "bg-destructive/10 text-destructive border-destructive/20";
+type EvidenceState = "demonstrated" | "partially_demonstrated" | "not_demonstrated" | "inaccessible";
+
+function ScorePill({
+  score,
+  label,
+  justification,
+  evidenceState,
+}: {
+  score: number | null | undefined;
+  label: string;
+  justification?: string;
+  evidenceState?: EvidenceState;
+}) {
+  // Evidence-normalized states: never render a numeric score for missing evidence.
+  const isNotDemonstrated = evidenceState === "not_demonstrated";
+  const isInaccessible = evidenceState === "inaccessible";
+  const isPartial = evidenceState === "partially_demonstrated";
+  const numeric = typeof score === "number" && Number.isFinite(score);
+
+  let color: string;
+  let body: JSX.Element;
+  let stateLabel = "";
+  if (isNotDemonstrated) {
+    color = "bg-muted/40 text-muted-foreground border-dashed border-border";
+    body = <span className="italic">n/e</span>;
+    stateLabel = "Not demonstrated in portfolio.";
+  } else if (isInaccessible) {
+    color = "bg-muted/40 text-muted-foreground border-dashed border-border";
+    body = <span className="italic">n/a</span>;
+    stateLabel = "Portfolio evidence could not be assessed.";
+  } else if (!numeric) {
+    color = "bg-muted/40 text-muted-foreground border-dashed border-border";
+    body = <span className="italic">—</span>;
+  } else {
+    color = (score as number) >= 4
+      ? "bg-primary/15 text-primary border-primary/20"
+      : (score as number) >= 3
+      ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+      : "bg-destructive/10 text-destructive border-destructive/20";
+    body = <span className="font-bold">{isPartial ? `${score}*` : score}</span>;
+    if (isPartial) stateLabel = "Partially demonstrated (inferred).";
+  }
+
   return (
     <TooltipProvider delayDuration={200}>
       <Tooltip>
         <TooltipTrigger asChild>
           <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded border ${color} cursor-default`}>
-            {label}<span className="font-bold">{score}</span>
+            {label}
+            {body}
           </span>
         </TooltipTrigger>
-        {justification && (
-          <TooltipContent side="top" className="max-w-xs text-xs">
-            {justification}
+        {(justification || stateLabel) && (
+          <TooltipContent side="top" className="max-w-xs text-xs space-y-1">
+            {stateLabel && <p className="font-medium">{stateLabel}</p>}
+            {justification && <p className="text-muted-foreground">{justification}</p>}
           </TooltipContent>
         )}
       </Tooltip>
@@ -88,6 +131,8 @@ function getCandidateCompetencyScore(candidate: any): number | null {
     return null;
   }
 
+  // Evidence-normalized: only include numeric scores (skips nulls from
+  // not_demonstrated / inaccessible so absence of evidence never depresses the mean).
   const scores = Object.values(competencies)
     .map((entry: any) => entry?.score)
     .filter((score): score is number => typeof score === "number" && Number.isFinite(score));

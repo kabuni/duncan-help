@@ -63,27 +63,53 @@ function buildCompetencyKeyMap(
   return out;
 }
 
-interface CompetencyResult { score: number; justification: string; }
+type EvidenceState = "demonstrated" | "partially_demonstrated" | "not_demonstrated" | "inaccessible";
+interface CompetencyResult { score: number | null; justification: string; evidence_state?: EvidenceState; }
 
-function buildToolSchema(keyMap: Array<{ key: string; name: string }>) {
+function buildToolSchema(keyMap: Array<{ key: string; name: string }>, portfolioMode: boolean) {
   const properties: Record<string, any> = {};
   for (const { key, name } of keyMap) {
-    properties[key] = {
-      type: "object",
-      description: `Score for competency "${name}"`,
-      properties: {
-        score: { type: "integer", minimum: 1, maximum: 5 },
-        justification: { type: "string", description: "Brief evidence-based justification (1–2 sentences quoting CV evidence)" },
-      },
-      required: ["score", "justification"],
-      additionalProperties: false,
-    };
+    if (portfolioMode) {
+      properties[key] = {
+        type: "object",
+        description: `Assessment for competency "${name}"`,
+        properties: {
+          evidence_state: {
+            type: "string",
+            enum: ["demonstrated", "partially_demonstrated", "not_demonstrated", "inaccessible"],
+            description: "demonstrated = clear portfolio evidence; partially_demonstrated = indirect/inferred evidence (state this in justification); not_demonstrated = portfolio contains no relevant evidence; inaccessible = evidence could not be viewed (broken link, gated).",
+          },
+          score: {
+            type: ["integer", "null"],
+            minimum: 1,
+            maximum: 5,
+            description: "Integer 1–5 ONLY when evidence_state is demonstrated or partially_demonstrated. MUST be null for not_demonstrated or inaccessible. Weak demonstrated execution IS a valid low score (1 or 2). Absence of evidence is NOT a score of 1 — use not_demonstrated instead.",
+          },
+          justification: { type: "string", description: "1–2 sentences quoting the specific portfolio evidence used. If partially_demonstrated, explicitly say it is inferred." },
+        },
+        required: ["evidence_state", "score", "justification"],
+        additionalProperties: false,
+      };
+    } else {
+      properties[key] = {
+        type: "object",
+        description: `Score for competency "${name}"`,
+        properties: {
+          score: { type: "integer", minimum: 1, maximum: 5 },
+          justification: { type: "string", description: "Brief evidence-based justification (1–2 sentences quoting CV evidence)" },
+        },
+        required: ["score", "justification"],
+        additionalProperties: false,
+      };
+    }
   }
   return {
     type: "function" as const,
     function: {
       name: "score_competencies",
-      description: "Submit competency scores for the candidate. You MUST provide a score and justification for every competency key listed in the schema.",
+      description: portfolioMode
+        ? "Submit an evidence-aware competency assessment. Provide evidence_state for EVERY competency; score is 1–5 only when the portfolio actually demonstrates the competency, otherwise null."
+        : "Submit competency scores for the candidate. You MUST provide a score and justification for every competency key listed in the schema.",
       parameters: {
         type: "object",
         properties,
@@ -94,10 +120,41 @@ function buildToolSchema(keyMap: Array<{ key: string; name: string }>) {
   };
 }
 
-function buildSystemPrompt(roleTitle: string, keyMap: Array<{ key: string; name: string }>, competencies: Array<{ name: string; description?: string }>) {
+function buildSystemPrompt(
+  roleTitle: string,
+  keyMap: Array<{ key: string; name: string }>,
+  competencies: Array<{ name: string; description?: string }>,
+  portfolioMode: boolean,
+) {
   const list = keyMap
     .map(({ key, name }, i) => `${i + 1}. key: "${key}" — ${name}: ${competencies[i]?.description || "No description provided"}`)
     .join("\n");
+
+  if (portfolioMode) {
+    return `You are an expert design/portfolio assessor. Evaluate this candidate STRICTLY from the portfolio evidence provided for the "${roleTitle}" role.
+
+CRITICAL RULES:
+- Base every assessment ONLY on evidence in the provided text (portfolio case studies, project descriptions, artefacts).
+- IGNORE any LinkedIn, recruiter notes, PPT context, hiring metadata, day rate, location, or availability — even if present.
+- Do NOT invent a numeric score when the portfolio does not show the competency. Absence of evidence is NOT a score of 1.
+- Do NOT inflate scores because a candidate worked at a prestigious company or shipped a product. Working somewhere ≠ demonstrated competency.
+- Weak but demonstrated execution IS a valid low numeric score (1 or 2).
+
+For EACH competency, return an evidence_state:
+- demonstrated: portfolio directly shows this competency in a case study, artefact, or explicit description. Score 1–5.
+    1 = evidence exists but the execution shown is weak
+    3 = solid, competent evidence
+    5 = exceptional, standout evidence
+- partially_demonstrated: evidence is indirect/inferred (e.g. a shipped product implies SOME handoff work). Score 1–5, and the justification MUST explicitly say "inferred". Prefer this over demonstrated when the evidence is only proxy.
+- not_demonstrated: portfolio contains no relevant evidence. score MUST be null.
+- inaccessible: portfolio link/case study could not be accessed (paywalled, broken, gated). score MUST be null.
+
+Competencies (use the exact key shown — do NOT invent new keys):
+${list}
+
+Call score_competencies ONCE with EVERY key: ${keyMap.map((k) => `"${k.key}"`).join(", ")}.`;
+  }
+
   return `You are an expert recruitment assessor. Score this candidate's CV against the following competencies for the "${roleTitle}" role.
 
 For EACH competency, score 1–5:
@@ -118,6 +175,7 @@ Call score_competencies ONCE. The arguments object MUST contain EVERY key listed
 function validateScoresPayload(
   raw: any,
   keyMap: Array<{ key: string; name: string }>,
+  portfolioMode: boolean,
 ): { ok: true; scores: Record<string, CompetencyResult> } | { ok: false; missing: string[]; invalid: string[] } {
   const missing: string[] = [];
   const invalid: string[] = [];
@@ -128,11 +186,30 @@ function validateScoresPayload(
   for (const { key } of keyMap) {
     const entry = raw[key];
     if (!entry || typeof entry !== "object") { missing.push(key); continue; }
-    const scoreNum = Number(entry.score);
     const justif = typeof entry.justification === "string" ? entry.justification.trim() : "";
-    if (!Number.isFinite(scoreNum) || scoreNum < 1 || scoreNum > 5) { invalid.push(key); continue; }
     if (!justif) { invalid.push(key); continue; }
-    scores[key] = { score: clampScore(scoreNum), justification: justif };
+
+    if (portfolioMode) {
+      const state = entry.evidence_state as EvidenceState | undefined;
+      if (!state || !["demonstrated", "partially_demonstrated", "not_demonstrated", "inaccessible"].includes(state)) {
+        invalid.push(key);
+        continue;
+      }
+      const rawScore = entry.score;
+      const requiresScore = state === "demonstrated" || state === "partially_demonstrated";
+      if (requiresScore) {
+        const n = Number(rawScore);
+        if (!Number.isFinite(n) || n < 1 || n > 5) { invalid.push(key); continue; }
+        scores[key] = { score: clampScore(n), justification: justif, evidence_state: state };
+      } else {
+        // score must be null for not_demonstrated / inaccessible
+        scores[key] = { score: null, justification: justif, evidence_state: state };
+      }
+    } else {
+      const n = Number(entry.score);
+      if (!Number.isFinite(n) || n < 1 || n > 5) { invalid.push(key); continue; }
+      scores[key] = { score: clampScore(n), justification: justif };
+    }
   }
   if (missing.length > 0 || invalid.length > 0) return { ok: false, missing, invalid };
   return { ok: true, scores };

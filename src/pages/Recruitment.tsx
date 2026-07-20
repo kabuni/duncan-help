@@ -667,6 +667,8 @@ const Recruitment = () => {
                       const vals = details?.values;
                       const comps = details?.competencies;
                       const compEntries = comps ? (Object.entries(comps) as [string, any][]) : [];
+                      const portfolioMeta = details?.portfolio_meta;
+                      const isPortfolioOnly = c.is_portfolio_only === true || !!portfolioMeta;
                         const competencyScore = getCandidateCompetencyScore(c);
                         const hireflixLink = c.hireflix_playback_url ?? c.hireflix_interview_url;
                       const isEligible = isInviteEligible(c);

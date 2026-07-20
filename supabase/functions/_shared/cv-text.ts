@@ -86,6 +86,10 @@ export async function extractCvText(
   } else if (lower.endsWith(".doc")) {
     // Legacy .doc: best-effort, treat as text
     try { text = new TextDecoder("utf-8", { fatal: false }).decode(bytes); } catch { text = null; }
+  } else if (lower.endsWith(".txt") || lower.endsWith(".md")) {
+    // Plain-text evidence corpora (e.g. PPT + LinkedIn + Portfolio investigations
+    // for candidates who don't come with a traditional CV).
+    try { text = new TextDecoder("utf-8", { fatal: false }).decode(bytes); } catch { text = null; }
   }
 
   if (!text || text.trim().length < 20) return null;

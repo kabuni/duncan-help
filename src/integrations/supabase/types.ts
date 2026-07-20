@@ -410,18 +410,22 @@ export type Database = {
           interview_transcript: string | null
           is_score_locked: boolean
           job_role_id: string | null
+          linkedin_url: string | null
           name: string
           offer_letter_storage_path: string | null
           onboarding_card_id: string | null
+          portfolio_url: string | null
           preferred_name: string | null
           rejected_at: string | null
           rejected_by: string | null
           scoring_details: Json | null
+          source: string | null
           start_date: string | null
           status: string
           total_score: number | null
           updated_at: string
           values_score: number | null
+          website_url: string | null
           work_location: string | null
         }
         Insert: {
@@ -451,18 +455,22 @@ export type Database = {
           interview_transcript?: string | null
           is_score_locked?: boolean
           job_role_id?: string | null
+          linkedin_url?: string | null
           name: string
           offer_letter_storage_path?: string | null
           onboarding_card_id?: string | null
+          portfolio_url?: string | null
           preferred_name?: string | null
           rejected_at?: string | null
           rejected_by?: string | null
           scoring_details?: Json | null
+          source?: string | null
           start_date?: string | null
           status?: string
           total_score?: number | null
           updated_at?: string
           values_score?: number | null
+          website_url?: string | null
           work_location?: string | null
         }
         Update: {
@@ -492,18 +500,22 @@ export type Database = {
           interview_transcript?: string | null
           is_score_locked?: boolean
           job_role_id?: string | null
+          linkedin_url?: string | null
           name?: string
           offer_letter_storage_path?: string | null
           onboarding_card_id?: string | null
+          portfolio_url?: string | null
           preferred_name?: string | null
           rejected_at?: string | null
           rejected_by?: string | null
           scoring_details?: Json | null
+          source?: string | null
           start_date?: string | null
           status?: string
           total_score?: number | null
           updated_at?: string
           values_score?: number | null
+          website_url?: string | null
           work_location?: string | null
         }
         Relationships: [

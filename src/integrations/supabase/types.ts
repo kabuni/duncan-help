@@ -3297,6 +3297,7 @@ export type Database = {
           owner_display_name: string | null
           owner_user_id: string | null
           priority: string
+          progress_percent: number | null
           status: string
           title: string
           updated_at: string
@@ -3313,6 +3314,7 @@ export type Database = {
           owner_display_name?: string | null
           owner_user_id?: string | null
           priority?: string
+          progress_percent?: number | null
           status?: string
           title: string
           updated_at?: string
@@ -3329,6 +3331,7 @@ export type Database = {
           owner_display_name?: string | null
           owner_user_id?: string | null
           priority?: string
+          progress_percent?: number | null
           status?: string
           title?: string
           updated_at?: string

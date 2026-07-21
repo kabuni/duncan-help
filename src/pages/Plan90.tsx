@@ -46,7 +46,7 @@ export default function Plan90() {
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
     const monthAfterNext = new Date(today.getFullYear(), today.getMonth() + 2, 1);
-    const in14 = new Date(today); in14.setDate(in14.getDate() + 14);
+    const in7 = new Date(today); in7.setDate(in7.getDate() + 7);
     return deliverables.filter((d) => {
       if (d.archived) return false;
       if (filters.q && !d.title.toLowerCase().includes(filters.q.toLowerCase())) return false;
@@ -58,7 +58,7 @@ export default function Plan90() {
         const due = d.due_date ? new Date(d.due_date) : null;
         if (!due) return false;
         if (filters.timeframe === "overdue" && !(due < today && d.status !== "Completed")) return false;
-        if (filters.timeframe === "soon" && !(due >= today && due <= in14)) return false;
+        if (filters.timeframe === "soon" && !(due >= today && due <= in7)) return false;
         if (filters.timeframe === "month" && !(due >= monthStart && due < nextMonthStart)) return false;
         if (filters.timeframe === "next" && !(due >= nextMonthStart && due < monthAfterNext)) return false;
         if (filters.timeframe === "later" && !(due >= monthAfterNext)) return false;

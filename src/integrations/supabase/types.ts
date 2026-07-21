@@ -3245,6 +3245,136 @@ export type Database = {
           },
         ]
       }
+      plan90_attachments: {
+        Row: {
+          created_at: string
+          deliverable_id: string
+          file_name: string
+          id: string
+          mime_type: string | null
+          size_bytes: number | null
+          storage_path: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          deliverable_id: string
+          file_name: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          deliverable_id?: string
+          file_name?: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan90_attachments_deliverable_id_fkey"
+            columns: ["deliverable_id"]
+            isOneToOne: false
+            referencedRelation: "plan90_deliverables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan90_deliverables: {
+        Row: {
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          due_date: string | null
+          id: string
+          notes: string | null
+          owner_display_name: string | null
+          owner_user_id: string | null
+          priority: string
+          status: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          workstream_id: string
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          owner_display_name?: string | null
+          owner_user_id?: string | null
+          priority?: string
+          status?: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          workstream_id: string
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          owner_display_name?: string | null
+          owner_user_id?: string | null
+          priority?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          workstream_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan90_deliverables_workstream_id_fkey"
+            columns: ["workstream_id"]
+            isOneToOne: false
+            referencedRelation: "plan90_workstreams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan90_workstreams: {
+        Row: {
+          archived: boolean
+          created_at: string
+          description: string | null
+          display_order: number
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           approval_status: string

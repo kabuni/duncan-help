@@ -45,7 +45,10 @@ function sanitizeName(f: string) {
 
 export function DeliverableRow({ item, workstreams, owners, isAdmin, onUpdate, onDelete }: Props) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  const isOverdue = !!item.due_date && new Date(item.due_date) < today && item.status !== "Completed";
+  const in7 = new Date(today); in7.setDate(in7.getDate() + 7);
+  const dueDate = item.due_date ? new Date(item.due_date) : null;
+  const isOverdue = !!dueDate && dueDate < today && item.status !== "Completed";
+  const isDueSoon = !!dueDate && !isOverdue && dueDate >= today && dueDate <= in7 && item.status !== "Completed";
   const [editTitle, setEditTitle] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [notesOpen, setNotesOpen] = useState(false);
@@ -56,7 +59,7 @@ export function DeliverableRow({ item, workstreams, owners, isAdmin, onUpdate, o
   const disabled = !isAdmin;
 
   return (
-    <tr className={cn("border-b border-border/60 hover:bg-secondary/30 transition-colors", isOverdue && "bg-red-500/[0.03]")}>
+    <tr className={cn("border-b border-border/60 hover:bg-secondary/30 transition-colors", isOverdue && "bg-red-500/[0.03]", isDueSoon && "bg-yellow-500/[0.04]")}>
       <td className="px-3 py-2 align-top">
         {editTitle && isAdmin ? (
           <div className="flex items-center gap-1">
@@ -86,7 +89,7 @@ export function DeliverableRow({ item, workstreams, owners, isAdmin, onUpdate, o
       <td className="px-3 py-2 align-top w-[140px]">
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" disabled={disabled} className={cn("h-8 justify-start font-normal text-xs w-full", isOverdue && "text-red-500")}>
+            <Button variant="ghost" size="sm" disabled={disabled} className={cn("h-8 justify-start font-normal text-xs w-full", isOverdue && "text-red-500", isDueSoon && "text-yellow-600 dark:text-yellow-400")} title={isOverdue ? "Overdue" : isDueSoon ? "Due within 7 days" : undefined}>
               <CalendarIcon className="h-3 w-3 mr-1.5" />
               {item.due_date ? format(new Date(item.due_date), "d MMM yyyy") : "—"}
             </Button>

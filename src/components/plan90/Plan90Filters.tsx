@@ -50,7 +50,7 @@ export function Plan90Filters({ value, onChange, workstreams, owners }: Props) {
         <SelectContent>
           <SelectItem value="all">Any time</SelectItem>
           <SelectItem value="overdue">Overdue</SelectItem>
-          <SelectItem value="soon">Due within 14 days</SelectItem>
+          <SelectItem value="soon">Due within 7 days</SelectItem>
           <SelectItem value="month">This month</SelectItem>
           <SelectItem value="next">Next month</SelectItem>
           <SelectItem value="later">Later</SelectItem>

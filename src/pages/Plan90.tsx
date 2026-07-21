@@ -46,7 +46,7 @@ export default function Plan90() {
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
     const monthAfterNext = new Date(today.getFullYear(), today.getMonth() + 2, 1);
-    const in14 = new Date(today); in14.setDate(in14.getDate() + 14);
+    const in7 = new Date(today); in7.setDate(in7.getDate() + 7);
     return deliverables.filter((d) => {
       if (d.archived) return false;
       if (filters.q && !d.title.toLowerCase().includes(filters.q.toLowerCase())) return false;
@@ -58,7 +58,7 @@ export default function Plan90() {
         const due = d.due_date ? new Date(d.due_date) : null;
         if (!due) return false;
         if (filters.timeframe === "overdue" && !(due < today && d.status !== "Completed")) return false;
-        if (filters.timeframe === "soon" && !(due >= today && due <= in14)) return false;
+        if (filters.timeframe === "soon" && !(due >= today && due <= in7)) return false;
         if (filters.timeframe === "month" && !(due >= monthStart && due < nextMonthStart)) return false;
         if (filters.timeframe === "next" && !(due >= nextMonthStart && due < monthAfterNext)) return false;
         if (filters.timeframe === "later" && !(due >= monthAfterNext)) return false;
@@ -114,8 +114,16 @@ export default function Plan90() {
 function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, onUpdate, onDelete, defaultOpen }: any) {
   const [open, setOpen] = useState<boolean>(defaultOpen);
   const today = new Date(); today.setHours(0, 0, 0, 0);
+  const in7 = new Date(today); in7.setDate(in7.getDate() + 7);
   const done = items.filter((i: any) => i.status === "Completed").length;
+  const inProg = items.filter((i: any) => i.status === "In Progress").length;
+  const notStarted = items.filter((i: any) => i.status === "Not Started").length;
   const overdue = items.filter((i: any) => i.due_date && new Date(i.due_date) < today && i.status !== "Completed").length;
+  const dueSoon = items.filter((i: any) => {
+    if (!i.due_date || i.status === "Completed") return false;
+    const d = new Date(i.due_date);
+    return d >= today && d <= in7;
+  }).length;
   const critical = items.filter((i: any) => i.priority === "Critical" && i.status !== "Completed").length;
   const pct = items.length ? Math.round((done / items.length) * 100) : 0;
 
@@ -126,13 +134,17 @@ function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, onUpdat
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-base font-semibold">{ws.name}</h2>
-            <span className="text-xs text-muted-foreground">{items.length} deliverable{items.length !== 1 && "s"}</span>
-            {overdue > 0 && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/30">{overdue} overdue</span>}
-            {critical > 0 && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-500 border border-orange-500/30">{critical} critical</span>}
+            <span className="text-[11px] text-muted-foreground">{items.length} total</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">{done} done</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400">{inProg} in progress</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{notStarted} not started</span>
+            {overdue > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 border border-red-500/30">{overdue} overdue</span>}
+            {dueSoon > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30">{dueSoon} due ≤7d</span>}
+            {critical > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-500 border border-orange-500/30">{critical} critical</span>}
           </div>
           <div className="mt-1.5 flex items-center gap-2">
             <div className="h-1.5 flex-1 max-w-[200px] rounded-full bg-secondary overflow-hidden"><div className="h-full bg-primary" style={{ width: `${pct}%` }} /></div>
-            <span className="text-[11px] text-muted-foreground">{pct}%</span>
+            <span className="text-[11px] text-muted-foreground">{pct}% complete</span>
           </div>
         </div>
       </CollapsibleTrigger>

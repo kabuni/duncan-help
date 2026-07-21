@@ -103,9 +103,6 @@ export function DeliverableRow({ item, workstreams, owners, isAdmin, onUpdate, o
           <SelectContent>{PLAN90_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
         </Select>
       </td>
-      <td className="px-3 py-2 align-top w-[140px]">
-        <ProgressCell item={item} isAdmin={isAdmin} onUpdate={onUpdate} />
-      </td>
       <td className="px-3 py-2 align-top w-[120px]">
         <Select disabled={disabled} value={item.priority} onValueChange={(v) => onUpdate(item.id, { priority: v })}>
           <SelectTrigger className={cn("h-8 text-xs border", priorityColor[item.priority] || "")}><SelectValue /></SelectTrigger>

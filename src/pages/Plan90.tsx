@@ -160,7 +160,7 @@ function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, onUpdat
                   <th className="text-left font-medium px-3 py-2">Owner</th>
                   <th className="text-left font-medium px-3 py-2">Due</th>
                   <th className="text-left font-medium px-3 py-2">Status</th>
-                  <th className="text-left font-medium px-3 py-2">Progress</th>
+                  
                   <th className="text-left font-medium px-3 py-2">Priority</th>
                   <th className="text-left font-medium px-3 py-2">Workstream</th>
                   <th className="text-left font-medium px-3 py-2"></th>

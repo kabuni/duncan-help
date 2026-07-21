@@ -19,6 +19,7 @@ export interface Plan90Deliverable {
   due_date: string | null;
   status: string;
   priority: string;
+  progress_percent: number | null;
   notes: string | null;
   archived: boolean;
   updated_at: string;

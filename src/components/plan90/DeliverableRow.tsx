@@ -89,7 +89,7 @@ export function DeliverableRow({ item, workstreams, owners, isAdmin, onUpdate, o
       <td className="px-3 py-2 align-top w-[140px]">
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" disabled={disabled} className={cn("h-8 justify-start font-normal text-xs w-full", isOverdue && "text-red-500")}>
+            <Button variant="ghost" size="sm" disabled={disabled} className={cn("h-8 justify-start font-normal text-xs w-full", isOverdue && "text-red-500", isDueSoon && "text-yellow-600 dark:text-yellow-400")} title={isOverdue ? "Overdue" : isDueSoon ? "Due within 7 days" : undefined}>
               <CalendarIcon className="h-3 w-3 mr-1.5" />
               {item.due_date ? format(new Date(item.due_date), "d MMM yyyy") : "—"}
             </Button>

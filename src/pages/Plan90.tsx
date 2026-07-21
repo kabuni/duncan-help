@@ -126,9 +126,6 @@ function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, onUpdat
   }).length;
   const critical = items.filter((i: any) => i.priority === "Critical" && i.status !== "Completed").length;
   const completionPct = items.length ? Math.round((done / items.length) * 100) : 0;
-  const progressPct = items.length
-    ? Math.round(items.reduce((s: number, i: any) => s + (i.progress_percent ?? 0), 0) / items.length)
-    : 0;
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="rounded-xl border border-border bg-card overflow-hidden">
@@ -145,15 +142,9 @@ function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, onUpdat
             {dueSoon > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30">{dueSoon} due ≤7d</span>}
             {critical > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-500 border border-orange-500/30">{critical} critical</span>}
           </div>
-          <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-w-xl">
-            <div className="flex items-center gap-2">
-              <div className="h-1.5 flex-1 rounded-full bg-secondary overflow-hidden"><div className="h-full bg-blue-500" style={{ width: `${progressPct}%` }} /></div>
-              <span className="text-[11px] text-muted-foreground whitespace-nowrap">{progressPct}% progress</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-1.5 flex-1 rounded-full bg-secondary overflow-hidden"><div className="h-full bg-primary" style={{ width: `${completionPct}%` }} /></div>
-              <span className="text-[11px] text-muted-foreground whitespace-nowrap">{completionPct}% complete</span>
-            </div>
+          <div className="mt-1.5 max-w-md flex items-center gap-2">
+            <div className="h-1.5 flex-1 rounded-full bg-secondary overflow-hidden"><div className="h-full bg-primary" style={{ width: `${completionPct}%` }} /></div>
+            <span className="text-[11px] text-muted-foreground whitespace-nowrap">{completionPct}% complete</span>
           </div>
         </div>
       </CollapsibleTrigger>

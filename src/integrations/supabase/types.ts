@@ -3291,6 +3291,7 @@ export type Database = {
           archived: boolean
           created_at: string
           created_by: string | null
+          display_order: number | null
           due_date: string | null
           id: string
           notes: string | null
@@ -3308,6 +3309,7 @@ export type Database = {
           archived?: boolean
           created_at?: string
           created_by?: string | null
+          display_order?: number | null
           due_date?: string | null
           id?: string
           notes?: string | null
@@ -3325,6 +3327,7 @@ export type Database = {
           archived?: boolean
           created_at?: string
           created_by?: string | null
+          display_order?: number | null
           due_date?: string | null
           id?: string
           notes?: string | null

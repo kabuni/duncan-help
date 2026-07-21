@@ -47,7 +47,7 @@ export function usePlan90() {
     setLoading(true);
     const [{ data: ws }, { data: d }] = await Promise.all([
       supabase.from("plan90_workstreams" as any).select("*").order("display_order"),
-      supabase.from("plan90_deliverables" as any).select("*").order("due_date", { ascending: true, nullsFirst: false }),
+      supabase.from("plan90_deliverables" as any).select("*").order("display_order", { ascending: true, nullsFirst: false }).order("created_at", { ascending: true }),
     ]);
     setWorkstreams((ws as any) || []);
     setDeliverables((d as any) || []);

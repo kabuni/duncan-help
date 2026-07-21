@@ -37,7 +37,7 @@ export function Plan90Overview({ items }: Props) {
       </div>
       <div className="rounded-lg border border-border bg-card px-4 py-3">
         <div className="flex items-center justify-between mb-1.5 text-xs">
-          <span className="text-muted-foreground">Overall 90-day progress</span>
+          <span className="text-muted-foreground">Overall Completion <span className="text-[10px]">(Completed / Total)</span></span>
           <span className="font-semibold">{stats.pct}%</span>
         </div>
         <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">

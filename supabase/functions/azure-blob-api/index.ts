@@ -9,6 +9,12 @@ const corsHeaders = {
 };
 
 const CONTAINER_NAME = "duncanstorage01";
+const CONFIDENTIAL_PREFIX = "confidential/";
+
+function isConfidentialPath(path: string | null | undefined): boolean {
+  if (!path) return false;
+  return path.toLowerCase().startsWith(CONFIDENTIAL_PREFIX);
+}
 
 /**
  * Parse the Azure Storage connection string into account name and key.

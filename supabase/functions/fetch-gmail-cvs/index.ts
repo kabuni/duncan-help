@@ -4,6 +4,71 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const AZURE_CONTAINER = "duncanstorage01";
 const AZURE_CV_FOLDER = "cvs";
 const AZURE_PUBLIC_FOLDER = "public";
+const AZURE_CONFIDENTIAL_FOLDER = "confidential";
+
+// Filename tokens that indicate SENSITIVE/CONFIDENTIAL content.
+// These non-CV attachments must NEVER end up in cvs/ or public/ — they are
+// routed to confidential/YYYY-MM/ which is gated to admin-only in azure-blob-api.
+const CONFIDENTIAL_FILENAME_TOKENS = [
+  "nda",
+  "non-disclosure",
+  "nondisclosure",
+  "contract",
+  "agreement",
+  "employment",
+  "offer-letter",
+  "offerletter",
+  "engagement-letter",
+  "sow",
+  "msa",
+  "term-sheet",
+  "termsheet",
+  "legal",
+  "bank",
+  "sign-card",
+  "signcard",
+  "statement",
+  "invoice",
+  "receipt",
+  "purchase-order",
+  "purchaseorder",
+  "po-",
+  "quotation",
+  "quote",
+  "budget",
+  "payroll",
+  "salary",
+  "board-pack",
+  "boardpack",
+  "minutes",
+  "cap-table",
+  "captable",
+  "shp",
+];
+
+function isConfidentialFilename(filename: string): boolean {
+  const normalized = filename.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return CONFIDENTIAL_FILENAME_TOKENS.some(
+    (t) =>
+      normalized === t ||
+      normalized.startsWith(`${t}-`) ||
+      normalized.endsWith(`-${t}`) ||
+      normalized.includes(`-${t}-`),
+  );
+}
+
+// A standalone cover letter is NOT a CV. If nothing in the batch looks like an
+// actual CV/resume, cover-letter files must be rejected from the recruitment
+// pipeline (no candidate row, no cvs/ storage).
+function isCoverLetterFilename(filename: string): boolean {
+  const normalized = filename.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return /(^|-)cover-letter(-|$)/.test(normalized) || /(^|-)coverletter(-|$)/.test(normalized);
+}
+
+function isResumeFilename(filename: string): boolean {
+  const normalized = filename.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return /(^|-)(cv|resume|curriculum-vitae)(-|$)/.test(normalized);
+}
 
 function parseAzureConnectionString(connStr: string): { accountName: string; accountKey: string } {
   const parts: Record<string, string> = {};

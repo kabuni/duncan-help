@@ -492,6 +492,54 @@ async function getAccessToken(supabaseAdmin: any): Promise<{ token: string; emai
   return { token: tokenData.access_token, email: tokenData.email_address || "" };
 }
 
+// Best-effort: download an attachment from Gmail and archive it to the Azure
+// `public/` folder (used for non-CV files we intentionally do NOT ingest into
+// the recruitment pipeline). Never throws — pipeline continues on failure.
+async function archiveNonCvAttachment(
+  gmailHeaders: Record<string, string>,
+  messageId: string,
+  attachmentId: string,
+  filename: string,
+  mimeType: string | undefined,
+): Promise<string | null> {
+  try {
+    const azureConnStr = Deno.env.get("AZURE_STORAGE_CONNECTION_STRING");
+    if (!azureConnStr) return null;
+
+    const attachRes = await fetch(
+      `${GMAIL_API}/messages/${messageId}/attachments/${attachmentId}`,
+      { headers: gmailHeaders },
+    );
+    if (!attachRes.ok) return null;
+    const attachData = await attachRes.json();
+    const base64Data = (attachData.data || "").replace(/-/g, "+").replace(/_/g, "/");
+    if (!base64Data) return null;
+    const binaryStr = atob(base64Data);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+    const now = new Date();
+    const yyyyMm = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+    const safeName = sanitizeFilenameForStorage(filename);
+    const blobPath = `${AZURE_PUBLIC_FOLDER}/${yyyyMm}/${Date.now()}_${safeName}`;
+
+    const { accountName, accountKey } = parseAzureConnectionString(azureConnStr);
+    const url = await uploadToAzureBlob(
+      accountName,
+      accountKey,
+      blobPath,
+      bytes,
+      mimeType || "application/octet-stream",
+    );
+    console.log(`[archived_public] ${filename} -> ${blobPath}`);
+    return url;
+  } catch (err) {
+    console.warn(`[archive_public_failed] ${filename}:`, err);
+    return null;
+  }
+}
+
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });

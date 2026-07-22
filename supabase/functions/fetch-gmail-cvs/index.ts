@@ -108,6 +108,7 @@ const NON_CV_TERMS = [
 
 // Hard blocklist: filename tokens that immediately disqualify a file as a CV.
 // Applied per-file (not per-message) so a CV emailed alongside an NDA still ingests.
+// Observed pollution patterns from the historical cvs/ bucket are all covered here.
 const NON_CV_FILENAME_TOKENS = [
   "nda",
   "agreement",
@@ -119,6 +120,31 @@ const NON_CV_FILENAME_TOKENS = [
   "purchase-order",
   "purchaseorder",
   "po-",
+  "bank",
+  "sign-card",
+  "signcard",
+  "consent",
+  "policy",
+  "framework",
+  "tracker",
+  "deck",
+  "budget",
+  "minutes",
+  "board-pack",
+  "boardpack",
+  "shp",
+  "statement",
+  "term-sheet",
+  "termsheet",
+  "proposal",
+  "quote",
+  "quotation",
+  "engagement-letter",
+  "sow",
+  "msa",
+  "jd",
+  "job-description",
+  "jobdescription",
 ];
 
 function isBlockedNonCvFilename(filename: string): boolean {
@@ -252,8 +278,19 @@ function classifyAttachmentBatch(
     if (!recruitmentSignal && filenames.length === 0) {
       return { accepted: false, reason: "Missing recruitment signal", roleSignal, recruitmentSignal };
     }
-  } else if (!recruitmentSignal && exclusionSignal) {
-    return { accepted: false, reason: "Looks like business document, not a CV", roleSignal, recruitmentSignal };
+  } else {
+    // No role matched: fail-safe. Require an explicit recruitment or CV-looking
+    // filename signal before accepting. Previously we only rejected on an
+    // explicit exclusion keyword, which let generic PDFs (board packs, bank
+    // letters, meeting notes, etc.) into the cvs/ bucket.
+    if (!recruitmentSignal && !filenameSignal) {
+      return {
+        accepted: false,
+        reason: "No recruitment or CV-filename signal (fail-safe reject)",
+        roleSignal,
+        recruitmentSignal,
+      };
+    }
   }
 
   if (exclusionSignal && !recruitmentSignal) {
@@ -430,7 +467,8 @@ interface ProcessingDetail {
     | "reprocessed"
     | "duplicate_email"
     | "skipped_non_cv"
-    | "matched_existing";
+    | "matched_existing"
+    | "archived_public";
   reason?: string;
   candidate_id?: string;
   matched_existing_candidate_id?: string;

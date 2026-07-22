@@ -860,6 +860,12 @@ serve(async (req) => {
 
         if (cvAttachments.length === 0) continue;
 
+        // ---- COVER-LETTER-ONLY GUARD ----
+        // A standalone cover letter is not a CV. If the batch contains no file
+        // whose name looks like an actual resume/CV, cover-letter files must
+        // NOT enter the recruitment pipeline. Route them out as non-CV.
+        const batchHasResume = cvAttachments.some((a) => isResumeFilename(a.filename));
+
         const attachmentGate = classifyAttachmentBatch(
           subject,
           snippet,
@@ -871,7 +877,7 @@ serve(async (req) => {
         if (!attachmentGate.accepted) {
           skipped++;
           for (const cv of cvAttachments) {
-            const archivedUrl = await archiveNonCvAttachment(
+            const archived = await archiveNonCvAttachment(
               gmailHeaders,
               msg.id,
               cv.attachmentId,
@@ -881,7 +887,9 @@ serve(async (req) => {
             details.push({
               gmail_message_id: msg.id,
               filename: cv.filename,
-              outcome: archivedUrl ? "archived_public" : "skipped",
+              outcome: archived
+                ? (archived.folder === "confidential" ? "archived_confidential" : "archived_public")
+                : "skipped",
               reason: attachmentGate.reason,
               role_title: matchedRoleTitle || selectedRole?.title || undefined,
             });
@@ -890,12 +898,13 @@ serve(async (req) => {
         }
 
         for (const cv of cvAttachments) {
-          // ---- BLOCK NON-CV FILES (filename heuristic) ----
-          // Route non-CV files to Azure `public/` folder instead of the `cvs/`
-          // recruitment bucket, and do not create a candidate row.
-          if (isBlockedNonCvFilename(cv.filename)) {
+          // ---- STANDALONE COVER LETTER ----
+          // If this file is a cover letter and the batch has no companion CV,
+          // do NOT create a candidate. Route to public/ (cover letters are not
+          // sensitive) so the document is preserved but out of recruitment.
+          if (isCoverLetterFilename(cv.filename) && !batchHasResume) {
             skipped++;
-            const archivedUrl = await archiveNonCvAttachment(
+            const archived = await archiveNonCvAttachment(
               gmailHeaders,
               msg.id,
               cv.attachmentId,
@@ -905,13 +914,43 @@ serve(async (req) => {
             details.push({
               gmail_message_id: msg.id,
               filename: cv.filename,
-              outcome: archivedUrl ? "archived_public" : "skipped_non_cv",
-              reason: "Filename matches non-CV blocklist (nda/agreement/invoice/receipt/contract/form/declaration)",
+              outcome: archived
+                ? (archived.folder === "confidential" ? "archived_confidential" : "archived_public")
+                : "skipped_cover_letter",
+              reason: "Standalone cover letter — no companion CV in batch",
               role_title: matchedRoleTitle || selectedRole?.title || undefined,
             });
-            console.log(`[non_cv] ${cv.filename} (msg=${msg.id}) -> ${archivedUrl ? "archived_public" : "skipped"}`);
+            console.log(`[cover_letter_only] ${cv.filename} (msg=${msg.id})`);
             continue;
           }
+
+          // ---- BLOCK NON-CV / SENSITIVE FILES (filename heuristic) ----
+          // Route confidential files to confidential/ (admin-only) and other
+          // non-CV files to public/. Never create a candidate row.
+          if (isBlockedNonCvFilename(cv.filename) || isConfidentialFilename(cv.filename)) {
+            skipped++;
+            const archived = await archiveNonCvAttachment(
+              gmailHeaders,
+              msg.id,
+              cv.attachmentId,
+              cv.filename,
+              cv.mimeType,
+            );
+            details.push({
+              gmail_message_id: msg.id,
+              filename: cv.filename,
+              outcome: archived
+                ? (archived.folder === "confidential" ? "archived_confidential" : "archived_public")
+                : "skipped_non_cv",
+              reason: archived?.folder === "confidential"
+                ? "Confidential document (nda/contract/bank/financial/legal) routed to admin-only storage"
+                : "Filename matches non-CV blocklist",
+              role_title: matchedRoleTitle || selectedRole?.title || undefined,
+            });
+            console.log(`[non_cv] ${cv.filename} (msg=${msg.id}) -> ${archived?.folder ?? "skipped"}`);
+            continue;
+          }
+
 
 
 

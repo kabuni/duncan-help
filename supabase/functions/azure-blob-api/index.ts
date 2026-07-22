@@ -436,6 +436,8 @@ serve(async (req) => {
         const file = params.file as File;
         const path = (params.path as string).replace(/\/$/, "");
         const blobPath = `${path}/${file.name}`;
+        const uploadDenied = assertConfidentialAccess(blobPath);
+        if (uploadDenied) return uploadDenied;
         const fileBytes = new Uint8Array(await file.arrayBuffer());
 
         const blobHeaders: Record<string, string> = {

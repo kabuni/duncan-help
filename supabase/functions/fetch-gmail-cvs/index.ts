@@ -758,10 +758,17 @@ serve(async (req) => {
         if (!attachmentGate.accepted) {
           skipped++;
           for (const cv of cvAttachments) {
+            const archivedUrl = await archiveNonCvAttachment(
+              gmailHeaders,
+              msg.id,
+              cv.attachmentId,
+              cv.filename,
+              cv.mimeType,
+            );
             details.push({
               gmail_message_id: msg.id,
               filename: cv.filename,
-              outcome: "skipped",
+              outcome: archivedUrl ? "archived_public" : "skipped",
               reason: attachmentGate.reason,
               role_title: matchedRoleTitle || selectedRole?.title || undefined,
             });
@@ -771,18 +778,29 @@ serve(async (req) => {
 
         for (const cv of cvAttachments) {
           // ---- BLOCK NON-CV FILES (filename heuristic) ----
+          // Route non-CV files to Azure `public/` folder instead of the `cvs/`
+          // recruitment bucket, and do not create a candidate row.
           if (isBlockedNonCvFilename(cv.filename)) {
             skipped++;
+            const archivedUrl = await archiveNonCvAttachment(
+              gmailHeaders,
+              msg.id,
+              cv.attachmentId,
+              cv.filename,
+              cv.mimeType,
+            );
             details.push({
               gmail_message_id: msg.id,
               filename: cv.filename,
-              outcome: "skipped_non_cv",
+              outcome: archivedUrl ? "archived_public" : "skipped_non_cv",
               reason: "Filename matches non-CV blocklist (nda/agreement/invoice/receipt/contract/form/declaration)",
               role_title: matchedRoleTitle || selectedRole?.title || undefined,
             });
-            console.log(`[skipped_non_cv] ${cv.filename} (msg=${msg.id})`);
+            console.log(`[non_cv] ${cv.filename} (msg=${msg.id}) -> ${archivedUrl ? "archived_public" : "skipped"}`);
             continue;
           }
+
+
 
           // ---- DEDUP A: gmail_message_id + attachment_filename ----
           const { data: existing } = await supabaseAdmin

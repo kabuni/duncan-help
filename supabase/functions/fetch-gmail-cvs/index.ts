@@ -108,6 +108,7 @@ const NON_CV_TERMS = [
 
 // Hard blocklist: filename tokens that immediately disqualify a file as a CV.
 // Applied per-file (not per-message) so a CV emailed alongside an NDA still ingests.
+// Observed pollution patterns from the historical cvs/ bucket are all covered here.
 const NON_CV_FILENAME_TOKENS = [
   "nda",
   "agreement",
@@ -119,6 +120,28 @@ const NON_CV_FILENAME_TOKENS = [
   "purchase-order",
   "purchaseorder",
   "po-",
+  "bank",
+  "sign-card",
+  "signcard",
+  "consent",
+  "policy",
+  "framework",
+  "tracker",
+  "deck",
+  "budget",
+  "minutes",
+  "board-pack",
+  "boardpack",
+  "shp",
+  "statement",
+  "term-sheet",
+  "termsheet",
+  "proposal",
+  "quote",
+  "quotation",
+  "engagement-letter",
+  "sow",
+  "msa",
 ];
 
 function isBlockedNonCvFilename(filename: string): boolean {

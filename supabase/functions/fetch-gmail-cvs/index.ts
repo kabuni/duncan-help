@@ -142,6 +142,9 @@ const NON_CV_FILENAME_TOKENS = [
   "engagement-letter",
   "sow",
   "msa",
+  "jd",
+  "job-description",
+  "jobdescription",
 ];
 
 function isBlockedNonCvFilename(filename: string): boolean {

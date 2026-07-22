@@ -216,6 +216,10 @@ serve(async (req) => {
     const isServiceCall = !!serviceSecret &&
       serviceSecret === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
+    // Track admin status so we can gate confidential/ paths (admin-only).
+    let isAdmin = false;
+    let authenticatedUserId: string | null = null;
+
     if (!isServiceCall && !hasValidDownloadToken) {
       if (!authHeader) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -233,6 +237,28 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      authenticatedUserId = user.id;
+      // Admin check via has_role() (uses caller's JWT — RLS-safe).
+      const { data: adminFlag } = await supabaseUser.rpc("has_role", {
+        _user_id: user.id,
+        _role: "admin",
+      });
+      isAdmin = adminFlag === true;
+    } else {
+      // Service-role internal calls and pre-signed download tokens are trusted.
+      isAdmin = true;
+    }
+
+    // Confidential paths (confidential/**) are admin-only. Service calls and
+    // valid pre-signed download tokens bypass this check.
+    function assertConfidentialAccess(path: string | null | undefined): Response | null {
+      if (isConfidentialPath(path) && !isAdmin) {
+        return new Response(JSON.stringify({ error: "Forbidden: confidential documents are admin-only" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return null;
     }
 
     // Parse Azure credentials

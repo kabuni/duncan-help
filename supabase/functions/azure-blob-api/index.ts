@@ -472,6 +472,9 @@ serve(async (req) => {
         if (!blobPath) {
           throw new Error("blob_path is required");
         }
+        const getContentDenied = assertConfidentialAccess(blobPath);
+        if (getContentDenied) return getContentDenied;
+
 
         const response = await azureRequest(
           accountName,

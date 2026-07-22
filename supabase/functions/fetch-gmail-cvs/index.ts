@@ -275,8 +275,19 @@ function classifyAttachmentBatch(
     if (!recruitmentSignal && filenames.length === 0) {
       return { accepted: false, reason: "Missing recruitment signal", roleSignal, recruitmentSignal };
     }
-  } else if (!recruitmentSignal && exclusionSignal) {
-    return { accepted: false, reason: "Looks like business document, not a CV", roleSignal, recruitmentSignal };
+  } else {
+    // No role matched: fail-safe. Require an explicit recruitment or CV-looking
+    // filename signal before accepting. Previously we only rejected on an
+    // explicit exclusion keyword, which let generic PDFs (board packs, bank
+    // letters, meeting notes, etc.) into the cvs/ bucket.
+    if (!recruitmentSignal && !filenameSignal) {
+      return {
+        accepted: false,
+        reason: "No recruitment or CV-filename signal (fail-safe reject)",
+        roleSignal,
+        recruitmentSignal,
+      };
+    }
   }
 
   if (exclusionSignal && !recruitmentSignal) {

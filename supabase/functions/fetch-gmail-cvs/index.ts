@@ -595,16 +595,18 @@ async function getAccessToken(supabaseAdmin: any): Promise<{ token: string; emai
   return { token: tokenData.access_token, email: tokenData.email_address || "" };
 }
 
-// Best-effort: download an attachment from Gmail and archive it to the Azure
-// `public/` folder (used for non-CV files we intentionally do NOT ingest into
-// the recruitment pipeline). Never throws — pipeline continues on failure.
+// Best-effort: download an attachment from Gmail and archive it to Azure.
+// Non-CV files are classified as either "confidential" (NDAs, contracts, bank
+// docs, financial/legal documents) or "public" (generic non-sensitive files).
+// Confidential blobs live under confidential/YYYY-MM/ and are gated to
+// admin-only in azure-blob-api. Never throws — pipeline continues on failure.
 async function archiveNonCvAttachment(
   gmailHeaders: Record<string, string>,
   messageId: string,
   attachmentId: string,
   filename: string,
   mimeType: string | undefined,
-): Promise<string | null> {
+): Promise<{ url: string; folder: "public" | "confidential" } | null> {
   try {
     const azureConnStr = Deno.env.get("AZURE_STORAGE_CONNECTION_STRING");
     if (!azureConnStr) return null;
@@ -621,10 +623,16 @@ async function archiveNonCvAttachment(
     const bytes = new Uint8Array(binaryStr.length);
     for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
 
+    const folder: "public" | "confidential" = isConfidentialFilename(filename)
+      ? "confidential"
+      : "public";
+    const folderPath =
+      folder === "confidential" ? AZURE_CONFIDENTIAL_FOLDER : AZURE_PUBLIC_FOLDER;
+
     const now = new Date();
     const yyyyMm = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
     const safeName = sanitizeFilenameForStorage(filename);
-    const blobPath = `${AZURE_PUBLIC_FOLDER}/${yyyyMm}/${Date.now()}_${safeName}`;
+    const blobPath = `${folderPath}/${yyyyMm}/${Date.now()}_${safeName}`;
 
     const { accountName, accountKey } = parseAzureConnectionString(azureConnStr);
     const url = await uploadToAzureBlob(
@@ -634,10 +642,10 @@ async function archiveNonCvAttachment(
       bytes,
       mimeType || "application/octet-stream",
     );
-    console.log(`[archived_public] ${filename} -> ${blobPath}`);
-    return url;
+    console.log(`[archived_${folder}] ${filename} -> ${blobPath}`);
+    return { url, folder };
   } catch (err) {
-    console.warn(`[archive_public_failed] ${filename}:`, err);
+    console.warn(`[archive_failed] ${filename}:`, err);
     return null;
   }
 }

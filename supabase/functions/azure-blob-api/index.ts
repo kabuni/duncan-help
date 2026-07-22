@@ -340,6 +340,10 @@ serve(async (req) => {
     switch (action) {
       case "list": {
         const prefix = params.path || "";
+        // Non-admins cannot list inside confidential/.
+        const confidentialDenied = assertConfidentialAccess(prefix);
+        if (confidentialDenied) return confidentialDenied;
+
         const queryParams = new URLSearchParams({
           restype: "container",
           comp: "list",
@@ -366,6 +370,7 @@ serve(async (req) => {
         const blobRegex = /<Blob><Name>(.*?)<\/Name>.*?<Content-Length>(.*?)<\/Content-Length>.*?<Last-Modified>(.*?)<\/Last-Modified>.*?<\/Blob>/gs;
         let match;
         while ((match = blobRegex.exec(xmlText)) !== null) {
+          if (!isAdmin && isConfidentialPath(match[1])) continue;
           blobs.push({
             name: match[1],
             size: parseInt(match[2], 10),
@@ -378,6 +383,7 @@ serve(async (req) => {
         const folders: string[] = [];
         const folderRegex = /<BlobPrefix><Name>(.*?)<\/Name><\/BlobPrefix>/g;
         while ((match = folderRegex.exec(xmlText)) !== null) {
+          if (!isAdmin && isConfidentialPath(match[1])) continue;
           folders.push(match[1]);
         }
 

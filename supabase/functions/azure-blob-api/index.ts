@@ -9,6 +9,12 @@ const corsHeaders = {
 };
 
 const CONTAINER_NAME = "duncanstorage01";
+const CONFIDENTIAL_PREFIX = "confidential/";
+
+function isConfidentialPath(path: string | null | undefined): boolean {
+  if (!path) return false;
+  return path.toLowerCase().startsWith(CONFIDENTIAL_PREFIX);
+}
 
 /**
  * Parse the Azure Storage connection string into account name and key.
@@ -210,6 +216,10 @@ serve(async (req) => {
     const isServiceCall = !!serviceSecret &&
       serviceSecret === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
+    // Track admin status so we can gate confidential/ paths (admin-only).
+    let isAdmin = false;
+    let authenticatedUserId: string | null = null;
+
     if (!isServiceCall && !hasValidDownloadToken) {
       if (!authHeader) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -227,6 +237,28 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      authenticatedUserId = user.id;
+      // Admin check via has_role() (uses caller's JWT — RLS-safe).
+      const { data: adminFlag } = await supabaseUser.rpc("has_role", {
+        _user_id: user.id,
+        _role: "admin",
+      });
+      isAdmin = adminFlag === true;
+    } else {
+      // Service-role internal calls and pre-signed download tokens are trusted.
+      isAdmin = true;
+    }
+
+    // Confidential paths (confidential/**) are admin-only. Service calls and
+    // valid pre-signed download tokens bypass this check.
+    function assertConfidentialAccess(path: string | null | undefined): Response | null {
+      if (isConfidentialPath(path) && !isAdmin) {
+        return new Response(JSON.stringify({ error: "Forbidden: confidential documents are admin-only" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return null;
     }
 
     // Parse Azure credentials
@@ -249,6 +281,10 @@ serve(async (req) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      const confidentialDenied = assertConfidentialAccess(blobPath);
+      if (confidentialDenied) return confidentialDenied;
+
 
       const encodedPath = blobPath.split("/").map((s) => encodeURIComponent(s)).join("/");
       const response = await azureRequest(
@@ -304,6 +340,10 @@ serve(async (req) => {
     switch (action) {
       case "list": {
         const prefix = params.path || "";
+        // Non-admins cannot list inside confidential/.
+        const confidentialDenied = assertConfidentialAccess(prefix);
+        if (confidentialDenied) return confidentialDenied;
+
         const queryParams = new URLSearchParams({
           restype: "container",
           comp: "list",
@@ -330,6 +370,7 @@ serve(async (req) => {
         const blobRegex = /<Blob><Name>(.*?)<\/Name>.*?<Content-Length>(.*?)<\/Content-Length>.*?<Last-Modified>(.*?)<\/Last-Modified>.*?<\/Blob>/gs;
         let match;
         while ((match = blobRegex.exec(xmlText)) !== null) {
+          if (!isAdmin && isConfidentialPath(match[1])) continue;
           blobs.push({
             name: match[1],
             size: parseInt(match[2], 10),
@@ -342,6 +383,7 @@ serve(async (req) => {
         const folders: string[] = [];
         const folderRegex = /<BlobPrefix><Name>(.*?)<\/Name><\/BlobPrefix>/g;
         while ((match = folderRegex.exec(xmlText)) !== null) {
+          if (!isAdmin && isConfidentialPath(match[1])) continue;
           folders.push(match[1]);
         }
 
@@ -375,6 +417,7 @@ serve(async (req) => {
         const blobRegex = /<Blob><Name>(.*?)<\/Name>.*?<Content-Length>(.*?)<\/Content-Length>.*?<Last-Modified>(.*?)<\/Last-Modified>.*?<\/Blob>/gs;
         let match;
         while ((match = blobRegex.exec(xmlText)) !== null) {
+          if (!isAdmin && isConfidentialPath(match[1])) continue;
           if (match[1].toLowerCase().includes(query)) {
             blobs.push({
               name: match[1],
@@ -393,6 +436,8 @@ serve(async (req) => {
         const file = params.file as File;
         const path = (params.path as string).replace(/\/$/, "");
         const blobPath = `${path}/${file.name}`;
+        const uploadDenied = assertConfidentialAccess(blobPath);
+        if (uploadDenied) return uploadDenied;
         const fileBytes = new Uint8Array(await file.arrayBuffer());
 
         const blobHeaders: Record<string, string> = {
@@ -427,6 +472,9 @@ serve(async (req) => {
         if (!blobPath) {
           throw new Error("blob_path is required");
         }
+        const getContentDenied = assertConfidentialAccess(blobPath);
+        if (getContentDenied) return getContentDenied;
+
 
         const response = await azureRequest(
           accountName,

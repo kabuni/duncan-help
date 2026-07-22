@@ -4,6 +4,71 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const AZURE_CONTAINER = "duncanstorage01";
 const AZURE_CV_FOLDER = "cvs";
 const AZURE_PUBLIC_FOLDER = "public";
+const AZURE_CONFIDENTIAL_FOLDER = "confidential";
+
+// Filename tokens that indicate SENSITIVE/CONFIDENTIAL content.
+// These non-CV attachments must NEVER end up in cvs/ or public/ — they are
+// routed to confidential/YYYY-MM/ which is gated to admin-only in azure-blob-api.
+const CONFIDENTIAL_FILENAME_TOKENS = [
+  "nda",
+  "non-disclosure",
+  "nondisclosure",
+  "contract",
+  "agreement",
+  "employment",
+  "offer-letter",
+  "offerletter",
+  "engagement-letter",
+  "sow",
+  "msa",
+  "term-sheet",
+  "termsheet",
+  "legal",
+  "bank",
+  "sign-card",
+  "signcard",
+  "statement",
+  "invoice",
+  "receipt",
+  "purchase-order",
+  "purchaseorder",
+  "po-",
+  "quotation",
+  "quote",
+  "budget",
+  "payroll",
+  "salary",
+  "board-pack",
+  "boardpack",
+  "minutes",
+  "cap-table",
+  "captable",
+  "shp",
+];
+
+function isConfidentialFilename(filename: string): boolean {
+  const normalized = filename.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return CONFIDENTIAL_FILENAME_TOKENS.some(
+    (t) =>
+      normalized === t ||
+      normalized.startsWith(`${t}-`) ||
+      normalized.endsWith(`-${t}`) ||
+      normalized.includes(`-${t}-`),
+  );
+}
+
+// A standalone cover letter is NOT a CV. If nothing in the batch looks like an
+// actual CV/resume, cover-letter files must be rejected from the recruitment
+// pipeline (no candidate row, no cvs/ storage).
+function isCoverLetterFilename(filename: string): boolean {
+  const normalized = filename.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return /(^|-)cover-letter(-|$)/.test(normalized) || /(^|-)coverletter(-|$)/.test(normalized);
+}
+
+function isResumeFilename(filename: string): boolean {
+  const normalized = filename.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return /(^|-)(cv|resume|curriculum-vitae)(-|$)/.test(normalized);
+}
 
 function parseAzureConnectionString(connStr: string): { accountName: string; accountKey: string } {
   const parts: Record<string, string> = {};
@@ -467,8 +532,10 @@ interface ProcessingDetail {
     | "reprocessed"
     | "duplicate_email"
     | "skipped_non_cv"
+    | "skipped_cover_letter"
     | "matched_existing"
-    | "archived_public";
+    | "archived_public"
+    | "archived_confidential";
   reason?: string;
   candidate_id?: string;
   matched_existing_candidate_id?: string;
@@ -530,16 +597,18 @@ async function getAccessToken(supabaseAdmin: any): Promise<{ token: string; emai
   return { token: tokenData.access_token, email: tokenData.email_address || "" };
 }
 
-// Best-effort: download an attachment from Gmail and archive it to the Azure
-// `public/` folder (used for non-CV files we intentionally do NOT ingest into
-// the recruitment pipeline). Never throws — pipeline continues on failure.
+// Best-effort: download an attachment from Gmail and archive it to Azure.
+// Non-CV files are classified as either "confidential" (NDAs, contracts, bank
+// docs, financial/legal documents) or "public" (generic non-sensitive files).
+// Confidential blobs live under confidential/YYYY-MM/ and are gated to
+// admin-only in azure-blob-api. Never throws — pipeline continues on failure.
 async function archiveNonCvAttachment(
   gmailHeaders: Record<string, string>,
   messageId: string,
   attachmentId: string,
   filename: string,
   mimeType: string | undefined,
-): Promise<string | null> {
+): Promise<{ url: string; folder: "public" | "confidential" } | null> {
   try {
     const azureConnStr = Deno.env.get("AZURE_STORAGE_CONNECTION_STRING");
     if (!azureConnStr) return null;
@@ -556,10 +625,16 @@ async function archiveNonCvAttachment(
     const bytes = new Uint8Array(binaryStr.length);
     for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
 
+    const folder: "public" | "confidential" = isConfidentialFilename(filename)
+      ? "confidential"
+      : "public";
+    const folderPath =
+      folder === "confidential" ? AZURE_CONFIDENTIAL_FOLDER : AZURE_PUBLIC_FOLDER;
+
     const now = new Date();
     const yyyyMm = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
     const safeName = sanitizeFilenameForStorage(filename);
-    const blobPath = `${AZURE_PUBLIC_FOLDER}/${yyyyMm}/${Date.now()}_${safeName}`;
+    const blobPath = `${folderPath}/${yyyyMm}/${Date.now()}_${safeName}`;
 
     const { accountName, accountKey } = parseAzureConnectionString(azureConnStr);
     const url = await uploadToAzureBlob(
@@ -569,10 +644,10 @@ async function archiveNonCvAttachment(
       bytes,
       mimeType || "application/octet-stream",
     );
-    console.log(`[archived_public] ${filename} -> ${blobPath}`);
-    return url;
+    console.log(`[archived_${folder}] ${filename} -> ${blobPath}`);
+    return { url, folder };
   } catch (err) {
-    console.warn(`[archive_public_failed] ${filename}:`, err);
+    console.warn(`[archive_failed] ${filename}:`, err);
     return null;
   }
 }
@@ -785,6 +860,12 @@ serve(async (req) => {
 
         if (cvAttachments.length === 0) continue;
 
+        // ---- COVER-LETTER-ONLY GUARD ----
+        // A standalone cover letter is not a CV. If the batch contains no file
+        // whose name looks like an actual resume/CV, cover-letter files must
+        // NOT enter the recruitment pipeline. Route them out as non-CV.
+        const batchHasResume = cvAttachments.some((a) => isResumeFilename(a.filename));
+
         const attachmentGate = classifyAttachmentBatch(
           subject,
           snippet,
@@ -796,7 +877,7 @@ serve(async (req) => {
         if (!attachmentGate.accepted) {
           skipped++;
           for (const cv of cvAttachments) {
-            const archivedUrl = await archiveNonCvAttachment(
+            const archived = await archiveNonCvAttachment(
               gmailHeaders,
               msg.id,
               cv.attachmentId,
@@ -806,7 +887,9 @@ serve(async (req) => {
             details.push({
               gmail_message_id: msg.id,
               filename: cv.filename,
-              outcome: archivedUrl ? "archived_public" : "skipped",
+              outcome: archived
+                ? (archived.folder === "confidential" ? "archived_confidential" : "archived_public")
+                : "skipped",
               reason: attachmentGate.reason,
               role_title: matchedRoleTitle || selectedRole?.title || undefined,
             });
@@ -815,12 +898,13 @@ serve(async (req) => {
         }
 
         for (const cv of cvAttachments) {
-          // ---- BLOCK NON-CV FILES (filename heuristic) ----
-          // Route non-CV files to Azure `public/` folder instead of the `cvs/`
-          // recruitment bucket, and do not create a candidate row.
-          if (isBlockedNonCvFilename(cv.filename)) {
+          // ---- STANDALONE COVER LETTER ----
+          // If this file is a cover letter and the batch has no companion CV,
+          // do NOT create a candidate. Route to public/ (cover letters are not
+          // sensitive) so the document is preserved but out of recruitment.
+          if (isCoverLetterFilename(cv.filename) && !batchHasResume) {
             skipped++;
-            const archivedUrl = await archiveNonCvAttachment(
+            const archived = await archiveNonCvAttachment(
               gmailHeaders,
               msg.id,
               cv.attachmentId,
@@ -830,13 +914,43 @@ serve(async (req) => {
             details.push({
               gmail_message_id: msg.id,
               filename: cv.filename,
-              outcome: archivedUrl ? "archived_public" : "skipped_non_cv",
-              reason: "Filename matches non-CV blocklist (nda/agreement/invoice/receipt/contract/form/declaration)",
+              outcome: archived
+                ? (archived.folder === "confidential" ? "archived_confidential" : "archived_public")
+                : "skipped_cover_letter",
+              reason: "Standalone cover letter — no companion CV in batch",
               role_title: matchedRoleTitle || selectedRole?.title || undefined,
             });
-            console.log(`[non_cv] ${cv.filename} (msg=${msg.id}) -> ${archivedUrl ? "archived_public" : "skipped"}`);
+            console.log(`[cover_letter_only] ${cv.filename} (msg=${msg.id})`);
             continue;
           }
+
+          // ---- BLOCK NON-CV / SENSITIVE FILES (filename heuristic) ----
+          // Route confidential files to confidential/ (admin-only) and other
+          // non-CV files to public/. Never create a candidate row.
+          if (isBlockedNonCvFilename(cv.filename) || isConfidentialFilename(cv.filename)) {
+            skipped++;
+            const archived = await archiveNonCvAttachment(
+              gmailHeaders,
+              msg.id,
+              cv.attachmentId,
+              cv.filename,
+              cv.mimeType,
+            );
+            details.push({
+              gmail_message_id: msg.id,
+              filename: cv.filename,
+              outcome: archived
+                ? (archived.folder === "confidential" ? "archived_confidential" : "archived_public")
+                : "skipped_non_cv",
+              reason: archived?.folder === "confidential"
+                ? "Confidential document (nda/contract/bank/financial/legal) routed to admin-only storage"
+                : "Filename matches non-CV blocklist",
+              role_title: matchedRoleTitle || selectedRole?.title || undefined,
+            });
+            console.log(`[non_cv] ${cv.filename} (msg=${msg.id}) -> ${archived?.folder ?? "skipped"}`);
+            continue;
+          }
+
 
 
 

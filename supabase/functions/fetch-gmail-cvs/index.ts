@@ -464,7 +464,8 @@ interface ProcessingDetail {
     | "reprocessed"
     | "duplicate_email"
     | "skipped_non_cv"
-    | "matched_existing";
+    | "matched_existing"
+    | "archived_public";
   reason?: string;
   candidate_id?: string;
   matched_existing_candidate_id?: string;

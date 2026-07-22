@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const AZURE_CONTAINER = "duncanstorage01";
 const AZURE_CV_FOLDER = "cvs";
+const AZURE_PUBLIC_FOLDER = "public";
 
 function parseAzureConnectionString(connStr: string): { accountName: string; accountKey: string } {
   const parts: Record<string, string> = {};
@@ -491,6 +492,54 @@ async function getAccessToken(supabaseAdmin: any): Promise<{ token: string; emai
   return { token: tokenData.access_token, email: tokenData.email_address || "" };
 }
 
+// Best-effort: download an attachment from Gmail and archive it to the Azure
+// `public/` folder (used for non-CV files we intentionally do NOT ingest into
+// the recruitment pipeline). Never throws — pipeline continues on failure.
+async function archiveNonCvAttachment(
+  gmailHeaders: Record<string, string>,
+  messageId: string,
+  attachmentId: string,
+  filename: string,
+  mimeType: string | undefined,
+): Promise<string | null> {
+  try {
+    const azureConnStr = Deno.env.get("AZURE_STORAGE_CONNECTION_STRING");
+    if (!azureConnStr) return null;
+
+    const attachRes = await fetch(
+      `${GMAIL_API}/messages/${messageId}/attachments/${attachmentId}`,
+      { headers: gmailHeaders },
+    );
+    if (!attachRes.ok) return null;
+    const attachData = await attachRes.json();
+    const base64Data = (attachData.data || "").replace(/-/g, "+").replace(/_/g, "/");
+    if (!base64Data) return null;
+    const binaryStr = atob(base64Data);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+    const now = new Date();
+    const yyyyMm = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+    const safeName = sanitizeFilenameForStorage(filename);
+    const blobPath = `${AZURE_PUBLIC_FOLDER}/${yyyyMm}/${Date.now()}_${safeName}`;
+
+    const { accountName, accountKey } = parseAzureConnectionString(azureConnStr);
+    const url = await uploadToAzureBlob(
+      accountName,
+      accountKey,
+      blobPath,
+      bytes,
+      mimeType || "application/octet-stream",
+    );
+    console.log(`[archived_public] ${filename} -> ${blobPath}`);
+    return url;
+  } catch (err) {
+    console.warn(`[archive_public_failed] ${filename}:`, err);
+    return null;
+  }
+}
+
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -709,10 +758,17 @@ serve(async (req) => {
         if (!attachmentGate.accepted) {
           skipped++;
           for (const cv of cvAttachments) {
+            const archivedUrl = await archiveNonCvAttachment(
+              gmailHeaders,
+              msg.id,
+              cv.attachmentId,
+              cv.filename,
+              cv.mimeType,
+            );
             details.push({
               gmail_message_id: msg.id,
               filename: cv.filename,
-              outcome: "skipped",
+              outcome: archivedUrl ? "archived_public" : "skipped",
               reason: attachmentGate.reason,
               role_title: matchedRoleTitle || selectedRole?.title || undefined,
             });
@@ -722,18 +778,29 @@ serve(async (req) => {
 
         for (const cv of cvAttachments) {
           // ---- BLOCK NON-CV FILES (filename heuristic) ----
+          // Route non-CV files to Azure `public/` folder instead of the `cvs/`
+          // recruitment bucket, and do not create a candidate row.
           if (isBlockedNonCvFilename(cv.filename)) {
             skipped++;
+            const archivedUrl = await archiveNonCvAttachment(
+              gmailHeaders,
+              msg.id,
+              cv.attachmentId,
+              cv.filename,
+              cv.mimeType,
+            );
             details.push({
               gmail_message_id: msg.id,
               filename: cv.filename,
-              outcome: "skipped_non_cv",
+              outcome: archivedUrl ? "archived_public" : "skipped_non_cv",
               reason: "Filename matches non-CV blocklist (nda/agreement/invoice/receipt/contract/form/declaration)",
               role_title: matchedRoleTitle || selectedRole?.title || undefined,
             });
-            console.log(`[skipped_non_cv] ${cv.filename} (msg=${msg.id})`);
+            console.log(`[non_cv] ${cv.filename} (msg=${msg.id}) -> ${archivedUrl ? "archived_public" : "skipped"}`);
             continue;
           }
+
+
 
           // ---- DEDUP A: gmail_message_id + attachment_filename ----
           const { data: existing } = await supabaseAdmin

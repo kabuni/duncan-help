@@ -417,6 +417,7 @@ serve(async (req) => {
         const blobRegex = /<Blob><Name>(.*?)<\/Name>.*?<Content-Length>(.*?)<\/Content-Length>.*?<Last-Modified>(.*?)<\/Last-Modified>.*?<\/Blob>/gs;
         let match;
         while ((match = blobRegex.exec(xmlText)) !== null) {
+          if (!isAdmin && isConfidentialPath(match[1])) continue;
           if (match[1].toLowerCase().includes(query)) {
             blobs.push({
               name: match[1],

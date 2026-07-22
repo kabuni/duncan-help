@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const AZURE_CONTAINER = "duncanstorage01";
 const AZURE_CV_FOLDER = "cvs";
+const AZURE_PUBLIC_FOLDER = "public";
 
 function parseAzureConnectionString(connStr: string): { accountName: string; accountKey: string } {
   const parts: Record<string, string> = {};

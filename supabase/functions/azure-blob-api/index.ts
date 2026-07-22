@@ -282,6 +282,10 @@ serve(async (req) => {
         });
       }
 
+      const confidentialDenied = assertConfidentialAccess(blobPath);
+      if (confidentialDenied) return confidentialDenied;
+
+
       const encodedPath = blobPath.split("/").map((s) => encodeURIComponent(s)).join("/");
       const response = await azureRequest(
         accountName,

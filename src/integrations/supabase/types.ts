@@ -3286,6 +3286,47 @@ export type Database = {
           },
         ]
       }
+      plan90_deliverable_updates: {
+        Row: {
+          author_id: string | null
+          author_name: string
+          created_at: string
+          deliverable_id: string
+          id: string
+          message: string
+          ryg: Database["public"]["Enums"]["plan90_ryg"]
+          updated_at: string
+        }
+        Insert: {
+          author_id?: string | null
+          author_name: string
+          created_at?: string
+          deliverable_id: string
+          id?: string
+          message: string
+          ryg?: Database["public"]["Enums"]["plan90_ryg"]
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string | null
+          author_name?: string
+          created_at?: string
+          deliverable_id?: string
+          id?: string
+          message?: string
+          ryg?: Database["public"]["Enums"]["plan90_ryg"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan90_deliverable_updates_deliverable_id_fkey"
+            columns: ["deliverable_id"]
+            isOneToOne: false
+            referencedRelation: "plan90_deliverables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan90_deliverables: {
         Row: {
           archived: boolean
@@ -5624,6 +5665,7 @@ export type Database = {
         | "failed"
         | "expired"
       event_approval_status: "pending" | "approved" | "rejected" | "proposed"
+      plan90_ryg: "green" | "amber" | "red"
       po_category:
         | "software"
         | "hardware"
@@ -5798,6 +5840,7 @@ export const Constants = {
         "expired",
       ],
       event_approval_status: ["pending", "approved", "rejected", "proposed"],
+      plan90_ryg: ["green", "amber", "red"],
       po_category: [
         "software",
         "hardware",

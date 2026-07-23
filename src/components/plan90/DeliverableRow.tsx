@@ -122,8 +122,8 @@ export function DeliverableRow({
         </Select>
       </td>
       
-      <td className="px-3 py-2 align-top w-[240px] min-w-[200px]">
-        <LatestUpdateCell latest={latestUpdate} onOpen={() => setUpdatesOpen(true)} />
+      <td className="px-3 py-2 align-top w-[60px]">
+        <LatestUpdateCell latest={latestUpdate} onOpen={() => setUpdatesOpen(true)} count={updates.length} />
       </td>
       <td className="px-3 py-2 align-top w-[70px]">
         <div className="flex items-center gap-1">

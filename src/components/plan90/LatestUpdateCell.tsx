@@ -1,5 +1,5 @@
-import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import { MessageSquare, MessageSquarePlus } from "lucide-react";
 import type { Plan90Update, Plan90Ryg } from "@/hooks/usePlan90Updates";
 
 const dotClass: Record<Plan90Ryg, string> = {
@@ -11,55 +11,42 @@ const dotClass: Record<Plan90Ryg, string> = {
 interface Props {
   latest: Plan90Update | undefined;
   onOpen: () => void;
+  count?: number;
 }
 
-export function LatestUpdateCell({ latest, onOpen }: Props) {
+export function LatestUpdateCell({ latest, onOpen, count }: Props) {
   if (!latest) {
     return (
       <button
         type="button"
         onClick={onOpen}
-        className="group flex items-center gap-2 text-left text-[11px] text-muted-foreground hover:text-primary transition-colors w-full"
+        className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-primary hover:bg-secondary transition-colors"
         title="Add the first update"
+        aria-label="Add update"
       >
-        <span className="h-2 w-2 rounded-full bg-muted-foreground/40 shrink-0" />
-        <span className="italic">No updates</span>
-        <span className="opacity-0 group-hover:opacity-100 text-[10px] text-primary">Add</span>
+        <MessageSquarePlus className="h-4 w-4" />
       </button>
     );
   }
 
   const firstName = latest.author_name.split(/\s+/)[0] || latest.author_name;
-  const rel = formatDistanceToNow(new Date(latest.created_at), { addSuffix: true })
-    .replace("about ", "")
-    .replace(" minutes", "m")
-    .replace(" minute", "m")
-    .replace(" hours", "h")
-    .replace(" hour", "h")
-    .replace(" days", "d")
-    .replace(" day", "d")
-    .replace(" months", "mo")
-    .replace(" month", "mo");
+  const tooltip = `${firstName} · ${new Date(latest.created_at).toLocaleString()}\n\n${latest.message}`;
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="flex items-start gap-2 text-left w-full min-w-0 hover:bg-secondary/50 rounded-md px-1.5 py-1 -mx-1.5 -my-1 transition-colors"
-      title={`${latest.author_name} · ${new Date(latest.created_at).toLocaleString()}\n\n${latest.message}`}
+      className="relative inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-primary hover:bg-secondary transition-colors"
+      title={tooltip}
+      aria-label={`View updates${count ? ` (${count})` : ""}`}
     >
+      <MessageSquare className="h-4 w-4" />
       <span
         className={cn(
-          "h-2 w-2 rounded-full shrink-0 mt-1.5",
+          "absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-card",
           dotClass[latest.ryg],
         )}
       />
-      <div className="min-w-0 flex-1 max-w-[220px]">
-        <div className="text-xs text-foreground leading-snug overflow-hidden text-ellipsis whitespace-nowrap">{latest.message}</div>
-        <div className="text-[10px] text-muted-foreground truncate">
-          {firstName} · {rel}
-        </div>
-      </div>
     </button>
   );
 }

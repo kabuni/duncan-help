@@ -175,8 +175,8 @@ export function DeliverableUpdatesDrawer({
             ))
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 

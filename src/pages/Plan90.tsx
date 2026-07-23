@@ -88,7 +88,7 @@ export default function Plan90() {
         )}
       </header>
 
-      <Plan90Overview items={deliverables} />
+      <Plan90Overview items={deliverables} latestByDeliverable={updatesApi.latestByDeliverable} />
 
       <Plan90Filters value={filters} onChange={setFilters} workstreams={activeWorkstreams} owners={owners} />
 
@@ -99,7 +99,7 @@ export default function Plan90() {
           {activeWorkstreams.map((ws) => {
             const items = filteredDeliverables.filter((d) => d.workstream_id === ws.id);
             if (filters.workstream !== "all" && filters.workstream !== ws.id) return null;
-            return <WorkstreamSection key={ws.id} ws={ws} items={items} allWorkstreams={activeWorkstreams} owners={owners} isAdmin={isAdmin} onUpdate={updateDeliverable} onDelete={deleteDeliverable} defaultOpen={filters.workstream === ws.id || items.length > 0} />;
+            return <WorkstreamSection key={ws.id} ws={ws} items={items} allWorkstreams={activeWorkstreams} owners={owners} isAdmin={isAdmin} currentUserId={user?.id ?? null} updatesApi={updatesApi} onUpdate={updateDeliverable} onDelete={deleteDeliverable} defaultOpen={filters.workstream === ws.id || items.length > 0} />;
           })}
           {filteredDeliverables.length === 0 && !loading && (
             <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">No deliverables match the current filters.</div>

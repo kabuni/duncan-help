@@ -54,8 +54,8 @@ export function LatestUpdateCell({ latest, onOpen }: Props) {
           dotClass[latest.ryg],
         )}
       />
-      <div className="min-w-0 flex-1">
-        <div className="text-xs text-foreground truncate leading-snug">{latest.message}</div>
+      <div className="min-w-0 flex-1 max-w-[220px]">
+        <div className="text-xs text-foreground leading-snug overflow-hidden text-ellipsis whitespace-nowrap">{latest.message}</div>
         <div className="text-[10px] text-muted-foreground truncate">
           {firstName} · {rel}
         </div>

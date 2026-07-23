@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Loader2, Trash2, Pencil, X, Check, ChevronDown } from "lucide-react";
@@ -94,10 +94,10 @@ export function DeliverableUpdatesDrawer({
   const grouped = groupByDay(updates);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
-        <SheetHeader className="px-4 pt-4 pb-2 border-b border-border space-y-1">
-          <SheetTitle className="text-sm font-semibold leading-snug pr-8">{deliverable.title}</SheetTitle>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl w-[95vw] p-0 flex flex-col max-h-[85vh] gap-0">
+        <DialogHeader className="px-4 pt-4 pb-2 border-b border-border space-y-1">
+          <DialogTitle className="text-sm font-semibold leading-snug pr-8 text-left">{deliverable.title}</DialogTitle>
           <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground flex-wrap">
             <span className="px-1.5 py-0.5 rounded bg-secondary text-foreground">{deliverable.status}</span>
             <span className="px-1.5 py-0.5 rounded bg-secondary text-foreground">{deliverable.priority}</span>
@@ -108,7 +108,7 @@ export function DeliverableUpdatesDrawer({
             )}
             <span className="ml-auto">{updates.length} update{updates.length !== 1 && "s"}</span>
           </div>
-        </SheetHeader>
+        </DialogHeader>
 
         {canPost && (
           <div className="px-4 py-2.5 border-b border-border bg-secondary/30">
@@ -175,8 +175,8 @@ export function DeliverableUpdatesDrawer({
             ))
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 

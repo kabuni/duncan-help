@@ -88,7 +88,13 @@ export default function Plan90() {
         )}
       </header>
 
-      <Plan90Overview items={deliverables} latestByDeliverable={updatesApi.latestByDeliverable} />
+      <Plan90Overview
+        items={deliverables}
+        latestByDeliverable={updatesApi.latestByDeliverable}
+        filters={filters}
+        onFiltersChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
+        onResetFilters={() => setFilters(emptyFilters)}
+      />
 
       <Plan90Filters value={filters} onChange={setFilters} workstreams={activeWorkstreams} owners={owners} />
 

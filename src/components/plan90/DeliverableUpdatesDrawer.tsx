@@ -204,7 +204,7 @@ function UpdateRow({
   const [draft, setDraft] = useState(update.message);
   const [draftRyg, setDraftRyg] = useState<Plan90Ryg>(update.ryg);
   const [saving, setSaving] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  
 
   useEffect(() => {
     setDraft(update.message);

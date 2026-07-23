@@ -22,8 +22,14 @@ interface Props {
   workstreams: Plan90Workstream[];
   owners: Owner[];
   isAdmin: boolean;
+  latestUpdate: Plan90Update | undefined;
+  updates: Plan90Update[];
+  currentUserId: string | null;
   onUpdate: (id: string, patch: Partial<Plan90Deliverable>) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
+  onPostUpdate: (deliverableId: string, message: string, ryg: Plan90Ryg) => Promise<boolean>;
+  onEditUpdate: (id: string, message: string, ryg: Plan90Ryg) => Promise<boolean>;
+  onDeleteUpdate: (id: string) => Promise<boolean>;
 }
 
 const statusColor: Record<string, string> = {

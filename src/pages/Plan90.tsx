@@ -173,9 +173,11 @@ function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, current
               <thead className="bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="text-left font-medium px-3 py-2">Deliverable</th>
-                  <th className="text-left font-medium px-3 py-2 w-[140px]">Owner</th>
-                  <th className="text-left font-medium px-3 py-2 w-[100px]">Due</th>
-                  <th className="text-left font-medium px-3 py-2 w-[40%]">Latest update</th>
+                  <th className="text-left font-medium px-3 py-2 w-[150px]">Owner</th>
+                  <th className="text-left font-medium px-3 py-2 w-[130px]">Status</th>
+                  <th className="text-left font-medium px-3 py-2 w-[110px]">Due</th>
+                  <th className="text-left font-medium px-3 py-2 w-[36%]">Latest update</th>
+                  {isAdmin && <th className="w-[36px]" />}
                 </tr>
               </thead>
               <tbody>

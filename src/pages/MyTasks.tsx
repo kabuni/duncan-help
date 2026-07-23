@@ -19,6 +19,8 @@ import { useMyPendingTasks } from "@/hooks/useHomeDashboard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -41,13 +43,19 @@ import type { ProjectMember } from "@/hooks/useProjects";
 const startOfDay = (d = new Date()) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 const endOfDay = (d = new Date()) => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x; };
 
+type TaskKind = "workstream" | "project";
+
 type UnifiedTask = {
   id: string;
+  raw_id: string;
+  kind: TaskKind;
   title: string;
   source: "Workstream" | "Project";
   context: string;
   status: string;
   due_date: string | null;
+  deadline: string | null;
+  notes: string | null;
   href: string;
 };
 
@@ -65,7 +73,7 @@ function useProjectTasks() {
       if (prof?.id) ids.push(prof.id);
       const { data, error } = await supabase
         .from("project_chat_plan_items")
-        .select("id,title,status,due_date,project_id,projects(name)")
+        .select("id,title,status,due_date,deadline,notes,project_id,projects(name)")
         .in("assignee_profile_id", ids)
         .neq("status", "done");
       if (error) throw error;
@@ -74,6 +82,8 @@ function useProjectTasks() {
         title: r.title,
         status: r.status,
         due_date: r.due_date,
+        deadline: r.deadline,
+        notes: r.notes,
         project_id: r.project_id,
         project_name: r.projects?.name ?? "Project",
       }));
@@ -134,6 +144,49 @@ async function loadProjectMembers(projectId: string): Promise<ProjectMember[]> {
   ];
 }
 
+/* ------------ mutations ------------ */
+async function markComplete(task: UnifiedTask, completed: boolean) {
+  if (task.kind === "workstream") {
+    const { error } = await supabase
+      .from("workstream_tasks")
+      .update({ completed, status: completed ? "done" : "todo" })
+      .eq("id", task.raw_id);
+    if (error) throw error;
+  } else {
+    const { error } = await (supabase as any)
+      .from("project_chat_plan_items")
+      .update({
+        status: completed ? "done" : "accepted",
+        completed_at: completed ? new Date().toISOString() : null,
+      })
+      .eq("id", task.raw_id);
+    if (error) throw error;
+  }
+}
+
+async function updateTaskFields(
+  task: UnifiedTask,
+  fields: { due_date: string | null; deadline: string | null; notes: string | null },
+) {
+  if (task.kind === "workstream") {
+    const { error } = await supabase
+      .from("workstream_tasks")
+      .update({ due_date: fields.due_date, description: fields.notes })
+      .eq("id", task.raw_id);
+    if (error) throw error;
+  } else {
+    const { error } = await (supabase as any)
+      .from("project_chat_plan_items")
+      .update({
+        due_date: fields.due_date,
+        deadline: fields.deadline,
+        notes: fields.notes,
+      })
+      .eq("id", task.raw_id);
+    if (error) throw error;
+  }
+}
+
 /* ------------ new task dialog ------------ */
 function NewTaskDialog({
   open,
@@ -150,12 +203,16 @@ function NewTaskDialog({
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState<string>("");
   const [dueDate, setDueDate] = useState<string>("");
+  const [deadline, setDeadline] = useState<string>("");
+  const [notes, setNotes] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
       setTitle("");
       setDueDate("");
+      setDeadline("");
+      setNotes("");
       setProjectId(projects[0]?.id ?? "");
     }
   }, [open, projects]);
@@ -166,7 +223,6 @@ function NewTaskDialog({
     if (!user) return;
     setSaving(true);
     try {
-      // Get or create a chat for this project (plan items require chat_id)
       let chatId: string | null = null;
       const { data: existingChat } = await supabase
         .from("project_chats")
@@ -186,7 +242,6 @@ function NewTaskDialog({
         chatId = created.id;
       }
 
-      // Resolve current user's profile id (assignee_profile_id references profiles.id for some rows)
       const { data: profile } = await supabase
         .from("profiles")
         .select("id")
@@ -201,6 +256,8 @@ function NewTaskDialog({
         status: "accepted",
         assignee_profile_id: profile?.id ?? user.id,
         due_date: dueDate || null,
+        deadline: deadline || null,
+        notes: notes.trim() || null,
       });
       if (error) throw error;
       toast.success("Task added");
@@ -246,13 +303,24 @@ function NewTaskDialog({
               </SelectContent>
             </Select>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="task-due" className="text-xs">Due date</Label>
+              <Input id="task-due" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="task-deadline" className="text-xs">Hard deadline</Label>
+              <Input id="task-deadline" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+            </div>
+          </div>
           <div className="space-y-1.5">
-            <Label htmlFor="task-due" className="text-xs">Due date (optional)</Label>
-            <Input
-              id="task-due"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
+            <Label htmlFor="task-notes" className="text-xs">Notes</Label>
+            <Textarea
+              id="task-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Context, links, acceptance criteria…"
+              rows={3}
             />
           </div>
         </div>
@@ -261,6 +329,111 @@ function NewTaskDialog({
           <Button onClick={submit} disabled={saving}>
             {saving && <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />}
             Add task
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ------------ edit task dialog ------------ */
+function EditTaskDialog({
+  task,
+  onOpenChange,
+  onSaved,
+}: {
+  task: UnifiedTask | null;
+  onOpenChange: (v: boolean) => void;
+  onSaved: () => void;
+}) {
+  const [dueDate, setDueDate] = useState("");
+  const [deadline, setDeadline] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!task) return;
+    setDueDate(task.due_date ?? "");
+    setDeadline(task.deadline ?? "");
+    setNotes(task.notes ?? "");
+
+    // For workstream tasks the list query doesn't include description; fetch it.
+    if (task.kind === "workstream") {
+      setLoading(true);
+      supabase
+        .from("workstream_tasks")
+        .select("description")
+        .eq("id", task.raw_id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.description != null) setNotes(data.description);
+        })
+        .then(() => setLoading(false));
+    }
+  }, [task]);
+
+  if (!task) return null;
+
+  async function save() {
+    if (!task) return;
+    setSaving(true);
+    try {
+      await updateTaskFields(task, {
+        due_date: dueDate || null,
+        deadline: task.kind === "project" ? (deadline || null) : null,
+        notes: notes.trim() || null,
+      });
+      toast.success("Task updated");
+      onOpenChange(false);
+      onSaved();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to update task");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={!!task} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base truncate">{task.title}</DialogTitle>
+          <DialogDescription className="text-xs">
+            <span className="uppercase tracking-widest">{task.source}</span> · {task.context}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className={`grid gap-3 ${task.kind === "project" ? "grid-cols-2" : "grid-cols-1"}`}>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-due" className="text-xs">Due date</Label>
+              <Input id="edit-due" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </div>
+            {task.kind === "project" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-deadline" className="text-xs">Hard deadline</Label>
+                <Input id="edit-deadline" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+              </div>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-notes" className="text-xs">
+              Notes {loading && <Loader2 className="h-3 w-3 inline animate-spin ml-1" />}
+            </Label>
+            <Textarea
+              id="edit-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={5}
+              placeholder="Context, links, acceptance criteria…"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={save} disabled={saving}>
+            {saving && <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />}
+            Save
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -334,24 +507,34 @@ export default function MyTasks() {
   const [importProject, setImportProject] = useState<Project | null>(null);
   const [importMembers, setImportMembers] = useState<ProjectMember[]>([]);
   const [importOpen, setImportOpen] = useState(false);
+  const [editing, setEditing] = useState<UnifiedTask | null>(null);
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
 
   const tasks: UnifiedTask[] = useMemo(() => {
     const a: UnifiedTask[] = (ws.data ?? []).map((t: any) => ({
       id: `ws-${t.id}`,
+      raw_id: t.id,
+      kind: "workstream" as TaskKind,
       title: t.title,
-      source: "Workstream",
+      source: "Workstream" as const,
       context: t.card_title,
       status: t.status,
       due_date: t.due_date,
+      deadline: null,
+      notes: null,
       href: `/workstreams?card=${t.card_id}`,
     }));
     const b: UnifiedTask[] = (proj.data ?? []).map((t: any) => ({
       id: `pj-${t.id}`,
+      raw_id: t.id,
+      kind: "project" as TaskKind,
       title: t.title,
-      source: "Project",
+      source: "Project" as const,
       context: t.project_name,
       status: t.status,
       due_date: t.due_date,
+      deadline: t.deadline,
+      notes: t.notes,
       href: `/projects/${t.project_id}`,
     }));
     return [...a, ...b];
@@ -366,14 +549,16 @@ export default function MyTasks() {
     const upcoming: UnifiedTask[] = [];
     const later: UnifiedTask[] = [];
     for (const t of tasks) {
-      if (!t.due_date) { later.push(t); continue; }
-      const d = new Date(t.due_date + "T00:00:00");
+      const anchor = t.due_date || t.deadline;
+      if (!anchor) { later.push(t); continue; }
+      const d = new Date(anchor + "T00:00:00");
       if (d < today) overdue.push(t);
       else if (d <= eod) dueToday.push(t);
       else if (d <= in7) upcoming.push(t);
       else later.push(t);
     }
-    const byDate = (a: UnifiedTask, b: UnifiedTask) => (a.due_date || "").localeCompare(b.due_date || "");
+    const byDate = (a: UnifiedTask, b: UnifiedTask) =>
+      ((a.due_date || a.deadline) || "").localeCompare((b.due_date || b.deadline) || "");
     return {
       overdue: overdue.sort(byDate),
       dueToday: dueToday.sort(byDate),
@@ -391,7 +576,7 @@ export default function MyTasks() {
       const members = await loadProjectMembers(p.id);
       setImportMembers(members);
       setImportOpen(true);
-    } catch (e: any) {
+    } catch {
       toast.error("Failed to load project members");
     }
   }
@@ -399,8 +584,24 @@ export default function MyTasks() {
   function refetchAll() {
     qc.invalidateQueries({ queryKey: ["my-tasks"] });
     qc.invalidateQueries({ queryKey: ["home-briefing"] });
+    qc.invalidateQueries({ queryKey: ["home-dashboard"] });
     ws.refetch?.();
     proj.refetch();
+  }
+
+  async function handleToggle(task: UnifiedTask, next: boolean) {
+    setBusyIds((s) => new Set(s).add(task.id));
+    try {
+      await markComplete(task, next);
+      toast.success(next ? "Marked complete" : "Reopened");
+      refetchAll();
+    } catch (e: any) {
+      toast.error(e.message || "Update failed");
+    } finally {
+      setBusyIds((s) => {
+        const n = new Set(s); n.delete(task.id); return n;
+      });
+    }
   }
 
   return (
@@ -443,10 +644,30 @@ export default function MyTasks() {
         </div>
       ) : (
         <div className="space-y-5">
-          {buckets.overdue.length > 0 && <Bucket title={`Overdue · ${buckets.overdue.length}`} tone="overdue" rows={buckets.overdue} />}
-          {buckets.dueToday.length > 0 && <Bucket title={`Due today · ${buckets.dueToday.length}`} tone="today" rows={buckets.dueToday} />}
-          {buckets.upcoming.length > 0 && <Bucket title={`Next 7 days · ${buckets.upcoming.length}`} tone="upcoming" rows={buckets.upcoming} />}
-          {buckets.later.length > 0 && <Bucket title={`Later / no due date · ${buckets.later.length}`} rows={buckets.later} />}
+          {buckets.overdue.length > 0 && (
+            <Bucket
+              title={`Overdue · ${buckets.overdue.length}`} tone="overdue" rows={buckets.overdue}
+              busyIds={busyIds} onToggle={handleToggle} onEdit={setEditing} onOpen={(t) => navigate(t.href)}
+            />
+          )}
+          {buckets.dueToday.length > 0 && (
+            <Bucket
+              title={`Due today · ${buckets.dueToday.length}`} tone="today" rows={buckets.dueToday}
+              busyIds={busyIds} onToggle={handleToggle} onEdit={setEditing} onOpen={(t) => navigate(t.href)}
+            />
+          )}
+          {buckets.upcoming.length > 0 && (
+            <Bucket
+              title={`Next 7 days · ${buckets.upcoming.length}`} tone="upcoming" rows={buckets.upcoming}
+              busyIds={busyIds} onToggle={handleToggle} onEdit={setEditing} onOpen={(t) => navigate(t.href)}
+            />
+          )}
+          {buckets.later.length > 0 && (
+            <Bucket
+              title={`Later / no due date · ${buckets.later.length}`} rows={buckets.later}
+              busyIds={busyIds} onToggle={handleToggle} onEdit={setEditing} onOpen={(t) => navigate(t.href)}
+            />
+          )}
         </div>
       )}
 
@@ -474,6 +695,11 @@ export default function MyTasks() {
           onImported={refetchAll}
         />
       )}
+      <EditTaskDialog
+        task={editing}
+        onOpenChange={(v) => { if (!v) setEditing(null); }}
+        onSaved={refetchAll}
+      />
     </div>
   );
 }
@@ -482,12 +708,19 @@ function Bucket({
   title,
   tone,
   rows,
+  busyIds,
+  onToggle,
+  onEdit,
+  onOpen,
 }: {
   title: string;
   tone?: "overdue" | "today" | "upcoming";
   rows: UnifiedTask[];
+  busyIds: Set<string>;
+  onToggle: (t: UnifiedTask, next: boolean) => void;
+  onEdit: (t: UnifiedTask) => void;
+  onOpen: (t: UnifiedTask) => void;
 }) {
-  const navigate = useNavigate();
   return (
     <div className="rounded-xl border border-border bg-card">
       <div className="px-4 py-2.5 border-b border-border text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -495,27 +728,48 @@ function Bucket({
       </div>
       <ul className="divide-y divide-border/60">
         {rows.map((t) => {
-          const due = t.due_date ? new Date(t.due_date + "T00:00:00") : null;
-          const dueLabel = due ? format(due, "d MMM yyyy") : "No date";
+          const anchor = t.due_date || t.deadline;
+          const dueLabel = anchor ? format(new Date(anchor + "T00:00:00"), "d MMM yyyy") : "No date";
           const dueClass =
             tone === "overdue" ? "text-destructive font-semibold" :
             tone === "today" ? "text-amber-600 dark:text-amber-400 font-medium" :
             "text-muted-foreground";
+          const busy = busyIds.has(t.id);
           return (
-            <li key={t.id}>
+            <li key={t.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
+              <div className="pt-0.5">
+                {busy ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : (
+                  <Checkbox
+                    aria-label="Mark complete"
+                    checked={false}
+                    onCheckedChange={(v) => onToggle(t, !!v)}
+                  />
+                )}
+              </div>
               <button
-                onClick={() => navigate(t.href)}
-                className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors"
+                onClick={() => onEdit(t)}
+                className="min-w-0 flex-1 text-left"
               >
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-foreground truncate">{t.title}</div>
-                  <div className="text-[11px] text-muted-foreground truncate mt-0.5">
-                    <span className="uppercase tracking-widest mr-1.5">{t.source}</span>
-                    · {t.context}
-                  </div>
+                <div className="text-sm font-medium text-foreground truncate">{t.title}</div>
+                <div className="text-[11px] text-muted-foreground truncate mt-0.5">
+                  <span className="uppercase tracking-widest mr-1.5">{t.source}</span>
+                  · {t.context}
+                  {t.notes && <span className="ml-1.5">· {t.notes.replace(/\s+/g, " ").slice(0, 60)}{t.notes.length > 60 ? "…" : ""}</span>}
+                  {t.kind === "project" && t.deadline && t.due_date && t.deadline !== t.due_date && (
+                    <span className="ml-1.5">· deadline {format(new Date(t.deadline + "T00:00:00"), "d MMM")}</span>
+                  )}
                 </div>
-                <div className={`text-xs tabular-nums shrink-0 ${dueClass}`}>{dueLabel}</div>
-                <ExternalLink className="h-3 w-3 text-muted-foreground/60 shrink-0" />
+              </button>
+              <div className={`text-xs tabular-nums shrink-0 ${dueClass}`}>{dueLabel}</div>
+              <button
+                onClick={() => onOpen(t)}
+                className="p-1 rounded hover:bg-muted text-muted-foreground/60 hover:text-foreground shrink-0"
+                aria-label="Open source"
+                title="Open source"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
               </button>
             </li>
           );

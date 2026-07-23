@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LayoutDashboard, Home, Settings, LogOut, X, Mail, FileText, MessageSquare, Calendar, GitBranch, Menu, Layers, Megaphone, Crown, Inbox, Receipt, Users, School, Target } from "lucide-react";
+import { LayoutDashboard, Home, Settings, LogOut, X, Mail, FileText, MessageSquare, Calendar, GitBranch, Menu, Layers, Megaphone, Crown, Inbox, Receipt, Users, School, Target, PanelLeftClose } from "lucide-react";
 import { canViewBriefing } from "@/lib/ceoAccess";
 import ChatHistory from "@/components/ChatHistory";
 import { useGeneralChatsContext } from "@/hooks/GeneralChatsContext";
@@ -38,12 +38,14 @@ const Sidebar = ({
   onSelectChat,
   onNewChat,
   chatOps: externalChatOps,
+  onDesktopHide,
 }: {
   mobileOpen?: boolean;
   onMobileClose?: () => void;
   onSelectChat?: (chatId: string) => void;
   onNewChat?: () => void;
   chatOps?: ReturnType<typeof useGeneralChats>;
+  onDesktopHide?: () => void;
 }) => {
   const chatOps = useGeneralChatsContext();
   const { user, signOut } = useAuth();
@@ -92,14 +94,27 @@ const Sidebar = ({
           </div>
         </button>
 
-        {/* Close button on mobile */}
-        <button
-          onClick={onMobileClose}
-          className="md:hidden flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {/* Close / hide buttons */}
+        <div className="flex items-center gap-1">
+          {onDesktopHide && (
+            <button
+              onClick={onDesktopHide}
+              className="hidden md:flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+              aria-label="Hide sidebar"
+              title="Hide sidebar"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            onClick={onMobileClose}
+            className="md:hidden flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
+
 
 
       {/* Nav */}

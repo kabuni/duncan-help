@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { MessageSquare, MessageSquarePlus } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import type { Plan90Update, Plan90Ryg } from "@/hooks/usePlan90Updates";
 
 const dotClass: Record<Plan90Ryg, string> = {

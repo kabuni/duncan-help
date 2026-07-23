@@ -73,7 +73,7 @@ export default function AdminUserManagement() {
     document.body.style.overflow = "hidden";
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !updateMutation.isPending) {
+      if (event.key === "Escape") {
         setEditing(null);
       }
     };
@@ -84,7 +84,7 @@ export default function AdminUserManagement() {
       document.body.style.overflow = originalOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [editing, updateMutation.isPending]);
+  }, [editing]);
 
   const updateMutation = useMutation({
     mutationFn: async (payload: { userId: string; patch: Record<string, unknown> }) => {

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { usePlan90, PLAN90_PRIORITIES, PLAN90_STATUSES } from "@/hooks/usePlan90";
+import { usePlan90Updates } from "@/hooks/usePlan90Updates";
 import type { Plan90Workstream } from "@/hooks/usePlan90";
 import { supabase } from "@/integrations/supabase/client";
 import { Plan90Overview } from "@/components/plan90/Plan90Overview";
@@ -36,6 +37,7 @@ export default function Plan90() {
   const { user } = useAuth();
   const { isAdmin, isLoading: roleLoading } = useIsAdmin();
   const { workstreams, deliverables, loading, updateDeliverable, createDeliverable, deleteDeliverable, createWorkstream, updateWorkstream, deleteWorkstream } = usePlan90();
+  const updatesApi = usePlan90Updates();
   const { data: owners = [] } = useOwners();
   const [filters, setFilters] = useState<Plan90FilterState>(emptyFilters);
   const [wsMgrOpen, setWsMgrOpen] = useState(false);
@@ -86,7 +88,7 @@ export default function Plan90() {
         )}
       </header>
 
-      <Plan90Overview items={deliverables} />
+      <Plan90Overview items={deliverables} latestByDeliverable={updatesApi.latestByDeliverable} />
 
       <Plan90Filters value={filters} onChange={setFilters} workstreams={activeWorkstreams} owners={owners} />
 
@@ -97,7 +99,7 @@ export default function Plan90() {
           {activeWorkstreams.map((ws) => {
             const items = filteredDeliverables.filter((d) => d.workstream_id === ws.id);
             if (filters.workstream !== "all" && filters.workstream !== ws.id) return null;
-            return <WorkstreamSection key={ws.id} ws={ws} items={items} allWorkstreams={activeWorkstreams} owners={owners} isAdmin={isAdmin} onUpdate={updateDeliverable} onDelete={deleteDeliverable} defaultOpen={filters.workstream === ws.id || items.length > 0} />;
+            return <WorkstreamSection key={ws.id} ws={ws} items={items} allWorkstreams={activeWorkstreams} owners={owners} isAdmin={isAdmin} currentUserId={user?.id ?? null} updatesApi={updatesApi} onUpdate={updateDeliverable} onDelete={deleteDeliverable} defaultOpen={filters.workstream === ws.id || items.length > 0} />;
           })}
           {filteredDeliverables.length === 0 && !loading && (
             <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">No deliverables match the current filters.</div>
@@ -111,7 +113,7 @@ export default function Plan90() {
   );
 }
 
-function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, onUpdate, onDelete, defaultOpen }: any) {
+function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, currentUserId, updatesApi, onUpdate, onDelete, defaultOpen }: any) {
   const [open, setOpen] = useState<boolean>(defaultOpen);
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const in7 = new Date(today); in7.setDate(in7.getDate() + 7);
@@ -127,6 +129,13 @@ function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, onUpdat
   const critical = items.filter((i: any) => i.priority === "Critical" && i.status !== "Completed").length;
   const completionPct = items.length ? Math.round((done / items.length) * 100) : 0;
 
+  // Workstream-level RYG rollup from latest updates
+  const rygCounts = { green: 0, amber: 0, red: 0 } as Record<"green" | "amber" | "red", number>;
+  for (const it of items) {
+    const latest = updatesApi.latestByDeliverable.get(it.id);
+    if (latest) rygCounts[latest.ryg as "green" | "amber" | "red"]++;
+  }
+
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="rounded-xl border border-border bg-card overflow-hidden">
       <CollapsibleTrigger className="w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary/40 transition-colors text-left">
@@ -141,6 +150,13 @@ function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, onUpdat
             {overdue > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 border border-red-500/30">{overdue} overdue</span>}
             {dueSoon > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30">{dueSoon} due ≤7d</span>}
             {critical > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-500 border border-orange-500/30">{critical} critical</span>}
+            {(rygCounts.red + rygCounts.amber + rygCounts.green) > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded border border-border inline-flex items-center gap-1.5" title="Health from latest updates">
+                <span className="inline-flex items-center gap-0.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{rygCounts.green}</span>
+                <span className="inline-flex items-center gap-0.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-500" />{rygCounts.amber}</span>
+                <span className="inline-flex items-center gap-0.5"><span className="h-1.5 w-1.5 rounded-full bg-red-500" />{rygCounts.red}</span>
+              </span>
+            )}
           </div>
           <div className="mt-1.5 max-w-md flex items-center gap-2">
             <div className="h-1.5 flex-1 rounded-full bg-secondary overflow-hidden"><div className="h-full bg-primary" style={{ width: `${completionPct}%` }} /></div>
@@ -153,21 +169,37 @@ function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, onUpdat
           <div className="px-4 py-6 text-sm text-muted-foreground border-t border-border">No matching deliverables.</div>
         ) : (
           <div className="border-t border-border overflow-x-auto">
-            <table className="w-full min-w-[980px] text-sm">
+            <table className="w-full min-w-[1120px] text-sm">
               <thead className="bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="text-left font-medium px-3 py-2">Deliverable</th>
                   <th className="text-left font-medium px-3 py-2">Owner</th>
                   <th className="text-left font-medium px-3 py-2">Due</th>
                   <th className="text-left font-medium px-3 py-2">Status</th>
-                  
                   <th className="text-left font-medium px-3 py-2">Priority</th>
                   <th className="text-left font-medium px-3 py-2">Workstream</th>
+                  <th className="text-left font-medium px-3 py-2">Latest update</th>
                   <th className="text-left font-medium px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((it: any) => <DeliverableRow key={it.id} item={it} workstreams={allWorkstreams} owners={owners} isAdmin={isAdmin} onUpdate={onUpdate} onDelete={onDelete} />)}
+                {items.map((it: any) => (
+                  <DeliverableRow
+                    key={it.id}
+                    item={it}
+                    workstreams={allWorkstreams}
+                    owners={owners}
+                    isAdmin={isAdmin}
+                    latestUpdate={updatesApi.latestByDeliverable.get(it.id)}
+                    updates={updatesApi.listFor(it.id)}
+                    currentUserId={currentUserId}
+                    onUpdate={onUpdate}
+                    onDelete={onDelete}
+                    onPostUpdate={updatesApi.post}
+                    onEditUpdate={updatesApi.edit}
+                    onDeleteUpdate={updatesApi.remove}
+                  />
+                ))}
               </tbody>
             </table>
           </div>

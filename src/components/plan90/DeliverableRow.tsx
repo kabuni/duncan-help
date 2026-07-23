@@ -121,12 +121,7 @@ export function DeliverableRow({
           <SelectContent>{PLAN90_PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
         </Select>
       </td>
-      <td className="px-3 py-2 align-top w-[160px]">
-        <Select disabled={disabled} value={item.workstream_id} onValueChange={(v) => onUpdate(item.id, { workstream_id: v })}>
-          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>{workstreams.filter((w) => !w.archived).map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent>
-        </Select>
-      </td>
+      
       <td className="px-3 py-2 align-top w-[240px] min-w-[200px]">
         <LatestUpdateCell latest={latestUpdate} onOpen={() => setUpdatesOpen(true)} />
       </td>

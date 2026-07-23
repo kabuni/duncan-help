@@ -2,10 +2,28 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, Trash2, Users, Search, AlertTriangle, Download } from "lucide-react";
+import { Loader2, Trash2, Users, Search, AlertTriangle, Download, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +54,43 @@ export default function AdminUserManagement() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "inactive30" | "inactive60" | "test" | "never">("all");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [editing, setEditing] = useState<AdminUser | null>(null);
+  const [editForm, setEditForm] = useState<{
+    display_name: string;
+    department: string;
+    role_title: string;
+    approval_status: string;
+    bio: string;
+  }>({ display_name: "", department: "", role_title: "", approval_status: "pending", bio: "" });
+
+  const openEdit = (u: AdminUser) => {
+    setEditing(u);
+    setEditForm({
+      display_name: u.display_name ?? "",
+      department: u.department ?? "",
+      role_title: u.role_title ?? "",
+      approval_status: u.approval_status ?? "pending",
+      bio: "",
+    });
+  };
+
+  const updateMutation = useMutation({
+    mutationFn: async (payload: { userId: string; patch: Record<string, unknown> }) => {
+      const { data, error } = await supabase.functions.invoke("admin-users", {
+        body: { action: "update_profile", userId: payload.userId, patch: payload.patch },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Profile updated");
+      setEditing(null);
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      qc.invalidateQueries({ queryKey: ["pending-approvals"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Update failed"),
+  });
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["admin-users"],
@@ -212,7 +267,7 @@ export default function AdminUserManagement() {
 
       {/* Table */}
       <div className="rounded-lg border border-border overflow-hidden">
-        <div className="grid grid-cols-[32px_1fr_1fr_90px_90px] gap-2 px-3 py-2 bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground font-medium border-b border-border">
+        <div className="grid grid-cols-[32px_1fr_1fr_90px_90px_40px] gap-2 px-3 py-2 bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground font-medium border-b border-border">
           <Checkbox
             checked={filtered.length > 0 && selected.size >= filtered.filter((u) => u.id !== currentUser?.id).length}
             onCheckedChange={toggleAll}
@@ -221,6 +276,7 @@ export default function AdminUserManagement() {
           <div>Department / Role</div>
           <div>Last sign in</div>
           <div>Status</div>
+          <div className="text-right">Edit</div>
         </div>
         <div className="max-h-[480px] overflow-y-auto divide-y divide-border">
           {filtered.length === 0 ? (
@@ -234,7 +290,7 @@ export default function AdminUserManagement() {
               return (
                 <div
                   key={u.id}
-                  className={`grid grid-cols-[32px_1fr_1fr_90px_90px] gap-2 px-3 py-2.5 items-center text-xs hover:bg-muted/20 ${
+                  className={`grid grid-cols-[32px_1fr_1fr_90px_90px_40px] gap-2 px-3 py-2.5 items-center text-xs hover:bg-muted/20 ${
                     selected.has(u.id) ? "bg-primary/5" : ""
                   }`}
                 >
@@ -277,6 +333,16 @@ export default function AdminUserManagement() {
                       {u.approval_status ?? "—"}
                     </span>
                   </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => openEdit(u)}
+                      className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                      title="Edit profile"
+                      aria-label={`Edit ${u.display_name || u.email}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               );
             })
@@ -312,6 +378,87 @@ export default function AdminUserManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit user profile</DialogTitle>
+            <DialogDescription className="truncate">{editing?.email}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-name">Display name</Label>
+              <Input
+                id="edit-name"
+                value={editForm.display_name}
+                onChange={(e) => setEditForm((f) => ({ ...f, display_name: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-dept">Department</Label>
+                <Input
+                  id="edit-dept"
+                  value={editForm.department}
+                  onChange={(e) => setEditForm((f) => ({ ...f, department: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-role">Role title</Label>
+                <Input
+                  id="edit-role"
+                  value={editForm.role_title}
+                  onChange={(e) => setEditForm((f) => ({ ...f, role_title: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Approval status</Label>
+              <Select
+                value={editForm.approval_status}
+                onValueChange={(v) => setEditForm((f) => ({ ...f, approval_status: v }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-bio">Bio (optional)</Label>
+              <Textarea
+                id="edit-bio"
+                rows={3}
+                placeholder="Leave blank to keep unchanged"
+                value={editForm.bio}
+                onChange={(e) => setEditForm((f) => ({ ...f, bio: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)} disabled={updateMutation.isPending}>Cancel</Button>
+            <Button
+              disabled={!editing || updateMutation.isPending}
+              onClick={() => {
+                if (!editing) return;
+                const patch: Record<string, unknown> = {
+                  display_name: editForm.display_name.trim(),
+                  department: editForm.department.trim(),
+                  role_title: editForm.role_title.trim(),
+                  approval_status: editForm.approval_status,
+                };
+                if (editForm.bio.trim()) patch.bio = editForm.bio.trim();
+                updateMutation.mutate({ userId: editing.id, patch });
+              }}
+            >
+              {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

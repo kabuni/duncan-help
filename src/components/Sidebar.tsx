@@ -38,12 +38,14 @@ const Sidebar = ({
   onSelectChat,
   onNewChat,
   chatOps: externalChatOps,
+  onDesktopHide,
 }: {
   mobileOpen?: boolean;
   onMobileClose?: () => void;
   onSelectChat?: (chatId: string) => void;
   onNewChat?: () => void;
   chatOps?: ReturnType<typeof useGeneralChats>;
+  onDesktopHide?: () => void;
 }) => {
   const chatOps = useGeneralChatsContext();
   const { user, signOut } = useAuth();

@@ -8,34 +8,58 @@ const dotClass: Record<Plan90Ryg, string> = {
   red: "bg-red-500",
 };
 
-export function LatestUpdateCell({ latest }: { latest: Plan90Update | undefined }) {
+interface Props {
+  latest: Plan90Update | undefined;
+  onOpen: () => void;
+}
+
+export function LatestUpdateCell({ latest, onOpen }: Props) {
   if (!latest) {
     return (
-      <div className="flex items-center gap-2 text-[11px] text-muted-foreground min-w-0">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="group flex items-center gap-2 text-left text-[11px] text-muted-foreground hover:text-primary transition-colors w-full"
+        title="Add the first update"
+      >
         <span className="h-2 w-2 rounded-full bg-muted-foreground/40 shrink-0" />
-        <span className="italic truncate">No updates</span>
-      </div>
+        <span className="italic">No updates</span>
+        <span className="opacity-0 group-hover:opacity-100 text-[10px] text-primary">Add</span>
+      </button>
     );
   }
 
   const firstName = latest.author_name.split(/\s+/)[0] || latest.author_name;
   const rel = formatDistanceToNow(new Date(latest.created_at), { addSuffix: true })
     .replace("about ", "")
-    .replace(" minutes", "m").replace(" minute", "m")
-    .replace(" hours", "h").replace(" hour", "h")
-    .replace(" days", "d").replace(" day", "d")
-    .replace(" months", "mo").replace(" month", "mo");
+    .replace(" minutes", "m")
+    .replace(" minute", "m")
+    .replace(" hours", "h")
+    .replace(" hour", "h")
+    .replace(" days", "d")
+    .replace(" day", "d")
+    .replace(" months", "mo")
+    .replace(" month", "mo");
 
   return (
-    <div
-      className="flex items-center gap-2 min-w-0 max-w-full"
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex items-start gap-2 text-left w-full min-w-0 hover:bg-secondary/50 rounded-md px-1.5 py-1 -mx-1.5 -my-1 transition-colors"
       title={`${latest.author_name} · ${new Date(latest.created_at).toLocaleString()}\n\n${latest.message}`}
     >
-      <span className={cn("h-2 w-2 rounded-full shrink-0", dotClass[latest.ryg])} />
-      <span className="text-xs text-foreground truncate min-w-0">{latest.message}</span>
-      <span className="text-[10px] text-muted-foreground shrink-0 hidden md:inline">
-        {firstName} · {rel}
-      </span>
-    </div>
+      <span
+        className={cn(
+          "h-2 w-2 rounded-full shrink-0 mt-1.5",
+          dotClass[latest.ryg],
+        )}
+      />
+      <div className="min-w-0 flex-1 max-w-[220px]">
+        <div className="text-xs text-foreground leading-snug overflow-hidden text-ellipsis whitespace-nowrap">{latest.message}</div>
+        <div className="text-[10px] text-muted-foreground truncate">
+          {firstName} · {rel}
+        </div>
+      </div>
+    </button>
   );
 }

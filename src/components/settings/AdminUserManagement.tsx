@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,14 +9,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -73,6 +65,26 @@ export default function AdminUserManagement() {
       bio: "",
     });
   };
+
+  useEffect(() => {
+    if (!editing) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setEditing(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [editing]);
 
   const updateMutation = useMutation({
     mutationFn: async (payload: { userId: string; patch: Record<string, unknown> }) => {
@@ -379,86 +391,105 @@ export default function AdminUserManagement() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit user profile</DialogTitle>
-            <DialogDescription className="truncate">{editing?.email}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-name">Display name</Label>
-              <Input
-                id="edit-name"
-                value={editForm.display_name}
-                onChange={(e) => setEditForm((f) => ({ ...f, display_name: e.target.value }))}
-              />
+      {editing && (
+        <div
+          className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-background/80 p-4 pt-8 backdrop-blur-sm sm:items-center sm:pt-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-user-profile-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default"
+            aria-label="Close edit user profile"
+            onClick={() => {
+              if (!updateMutation.isPending) setEditing(null);
+            }}
+          />
+          <div className="relative z-[201] flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl">
+            <div className="shrink-0 border-b border-border px-4 py-3">
+              <h3 id="edit-user-profile-title" className="text-sm font-semibold text-foreground">
+                Edit user profile
+              </h3>
+              <p className="truncate text-xs text-muted-foreground">{editing.email}</p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
               <div className="space-y-1.5">
-                <Label htmlFor="edit-dept">Department</Label>
+                <Label htmlFor="edit-name">Display name</Label>
                 <Input
-                  id="edit-dept"
-                  value={editForm.department}
-                  onChange={(e) => setEditForm((f) => ({ ...f, department: e.target.value }))}
+                  id="edit-name"
+                  autoFocus
+                  value={editForm.display_name}
+                  onChange={(e) => setEditForm((f) => ({ ...f, display_name: e.target.value }))}
                 />
               </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-dept">Department</Label>
+                  <Input
+                    id="edit-dept"
+                    value={editForm.department}
+                    onChange={(e) => setEditForm((f) => ({ ...f, department: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-role">Role title</Label>
+                  <Input
+                    id="edit-role"
+                    value={editForm.role_title}
+                    onChange={(e) => setEditForm((f) => ({ ...f, role_title: e.target.value }))}
+                  />
+                </div>
+              </div>
               <div className="space-y-1.5">
-                <Label htmlFor="edit-role">Role title</Label>
-                <Input
-                  id="edit-role"
-                  value={editForm.role_title}
-                  onChange={(e) => setEditForm((f) => ({ ...f, role_title: e.target.value }))}
+                <Label>Approval status</Label>
+                <Select
+                  value={editForm.approval_status}
+                  onValueChange={(v) => setEditForm((f) => ({ ...f, approval_status: v }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="z-[220]">
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="approved">Approved</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-bio">Bio (optional)</Label>
+                <Textarea
+                  id="edit-bio"
+                  rows={3}
+                  placeholder="Leave blank to keep unchanged"
+                  value={editForm.bio}
+                  onChange={(e) => setEditForm((f) => ({ ...f, bio: e.target.value }))}
                 />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Approval status</Label>
-              <Select
-                value={editForm.approval_status}
-                onValueChange={(v) => setEditForm((f) => ({ ...f, approval_status: v }))}
+
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border px-4 py-3 sm:flex-row sm:justify-end">
+              <Button variant="outline" onClick={() => setEditing(null)} disabled={updateMutation.isPending}>Cancel</Button>
+              <Button
+                disabled={updateMutation.isPending}
+                onClick={() => {
+                  const patch: Record<string, unknown> = {
+                    display_name: editForm.display_name.trim(),
+                    department: editForm.department.trim(),
+                    role_title: editForm.role_title.trim(),
+                    approval_status: editForm.approval_status,
+                  };
+                  if (editForm.bio.trim()) patch.bio = editForm.bio.trim();
+                  updateMutation.mutate({ userId: editing.id, patch });
+                }}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-bio">Bio (optional)</Label>
-              <Textarea
-                id="edit-bio"
-                rows={3}
-                placeholder="Leave blank to keep unchanged"
-                value={editForm.bio}
-                onChange={(e) => setEditForm((f) => ({ ...f, bio: e.target.value }))}
-              />
+                {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save changes
+              </Button>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)} disabled={updateMutation.isPending}>Cancel</Button>
-            <Button
-              disabled={!editing || updateMutation.isPending}
-              onClick={() => {
-                if (!editing) return;
-                const patch: Record<string, unknown> = {
-                  display_name: editForm.display_name.trim(),
-                  department: editForm.department.trim(),
-                  role_title: editForm.role_title.trim(),
-                  approval_status: editForm.approval_status,
-                };
-                if (editForm.bio.trim()) patch.bio = editForm.bio.trim();
-                updateMutation.mutate({ userId: editing.id, patch });
-              }}
-            >
-              {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Save changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 }

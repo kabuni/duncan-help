@@ -51,7 +51,11 @@ function sanitizeName(f: string) {
   return ext ? `${safe}.${ext}` : safe;
 }
 
-export function DeliverableRow({ item, workstreams, owners, isAdmin, onUpdate, onDelete }: Props) {
+export function DeliverableRow({
+  item, workstreams, owners, isAdmin,
+  latestUpdate, updates, currentUserId,
+  onUpdate, onDelete, onPostUpdate, onEditUpdate, onDeleteUpdate,
+}: Props) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const in7 = new Date(today); in7.setDate(in7.getDate() + 7);
   const dueDate = item.due_date ? new Date(item.due_date) : null;
@@ -59,14 +63,14 @@ export function DeliverableRow({ item, workstreams, owners, isAdmin, onUpdate, o
   const isDueSoon = !!dueDate && !isOverdue && dueDate >= today && dueDate <= in7 && item.status !== "Completed";
   const [editTitle, setEditTitle] = useState(false);
   const [title, setTitle] = useState(item.title);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [notes, setNotes] = useState(item.notes || "");
   const [attachOpen, setAttachOpen] = useState(false);
-  useEffect(() => { setTitle(item.title); setNotes(item.notes || ""); }, [item.id, item.title, item.notes]);
+  const [updatesOpen, setUpdatesOpen] = useState(false);
+  useEffect(() => { setTitle(item.title); }, [item.id, item.title]);
 
   const disabled = !isAdmin;
 
   return (
+    <>
     <tr className={cn("border-b border-border/60 hover:bg-secondary/30 transition-colors", isOverdue && "bg-red-500/[0.03]", isDueSoon && "bg-yellow-500/[0.04]")}>
       <td className="px-3 py-2 align-top">
         {editTitle && isAdmin ? (
@@ -123,20 +127,11 @@ export function DeliverableRow({ item, workstreams, owners, isAdmin, onUpdate, o
           <SelectContent>{workstreams.filter((w) => !w.archived).map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent>
         </Select>
       </td>
-      <td className="px-3 py-2 align-top w-[80px]">
+      <td className="px-3 py-2 align-top w-[240px] min-w-[200px]">
+        <LatestUpdateCell latest={latestUpdate} onOpen={() => setUpdatesOpen(true)} />
+      </td>
+      <td className="px-3 py-2 align-top w-[70px]">
         <div className="flex items-center gap-1">
-          <Popover open={notesOpen} onOpenChange={setNotesOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 relative" title={item.notes || "Notes"}>
-                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="14" y2="17" /></svg>
-                {item.notes && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-primary" />}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-80">
-              <Textarea disabled={disabled} value={notes} onChange={(e) => setNotes(e.target.value)} rows={5} className="text-xs" placeholder={isAdmin ? "Add notes…" : "No notes"} />
-              {isAdmin && <div className="flex justify-end gap-2 mt-2"><Button variant="ghost" size="sm" onClick={() => { setNotes(item.notes || ""); setNotesOpen(false); }}>Cancel</Button><Button size="sm" onClick={async () => { await onUpdate(item.id, { notes: notes || null }); setNotesOpen(false); }}>Save</Button></div>}
-            </PopoverContent>
-          </Popover>
           <Popover open={attachOpen} onOpenChange={setAttachOpen}>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon" className="h-7 w-7"><Paperclip className="h-3.5 w-3.5" /></Button>
@@ -149,6 +144,19 @@ export function DeliverableRow({ item, workstreams, owners, isAdmin, onUpdate, o
         </div>
       </td>
     </tr>
+    <DeliverableUpdatesDrawer
+      open={updatesOpen}
+      onOpenChange={setUpdatesOpen}
+      deliverable={item}
+      updates={updates}
+      currentUserId={currentUserId}
+      isAdmin={isAdmin}
+      canPost={!!currentUserId}
+      onPost={onPostUpdate}
+      onEdit={onEditUpdate}
+      onDelete={onDeleteUpdate}
+    />
+    </>
   );
 }
 

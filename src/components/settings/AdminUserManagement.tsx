@@ -290,7 +290,7 @@ export default function AdminUserManagement() {
               return (
                 <div
                   key={u.id}
-                  className={`grid grid-cols-[32px_1fr_1fr_90px_90px] gap-2 px-3 py-2.5 items-center text-xs hover:bg-muted/20 ${
+                  className={`grid grid-cols-[32px_1fr_1fr_90px_90px_40px] gap-2 px-3 py-2.5 items-center text-xs hover:bg-muted/20 ${
                     selected.has(u.id) ? "bg-primary/5" : ""
                   }`}
                 >
@@ -332,6 +332,16 @@ export default function AdminUserManagement() {
                     >
                       {u.approval_status ?? "—"}
                     </span>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => openEdit(u)}
+                      className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                      title="Edit profile"
+                      aria-label={`Edit ${u.display_name || u.email}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
               );

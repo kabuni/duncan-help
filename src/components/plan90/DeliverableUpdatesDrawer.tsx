@@ -282,28 +282,9 @@ function UpdateRow({
         </div>
       ) : (
         <div className="mt-0.5 pl-4">
-          <button
-            type="button"
-            onClick={() => isLong && setExpanded((v) => !v)}
-            className={cn(
-              "text-xs text-foreground/90 leading-snug text-left w-full",
-              !expanded && "line-clamp-2",
-              expanded && "whitespace-pre-wrap",
-              isLong && "cursor-pointer",
-            )}
-          >
+          <div className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap break-words">
             {update.message}
-          </button>
-          {isLong && (
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-primary mt-0.5"
-            >
-              <ChevronDown className={cn("h-3 w-3 transition-transform", expanded && "rotate-180")} />
-              {expanded ? "Show less" : "Show more"}
-            </button>
-          )}
+          </div>
         </div>
       )}
 

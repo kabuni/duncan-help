@@ -37,6 +37,7 @@ export default function Plan90() {
   const { user } = useAuth();
   const { isAdmin, isLoading: roleLoading } = useIsAdmin();
   const { workstreams, deliverables, loading, updateDeliverable, createDeliverable, deleteDeliverable, createWorkstream, updateWorkstream, deleteWorkstream } = usePlan90();
+  const updatesApi = usePlan90Updates();
   const { data: owners = [] } = useOwners();
   const [filters, setFilters] = useState<Plan90FilterState>(emptyFilters);
   const [wsMgrOpen, setWsMgrOpen] = useState(false);

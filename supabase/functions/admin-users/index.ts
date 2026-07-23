@@ -87,6 +87,33 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "update_profile") {
+      const targetId: string | undefined = body.userId;
+      const patch = body.patch ?? {};
+      if (!targetId || typeof targetId !== "string") return json({ error: "userId required" }, 400);
+      const allowed = ["display_name", "department", "role_title", "approval_status", "bio"] as const;
+      const clean: Record<string, unknown> = {};
+      for (const k of allowed) {
+        if (k in patch) {
+          const v = patch[k];
+          if (v === "" || v === undefined) clean[k] = null;
+          else clean[k] = v;
+        }
+      }
+      if (clean.approval_status && !["pending", "approved", "rejected"].includes(clean.approval_status as string)) {
+        return json({ error: "Invalid approval_status" }, 400);
+      }
+      if (Object.keys(clean).length === 0) return json({ error: "No fields to update" }, 400);
+      const { data: updated, error: upErr } = await admin
+        .from("profiles")
+        .update({ ...clean, updated_at: new Date().toISOString() })
+        .eq("user_id", targetId)
+        .select("user_id, display_name, department, role_title, approval_status, bio")
+        .maybeSingle();
+      if (upErr) return json({ error: upErr.message }, 500);
+      return json({ profile: updated });
+    }
+
     return json({ error: "Unknown action" }, 400);
   } catch (e: any) {
     return json({ error: e?.message ?? "Server error" }, 500);

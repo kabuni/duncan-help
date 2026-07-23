@@ -380,7 +380,7 @@ export default function AdminUserManagement() {
       </AlertDialog>
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit user profile</DialogTitle>
             <DialogDescription className="truncate">{editing?.email}</DialogDescription>

@@ -54,6 +54,43 @@ export default function AdminUserManagement() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "inactive30" | "inactive60" | "test" | "never">("all");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [editing, setEditing] = useState<AdminUser | null>(null);
+  const [editForm, setEditForm] = useState<{
+    display_name: string;
+    department: string;
+    role_title: string;
+    approval_status: string;
+    bio: string;
+  }>({ display_name: "", department: "", role_title: "", approval_status: "pending", bio: "" });
+
+  const openEdit = (u: AdminUser) => {
+    setEditing(u);
+    setEditForm({
+      display_name: u.display_name ?? "",
+      department: u.department ?? "",
+      role_title: u.role_title ?? "",
+      approval_status: u.approval_status ?? "pending",
+      bio: "",
+    });
+  };
+
+  const updateMutation = useMutation({
+    mutationFn: async (payload: { userId: string; patch: Record<string, unknown> }) => {
+      const { data, error } = await supabase.functions.invoke("admin-users", {
+        body: { action: "update_profile", userId: payload.userId, patch: payload.patch },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Profile updated");
+      setEditing(null);
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      qc.invalidateQueries({ queryKey: ["pending-approvals"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Update failed"),
+  });
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["admin-users"],

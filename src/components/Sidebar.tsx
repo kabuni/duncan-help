@@ -94,14 +94,27 @@ const Sidebar = ({
           </div>
         </button>
 
-        {/* Close button on mobile */}
-        <button
-          onClick={onMobileClose}
-          className="md:hidden flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {/* Close / hide buttons */}
+        <div className="flex items-center gap-1">
+          {onDesktopHide && (
+            <button
+              onClick={onDesktopHide}
+              className="hidden md:flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+              aria-label="Hide sidebar"
+              title="Hide sidebar"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            onClick={onMobileClose}
+            className="md:hidden flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
+
 
 
       {/* Nav */}

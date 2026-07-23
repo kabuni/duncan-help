@@ -168,18 +168,14 @@ function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, current
         {items.length === 0 ? (
           <div className="px-4 py-6 text-sm text-muted-foreground border-t border-border">No matching deliverables.</div>
         ) : (
-          <div className="border-t border-border overflow-x-auto">
-            <table className="w-full min-w-[1120px] text-sm">
+          <div className="border-t border-border">
+            <table className="w-full text-sm table-fixed">
               <thead className="bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="text-left font-medium px-3 py-2">Deliverable</th>
-                  <th className="text-left font-medium px-3 py-2">Owner</th>
-                  <th className="text-left font-medium px-3 py-2">Due</th>
-                  <th className="text-left font-medium px-3 py-2">Status</th>
-                  <th className="text-left font-medium px-3 py-2">Priority</th>
-                  
-                  <th className="text-left font-medium px-3 py-2">Latest update</th>
-                  <th className="text-left font-medium px-3 py-2"></th>
+                  <th className="text-left font-medium px-3 py-2 w-[140px]">Owner</th>
+                  <th className="text-left font-medium px-3 py-2 w-[100px]">Due</th>
+                  <th className="text-left font-medium px-3 py-2 w-[40%]">Latest update</th>
                 </tr>
               </thead>
               <tbody>

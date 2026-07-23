@@ -267,7 +267,7 @@ export default function AdminUserManagement() {
 
       {/* Table */}
       <div className="rounded-lg border border-border overflow-hidden">
-        <div className="grid grid-cols-[32px_1fr_1fr_90px_90px] gap-2 px-3 py-2 bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground font-medium border-b border-border">
+        <div className="grid grid-cols-[32px_1fr_1fr_90px_90px_40px] gap-2 px-3 py-2 bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground font-medium border-b border-border">
           <Checkbox
             checked={filtered.length > 0 && selected.size >= filtered.filter((u) => u.id !== currentUser?.id).length}
             onCheckedChange={toggleAll}
@@ -276,6 +276,7 @@ export default function AdminUserManagement() {
           <div>Department / Role</div>
           <div>Last sign in</div>
           <div>Status</div>
+          <div className="text-right">Edit</div>
         </div>
         <div className="max-h-[480px] overflow-y-auto divide-y divide-border">
           {filtered.length === 0 ? (

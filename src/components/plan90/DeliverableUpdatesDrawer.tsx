@@ -218,7 +218,7 @@ function UpdateRow({
     if (ok) setEditing(false);
   }
 
-  const isLong = update.message.length > 140 || update.message.includes("\n");
+  
   const firstName = update.author_name.split(/\s+/)[0] || update.author_name;
   const relTime = formatDistanceToNow(createdAt, { addSuffix: false })
     .replace("about ", "")

@@ -79,7 +79,7 @@ export function DeliverableRow({
             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { onUpdate(item.id, { title }); setEditTitle(false); }}><Save className="h-3.5 w-3.5" /></Button>
           </div>
         ) : (
-          <button type="button" disabled={disabled} onClick={() => setEditTitle(true)} className={cn("text-sm text-left leading-snug", isAdmin && "hover:text-primary")}>{item.title}</button>
+          <button type="button" disabled={disabled} onClick={() => setEditTitle(true)} className={cn("text-sm text-left leading-snug break-words whitespace-normal", isAdmin && "hover:text-primary")}>{item.title}</button>
         )}
       </td>
       <td className="px-3 py-2 align-top w-[160px]">

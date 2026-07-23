@@ -319,14 +319,31 @@ function AssignedTasksSection() {
   const { tasks, isLoading } = useUnifiedTasks();
   const b = useMemo(() => bucketTasks(tasks), [tasks]);
   const total = tasks.length;
+  const navigate = useNavigate();
 
   return (
     <Tile delay={0.08}>
-      <TileHeader icon={ListChecks} label={`Assigned tasks${total ? ` · ${total}` : ""}`} />
+      <TileHeader
+        icon={ListChecks}
+        label={`Assigned tasks${total ? ` · ${total}` : ""}`}
+        action={
+          <button
+            onClick={() => navigate("/tasks")}
+            className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5"
+          >
+            Open all <ExternalLink className="h-2.5 w-2.5" />
+          </button>
+        }
+      />
       {isLoading ? (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
       ) : total === 0 ? (
-        <p className="text-xs text-muted-foreground">You're all clear. No open tasks assigned to you.</p>
+        <button
+          onClick={() => navigate("/tasks")}
+          className="text-xs text-muted-foreground hover:text-foreground text-left"
+        >
+          You're all clear. No open tasks assigned to you. Add one →
+        </button>
       ) : (
         <div className="space-y-4">
           {b.overdue.length > 0 && <TaskGroup title={`Overdue · ${b.overdue.length}`} rows={b.overdue.slice(0, 6)} tone="overdue" />}

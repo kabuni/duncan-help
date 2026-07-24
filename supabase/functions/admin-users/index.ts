@@ -32,6 +32,7 @@ Deno.serve(async (req) => {
 
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const action = body.action ?? "list";
+    // build: supports actions: list, delete, update_profile
 
     if (action === "list") {
       // List all auth users + profile info

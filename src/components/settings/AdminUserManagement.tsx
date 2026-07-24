@@ -91,7 +91,21 @@ export default function AdminUserManagement() {
       const { data, error } = await supabase.functions.invoke("admin-users", {
         body: { action: "update_profile", userId: payload.userId, patch: payload.patch },
       });
-      if (error) throw error;
+      // Supabase wraps non-2xx as a generic FunctionsHttpError. Try to read the JSON body for the real message.
+      if (error) {
+        let detail = error.message;
+        try {
+          const ctx: any = (error as any).context;
+          if (ctx && typeof ctx.json === "function") {
+            const parsed = await ctx.json();
+            if (parsed?.error) detail = parsed.error;
+          } else if (ctx && typeof ctx.text === "function") {
+            const text = await ctx.text();
+            if (text) detail = text;
+          }
+        } catch { /* ignore */ }
+        throw new Error(detail);
+      }
       if ((data as any)?.error) throw new Error((data as any).error);
       return data;
     },

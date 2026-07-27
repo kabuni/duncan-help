@@ -8245,6 +8245,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = await withToolTimeout(tc.function.name, executeReleaseTool(tc.function.name, args, supabaseAdmin, userId || ""));
           } else if (lovableContribToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeLovableContributorsTool(tc.function.name, args, supabaseAdmin, userId || ""));
+          } else if (productFeedbackToolNames.includes(tc.function.name)) {
+              result = await withToolTimeout(tc.function.name, executeProductFeedbackTool(tc.function.name, args, supabaseAdmin, userId || "", userEmail || ""));
           } else {
               result = { error: `Unknown tool: ${tc.function.name}` };
           }

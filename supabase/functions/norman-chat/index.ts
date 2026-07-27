@@ -2219,7 +2219,7 @@ async function executeWorkstreamTool(
 
       let cardsQuery = supabaseAdmin
         .from("workstream_cards")
-        .select("id, title, status, project_tag, due_date, priority, created_at")
+        .select("id, task_code, title, status, project_tag, due_date, priority, created_at")
         .is("archived_at", null)
         .order("due_date", { ascending: true, nullsFirst: false })
         .limit(limit);

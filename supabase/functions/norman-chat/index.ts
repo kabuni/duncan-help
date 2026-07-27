@@ -8697,7 +8697,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
                 .from("feature_requests")
                 .insert({
                   user_id: userId,
-                  requester_email: userEmail,
+                  user_email: userEmail,
                   title,
                   description,
                   status: "new",

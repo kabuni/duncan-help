@@ -95,7 +95,12 @@ const Workstreams = () => {
     return { totalCards, totalTasks, doneTasks, completionPct, taskTotals, cardCounts };
   }, [allCards]);
 
-  const displayCards = cards || [];
+  const displayCards = useMemo(() => {
+    const list = cards || [];
+    const q = taskIdSearch.trim().toLowerCase().replace(/^ws-?/, "");
+    if (!q) return list;
+    return list.filter(c => (c.task_code || "").toLowerCase().includes(q));
+  }, [cards, taskIdSearch]);
 
   return (
     <>
@@ -144,6 +149,17 @@ const Workstreams = () => {
                 className="pl-9 h-9 text-sm"
               />
             </div>
+
+            <div className="relative w-full sm:w-[170px]">
+              <Input
+                value={taskIdSearch}
+                onChange={e => setTaskIdSearch(e.target.value)}
+                placeholder="Task ID (e.g. WS-0042)"
+                className="pl-3 h-9 text-xs font-mono"
+                aria-label="Search by Task ID"
+              />
+            </div>
+
 
             <div className="flex items-center gap-2 flex-wrap">
               <Select value={filterStatus} onValueChange={setFilterStatus}>

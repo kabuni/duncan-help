@@ -8733,28 +8733,39 @@ Format as a natural, readable summary with clear sections. If a section has no d
             // Salvage: if the stream was cut mid-tool-call BUT the tool is a
             // product-feedback capture and we already have title+description in
             // the partial arguments, keep the tool call and let it execute.
-            // These are simple inserts — no need to re-roll the whole round.
+            if (hadIncompleteToolCall && toolCalls.length > 0) {
+              console.log("SALVAGE ATTEMPT raw tool calls:", JSON.stringify(toolCalls.map((tc: any) => ({
+                name: tc?.function?.name,
+                argsLen: (tc?.function?.arguments || "").length,
+                argsPreview: (tc?.function?.arguments || "").slice(0, 400),
+              }))));
+            }
             const salvageable = hadIncompleteToolCall && toolCalls.length > 0 && toolCalls.every((tc: any) => {
               const name = tc?.function?.name;
               if (name !== "create_bug_report" && name !== "create_feature_request") return false;
               const raw = tc?.function?.arguments || "{}";
               let parsed: any = null;
-              try { parsed = JSON.parse(raw); } catch {
-                for (let i = 1; i <= 6 && !parsed; i++) {
-                  try { parsed = JSON.parse(raw + '"' + '}'.repeat(i)); } catch {}
-                  if (!parsed) { try { parsed = JSON.parse(raw + '}'.repeat(i)); } catch {} }
+              try { parsed = JSON.parse(raw); } catch {}
+              if (!parsed) {
+                // Try progressively closing quotes/brackets
+                for (let i = 1; i <= 8 && !parsed; i++) {
+                  const candidates = [raw + '}'.repeat(i), raw + '"' + '}'.repeat(i), raw + '"}' + '}'.repeat(i - 1)];
+                  for (const c of candidates) {
+                    try { parsed = JSON.parse(c); if (parsed) break; } catch {}
+                  }
                 }
               }
               if (!parsed || typeof parsed !== "object") return false;
               const okFields = typeof parsed.title === "string" && parsed.title.trim().length > 0
                 && typeof parsed.description === "string" && parsed.description.trim().length > 0;
-              if (okFields) tc.function.arguments = JSON.stringify(parsed);
+              if (okFields) {
+                if (name === "create_bug_report" && !parsed.issue_type) parsed.issue_type = "Bug";
+                tc.function.arguments = JSON.stringify(parsed);
+              }
               return okFields;
             });
             if (salvageable) {
-              console.log("SALVAGED incomplete tool call for product feedback", {
-                names: toolCalls.map((tc: any) => tc?.function?.name),
-              });
+              console.log("SALVAGED incomplete tool call for product feedback");
               hadIncompleteToolCall = false;
             }
 

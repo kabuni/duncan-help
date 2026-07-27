@@ -5745,7 +5745,7 @@ const PRODUCT_FEEDBACK_TOOLS = [
           confidence: { type: "number", description: "Duncan's 0-1 confidence that this is a real, well-scoped, non-duplicate bug." },
           chat_context_summary: { type: "string", description: "One-paragraph summary of the chat that led to filing." },
         },
-        required: ["title", "description", "issue_type"],
+        required: ["title", "description"],
       },
     },
   },
@@ -6256,13 +6256,13 @@ serve(async (req) => {
       + formatIdentityForPrompt(resolvedIdentity)
       + `\n\nWhen the user says "today" / "tomorrow" / "this week", interpret them in the caller's timezone above, NOT UTC.`
       + `\n\n## PRODUCT FEEDBACK CAPTURE (bug reports & feature requests)\n`
-      + `When a user's message describes broken behaviour, an error, a wrong output, or says something "doesn't work" / "is broken" / "isn't working" / "please fix" / "report this bug" — call \`create_bug_report\` IMMEDIATELY in this same turn.\n`
-      + `When a user asks for a new capability, says "it would be great if…" / "can you add…" / "feature request" — call \`create_feature_request\` IMMEDIATELY in this same turn.\n`
+      + `When a user's message describes broken behaviour / an error / says "doesn't work" / "is broken" / "please fix" / "report this bug" / "log a bug" / "file a bug" — your VERY FIRST output for that turn MUST be a \`create_bug_report\` tool call. No prose, no markdown headers ("Bug report prep", "Summary", etc.), no preamble. Just the tool call.\n`
+      + `When a user asks for a new capability / says "it would be great if…" / "can you add…" / "feature request" — your VERY FIRST output MUST be a \`create_feature_request\` tool call.\n`
       + `Rules — KEEP IT SIMPLE:\n`
-      + `- The tools only require \`title\` and \`description\` (plus \`issue_type\` for bugs — default to "Bug"). Infer them from the user's message. Do NOT ask clarifying questions unless the message is a single word with no content.\n`
-      + `- Do NOT investigate with other tools first. Do NOT call \`search_existing_bug_reports\` / \`search_existing_feature_requests\` unless the user explicitly asks you to check for duplicates.\n`
-      + `- Do NOT write a "shall I file this?" preview. There is NO confirmation card for these tools — they insert directly into the same Settings → Report a Bug / Request a Feature list. Just call the tool.\n`
-      + `- After the tool returns \`ok:true\`, reply in ONE short sentence past-tense with the returned id, and mention it now appears in Settings.\n`
+      + `- Only \`title\` and \`description\` are required (plus \`issue_type\` for bugs — default "Bug"). Infer them from the user's message. NEVER ask clarifying questions unless the message has literally no content.\n`
+      + `- NEVER call \`search_existing_bug_reports\` / \`search_existing_feature_requests\` unless the user explicitly asks to check for duplicates.\n`
+      + `- There is NO confirmation card and NO preview. The tool inserts directly into Settings → Report a Bug / Request a Feature. Writing a "prep" summary instead of calling the tool is a hard failure.\n`
+      + `- After the tool returns \`ok:true\`, reply in ONE short past-tense sentence with the returned id, and mention it now appears in Settings.\n`
       + `Pure questions, opinions, or general chat NEVER trigger these tools.`;
 
     // ===== TEAM DIRECTORY — used for resolving attendee names → emails =====
@@ -8644,6 +8644,81 @@ Format as a natural, readable summary with clear sections. If a section has no d
         let aggregatedContent = "";
         let lastFullContent = "";
 
+        // ------------------------------------------------------------------
+        // Deterministic short-circuit: product-feedback capture.
+        // Historically the LLM either (a) produced prose instead of a tool
+        // call, or (b) degenerated into repeated tokens ("che che che ...")
+        // when forced. Both broke Settings → Report a Bug / Request a Feature.
+        // For clear "log a bug" / "feature request" intents we skip the model
+        // entirely, insert directly, and emit a canned confirmation as SSE.
+        // ------------------------------------------------------------------
+        try {
+          const _text = String(latestUserText || "").trim();
+          const _lc = _text.toLowerCase();
+          const bugRe = /\b(log|file|report|raise|open|submit|create)\s+(a\s+|an\s+|this\s+)?(bug|issue|defect|problem)\b|\bbug\s+report\b|\breport\s+this\s+bug\b/;
+          const featureRe = /\b(feature\s+request|request\s+(a\s+)?feature|feature\s+idea|add\s+(a\s+)?feature|it\s+would\s+be\s+great\s+if|can\s+you\s+add|please\s+add)\b/;
+          const wantsBug = bugRe.test(_lc);
+          const wantsFeature = !wantsBug && featureRe.test(_lc);
+          if ((wantsBug || wantsFeature) && _text.length > 0) {
+            // Derive a reasonable title from the message: first "Title it X" hint,
+            // then first sentence, capped at ~90 chars.
+            let title = "";
+            const titledMatch = _text.match(/title\s+it\s+["“]?([^"”\n\.]{3,120})/i);
+            if (titledMatch) title = titledMatch[1].trim();
+            if (!title) {
+              const firstSentence = _text.split(/(?<=[\.\!\?])\s+/)[0] || _text;
+              title = firstSentence.replace(/^(please\s+)?(log|file|report|raise|open|submit|create|add)\s+(a\s+|an\s+|this\s+)?(bug|issue|feature\s+request|feature)[:\s\-–—]*/i, "").trim();
+              if (!title) title = firstSentence.trim();
+            }
+            title = title.replace(/\s+/g, " ").slice(0, 180);
+            const description = _text;
+            if (wantsBug) {
+              const { data: ins, error: insErr } = await supabaseAdmin
+                .from("issues")
+                .insert({
+                  user_id: userId,
+                  user_email: userEmail,
+                  title,
+                  description,
+                  issue_type: "Bug",
+                })
+                .select("id")
+                .maybeSingle();
+              if (!insErr) {
+                const reply = `Logged as a bug in **Settings → Report a Bug**.\n\n- **Title:** ${title}\n- **ID:** \`${ins?.id ?? "created"}\``;
+                enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: reply } }] })}\n\n`);
+                enqueue(`data: [DONE]\n\n`);
+                controller.close();
+                return;
+              }
+              console.error("[feedback-shortcut] insert issues failed:", insErr);
+            } else {
+              const { data: ins, error: insErr } = await supabaseAdmin
+                .from("feature_requests")
+                .insert({
+                  user_id: userId,
+                  user_email: userEmail,
+                  title,
+                  description,
+                  status: "new",
+                })
+                .select("id")
+                .maybeSingle();
+              if (!insErr) {
+                const reply = `Filed as a feature request in **Settings → Request a Feature**.\n\n- **Title:** ${title}\n- **ID:** \`${ins?.id ?? "created"}\``;
+                enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: reply } }] })}\n\n`);
+                enqueue(`data: [DONE]\n\n`);
+                controller.close();
+                return;
+              }
+              console.error("[feedback-shortcut] insert feature_requests failed:", insErr);
+            }
+          }
+        } catch (e) {
+          console.error("[feedback-shortcut] unexpected error, falling back to LLM:", e);
+        }
+
+
         // Phase 7 — Structured per-turn observability.
         const turnId = (globalThis.crypto?.randomUUID?.() ?? `turn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
         const turnStartedAt = Date.now();
@@ -8714,6 +8789,45 @@ Format as a natural, readable summary with clear sections. If a section has no d
               sawToolDelta,
               hadIncompleteToolCall,
             });
+
+            // Salvage: if the stream was cut mid-tool-call BUT the tool is a
+            // product-feedback capture and we already have title+description in
+            // the partial arguments, keep the tool call and let it execute.
+            if (hadIncompleteToolCall && toolCalls.length > 0) {
+              console.log("SALVAGE ATTEMPT raw tool calls:", JSON.stringify(toolCalls.map((tc: any) => ({
+                name: tc?.function?.name,
+                argsLen: (tc?.function?.arguments || "").length,
+                argsPreview: (tc?.function?.arguments || "").slice(0, 400),
+              }))));
+            }
+            const salvageable = hadIncompleteToolCall && toolCalls.length > 0 && toolCalls.every((tc: any) => {
+              const name = tc?.function?.name;
+              if (name !== "create_bug_report" && name !== "create_feature_request") return false;
+              const raw = tc?.function?.arguments || "{}";
+              let parsed: any = null;
+              try { parsed = JSON.parse(raw); } catch {}
+              if (!parsed) {
+                // Try progressively closing quotes/brackets
+                for (let i = 1; i <= 8 && !parsed; i++) {
+                  const candidates = [raw + '}'.repeat(i), raw + '"' + '}'.repeat(i), raw + '"}' + '}'.repeat(i - 1)];
+                  for (const c of candidates) {
+                    try { parsed = JSON.parse(c); if (parsed) break; } catch {}
+                  }
+                }
+              }
+              if (!parsed || typeof parsed !== "object") return false;
+              const okFields = typeof parsed.title === "string" && parsed.title.trim().length > 0
+                && typeof parsed.description === "string" && parsed.description.trim().length > 0;
+              if (okFields) {
+                if (name === "create_bug_report" && !parsed.issue_type) parsed.issue_type = "Bug";
+                tc.function.arguments = JSON.stringify(parsed);
+              }
+              return okFields;
+            });
+            if (salvageable) {
+              console.log("SALVAGED incomplete tool call for product feedback");
+              hadIncompleteToolCall = false;
+            }
 
             if ((!fullContent.trim() && toolCalls.length === 0) || hadIncompleteToolCall) {
               console.warn("EMPTY MODEL ROUND DETECTED", {

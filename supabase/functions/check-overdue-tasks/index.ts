@@ -317,17 +317,17 @@ Deno.serve(async (req) => {
               const escMessage = [
                 `🚨 *Escalation: Overdue Task (${Math.floor(daysSinceOverdue)} days)*`,
                 ``,
-                `Task *${task.title}* in your card *${card.title}* was due on *${dueDate}*.`,
+                `Task *${task.title}* in your card *${card.title}*${card.task_code ? ` (${card.task_code})` : ""} was due on *${dueDate}*.`,
                 `Assigned to: ${assigneeNames}`,
                 ``,
                 `${statusEmoji(card.status)} Card status: *${card.status.toUpperCase()}*`,
                 ``,
-                `👉 <${appUrl}/workstreams|Review in Duncan>`,
+                `👉 <${appUrl}/workstreams${card.task_code ? `?card=${card.task_code}` : ""}|Review in Duncan>`,
               ].join("\n");
 
               const escSuccess = await sendSlackDM(ownerSlack, escMessage);
               await logNotification(supabase, ownerSlack, {
-                type: "overdue_escalation", task_id: task.id, card_title: card.title,
+                type: "overdue_escalation", task_id: task.id, card_title: card.title, task_code: card.task_code ?? null,
               }, escSuccess, escalationKey, card.owner_id);
             }
           }

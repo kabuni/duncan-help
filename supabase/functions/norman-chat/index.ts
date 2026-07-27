@@ -7398,6 +7398,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
     tools.push(...RELEASE_TOOLS);
     // Lovable contributors snapshot (admin-only, requires attached screenshot)
     tools.push(...LOVABLE_CONTRIBUTORS_TOOLS);
+    tools.push(...PRODUCT_FEEDBACK_TOOLS);
     // Briefing mode must always return text, never invoke tools.
     // Do NOT set tool_choice without tools — OpenAI rejects that combination.
 

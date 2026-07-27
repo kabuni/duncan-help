@@ -101,7 +101,7 @@ async function processRequest(id: string) {
     .eq("id", id)
     .maybeSingle();
   if (error || !fr) throw new Error("feature request not found");
-  if (["filed", "dismissed"].includes(fr.triage_status)) {
+  if (["filed", "triaged", "dismissed"].includes(fr.triage_status)) {
     return { skipped: true, reason: `already ${fr.triage_status}` };
   }
 
@@ -110,68 +110,126 @@ async function processRequest(id: string) {
     .update({ last_agent_run_at: new Date().toISOString() })
     .eq("id", id);
 
-  const { data: msgs } = await admin
-    .from("feature_request_messages")
-    .select("role, channel, body, created_at")
-    .eq("feature_request_id", id)
-    .order("created_at", { ascending: true });
-
-  const existing = await loadExistingContext(fr);
-  const decision = await runLLM(fr, msgs ?? [], existing);
-
-  if (decision.action === "clarify") {
-    // Cap clarification rounds at 1 — if the user has replied at least once,
-    // force triage with best-effort assumptions rather than re-asking.
-    const userReplied = (msgs ?? []).some((m: any) => m.role === "user");
-    if ((fr.clarification_round ?? 0) >= 1 || userReplied) {
-      return await fileTicket(fr, { ...decision, action: "triage" });
-    }
-    return await sendClarification(fr, decision);
-  }
-  if (decision.action === "dismiss") {
-    await admin
-      .from("feature_requests")
-      .update({
-        triage_status: "dismissed",
-        admin_notes: decision.dismiss_reason ?? null,
-      })
-      .eq("id", id);
-    await notify(fr.user_id, {
-      kind: "feature_request_dismissed",
-      title: "Feature request closed",
-      body: decision.dismiss_reason ?? "Duncan decided not to add this to the backlog.",
-      link: "/feature-requests",
-    });
-    return { dismissed: true };
-  }
-  return await fileTicket(fr, decision);
+  const suggestions = await runSuggestionLLM(fr);
+  return await reviewAndNotify(fr, suggestions);
 }
 
-async function loadExistingContext(fr: any) {
-  // Existing backlog cards (what's already planned or shipped)
-  const { data: cards } = await admin
-    .from("workstream_cards")
-    .select("title, status, priority, project_tag, category")
-    .order("created_at", { ascending: false })
-    .limit(120);
+type ReviewOutput = {
+  refined_title: string;
+  summary: string;
+  suggestions: string[]; // bullet suggestions on how to build it
+  effort_estimate?: string;
+  priority_suggestion?: "P0" | "P1" | "P2" | "P3";
+};
 
-  // Prior feature requests (so Duncan can spot near-duplicates)
-  const { data: prior } = await admin
-    .from("feature_requests")
-    .select("refined_title, title, triage_status, priority_band")
-    .neq("id", fr.id)
-    .in("triage_status", ["filed", "clarifying", "triaged", "dismissed"])
-    .order("created_at", { ascending: false })
-    .limit(80);
+async function runSuggestionLLM(fr: any): Promise<ReviewOutput> {
+  const system = `You are Duncan, Kabuni's operational intelligence.
+A team member has submitted a feature request. Your job is ONLY to:
+1. Rewrite the title cleanly (<= 90 chars).
+2. Summarise the request in 1-2 sentences (plain English).
+3. Give 3-6 concrete implementation suggestions for the engineering team (how to build it, what to consider, edge cases, dependencies).
+4. Suggest a rough effort (S/M/L/XL) and priority (P0-P3).
 
-  return {
-    backlog: (cards ?? []).map((c: any) => ({
-      title: c.title, status: c.status, tag: c.project_tag, category: c.category,
-    })),
-    prior_requests: (prior ?? []).map((p: any) => ({
-      title: p.refined_title ?? p.title, status: p.triage_status, priority: p.priority_band,
-    })),
+Do NOT ask clarifying questions. Do NOT dismiss. Do NOT create tickets. Just review and suggest.
+
+Return STRICT JSON:
+{ "refined_title": string, "summary": string, "suggestions": string[], "effort_estimate": "S"|"M"|"L"|"XL", "priority_suggestion": "P0"|"P1"|"P2"|"P3" }`;
+
+  const payload = {
+    title: fr.title,
+    description: fr.description,
+    use_case: fr.use_case,
+    requester_email: fr.user_email,
+    requester_priority: fr.priority,
   };
+
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Lovable-API-Key": LOVABLE_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: JSON.stringify(payload) },
+      ],
+      response_format: { type: "json_object" },
+    }),
+  });
+
+  if (!res.ok) {
+    console.error("LLM error", res.status, await res.text().catch(() => ""));
+    return {
+      refined_title: fr.title,
+      summary: fr.description?.slice(0, 240) ?? fr.title,
+      suggestions: ["Duncan could not auto-analyse this request — please review the raw description."],
+    };
+  }
+  const body = await res.json();
+  const raw = body?.choices?.[0]?.message?.content ?? "{}";
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      refined_title: (parsed.refined_title || fr.title).slice(0, 120),
+      summary: parsed.summary || fr.description?.slice(0, 240) || fr.title,
+      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions.slice(0, 8) : [],
+      effort_estimate: parsed.effort_estimate,
+      priority_suggestion: parsed.priority_suggestion,
+    };
+  } catch {
+    return {
+      refined_title: fr.title,
+      summary: fr.description?.slice(0, 240) ?? fr.title,
+      suggestions: [],
+    };
+  }
+}
+
+async function reviewAndNotify(fr: any, review: ReviewOutput) {
+  const suggestionsMd = review.suggestions.map((s) => `- ${s}`).join("\n");
+
+  await admin
+    .from("feature_requests")
+    .update({
+      triage_status: "triaged",
+      refined_title: review.refined_title,
+      problem_statement: review.summary,
+      proposed_solution: suggestionsMd || null,
+      priority_band: review.priority_suggestion ?? null,
+      effort_band: review.effort_estimate ?? null,
+    })
+    .eq("id", fr.id);
+
+  await admin.from("feature_request_messages").insert({
+    feature_request_id: fr.id,
+    role: "agent",
+    channel: "in_app",
+    body: `Duncan reviewed this request and shared suggestions with the admin reviewers.`,
+  });
+
+  // Notify the fixed admin reviewer group
+  const shortBody = `${fr.user_email ?? "A user"}: ${review.refined_title}`;
+  const link = `/settings`;
+  const notifRows = REVIEWER_IDS.map((uid) => ({
+    user_id: uid,
+    kind: "feature_request_review",
+    title: "New feature request to review",
+    body: shortBody,
+    link,
+  }));
+  await admin.from("notifications").insert(notifRows);
+
+  // Let the requester know it's been reviewed (no dismissal, no card).
+  await notify(fr.user_id, {
+    kind: "feature_request_reviewed",
+    title: "Duncan reviewed your feature request",
+    body: `Suggestions have been shared with the admin reviewers for "${review.refined_title}".`,
+    link: "/settings",
+  });
+
+  return { reviewed: true, notified: REVIEWER_IDS.length };
 }
 
 async function runLLM(fr: any, thread: any[], existing: { backlog: any[]; prior_requests: any[] }): Promise<TriageDecision> {

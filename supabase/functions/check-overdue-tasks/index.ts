@@ -465,9 +465,9 @@ async function sendOnboardingPreDueNudges(
         const msg = [
           `⏳ *Onboarding reminder — due in ~${win.hours}h*`,
           ``,
-          `*${task.title}* on onboarding card *${card.title}* is due *${dueNice}*.`,
+          `*${task.title}* on onboarding card *${card.title}*${card.task_code ? ` (${card.task_code})` : ""} is due *${dueNice}*.`,
           ``,
-          `👉 <${appUrl}/workstreams|Open in Duncan> to complete or reassign.`,
+          `👉 <${appUrl}/workstreams${card.task_code ? `?card=${card.task_code}` : ""}|Open in Duncan> to complete or reassign.`,
         ].join("\n");
         const ok = await sendSlackDM(slackId, msg);
         await logNotification(supabase, slackId, {
@@ -476,6 +476,7 @@ async function sendOnboardingPreDueNudges(
           task_id: task.id,
           task_title: task.title,
           card_title: card.title,
+          task_code: card.task_code ?? null,
           due_date: task.due_date,
         }, ok, key, uid);
         if (ok) sent++;

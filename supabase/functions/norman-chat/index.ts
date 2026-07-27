@@ -2201,6 +2201,64 @@ async function executeWorkstreamTool(
       return { members: data || [], count: (data || []).length };
     }
 
+    case "get_workstream_card": {
+      const raw = (args.task_code || args.card_id || "").toString().trim();
+      if (!raw) throw new Error("get_workstream_card requires task_code or card_id");
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      let cardQ = supabaseAdmin
+        .from("workstream_cards")
+        .select("id, task_code, title, description, status, priority, project_tag, due_date, category, owner_id, created_by, created_at, archived_at")
+        .limit(1);
+      if (uuidRe.test(raw)) cardQ = cardQ.eq("id", raw);
+      else cardQ = cardQ.eq("task_code", raw.toUpperCase());
+      const { data: cardRows, error: cardErr } = await cardQ;
+      if (cardErr) throw new Error(`get_workstream_card failed: ${cardErr.message}`);
+      const card = (cardRows || [])[0];
+      if (!card) {
+        return {
+          found: false,
+          query: raw,
+          message: `No workstream card found for '${raw}'. Task IDs look like WS-0042.`,
+        };
+      }
+      const [assigneesRes, tasksRes, ownerRes, creatorRes] = await Promise.all([
+        supabaseAdmin.from("workstream_card_assignees").select("user_id").eq("card_id", card.id),
+        supabaseAdmin.from("workstream_tasks").select("id, title, due_date, completed, assignee_id").eq("card_id", card.id).order("completed", { ascending: true }).order("due_date", { ascending: true, nullsFirst: false }),
+        card.owner_id ? supabaseAdmin.from("profiles").select("id, display_name").eq("id", card.owner_id).maybeSingle() : Promise.resolve({ data: null }),
+        card.created_by ? supabaseAdmin.from("profiles").select("id, display_name").eq("id", card.created_by).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      const assigneeIds = ((assigneesRes as any).data || []).map((r: any) => r.user_id);
+      let assigneeNames: string[] = [];
+      if (assigneeIds.length) {
+        const { data: profs } = await supabaseAdmin.from("profiles").select("id, display_name").in("id", assigneeIds);
+        assigneeNames = (profs || []).map((p: any) => p.display_name).filter(Boolean);
+      }
+      const tasks = ((tasksRes as any).data || []) as any[];
+      return {
+        found: true,
+        card: {
+          task_code: card.task_code,
+          id: card.id,
+          title: card.title,
+          description: card.description,
+          status: card.status,
+          priority: card.priority,
+          project_tag: card.project_tag,
+          category: card.category,
+          due_date: card.due_date,
+          created_at: card.created_at,
+          archived: !!card.archived_at,
+          owner: (ownerRes as any).data?.display_name ?? null,
+          created_by: (creatorRes as any).data?.display_name ?? null,
+          assignees: assigneeNames,
+          open_tasks: tasks.filter((t) => !t.completed).map((t) => ({ title: t.title, due_date: t.due_date })),
+          completed_tasks: tasks.filter((t) => t.completed).map((t) => ({ title: t.title, due_date: t.due_date })),
+          link: `/workstreams?card=${card.task_code || card.id}`,
+        },
+        meta: { readResult: true, read_only: true },
+      };
+    }
+
     case "list_workstream_cards": {
       const wantCsv = args.export_format === "csv";
       const wantSheet = args.export_format === "gsheet";

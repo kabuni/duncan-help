@@ -112,6 +112,9 @@ export default function ProjectWorkspace() {
   const [showCollaborate, setShowCollaborate] = useState(false);
   const [showTasks, setShowTasks] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  const [showTeamChat, setShowTeamChat] = useState(false);
+  const { isAdmin } = useIsAdmin();
+  const teamChatUnread = useProjectTeamChatUnread(projectId || null);
   const [openTaskCount, setOpenTaskCount] = useState(0);
   const [editName, setEditName] = useState("");
   const [editPrompt, setEditPrompt] = useState("");

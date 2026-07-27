@@ -5963,8 +5963,9 @@ const WRITE_TOOLS = new Set<string>([
   "update_planner_event_meta",
   "reschedule_event",
   "send_pdf_for_signature",
-  "create_bug_report",
-  "create_feature_request",
+  // create_bug_report and create_feature_request intentionally NOT gated:
+  // they write to the user's own bug/feature list in Settings. Keep it simple —
+  // fire immediately, no Confirm card.
 ]);
 
 const WRITE_TOOL_LABELS: Record<string, string> = {

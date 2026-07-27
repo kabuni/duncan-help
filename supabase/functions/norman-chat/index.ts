@@ -8730,6 +8730,27 @@ Format as a natural, readable summary with clear sections. If a section has no d
               hadIncompleteToolCall,
             });
 
+            // Salvage: if the stream was cut mid-tool-call BUT the tool is a
+            // product-feedback capture and we already have title+description in
+            // the partial arguments, keep the tool call and let it execute.
+            // These are simple inserts — no need to re-roll the whole round.
+            const salvageable = hadIncompleteToolCall && toolCalls.length > 0 && toolCalls.every((tc: any) => {
+              const name = tc?.function?.name;
+              if (name !== "create_bug_report" && name !== "create_feature_request") return false;
+              try {
+                const raw = tc?.function?.arguments || "{}";
+                const parsed = JSON.parse(raw);
+                return typeof parsed?.title === "string" && parsed.title.trim().length > 0
+                  && typeof parsed?.description === "string" && parsed.description.trim().length > 0;
+              } catch { return false; }
+            });
+            if (salvageable) {
+              console.log("SALVAGED incomplete tool call for product feedback", {
+                names: toolCalls.map((tc: any) => tc?.function?.name),
+              });
+              hadIncompleteToolCall = false;
+            }
+
             if ((!fullContent.trim() && toolCalls.length === 0) || hadIncompleteToolCall) {
               console.warn("EMPTY MODEL ROUND DETECTED", {
                 round,

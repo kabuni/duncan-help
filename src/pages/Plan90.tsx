@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useIsAdmin } from "@/hooks/useUserRoles";
+import { usePlan90CanEdit } from "@/hooks/usePlan90Access";
 import { usePlan90, PLAN90_PRIORITIES, PLAN90_STATUSES } from "@/hooks/usePlan90";
 import { usePlan90Updates } from "@/hooks/usePlan90Updates";
 import type { Plan90Workstream } from "@/hooks/usePlan90";

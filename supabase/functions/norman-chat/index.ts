@@ -8644,6 +8644,81 @@ Format as a natural, readable summary with clear sections. If a section has no d
         let aggregatedContent = "";
         let lastFullContent = "";
 
+        // ------------------------------------------------------------------
+        // Deterministic short-circuit: product-feedback capture.
+        // Historically the LLM either (a) produced prose instead of a tool
+        // call, or (b) degenerated into repeated tokens ("che che che ...")
+        // when forced. Both broke Settings → Report a Bug / Request a Feature.
+        // For clear "log a bug" / "feature request" intents we skip the model
+        // entirely, insert directly, and emit a canned confirmation as SSE.
+        // ------------------------------------------------------------------
+        try {
+          const _text = String(latestUserText || "").trim();
+          const _lc = _text.toLowerCase();
+          const bugRe = /\b(log|file|report|raise|open|submit|create)\s+(a\s+|an\s+|this\s+)?(bug|issue|defect|problem)\b|\bbug\s+report\b|\breport\s+this\s+bug\b/;
+          const featureRe = /\b(feature\s+request|request\s+(a\s+)?feature|feature\s+idea|add\s+(a\s+)?feature|it\s+would\s+be\s+great\s+if|can\s+you\s+add|please\s+add)\b/;
+          const wantsBug = bugRe.test(_lc);
+          const wantsFeature = !wantsBug && featureRe.test(_lc);
+          if ((wantsBug || wantsFeature) && _text.length > 0) {
+            // Derive a reasonable title from the message: first "Title it X" hint,
+            // then first sentence, capped at ~90 chars.
+            let title = "";
+            const titledMatch = _text.match(/title\s+it\s+["“]?([^"”\n\.]{3,120})/i);
+            if (titledMatch) title = titledMatch[1].trim();
+            if (!title) {
+              const firstSentence = _text.split(/(?<=[\.\!\?])\s+/)[0] || _text;
+              title = firstSentence.replace(/^(please\s+)?(log|file|report|raise|open|submit|create|add)\s+(a\s+|an\s+|this\s+)?(bug|issue|feature\s+request|feature)[:\s\-–—]*/i, "").trim();
+              if (!title) title = firstSentence.trim();
+            }
+            title = title.replace(/\s+/g, " ").slice(0, 180);
+            const description = _text;
+            if (wantsBug) {
+              const { data: ins, error: insErr } = await supabaseAdmin
+                .from("issues")
+                .insert({
+                  user_id: userId,
+                  user_email: userEmail,
+                  title,
+                  description,
+                  issue_type: "Bug",
+                })
+                .select("id")
+                .maybeSingle();
+              if (!insErr) {
+                const reply = `Logged as a bug in **Settings → Report a Bug**.\n\n- **Title:** ${title}\n- **ID:** \`${ins?.id ?? "created"}\``;
+                enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: reply } }] })}\n\n`);
+                enqueue(`data: [DONE]\n\n`);
+                controller.close();
+                return;
+              }
+              console.error("[feedback-shortcut] insert issues failed:", insErr);
+            } else {
+              const { data: ins, error: insErr } = await supabaseAdmin
+                .from("feature_requests")
+                .insert({
+                  user_id: userId,
+                  requester_email: userEmail,
+                  title,
+                  description,
+                  status: "new",
+                })
+                .select("id")
+                .maybeSingle();
+              if (!insErr) {
+                const reply = `Filed as a feature request in **Settings → Request a Feature**.\n\n- **Title:** ${title}\n- **ID:** \`${ins?.id ?? "created"}\``;
+                enqueue(`data: ${JSON.stringify({ choices: [{ delta: { content: reply } }] })}\n\n`);
+                enqueue(`data: [DONE]\n\n`);
+                controller.close();
+                return;
+              }
+              console.error("[feedback-shortcut] insert feature_requests failed:", insErr);
+            }
+          }
+        } catch (e) {
+          console.error("[feedback-shortcut] unexpected error, falling back to LLM:", e);
+        }
+
+
         // Phase 7 — Structured per-turn observability.
         const turnId = (globalThis.crypto?.randomUUID?.() ?? `turn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
         const turnStartedAt = Date.now();

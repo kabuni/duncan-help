@@ -5683,6 +5683,271 @@ async function executeCalendarTool(
 }
 
 // ============================================================
+// PRODUCT FEEDBACK TOOLS — agentic bug reports & feature requests.
+// These are thin, additive tools that write into Duncan's EXISTING
+// `issues` and `feature_requests` tables (the same rows used by
+// Settings → Report a Bug and Settings → Request a Feature). No
+// parallel ticketing system. Feature requests reuse the existing
+// `feature-request-agent` triage pipeline.
+// ============================================================
+const PRODUCT_FEEDBACK_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "search_existing_bug_reports",
+      description: "Read-only. Search existing bug reports in the `issues` table BEFORE filing a new one, to catch duplicates. Use before every `create_bug_report` call.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Keywords describing the bug (e.g. 'kanban filter overdue')." },
+          limit: { type: "number", description: "Max results (default 5, cap 10)." },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_existing_feature_requests",
+      description: "Read-only. Search existing feature requests BEFORE filing a new one, to catch duplicates. Use before every `create_feature_request` call.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string" },
+          limit: { type: "number" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_bug_report",
+      description: "File a bug report on behalf of the current user in Duncan's EXISTING Bug Report system (the same `issues` table used by Settings → Report a Bug). WRITE tool: the write-confirmation interceptor will render a Confirm/Cancel card in the chat UI; the row is inserted only after the user confirms. Before calling this: (1) investigate by re-reading the conversation and any attachments, (2) call `search_existing_bug_reports` to detect duplicates, (3) infer severity, affected area, expected vs actual behaviour, and reproduction steps, (4) self-validate confidence. Do NOT claim the bug is filed until the tool result has `ok:true` and `verified:true`.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Concise, specific title (max 200 chars)." },
+          description: { type: "string", description: "Full description including business impact and any context from the chat." },
+          issue_type: {
+            type: "string",
+            enum: ["Bug", "Retrieval Issue", "Incorrect Output", "Hallucination", "Tool Failure", "Integration Issue", "Performance Issue", "UI Issue", "Data Issue", "Other"],
+            description: "Classification (matches the Settings form).",
+          },
+          expected_behavior: { type: "string" },
+          actual_behavior: { type: "string" },
+          affected_area: { type: "string", description: "Module / page, e.g. 'Workstreams > Kanban', 'Chat', 'Recruitment'." },
+          severity: { type: "string", enum: ["low", "medium", "high", "critical"] },
+          steps_to_reproduce: { type: "string", description: "Numbered steps if applicable." },
+          root_cause_hypothesis: { type: "string", description: "Duncan's best guess at the underlying cause (may be empty)." },
+          confidence: { type: "number", description: "Duncan's 0-1 confidence that this is a real, well-scoped, non-duplicate bug." },
+          chat_context_summary: { type: "string", description: "One-paragraph summary of the chat that led to filing." },
+        },
+        required: ["title", "description", "issue_type"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_feature_request",
+      description: "File a feature request on behalf of the current user in Duncan's EXISTING Feature Request system (the same `feature_requests` table used by Settings → Request a Feature). After insert, the existing `feature-request-agent` is automatically invoked for RICE triage and clarifying follow-ups — do NOT triage yourself. WRITE tool: Confirm/Cancel card is shown first. Investigate + search for duplicates before calling.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          description: { type: "string", description: "What the feature should do / how it should work." },
+          use_case: { type: "string", description: "What problem it solves for the user." },
+          priority: { type: "string", enum: ["Low", "Medium", "High"] },
+          chat_context_summary: { type: "string" },
+          confidence: { type: "number" },
+        },
+        required: ["title", "description"],
+      },
+    },
+  },
+];
+
+async function executeProductFeedbackTool(
+  toolName: string,
+  args: any,
+  supabaseAdmin: any,
+  userId: string,
+  userEmail: string,
+): Promise<any> {
+  const APP_URL = Deno.env.get("APP_URL") || "https://duncan.help";
+
+  const buildOrExpr = (query: string, fields: string[]): string | null => {
+    const terms = String(query || "")
+      .split(/\s+/)
+      .map((t) => t.trim().replace(/[%,()]/g, ""))
+      .filter((t) => t.length >= 3)
+      .slice(0, 6);
+    if (terms.length === 0) return null;
+    return terms.flatMap((t) => fields.map((f) => `${f}.ilike.%${t}%`)).join(",");
+  };
+
+  switch (toolName) {
+    case "search_existing_bug_reports": {
+      const limit = Math.min(Math.max(Number(args?.limit) || 5, 1), 10);
+      const orExpr = buildOrExpr(args?.query, ["title", "description", "affected_area"]);
+      if (!orExpr) return { count: 0, matches: [], message: "Query too short (need words of 3+ characters)." };
+      const { data, error } = await supabaseAdmin
+        .from("issues")
+        .select("id, title, issue_type, affected_area, status, created_at, user_email")
+        .or(orExpr)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) return { error: error.message };
+      return { count: data?.length || 0, matches: data || [] };
+    }
+
+    case "search_existing_feature_requests": {
+      const limit = Math.min(Math.max(Number(args?.limit) || 5, 1), 10);
+      const orExpr = buildOrExpr(args?.query, ["title", "description", "use_case"]);
+      if (!orExpr) return { count: 0, matches: [], message: "Query too short (need words of 3+ characters)." };
+      const { data, error } = await supabaseAdmin
+        .from("feature_requests")
+        .select("id, title, priority, status, triage_status, created_at, user_email")
+        .or(orExpr)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) return { error: error.message };
+      return { count: data?.length || 0, matches: data || [] };
+    }
+
+    case "create_bug_report": {
+      const title = String(args?.title || "").trim().slice(0, 200);
+      const description = String(args?.description || "").trim();
+      if (!title || !description) {
+        return createStructuredToolResult(toolName, { error: "title and description are required" }, "hard_error");
+      }
+      const meta: string[] = [];
+      if (args?.severity) meta.push(`Severity: ${args.severity}`);
+      if (args?.steps_to_reproduce) meta.push(`Steps to reproduce:\n${args.steps_to_reproduce}`);
+      if (args?.root_cause_hypothesis) meta.push(`Root-cause hypothesis: ${args.root_cause_hypothesis}`);
+      if (typeof args?.confidence === "number") meta.push(`Duncan confidence: ${(args.confidence * 100).toFixed(0)}%`);
+      if (args?.chat_context_summary) meta.push(`Chat context:\n${args.chat_context_summary}`);
+      const finalDescription = meta.length ? `${description}\n\n---\n${meta.join("\n\n")}\n\nFiled via Duncan Chat.` : `${description}\n\nFiled via Duncan Chat.`;
+
+      const { data, error } = await supabaseAdmin
+        .from("issues")
+        .insert({
+          user_id: userId,
+          user_email: userEmail || null,
+          title,
+          issue_type: args?.issue_type || "Bug",
+          description: finalDescription,
+          expected_behavior: args?.expected_behavior || "",
+          actual_behavior: args?.actual_behavior || "",
+          affected_area: args?.affected_area || "",
+        })
+        .select("id, title, issue_type")
+        .single();
+      if (error) return createStructuredToolResult(toolName, { error: error.message }, "hard_error");
+
+      const link = `${APP_URL}/feedback-issues`;
+      try {
+        const { data: admins } = await supabaseAdmin.from("user_roles").select("user_id").eq("role", "admin");
+        for (const a of admins || []) {
+          await supabaseAdmin.from("notifications").insert({
+            user_id: a.user_id,
+            kind: "bug_report_filed",
+            title: `New bug: ${data.title}`,
+            body: `${userEmail || "A user"} reported a ${data.issue_type}${args?.severity ? ` (severity: ${args.severity})` : ""}${args?.affected_area ? ` in ${args.affected_area}` : ""}.`,
+            link,
+          });
+        }
+      } catch (e) {
+        console.error("bug_report notify fanout failed", e);
+      }
+
+      return createStructuredToolResult(toolName, {
+        ok: true,
+        verified: true,
+        status: "success",
+        bug_id: data.id,
+        title: data.title,
+        issue_type: data.issue_type,
+        link,
+        summary: `Filed bug "${data.title}" in the Feedback & Issues log. Admins have been notified.`,
+      }, "success");
+    }
+
+    case "create_feature_request": {
+      const title = String(args?.title || "").trim().slice(0, 200);
+      const description = String(args?.description || "").trim();
+      if (!title || !description) {
+        return createStructuredToolResult(toolName, { error: "title and description are required" }, "hard_error");
+      }
+      const meta: string[] = [];
+      if (args?.chat_context_summary) meta.push(`Chat context:\n${args.chat_context_summary}`);
+      if (typeof args?.confidence === "number") meta.push(`Duncan confidence: ${(args.confidence * 100).toFixed(0)}%`);
+      const finalDescription = meta.length ? `${description}\n\n---\n${meta.join("\n\n")}\n\nFiled via Duncan Chat.` : `${description}\n\nFiled via Duncan Chat.`;
+
+      const { data, error } = await supabaseAdmin
+        .from("feature_requests")
+        .insert({
+          user_id: userId,
+          user_email: userEmail || null,
+          title,
+          description: finalDescription,
+          use_case: args?.use_case || null,
+          priority: args?.priority || "Medium",
+        })
+        .select("id, title, priority")
+        .single();
+      if (error) return createStructuredToolResult(toolName, { error: error.message }, "hard_error");
+
+      // Kick off existing agentic triage — fire-and-forget.
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        fetch(`${supabaseUrl}/functions/v1/feature-request-agent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+          body: JSON.stringify({ feature_request_id: data.id }),
+        }).catch((e) => console.warn("feature-request-agent kick failed", e));
+      } catch (e) {
+        console.warn("feature-request-agent invoke error", e);
+      }
+
+      const link = `${APP_URL}/settings?panel=feature_request`;
+      try {
+        const { data: admins } = await supabaseAdmin.from("user_roles").select("user_id").eq("role", "admin");
+        for (const a of admins || []) {
+          await supabaseAdmin.from("notifications").insert({
+            user_id: a.user_id,
+            kind: "feature_request_filed",
+            title: `New feature request: ${data.title}`,
+            body: `${userEmail || "A user"} requested a new feature (priority ${data.priority}). Duncan's triage agent has been kicked off.`,
+            link,
+          });
+        }
+      } catch (e) {
+        console.error("feature_request notify fanout failed", e);
+      }
+
+      return createStructuredToolResult(toolName, {
+        ok: true,
+        verified: true,
+        status: "success",
+        feature_request_id: data.id,
+        title: data.title,
+        priority: data.priority,
+        link,
+        summary: `Filed feature request "${data.title}" (priority ${data.priority}). Duncan's triage agent will follow up by email if it needs more detail.`,
+      }, "success");
+    }
+
+    default:
+      throw new Error(`Unknown product feedback tool: ${toolName}`);
+  }
+}
+
+// ============================================================
 // Phase 2: write-tool confirmation infrastructure
 // ============================================================
 const WRITE_TOOLS = new Set<string>([
@@ -5698,6 +5963,8 @@ const WRITE_TOOLS = new Set<string>([
   "update_planner_event_meta",
   "reschedule_event",
   "send_pdf_for_signature",
+  "create_bug_report",
+  "create_feature_request",
 ]);
 
 const WRITE_TOOL_LABELS: Record<string, string> = {
@@ -5713,6 +5980,8 @@ const WRITE_TOOL_LABELS: Record<string, string> = {
   update_planner_event_meta: "Update planner event",
   reschedule_event: "Reschedule event (planner or Google Calendar)",
   send_pdf_for_signature: "Send PDF for e-signature (DocuSign)",
+  create_bug_report: "File a bug report",
+  create_feature_request: "File a feature request",
 };
 
 type TeamDirectoryEntry = {
@@ -5831,6 +6100,10 @@ function summarizeWriteAction(toolName: string, args: any): string {
         return `${label}: ${args?.event_id || args?.google_event_id || "?"} → ${args?.startDateTime || "?"} – ${args?.endDateTime || "?"}`;
       case "send_pdf_for_signature":
         return `${label}: "${args?.file_name || "PDF"}" → ${args?.recipient_name || "?"} <${args?.recipient_email || "?"}>`;
+      case "create_bug_report":
+        return `${label}: "${(args?.title || "(untitled)").toString().slice(0, 100)}"${args?.severity ? ` — severity ${args.severity}` : ""}${args?.affected_area ? ` (${args.affected_area})` : ""}`;
+      case "create_feature_request":
+        return `${label}: "${(args?.title || "(untitled)").toString().slice(0, 100)}"${args?.priority ? ` — priority ${args.priority}` : ""}`;
       default:
         return label;
     }
@@ -5980,7 +6253,17 @@ serve(async (req) => {
       + `\n\nCurrent date and time: ${new Date().toISOString()} (UTC).`
       + `\n\n## CALLER IDENTITY (canonical — use these for "today", "this week", "my time")\n`
       + formatIdentityForPrompt(resolvedIdentity)
-      + `\n\nWhen the user says "today" / "tomorrow" / "this week", interpret them in the caller's timezone above, NOT UTC.`;
+      + `\n\nWhen the user says "today" / "tomorrow" / "this week", interpret them in the caller's timezone above, NOT UTC.`
+      + `\n\n## PRODUCT FEEDBACK CAPTURE (bug reports & feature requests)\n`
+      + `You are also Duncan's in-chat product engineer. When a user's message clearly describes broken behaviour, an error, a wrong output, a regression, or something that "doesn't work", treat it as a potential BUG REPORT. When they suggest a new capability, ask for something Duncan can't do yet, or say "it would be great if…", treat it as a potential FEATURE REQUEST. Pure questions, opinions, or general chat NEVER trigger these tools.\n\n`
+      + `Agentic flow (always in this order):\n`
+      + `1. INVESTIGATE — re-read the recent conversation, any uploaded files, and use available read-only tools (search_knowledge_base, list_workstream_cards, get_workstream_card, list_meetings, etc.) to understand the issue before acting.\n`
+      + `2. DEDUPE — call \`search_existing_bug_reports\` or \`search_existing_feature_requests\` with 2–4 keywords first. If a strong match already exists, tell the user and OFFER to add context to the existing ticket instead of filing a duplicate. Do not silently file duplicates.\n`
+      + `3. STRUCTURE — infer title, description, affected area, expected vs actual behaviour, reproduction steps, severity (bugs) or priority (features), and a possible root cause. Score your own confidence 0–1.\n`
+      + `4. ASK ONLY WHAT'S CRITICAL — if a P0/P1 field is missing (e.g. reproduction steps for a S1 bug), ask ONE concise question. Never turn this into a form.\n`
+      + `5. SELF-VALIDATE — if confidence < 0.6 or the title/description feels vague, ask a follow-up instead of filing.\n`
+      + `6. FILE via \`create_bug_report\` or \`create_feature_request\`. The write-confirmation interceptor will render the Confirm/Cancel card automatically — do NOT write another prose "shall I file this?" preview. After the tool returns, only claim it was filed if the result has \`ok:true\` and \`verified:true\`, in past tense, including the returned id and link.\n`
+      + `Reuse only: both tools write to Duncan's EXISTING Bug Report / Feature Request tables (same rows as Settings → Report a Bug / Request a Feature). Feature requests are auto-triaged by the existing \`feature-request-agent\` — do NOT try to triage yourself. Admins are notified via the existing notifications system automatically.`;
 
     // ===== TEAM DIRECTORY — used for resolving attendee names → emails =====
     // Inject the full Duncan team directory so the model never has to ask
@@ -7125,6 +7408,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
     tools.push(...RELEASE_TOOLS);
     // Lovable contributors snapshot (admin-only, requires attached screenshot)
     tools.push(...LOVABLE_CONTRIBUTORS_TOOLS);
+    tools.push(...PRODUCT_FEEDBACK_TOOLS);
     // Briefing mode must always return text, never invoke tools.
     // Do NOT set tool_choice without tools — OpenAI rejects that combination.
 
@@ -7164,6 +7448,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       ...EXEC_SUMMARY_TOOLS,
       ...RELEASE_TOOLS,
       ...LOVABLE_CONTRIBUTORS_TOOLS,
+      ...PRODUCT_FEEDBACK_TOOLS, // Bug reports & feature requests are always callable.
       ...RESCHEDULE_TOOLS,
       ...PROJECT_TOOLS,
     ];
@@ -7731,6 +8016,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const execSummaryToolNames = ["generate_exec_summary_document"];
       const releaseToolNames = ["log_release_change"];
       const lovableContribToolNames = ["update_lovable_contributors"];
+      const productFeedbackToolNames = ["search_existing_bug_reports", "search_existing_feature_requests", "create_bug_report", "create_feature_request"];
       const toolResults: any[] = [];
 
       // Phase 1: run all tools in this round in parallel (Promise.allSettled preserves order).
@@ -7969,6 +8255,8 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = await withToolTimeout(tc.function.name, executeReleaseTool(tc.function.name, args, supabaseAdmin, userId || ""));
           } else if (lovableContribToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeLovableContributorsTool(tc.function.name, args, supabaseAdmin, userId || ""));
+          } else if (productFeedbackToolNames.includes(tc.function.name)) {
+              result = await withToolTimeout(tc.function.name, executeProductFeedbackTool(tc.function.name, args, supabaseAdmin, userId || "", userEmail || ""));
           } else {
               result = { error: `Unknown tool: ${tc.function.name}` };
           }

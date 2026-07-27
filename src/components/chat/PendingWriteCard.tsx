@@ -19,6 +19,8 @@ const TOOL_LABEL: Record<string, string> = {
   update_workstream_card: "Update workstream card",
   submit_google_form: "Submit Google Form",
   update_planner_event_meta: "Update planner event",
+  create_bug_report: "File bug report",
+  create_feature_request: "File feature request",
 };
 
 export default function PendingWriteCard({ pending, onConfirm, onCancel }: Props) {

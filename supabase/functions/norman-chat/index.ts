@@ -6256,13 +6256,13 @@ serve(async (req) => {
       + formatIdentityForPrompt(resolvedIdentity)
       + `\n\nWhen the user says "today" / "tomorrow" / "this week", interpret them in the caller's timezone above, NOT UTC.`
       + `\n\n## PRODUCT FEEDBACK CAPTURE (bug reports & feature requests)\n`
-      + `When a user's message describes broken behaviour, an error, a wrong output, or says something "doesn't work" / "is broken" / "isn't working" / "please fix" / "report this bug" — call \`create_bug_report\` IMMEDIATELY in this same turn.\n`
-      + `When a user asks for a new capability, says "it would be great if…" / "can you add…" / "feature request" — call \`create_feature_request\` IMMEDIATELY in this same turn.\n`
+      + `When a user's message describes broken behaviour / an error / says "doesn't work" / "is broken" / "please fix" / "report this bug" / "log a bug" / "file a bug" — your VERY FIRST output for that turn MUST be a \`create_bug_report\` tool call. No prose, no markdown headers ("Bug report prep", "Summary", etc.), no preamble. Just the tool call.\n`
+      + `When a user asks for a new capability / says "it would be great if…" / "can you add…" / "feature request" — your VERY FIRST output MUST be a \`create_feature_request\` tool call.\n`
       + `Rules — KEEP IT SIMPLE:\n`
-      + `- The tools only require \`title\` and \`description\` (plus \`issue_type\` for bugs — default to "Bug"). Infer them from the user's message. Do NOT ask clarifying questions unless the message is a single word with no content.\n`
-      + `- Do NOT investigate with other tools first. Do NOT call \`search_existing_bug_reports\` / \`search_existing_feature_requests\` unless the user explicitly asks you to check for duplicates.\n`
-      + `- Do NOT write a "shall I file this?" preview. There is NO confirmation card for these tools — they insert directly into the same Settings → Report a Bug / Request a Feature list. Just call the tool.\n`
-      + `- After the tool returns \`ok:true\`, reply in ONE short sentence past-tense with the returned id, and mention it now appears in Settings.\n`
+      + `- Only \`title\` and \`description\` are required (plus \`issue_type\` for bugs — default "Bug"). Infer them from the user's message. NEVER ask clarifying questions unless the message has literally no content.\n`
+      + `- NEVER call \`search_existing_bug_reports\` / \`search_existing_feature_requests\` unless the user explicitly asks to check for duplicates.\n`
+      + `- There is NO confirmation card and NO preview. The tool inserts directly into Settings → Report a Bug / Request a Feature. Writing a "prep" summary instead of calling the tool is a hard failure.\n`
+      + `- After the tool returns \`ok:true\`, reply in ONE short past-tense sentence with the returned id, and mention it now appears in Settings.\n`
       + `Pure questions, opinions, or general chat NEVER trigger these tools.`;
 
     // ===== TEAM DIRECTORY — used for resolving attendee names → emails =====

@@ -5963,8 +5963,9 @@ const WRITE_TOOLS = new Set<string>([
   "update_planner_event_meta",
   "reschedule_event",
   "send_pdf_for_signature",
-  "create_bug_report",
-  "create_feature_request",
+  // create_bug_report and create_feature_request intentionally NOT gated:
+  // they write to the user's own bug/feature list in Settings. Keep it simple —
+  // fire immediately, no Confirm card.
 ]);
 
 const WRITE_TOOL_LABELS: Record<string, string> = {
@@ -6255,14 +6256,14 @@ serve(async (req) => {
       + formatIdentityForPrompt(resolvedIdentity)
       + `\n\nWhen the user says "today" / "tomorrow" / "this week", interpret them in the caller's timezone above, NOT UTC.`
       + `\n\n## PRODUCT FEEDBACK CAPTURE (bug reports & feature requests)\n`
-      + `You are also Duncan's in-chat product engineer. When a user's message clearly describes broken behaviour, an error, a wrong output, a regression, or something that "doesn't work", treat it as a potential BUG REPORT. When they suggest a new capability, ask for something Duncan can't do yet, or say "it would be great if…", treat it as a potential FEATURE REQUEST. Pure questions, opinions, or general chat NEVER trigger these tools.\n\n`
-      + `Agentic flow (always in this order — DO NOT stop between steps):\n`
-      + `1. INVESTIGATE — re-read the recent conversation and any attachments. Use read-only tools (search_knowledge_base, list_workstream_cards, get_workstream_card, list_meetings, etc.) only if they materially help. Investigation is INTERNAL — never publish a standalone "here's what I found" analysis message to the user and stop.\n`
-      + `2. DEDUPE — call \`search_existing_bug_reports\` or \`search_existing_feature_requests\` with 2–4 keywords in the SAME turn as investigation. If a strong match already exists, tell the user and OFFER to add context to the existing ticket; otherwise proceed straight to step 3 without pausing.\n`
-      + `3. STRUCTURE + FILE — in the SAME assistant turn as dedupe, infer title, description, affected_area (module), expected vs actual behaviour, steps_to_reproduce, severity (bugs) or priority (features), root_cause_hypothesis, and a 0–1 confidence, then IMMEDIATELY call \`create_bug_report\` or \`create_feature_request\`. The write-confirmation interceptor will render the Confirm/Cancel card with all fields — that card IS the preview. NEVER write a prose "shall I file this?" preview; NEVER end the turn with an analysis summary and no tool call.\n`
-      + `4. CLARIFY ONLY IF A REQUIRED FIELD IS TRULY UNKNOWABLE — the tool only requires title + description (+ issue_type for bugs). If you have those, you MUST call the tool. Ask ONE concise question only when title or description cannot be inferred at all from the conversation. Low confidence on non-required fields (severity, repro, root cause) is NOT a reason to skip the tool call — file it with confidence < 0.6 flagged in the confidence field instead.\n`
-      + `5. AFTER THE TOOL RETURNS — only claim it was filed if the tool result has \`ok:true\` AND \`verified:true\`. On success, reply in past tense with the returned bug/feature id and link. On \`status:"pending_confirmation"\` (ok:false, verified:false), tell the user the Confirm card is now in the chat and they need to click Confirm to file it — do NOT say it is filed, do NOT retry, do NOT call any further write tools this turn. On hard_error, explain the error plainly and do not silently drop the report.\n`
-      + `Reuse only: both tools write to Duncan's EXISTING Bug Report / Feature Request tables (same rows as Settings → Report a Bug / Request a Feature). Feature requests are auto-triaged by the existing \`feature-request-agent\` — do NOT triage yourself. Admins are notified via the existing notifications system automatically.`;
+      + `When a user's message describes broken behaviour, an error, a wrong output, or says something "doesn't work" / "is broken" / "isn't working" / "please fix" / "report this bug" — call \`create_bug_report\` IMMEDIATELY in this same turn.\n`
+      + `When a user asks for a new capability, says "it would be great if…" / "can you add…" / "feature request" — call \`create_feature_request\` IMMEDIATELY in this same turn.\n`
+      + `Rules — KEEP IT SIMPLE:\n`
+      + `- The tools only require \`title\` and \`description\` (plus \`issue_type\` for bugs — default to "Bug"). Infer them from the user's message. Do NOT ask clarifying questions unless the message is a single word with no content.\n`
+      + `- Do NOT investigate with other tools first. Do NOT call \`search_existing_bug_reports\` / \`search_existing_feature_requests\` unless the user explicitly asks you to check for duplicates.\n`
+      + `- Do NOT write a "shall I file this?" preview. There is NO confirmation card for these tools — they insert directly into the same Settings → Report a Bug / Request a Feature list. Just call the tool.\n`
+      + `- After the tool returns \`ok:true\`, reply in ONE short sentence past-tense with the returned id, and mention it now appears in Settings.\n`
+      + `Pure questions, opinions, or general chat NEVER trigger these tools.`;
 
     // ===== TEAM DIRECTORY — used for resolving attendee names → emails =====
     // Inject the full Duncan team directory so the model never has to ask

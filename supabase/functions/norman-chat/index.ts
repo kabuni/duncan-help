@@ -8737,12 +8737,19 @@ Format as a natural, readable summary with clear sections. If a section has no d
             const salvageable = hadIncompleteToolCall && toolCalls.length > 0 && toolCalls.every((tc: any) => {
               const name = tc?.function?.name;
               if (name !== "create_bug_report" && name !== "create_feature_request") return false;
-              try {
-                const raw = tc?.function?.arguments || "{}";
-                const parsed = JSON.parse(raw);
-                return typeof parsed?.title === "string" && parsed.title.trim().length > 0
-                  && typeof parsed?.description === "string" && parsed.description.trim().length > 0;
-              } catch { return false; }
+              const raw = tc?.function?.arguments || "{}";
+              let parsed: any = null;
+              try { parsed = JSON.parse(raw); } catch {
+                for (let i = 1; i <= 6 && !parsed; i++) {
+                  try { parsed = JSON.parse(raw + '"' + '}'.repeat(i)); } catch {}
+                  if (!parsed) { try { parsed = JSON.parse(raw + '}'.repeat(i)); } catch {} }
+                }
+              }
+              if (!parsed || typeof parsed !== "object") return false;
+              const okFields = typeof parsed.title === "string" && parsed.title.trim().length > 0
+                && typeof parsed.description === "string" && parsed.description.trim().length > 0;
+              if (okFields) tc.function.arguments = JSON.stringify(parsed);
+              return okFields;
             });
             if (salvageable) {
               console.log("SALVAGED incomplete tool call for product feedback", {

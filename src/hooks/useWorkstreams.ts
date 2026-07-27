@@ -20,6 +20,7 @@ export type WorkstreamCategory = (typeof WORKSTREAM_CATEGORIES)[number];
 
 export interface WorkstreamCard {
   id: string;
+  task_code: string;
   title: string;
   description: string;
   status: CardStatus;
@@ -29,6 +30,7 @@ export interface WorkstreamCard {
   project_tag: string | null;
   category: string | null;
   created_by: string;
+  created_by_name?: string;
   archived_at: string | null;
   created_at: string;
   updated_at: string;

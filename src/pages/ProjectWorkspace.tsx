@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, Plus, MessageSquare, Send, Loader2, Settings2, Users,
+  ArrowLeft, Plus, MessageSquare, MessagesSquare, Send, Loader2, Settings2, Users,
   Upload, FileText, Sparkles, Trash2, RefreshCw, PanelRightOpen, X, Menu, ListChecks, Pencil, Check, StickyNote,
 } from "lucide-react";
+import { ProjectTeamChatDrawer } from "@/components/projects/ProjectTeamChatDrawer";
+import { useProjectTeamChatUnread } from "@/hooks/useProjectTeamChatUnread";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import { ProjectNotesDrawer } from "@/components/projects/ProjectNotesDrawer";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";

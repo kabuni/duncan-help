@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import { PanelLeftOpen } from "lucide-react";
 import Sidebar, { MobileMenuButton } from "@/components/Sidebar";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { SettingsPanelProvider } from "@/hooks/SettingsPanelContext";
 
 const SIDEBAR_HIDDEN_KEY = "duncan.sidebar.hidden";

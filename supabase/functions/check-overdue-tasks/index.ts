@@ -280,18 +280,18 @@ Deno.serve(async (req) => {
         const message = [
           `⏰ *Overdue Task Alert*`,
           ``,
-          `Your task *${task.title}* in card *${card.title}* was due on *${dueDate}*.`,
+          `Your task *${task.title}* in card *${card.title}*${card.task_code ? ` (${card.task_code})` : ""} was due on *${dueDate}*.`,
           ``,
           `${statusEmoji(card.status)} Card status: *${card.status.toUpperCase()}*`,
           ``,
-          `👉 <${appUrl}/workstreams|Open in Duncan> to update or mark complete.`,
+          `👉 <${appUrl}/workstreams${card.task_code ? `?card=${card.task_code}` : ""}|Open in Duncan> to update or mark complete.`,
         ].join("\n");
 
         const success = await sendSlackDM(slackUserId, message);
         await logNotification(
           supabase,
           slackUserId,
-          { type: "overdue_task", task_id: task.id, task_title: task.title, card_title: card.title, due_date: task.due_date },
+          { type: "overdue_task", task_id: task.id, task_title: task.title, card_title: card.title, task_code: card.task_code ?? null, due_date: task.due_date },
           success,
           eventKey,
           userId

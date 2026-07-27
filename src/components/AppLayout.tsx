@@ -63,6 +63,8 @@ const AppLayout = ({ children }: { children?: React.ReactNode }) => {
               <PanelLeftOpen className="h-4 w-4" />
             </button>
           )}
+          {/* Global search palette (Cmd/Ctrl+K) — mounted once at the shell */}
+          <GlobalSearch />
           {/* Mobile header with menu button */}
           <div
             className="md:hidden flex items-center justify-between gap-2 border-b border-border px-4 py-3"

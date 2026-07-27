@@ -18,6 +18,14 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const APP_URL = Deno.env.get("APP_URL") || "https://duncan.help";
 
+// Fixed reviewer group — Duncan notifies these admins for every feature request.
+const REVIEWER_IDS: string[] = [
+  "c93fa0ff-fbc9-4f28-808f-b55d8defc9eb", // Palash Soundarkar
+  "ab34cb37-78ca-4f51-b980-c43b8e884d27", // Ashish
+  "4bc1118e-b1ac-4587-81d5-57105f66b0bd", // Balkrishna
+  "15233afa-6b01-44c3-94b7-58c64f6360fa", // Adit Bhargava
+];
+
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
 type TriageDecision = {

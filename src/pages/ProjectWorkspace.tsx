@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, Plus, MessageSquare, Send, Loader2, Settings2, Users,
+  ArrowLeft, Plus, MessageSquare, MessagesSquare, Send, Loader2, Settings2, Users,
   Upload, FileText, Sparkles, Trash2, RefreshCw, PanelRightOpen, X, Menu, ListChecks, Pencil, Check, StickyNote,
 } from "lucide-react";
+import { ProjectTeamChatDrawer } from "@/components/projects/ProjectTeamChatDrawer";
+import { useProjectTeamChatUnread } from "@/hooks/useProjectTeamChatUnread";
+import { useIsAdmin } from "@/hooks/useUserRoles";
 import { ProjectNotesDrawer } from "@/components/projects/ProjectNotesDrawer";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -109,6 +112,9 @@ export default function ProjectWorkspace() {
   const [showCollaborate, setShowCollaborate] = useState(false);
   const [showTasks, setShowTasks] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  const [showTeamChat, setShowTeamChat] = useState(false);
+  const { isAdmin } = useIsAdmin();
+  const teamChatUnread = useProjectTeamChatUnread(projectId || null);
   const [openTaskCount, setOpenTaskCount] = useState(0);
   const [editName, setEditName] = useState("");
   const [editPrompt, setEditPrompt] = useState("");
@@ -395,6 +401,15 @@ export default function ProjectWorkspace() {
             {openTaskCount > 0 && (
               <span className="sm:hidden absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-medium px-1">
                 {openTaskCount}
+              </span>
+            )}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setShowTeamChat(true)} className="gap-1.5 text-xs px-2 sm:px-3 relative" aria-label="Team Chat">
+            <MessagesSquare className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Team Chat{teamChatUnread > 0 && ` (${teamChatUnread})`}</span>
+            {teamChatUnread > 0 && (
+              <span className="sm:hidden absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-medium px-1">
+                {teamChatUnread}
               </span>
             )}
           </Button>
@@ -930,6 +945,17 @@ export default function ProjectWorkspace() {
           members={members}
           chats={chats.map((c) => ({ id: c.id, title: c.title }))}
           onJumpToChat={(id) => setActiveChatId(id)}
+        />
+      )}
+
+      {projectId && (
+        <ProjectTeamChatDrawer
+          open={showTeamChat}
+          onOpenChange={setShowTeamChat}
+          projectId={projectId}
+          projectName={project?.name || "Project"}
+          isOwnerOrAdmin={isAdmin || project?.user_id === user?.id}
+          members={members.map((m) => ({ user_id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }))}
         />
       )}
 

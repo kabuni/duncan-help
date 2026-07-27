@@ -461,6 +461,7 @@ export function useWorkstreamCard(cardId: string | null) {
           status: card.status as CardStatus,
           priority: card.priority as CardPriority,
           owner_name: card.owner_id ? profileMap[card.owner_id] : undefined,
+          created_by_name: card.created_by ? profileMap[card.created_by] : undefined,
           assignees: cardAssignees.map((a: any) => ({ user_id: a.user_id, display_name: profileMap[a.user_id] || "Unknown", assignment_status: a.assignment_status, responded_at: a.responded_at, decline_reason: a.decline_reason })),
           overall_status: getOverallStatus([], card.status as CardStatus),
           task_breakdown: getTaskBreakdown([]),

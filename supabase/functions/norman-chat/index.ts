@@ -5745,7 +5745,7 @@ const PRODUCT_FEEDBACK_TOOLS = [
           confidence: { type: "number", description: "Duncan's 0-1 confidence that this is a real, well-scoped, non-duplicate bug." },
           chat_context_summary: { type: "string", description: "One-paragraph summary of the chat that led to filing." },
         },
-        required: ["title", "description", "issue_type"],
+        required: ["title", "description"],
       },
     },
   },

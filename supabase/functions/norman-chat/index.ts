@@ -6100,6 +6100,10 @@ function summarizeWriteAction(toolName: string, args: any): string {
         return `${label}: ${args?.event_id || args?.google_event_id || "?"} → ${args?.startDateTime || "?"} – ${args?.endDateTime || "?"}`;
       case "send_pdf_for_signature":
         return `${label}: "${args?.file_name || "PDF"}" → ${args?.recipient_name || "?"} <${args?.recipient_email || "?"}>`;
+      case "create_bug_report":
+        return `${label}: "${(args?.title || "(untitled)").toString().slice(0, 100)}"${args?.severity ? ` — severity ${args.severity}` : ""}${args?.affected_area ? ` (${args.affected_area})` : ""}`;
+      case "create_feature_request":
+        return `${label}: "${(args?.title || "(untitled)").toString().slice(0, 100)}"${args?.priority ? ` — priority ${args.priority}` : ""}`;
       default:
         return label;
     }

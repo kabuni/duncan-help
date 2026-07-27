@@ -28,23 +28,6 @@ const REVIEWER_IDS: string[] = [
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
-type TriageDecision = {
-  action: "clarify" | "triage" | "dismiss";
-  questions?: string[];
-  reasoning?: string;
-  refined_title?: string;
-  problem_statement?: string;
-  proposed_solution?: string;
-  acceptance_criteria?: string;
-  category?: string;
-  rice_reach?: number;
-  rice_impact?: number;
-  rice_confidence?: number;
-  rice_effort?: number;
-  priority_band?: "P0" | "P1" | "P2" | "P3";
-  effort_band?: "S" | "M" | "L" | "XL";
-  dismiss_reason?: string;
-};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

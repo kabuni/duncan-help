@@ -3724,6 +3724,95 @@ export type Database = {
           },
         ]
       }
+      project_message_reads: {
+        Row: {
+          last_read_at: string
+          project_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          last_read_at?: string
+          project_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          last_read_at?: string
+          project_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_message_reads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_messages: {
+        Row: {
+          attachments: Json
+          content: string
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          edited_at: string | null
+          id: string
+          pinned_at: string | null
+          pinned_by: string | null
+          project_id: string
+          reply_to_id: string | null
+          user_id: string
+        }
+        Insert: {
+          attachments?: Json
+          content?: string
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          edited_at?: string | null
+          id?: string
+          pinned_at?: string | null
+          pinned_by?: string | null
+          project_id: string
+          reply_to_id?: string | null
+          user_id: string
+        }
+        Update: {
+          attachments?: Json
+          content?: string
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          edited_at?: string | null
+          id?: string
+          pinned_at?: string | null
+          pinned_by?: string | null
+          project_id?: string
+          reply_to_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "project_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_note_attachments: {
         Row: {
           created_at: string

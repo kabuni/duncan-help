@@ -179,12 +179,12 @@ Deno.serve(async (req) => {
 
     // 3. Fetch cards, task assignees, and user mappings in parallel
     const [cardsRes, taskAssigneesRes, mappingsRes] = await Promise.all([
-      supabase.from("workstream_cards").select("id, title, status, owner_id, status_source").in("id", cardIds),
+      supabase.from("workstream_cards").select("id, title, task_code, status, owner_id, status_source").in("id", cardIds),
       supabase.from("workstream_task_assignees").select("task_id, user_id").in("task_id", taskIds),
       supabase.from("user_notification_mappings").select("duncan_user_id, slack_user_identifier, is_active").eq("is_active", true),
     ]);
 
-    const cardMap: Record<string, { id: string; title: string; status: string; owner_id: string | null; status_source?: string | null }> = {};
+    const cardMap: Record<string, { id: string; title: string; task_code?: string | null; status: string; owner_id: string | null; status_source?: string | null }> = {};
     (cardsRes.data || []).forEach((c: any) => { cardMap[c.id] = c; });
 
     // Build mapping from profile.id → slack_user_identifier

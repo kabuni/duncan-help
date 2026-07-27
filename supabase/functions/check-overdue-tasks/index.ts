@@ -400,13 +400,13 @@ async function sendOnboardingPreDueNudges(
   // Onboarding cards (incomplete)
   const { data: onbCards } = await supabase
     .from("workstream_cards")
-    .select("id, title")
+    .select("id, title, task_code")
     .eq("project_tag", "Onboarding")
     .neq("status", "done")
     .is("archived_at", null);
   if (!onbCards || onbCards.length === 0) return 0;
   const onbCardIds = onbCards.map((c: any) => c.id);
-  const onbCardMap: Record<string, { id: string; title: string }> = {};
+  const onbCardMap: Record<string, { id: string; title: string; task_code?: string | null }> = {};
   onbCards.forEach((c: any) => { onbCardMap[c.id] = c; });
 
   for (const win of windows) {

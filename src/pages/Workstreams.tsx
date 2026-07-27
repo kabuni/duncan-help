@@ -51,6 +51,29 @@ const Workstreams = () => {
     }
   }, [searchParams, setSearchParams]);
 
+  // Deep link: /workstreams?card=WS-0042 or ?card=<uuid> opens the card modal.
+  // Task IDs are the single source of truth — no separate IDs are minted here.
+  useEffect(() => {
+    const raw = searchParams.get("card");
+    if (!raw) return;
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let cancelled = false;
+    (async () => {
+      if (uuidRe.test(raw)) {
+        if (!cancelled) setSelectedCardId(raw);
+      } else {
+        const code = raw.toUpperCase();
+        const { data } = await supabase
+          .from("workstream_cards")
+          .select("id")
+          .eq("task_code", code)
+          .maybeSingle();
+        if (!cancelled && data?.id) setSelectedCardId(data.id);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [searchParams]);
+
   const { data: users } = useUserProfiles();
 
   const filters = useMemo(() => ({

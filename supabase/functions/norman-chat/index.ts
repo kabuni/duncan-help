@@ -1810,6 +1810,21 @@ const WORKSTREAM_TOOLS = [
   {
     type: "function",
     function: {
+      name: "get_workstream_card",
+      description: "READ-ONLY: look up a single workstream card by its Task ID (e.g. 'WS-0042') or by its UUID. Returns the full card — title, description, status, priority, project tag, due date, task code, creator, assignees, open and completed tasks. Use whenever the user references a WS-XXXX code or asks 'show me / open / what's the status of WS-XXXX'. NEVER modifies data.",
+      parameters: {
+        type: "object",
+        properties: {
+          task_code: { type: "string", description: "Task ID like 'WS-0042' (case-insensitive). Preferred." },
+          card_id: { type: "string", description: "UUID of the card, if the Task ID is unknown." },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "create_workstream_card",
       description: "Create a new workstream card, optionally with its initial tasks and assignees in the same call. The creator is always added as an assignee. Pass `assignee_user_ids` for additional card-level assignees, and `assignee_user_ids` per item in `pending_tasks` for task-level assignees (resolve names via list_team_members FIRST). IMPORTANT: when the user has described tasks/action items for this card, ALWAYS pass them in `pending_tasks` so they are created atomically when the user confirms the card.",
       parameters: {

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useIsAdmin } from "@/hooks/useUserRoles";
+import { usePlan90CanEdit } from "@/hooks/usePlan90Access";
 import { usePlan90, PLAN90_PRIORITIES, PLAN90_STATUSES } from "@/hooks/usePlan90";
 import { usePlan90Updates } from "@/hooks/usePlan90Updates";
 import type { Plan90Workstream } from "@/hooks/usePlan90";
@@ -35,7 +35,8 @@ function useOwners() {
 
 export default function Plan90() {
   const { user } = useAuth();
-  const { isAdmin, isLoading: roleLoading } = useIsAdmin();
+  // "isAdmin" here means "can edit the tracker": admins + explicit plan90 editors.
+  const { canEdit: isAdmin, isLoading: roleLoading } = usePlan90CanEdit();
   const { workstreams, deliverables, loading, updateDeliverable, createDeliverable, deleteDeliverable, createWorkstream, updateWorkstream, deleteWorkstream } = usePlan90();
   const updatesApi = usePlan90Updates();
   const { data: owners = [] } = useOwners();

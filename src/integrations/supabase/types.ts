@@ -3392,6 +3392,24 @@ export type Database = {
           },
         ]
       }
+      plan90_editors: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       plan90_workstreams: {
         Row: {
           archived: boolean
@@ -5495,6 +5513,7 @@ export type Database = {
         Args: { _candidate_id: string; _user_id: string }
         Returns: boolean
       }
+      can_edit_plan90: { Args: { _user_id: string }; Returns: boolean }
       can_view_candidate_plan: {
         Args: { _candidate_id: string; _user_id: string }
         Returns: boolean

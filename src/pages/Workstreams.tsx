@@ -27,6 +27,7 @@ const Workstreams = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<ViewMode>("board");
   const [search, setSearch] = useState("");
+  const [taskIdSearch, setTaskIdSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterPriority] = useState<string>("all");
   const [filterAssignee, setFilterAssignee] = useState<string>("all");

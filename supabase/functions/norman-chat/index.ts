@@ -7539,25 +7539,10 @@ Format as a natural, readable summary with clear sections. If a section has no d
 
     if (mode !== "briefing" && !shouldBypassTools && filteredTools.length > 0) {
       requestBody.tools = filteredTools;
-      // Deterministic intent detection for product-feedback capture. The generic
-      // "auto" tool_choice sometimes yields prose ("Bug report prep…") instead
-      // of a tool call, so we force the correct tool when the user's phrasing
-      // clearly signals a bug report or feature request.
-      const _lut = latestUserText.toLowerCase();
-      const bugIntentRe = /\b(log|file|report|raise|open|submit|create)\s+(a\s+|an\s+|this\s+)?(bug|issue|defect|problem)\b|\bbug\s+report\b|\breport\s+this\s+bug\b/;
-      const featureIntentRe = /\b(feature\s+request|request\s+(a\s+)?feature|feature\s+idea|add\s+(a\s+)?feature|it\s+would\s+be\s+great\s+if|can\s+you\s+add|please\s+add)\b/;
-      const wantsBug = bugIntentRe.test(_lut);
-      const wantsFeature = !wantsBug && featureIntentRe.test(_lut);
       if (isNdaConfirmationReply && pendingNdaArgsFromHistory) {
         requestBody.tool_choice = { type: "function", function: { name: "generate_nda" } };
       } else if (isWorkstreamCreationConfirmationReply) {
         requestBody.tool_choice = { type: "function", function: { name: "create_workstream_card" } };
-      } else if (wantsBug && filteredTools.some((t: any) => t?.function?.name === "create_bug_report")) {
-        requestBody.tool_choice = { type: "function", function: { name: "create_bug_report" } };
-        console.log("[intent-force] create_bug_report");
-      } else if (wantsFeature && filteredTools.some((t: any) => t?.function?.name === "create_feature_request")) {
-        requestBody.tool_choice = { type: "function", function: { name: "create_feature_request" } };
-        console.log("[intent-force] create_feature_request");
       } else if (isDataIntent && !isVoiceMode && !mustAskMeetingSource) {
         requestBody.tool_choice = "auto";
       }

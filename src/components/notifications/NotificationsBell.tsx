@@ -6,6 +6,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNotifications } from "@/hooks/useNotifications";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
+import {
+  renderWithTaskLinks,
+  extractTaskCode,
+  taskCodeHref,
+} from "@/components/TaskIdLink";
 
 export function NotificationsBell() {
   const { items, unreadCount, markRead, markAllRead } = useNotifications();

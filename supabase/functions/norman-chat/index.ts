@@ -8006,6 +8006,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const execSummaryToolNames = ["generate_exec_summary_document"];
       const releaseToolNames = ["log_release_change"];
       const lovableContribToolNames = ["update_lovable_contributors"];
+      const productFeedbackToolNames = ["search_existing_bug_reports", "search_existing_feature_requests", "create_bug_report", "create_feature_request"];
       const toolResults: any[] = [];
 
       // Phase 1: run all tools in this round in parallel (Promise.allSettled preserves order).

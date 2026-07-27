@@ -140,8 +140,18 @@ function KanbanCard({ card, onClick, onDragStart }: {
       onClick={onClick}
       className={`group cursor-pointer rounded-lg border border-l-[3px] bg-card p-3 transition-all hover:shadow-md hover:border-primary/30 ${getStatusBorderClass(card.status)}`}
     >
-      {/* Tag */}
-      <div className="flex items-center justify-end mb-2">
+      {/* Header row: task code + tag */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span
+          className="text-[9px] font-mono text-muted-foreground bg-secondary/60 px-1.5 py-0.5 rounded cursor-pointer hover:bg-secondary"
+          title="Click to copy Task ID"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigator.clipboard?.writeText(card.task_code).catch(() => {});
+          }}
+        >
+          {card.task_code}
+        </span>
         {card.project_tag && (
           <span className="text-[9px] font-mono bg-secondary/80 text-muted-foreground px-1.5 py-0.5 rounded">
             {card.project_tag}

@@ -4987,6 +4987,7 @@ export type Database = {
           project_tag: string | null
           status: string
           status_source: string
+          task_code: string
           title: string
           updated_at: string
         }
@@ -5004,6 +5005,7 @@ export type Database = {
           project_tag?: string | null
           status?: string
           status_source?: string
+          task_code?: string
           title: string
           updated_at?: string
         }
@@ -5021,6 +5023,7 @@ export type Database = {
           project_tag?: string | null
           status?: string
           status_source?: string
+          task_code?: string
           title?: string
           updated_at?: string
         }

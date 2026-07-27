@@ -195,6 +195,19 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
           <div className="flex flex-col max-h-[85vh]">
             {/* Header */}
             <div className="px-6 pt-5 pb-4 border-b border-border">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard?.writeText(card.task_code).catch(() => {})}
+                  title="Click to copy Task ID"
+                  className="text-[10px] font-mono bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors px-2 py-0.5 rounded-md"
+                >
+                  {card.task_code}
+                </button>
+                <span className="text-[10px] text-muted-foreground">
+                  Created by <span className="text-foreground">{card.created_by_name || "Unknown"}</span>
+                </span>
+              </div>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   {editingField === "title" ? (

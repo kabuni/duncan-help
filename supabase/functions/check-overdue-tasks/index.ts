@@ -179,12 +179,12 @@ Deno.serve(async (req) => {
 
     // 3. Fetch cards, task assignees, and user mappings in parallel
     const [cardsRes, taskAssigneesRes, mappingsRes] = await Promise.all([
-      supabase.from("workstream_cards").select("id, title, status, owner_id, status_source").in("id", cardIds),
+      supabase.from("workstream_cards").select("id, title, task_code, status, owner_id, status_source").in("id", cardIds),
       supabase.from("workstream_task_assignees").select("task_id, user_id").in("task_id", taskIds),
       supabase.from("user_notification_mappings").select("duncan_user_id, slack_user_identifier, is_active").eq("is_active", true),
     ]);
 
-    const cardMap: Record<string, { id: string; title: string; status: string; owner_id: string | null; status_source?: string | null }> = {};
+    const cardMap: Record<string, { id: string; title: string; task_code?: string | null; status: string; owner_id: string | null; status_source?: string | null }> = {};
     (cardsRes.data || []).forEach((c: any) => { cardMap[c.id] = c; });
 
     // Build mapping from profile.id → slack_user_identifier
@@ -280,18 +280,18 @@ Deno.serve(async (req) => {
         const message = [
           `⏰ *Overdue Task Alert*`,
           ``,
-          `Your task *${task.title}* in card *${card.title}* was due on *${dueDate}*.`,
+          `Your task *${task.title}* in card *${card.title}*${card.task_code ? ` (${card.task_code})` : ""} was due on *${dueDate}*.`,
           ``,
           `${statusEmoji(card.status)} Card status: *${card.status.toUpperCase()}*`,
           ``,
-          `👉 <${appUrl}/workstreams|Open in Duncan> to update or mark complete.`,
+          `👉 <${appUrl}/workstreams${card.task_code ? `?card=${card.task_code}` : ""}|Open in Duncan> to update or mark complete.`,
         ].join("\n");
 
         const success = await sendSlackDM(slackUserId, message);
         await logNotification(
           supabase,
           slackUserId,
-          { type: "overdue_task", task_id: task.id, task_title: task.title, card_title: card.title, due_date: task.due_date },
+          { type: "overdue_task", task_id: task.id, task_title: task.title, card_title: card.title, task_code: card.task_code ?? null, due_date: task.due_date },
           success,
           eventKey,
           userId
@@ -317,17 +317,17 @@ Deno.serve(async (req) => {
               const escMessage = [
                 `🚨 *Escalation: Overdue Task (${Math.floor(daysSinceOverdue)} days)*`,
                 ``,
-                `Task *${task.title}* in your card *${card.title}* was due on *${dueDate}*.`,
+                `Task *${task.title}* in your card *${card.title}*${card.task_code ? ` (${card.task_code})` : ""} was due on *${dueDate}*.`,
                 `Assigned to: ${assigneeNames}`,
                 ``,
                 `${statusEmoji(card.status)} Card status: *${card.status.toUpperCase()}*`,
                 ``,
-                `👉 <${appUrl}/workstreams|Review in Duncan>`,
+                `👉 <${appUrl}/workstreams${card.task_code ? `?card=${card.task_code}` : ""}|Review in Duncan>`,
               ].join("\n");
 
               const escSuccess = await sendSlackDM(ownerSlack, escMessage);
               await logNotification(supabase, ownerSlack, {
-                type: "overdue_escalation", task_id: task.id, card_title: card.title,
+                type: "overdue_escalation", task_id: task.id, card_title: card.title, task_code: card.task_code ?? null,
               }, escSuccess, escalationKey, card.owner_id);
             }
           }
@@ -400,13 +400,13 @@ async function sendOnboardingPreDueNudges(
   // Onboarding cards (incomplete)
   const { data: onbCards } = await supabase
     .from("workstream_cards")
-    .select("id, title")
+    .select("id, title, task_code")
     .eq("project_tag", "Onboarding")
     .neq("status", "done")
     .is("archived_at", null);
   if (!onbCards || onbCards.length === 0) return 0;
   const onbCardIds = onbCards.map((c: any) => c.id);
-  const onbCardMap: Record<string, { id: string; title: string }> = {};
+  const onbCardMap: Record<string, { id: string; title: string; task_code?: string | null }> = {};
   onbCards.forEach((c: any) => { onbCardMap[c.id] = c; });
 
   for (const win of windows) {
@@ -465,9 +465,9 @@ async function sendOnboardingPreDueNudges(
         const msg = [
           `⏳ *Onboarding reminder — due in ~${win.hours}h*`,
           ``,
-          `*${task.title}* on onboarding card *${card.title}* is due *${dueNice}*.`,
+          `*${task.title}* on onboarding card *${card.title}*${card.task_code ? ` (${card.task_code})` : ""} is due *${dueNice}*.`,
           ``,
-          `👉 <${appUrl}/workstreams|Open in Duncan> to complete or reassign.`,
+          `👉 <${appUrl}/workstreams${card.task_code ? `?card=${card.task_code}` : ""}|Open in Duncan> to complete or reassign.`,
         ].join("\n");
         const ok = await sendSlackDM(slackId, msg);
         await logNotification(supabase, slackId, {
@@ -476,6 +476,7 @@ async function sendOnboardingPreDueNudges(
           task_id: task.id,
           task_title: task.title,
           card_title: card.title,
+          task_code: card.task_code ?? null,
           due_date: task.due_date,
         }, ok, key, uid);
         if (ok) sent++;

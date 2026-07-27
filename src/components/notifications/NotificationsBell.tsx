@@ -6,6 +6,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNotifications } from "@/hooks/useNotifications";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
+import {
+  renderWithTaskLinks,
+  extractTaskCode,
+  taskCodeHref,
+} from "@/components/TaskIdLink";
 
 export function NotificationsBell() {
   const { items, unreadCount, markRead, markAllRead } = useNotifications();
@@ -44,12 +49,17 @@ export function NotificationsBell() {
             <ul className="divide-y divide-border">
               {items.map((n) => {
                 const unread = !n.read_at;
+                // If the notification's link is missing but the title/body
+                // mentions a Task ID (WS-XXXX), route to that task by default.
+                const inferredCode =
+                  !n.link && extractTaskCode(`${n.title ?? ""} ${n.body ?? ""}`);
+                const targetLink = n.link || (inferredCode ? taskCodeHref(inferredCode) : null);
                 return (
                   <li key={n.id}>
                     <button
                       onClick={() => {
                         if (unread) markRead(n.id);
-                        if (n.link) navigate(n.link);
+                        if (targetLink) navigate(targetLink);
                       }}
                       className={cn(
                         "w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors flex gap-2 items-start",
@@ -64,11 +74,11 @@ export function NotificationsBell() {
                       />
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold text-foreground truncate">
-                          {n.title}
+                          {renderWithTaskLinks(n.title)}
                         </div>
                         {n.body && (
                           <div className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                            {n.body}
+                            {renderWithTaskLinks(n.body)}
                           </div>
                         )}
                         <div className="text-[10px] text-muted-foreground/70 mt-1">

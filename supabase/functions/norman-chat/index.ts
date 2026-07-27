@@ -54,6 +54,8 @@ const SYSTEM_PROMPT = `You are Duncan, an advanced reasoning and agentic operati
 
 **SINGLE-SOURCE EXECUTION RULE:** If exactly one tool supports the entity AND the entity matches a known enum / project_tag / source value (even fuzzily), call the tool directly. Example: "Lightning Strike Event" matches workstream_cards.project_tag → call list_workstream_cards immediately. Never ask "should I pull this from Workstreams or [other system]?"
 
+**TASK IDs (WS-XXXX):** Workstream cards each have a canonical Task ID like \`WS-0042\`. If the user's message contains \`WS-\` followed by digits, immediately call \`get_workstream_card\` with that task_code — do NOT ask which project it is on, and do NOT call \`list_workstream_cards\` first. Always render the Task ID in your reply (e.g. "**WS-0042 — <title>**") so the frontend can auto-linkify it. Task IDs are READ ONLY through chat: never modify a card just because the user referenced its Task ID.
+
 **NEGATIVE GROUNDING (NEVER hallucinate disconnected systems):** The following systems are NOT connected and have NO runtime tools in this environment: Basecamp, Trello, Jira (non-DevOps), Asana, Monday.com, ClickUp, Notion (entire workspace — decommissioned). NEVER offer them, ask about them, imply they exist, or use them as a "should I pull from X or Y?" alternative. Workstreams is the canonical task/card system. Planner / Key Events is the canonical diary system. Azure DevOps is the canonical engineering work-item system. Gmail/Calendar/Drive/Slack/Xero/Meetings are the only other connected sources — if a tool for a system isn't in your tool list, that system is not connected. Period.
 
 
@@ -1810,6 +1812,21 @@ const WORKSTREAM_TOOLS = [
   {
     type: "function",
     function: {
+      name: "get_workstream_card",
+      description: "READ-ONLY: look up a single workstream card by its Task ID (e.g. 'WS-0042') or by its UUID. Returns the full card — title, description, status, priority, project tag, due date, task code, creator, assignees, open and completed tasks. Use whenever the user references a WS-XXXX code or asks 'show me / open / what's the status of WS-XXXX'. NEVER modifies data.",
+      parameters: {
+        type: "object",
+        properties: {
+          task_code: { type: "string", description: "Task ID like 'WS-0042' (case-insensitive). Preferred." },
+          card_id: { type: "string", description: "UUID of the card, if the Task ID is unknown." },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "create_workstream_card",
       description: "Create a new workstream card, optionally with its initial tasks and assignees in the same call. The creator is always added as an assignee. Pass `assignee_user_ids` for additional card-level assignees, and `assignee_user_ids` per item in `pending_tasks` for task-level assignees (resolve names via list_team_members FIRST). IMPORTANT: when the user has described tasks/action items for this card, ALWAYS pass them in `pending_tasks` so they are created atomically when the user confirms the card.",
       parameters: {
@@ -2186,6 +2203,64 @@ async function executeWorkstreamTool(
       return { members: data || [], count: (data || []).length };
     }
 
+    case "get_workstream_card": {
+      const raw = (args.task_code || args.card_id || "").toString().trim();
+      if (!raw) throw new Error("get_workstream_card requires task_code or card_id");
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      let cardQ = supabaseAdmin
+        .from("workstream_cards")
+        .select("id, task_code, title, description, status, priority, project_tag, due_date, category, owner_id, created_by, created_at, archived_at")
+        .limit(1);
+      if (uuidRe.test(raw)) cardQ = cardQ.eq("id", raw);
+      else cardQ = cardQ.eq("task_code", raw.toUpperCase());
+      const { data: cardRows, error: cardErr } = await cardQ;
+      if (cardErr) throw new Error(`get_workstream_card failed: ${cardErr.message}`);
+      const card = (cardRows || [])[0];
+      if (!card) {
+        return {
+          found: false,
+          query: raw,
+          message: `No workstream card found for '${raw}'. Task IDs look like WS-0042.`,
+        };
+      }
+      const [assigneesRes, tasksRes, ownerRes, creatorRes] = await Promise.all([
+        supabaseAdmin.from("workstream_card_assignees").select("user_id").eq("card_id", card.id),
+        supabaseAdmin.from("workstream_tasks").select("id, title, due_date, completed, assignee_id").eq("card_id", card.id).order("completed", { ascending: true }).order("due_date", { ascending: true, nullsFirst: false }),
+        card.owner_id ? supabaseAdmin.from("profiles").select("id, display_name").eq("id", card.owner_id).maybeSingle() : Promise.resolve({ data: null }),
+        card.created_by ? supabaseAdmin.from("profiles").select("id, display_name").eq("id", card.created_by).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      const assigneeIds = ((assigneesRes as any).data || []).map((r: any) => r.user_id);
+      let assigneeNames: string[] = [];
+      if (assigneeIds.length) {
+        const { data: profs } = await supabaseAdmin.from("profiles").select("id, display_name").in("id", assigneeIds);
+        assigneeNames = (profs || []).map((p: any) => p.display_name).filter(Boolean);
+      }
+      const tasks = ((tasksRes as any).data || []) as any[];
+      return {
+        found: true,
+        card: {
+          task_code: card.task_code,
+          id: card.id,
+          title: card.title,
+          description: card.description,
+          status: card.status,
+          priority: card.priority,
+          project_tag: card.project_tag,
+          category: card.category,
+          due_date: card.due_date,
+          created_at: card.created_at,
+          archived: !!card.archived_at,
+          owner: (ownerRes as any).data?.display_name ?? null,
+          created_by: (creatorRes as any).data?.display_name ?? null,
+          assignees: assigneeNames,
+          open_tasks: tasks.filter((t) => !t.completed).map((t) => ({ title: t.title, due_date: t.due_date })),
+          completed_tasks: tasks.filter((t) => t.completed).map((t) => ({ title: t.title, due_date: t.due_date })),
+          link: `/workstreams?card=${card.task_code || card.id}`,
+        },
+        meta: { readResult: true, read_only: true },
+      };
+    }
+
     case "list_workstream_cards": {
       const wantCsv = args.export_format === "csv";
       const wantSheet = args.export_format === "gsheet";
@@ -2219,7 +2294,7 @@ async function executeWorkstreamTool(
 
       let cardsQuery = supabaseAdmin
         .from("workstream_cards")
-        .select("id, title, status, project_tag, due_date, priority, created_at")
+        .select("id, task_code, title, status, project_tag, due_date, priority, created_at")
         .is("archived_at", null)
         .order("due_date", { ascending: true, nullsFirst: false })
         .limit(limit);
@@ -7068,7 +7143,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       { groups: [GMAIL_TOOLS], re: /\b(gmail|email|emails|inbox|draft|drafts|reply|forward|unread|sender|recipient|cc'?d|bcc'?d)\b/i },
       { groups: [CALENDAR_TOOLS, TEAM_CALENDAR_AVAILABILITY_TOOLS], re: /\b(calendar|diary|schedule|scheduling|availability|free\/busy|free busy|book\b|booking|meeting|meetings|meeting room|reschedule|invite|invites|event|events|appointment|catch[- ]?up|1:1|one[- ]?on[- ]?one|set\s+(?:up\s+)?(?:a|an|the)?\s*(?:meeting|call|catch[- ]?up|sync|chat)|arrange\s+(?:a|an|the)?\s*(?:meeting|call|catch[- ]?up|sync)|put\s+.+?\s+on\s+(?:my|the|our)\s+calendar|block\s+(?:time|out)|find\s+time|google\s*meet|meet\s+link|zoom\s+link|teams\s+link)\b/i },
       { groups: [MEETING_TOOLS], re: /\b(meeting notes?|recap|action items?|transcript|plaud|gemini|recording|summary of (the|my|our)\b|minutes\b)\b/i },
-      { groups: [WORKSTREAM_TOOLS], re: /\b(workstream|workstreams|kanban|card|cards|ryg|amber|red\/yellow|status update|owner of|pending action|pending actions|action items?|open tasks?|my tasks?|to[- ]?dos?|on my plate|overdue|csv|download|spreadsheet|excel|google sheet|export)\b/i },
+      { groups: [WORKSTREAM_TOOLS], re: /\b(workstream|workstreams|kanban|card|cards|ryg|amber|red\/yellow|status update|owner of|pending action|pending actions|action items?|open tasks?|my tasks?|to[- ]?dos?|on my plate|overdue|csv|download|spreadsheet|excel|google sheet|export|WS-\d{3,})\b/i },
       { groups: [PLANNER_TOOLS, CALENDAR_TOOLS], re: /\b(planner|plan\b|roadmap|milestone|sprint plan|backlog|to-do list|reschedule|postpone|move (it|this|the meeting|to tomorrow)|push (back|forward) (the|my)|change (the )?(date|time))\b/i },
       { groups: [ANALYTICS_TOOLS], re: /\b(analytic|analytics|metric|metrics|kpi|dashboard|trend|report|reporting|chart|graph)\b/i },
       { groups: [GOOGLE_DRIVE_TOOLS], re: /\b(drive|google drive|gdrive|folder|shared drive|doc\b|docs\b|sheet\b|sheets\b|slide|slides|file in)\b/i },
@@ -7650,7 +7725,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const driveToolNames = ["drive_list_files", "drive_search", "drive_get_content"];
       const slackToolNames = ["list_slack_channels", "read_slack_channel_messages", "send_slack_message"];
       const analyticsToolNames = ["get_workstream_analytics", "get_recruitment_analytics", "get_team_activity_analytics", "get_operational_summary", "get_google_analytics_dashboard"];
-      const workstreamMgmtToolNames = ["list_team_members", "list_workstream_cards", "create_workstream_card", "add_tasks_to_card", "update_workstream_card", "check_team_availability", "list_my_project_tasks"];
+      const workstreamMgmtToolNames = ["list_team_members", "list_workstream_cards", "get_workstream_card", "create_workstream_card", "add_tasks_to_card", "update_workstream_card", "check_team_availability", "list_my_project_tasks"];
       const plannerToolNames = ["list_planner_events", "update_planner_event_meta"];
       const registrationsToolNames = ["list_school_registrations", "get_school_registrations_summary"];
       const execSummaryToolNames = ["generate_exec_summary_document"];

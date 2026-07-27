@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import {
   Plus, Search, Filter, LayoutGrid, List, Loader2,
@@ -49,6 +50,29 @@ const Workstreams = () => {
       setSearchParams(next, { replace: true });
     }
   }, [searchParams, setSearchParams]);
+
+  // Deep link: /workstreams?card=WS-0042 or ?card=<uuid> opens the card modal.
+  // Task IDs are the single source of truth — no separate IDs are minted here.
+  useEffect(() => {
+    const raw = searchParams.get("card");
+    if (!raw) return;
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let cancelled = false;
+    (async () => {
+      if (uuidRe.test(raw)) {
+        if (!cancelled) setSelectedCardId(raw);
+      } else {
+        const code = raw.toUpperCase();
+        const { data } = await supabase
+          .from("workstream_cards")
+          .select("id")
+          .eq("task_code", code)
+          .maybeSingle();
+        if (!cancelled && data?.id) setSelectedCardId(data.id);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [searchParams]);
 
   const { data: users } = useUserProfiles();
 
@@ -272,7 +296,14 @@ const Workstreams = () => {
         />
         <CardDetailModal
           cardId={selectedCardId}
-          onClose={() => setSelectedCardId(null)}
+          onClose={() => {
+            setSelectedCardId(null);
+            if (searchParams.get("card")) {
+              const next = new URLSearchParams(searchParams);
+              next.delete("card");
+              setSearchParams(next, { replace: true });
+            }
+          }}
           assigneeFilter={filterAssignee !== "all" ? filterAssignee : undefined}
         />
       </main>

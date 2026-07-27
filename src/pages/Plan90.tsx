@@ -35,7 +35,8 @@ function useOwners() {
 
 export default function Plan90() {
   const { user } = useAuth();
-  const { isAdmin, isLoading: roleLoading } = useIsAdmin();
+  // "isAdmin" here means "can edit the tracker": admins + explicit plan90 editors.
+  const { canEdit: isAdmin, isLoading: roleLoading } = usePlan90CanEdit();
   const { workstreams, deliverables, loading, updateDeliverable, createDeliverable, deleteDeliverable, createWorkstream, updateWorkstream, deleteWorkstream } = usePlan90();
   const updatesApi = usePlan90Updates();
   const { data: owners = [] } = useOwners();

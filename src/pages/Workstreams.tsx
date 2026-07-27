@@ -296,7 +296,14 @@ const Workstreams = () => {
         />
         <CardDetailModal
           cardId={selectedCardId}
-          onClose={() => setSelectedCardId(null)}
+          onClose={() => {
+            setSelectedCardId(null);
+            if (searchParams.get("card")) {
+              const next = new URLSearchParams(searchParams);
+              next.delete("card");
+              setSearchParams(next, { replace: true });
+            }
+          }}
           assigneeFilter={filterAssignee !== "all" ? filterAssignee : undefined}
         />
       </main>

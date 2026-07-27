@@ -7438,6 +7438,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       ...EXEC_SUMMARY_TOOLS,
       ...RELEASE_TOOLS,
       ...LOVABLE_CONTRIBUTORS_TOOLS,
+      ...PRODUCT_FEEDBACK_TOOLS, // Bug reports & feature requests are always callable.
       ...RESCHEDULE_TOOLS,
       ...PROJECT_TOOLS,
     ];

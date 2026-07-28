@@ -14,7 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { ChevronDown, Plus, Pencil, Trash2, Loader2, Presentation } from "lucide-react";
+import { Link } from "react-router-dom";
+
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";

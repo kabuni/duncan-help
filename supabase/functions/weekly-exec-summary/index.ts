@@ -176,6 +176,82 @@ async function fetchWorkstreamCards(admin: any, w: ReportWeek): Promise<{ cards:
   return { cards: cardList, tasks: tasks ?? [] };
 }
 
+// ─── 90 Day Tracker (Plan 90) weekly change digest ─────────────────────────
+async function fetchPlan90Changes(admin: any, w: ReportWeek): Promise<string> {
+  const from = w.monday.toISOString();
+  const to = w.saturdayExcl.toISOString();
+
+  const [{ data: wsRows }, { data: delRows }] = await Promise.all([
+    admin.from("plan90_workstreams").select("id,name,archived").order("display_order"),
+    admin.from("plan90_deliverables").select("id,workstream_id,title,status,priority,owner_display_name,due_date,updated_at,archived"),
+  ]);
+
+  const workstreams = ((wsRows ?? []) as any[]).filter((x) => !x.archived);
+  if (!workstreams.length) return "No 90 Day Tracker workstreams configured.";
+
+  const deliverables = ((delRows ?? []) as any[]).filter((d) => !d.archived);
+  const delById = new Map(deliverables.map((d) => [d.id, d]));
+
+  const { data: updRows } = await admin
+    .from("plan90_deliverable_updates")
+    .select("id,deliverable_id,author_name,message,ryg,created_at")
+    .gte("created_at", from)
+    .lt("created_at", to)
+    .order("created_at", { ascending: true });
+  const updates = (updRows ?? []) as any[];
+
+  const updatesByWs = new Map<string, any[]>();
+  for (const u of updates) {
+    const d = delById.get(u.deliverable_id);
+    if (!d) continue;
+    const arr = updatesByWs.get(d.workstream_id) ?? [];
+    arr.push({ ...u, deliverable_title: d.title });
+    updatesByWs.set(d.workstream_id, arr);
+  }
+
+  const editedByWs = new Map<string, any[]>();
+  for (const d of deliverables) {
+    if (!d.updated_at) continue;
+    if (d.updated_at >= from && d.updated_at < to) {
+      const arr = editedByWs.get(d.workstream_id) ?? [];
+      arr.push(d);
+      editedByWs.set(d.workstream_id, arr);
+    }
+  }
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+  const sections = workstreams.map((ws) => {
+    const ups = updatesByWs.get(ws.id) ?? [];
+    const edits = editedByWs.get(ws.id) ?? [];
+    if (!ups.length && !edits.length) {
+      return `### ${ws.name}\nNo update this week.`;
+    }
+    const lines: string[] = [`### ${ws.name}`];
+    if (ups.length) {
+      lines.push(`Progress updates posted (${ups.length}):`);
+      for (const u of ups) {
+        lines.push(
+          `- [${fmtDate(u.created_at)}] ${u.deliverable_title} — RYG: ${u.ryg} — ${u.author_name}: ${String(u.message).replace(/\s+/g, " ").slice(0, 400)}`,
+        );
+      }
+    }
+    if (edits.length) {
+      lines.push(`Deliverables changed (${edits.length}):`);
+      for (const d of edits) {
+        lines.push(
+          `- ${d.title} — status: ${d.status} · priority: ${d.priority} · owner: ${d.owner_display_name || "Unassigned"}${d.due_date ? ` · due ${fmtDate(d.due_date)}` : ""}`,
+        );
+      }
+    }
+    return lines.join("\n");
+  });
+
+  return sections.join("\n\n");
+}
+
+
 // ─── Build source-data block for the model ─────────────────────────────────
 function formatMeetingsBlock(meetings: MeetingRow[]): string {
   if (!meetings.length) return "No Gemini/Plaud meetings recorded in this window.";

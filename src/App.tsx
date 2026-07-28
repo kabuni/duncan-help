@@ -28,6 +28,8 @@ import ProjectWorkspace from "./pages/ProjectWorkspace";
 import Workstreams from "./pages/Workstreams";
 import WorkstreamsPresentation from "./pages/WorkstreamsPresentation";
 import Plan90 from "./pages/Plan90";
+import Plan90Presentation from "./pages/Plan90Presentation";
+
 import MyTasks from "./pages/MyTasks";
 import Gmail from "./pages/Gmail";
 import ReleaseManager from "./pages/ReleaseManager";

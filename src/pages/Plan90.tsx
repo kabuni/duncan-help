@@ -14,7 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { ChevronDown, Plus, Pencil, Trash2, Loader2, Presentation } from "lucide-react";
+import { Link } from "react-router-dom";
+
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -81,12 +83,18 @@ export default function Plan90() {
           <h1 className="text-2xl font-semibold tracking-tight">90 Day Tracker</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Execution across workstreams for the 90-day plan.</p>
         </div>
-        {isAdmin && (
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => setWsMgrOpen(true)}><Pencil className="h-3.5 w-3.5 mr-1.5" />Workstreams</Button>
-            <Button size="sm" onClick={() => setAddOpen(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Add deliverable</Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <Button asChild size="sm" variant="outline">
+            <Link to="/plan-90/present"><Presentation className="h-4 w-4 mr-1.5" />Present</Link>
+          </Button>
+          {isAdmin && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => setWsMgrOpen(true)}><Pencil className="h-3.5 w-3.5 mr-1.5" />Workstreams</Button>
+              <Button size="sm" onClick={() => setAddOpen(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Add deliverable</Button>
+            </>
+          )}
+        </div>
+
       </header>
 
       <Plan90Overview

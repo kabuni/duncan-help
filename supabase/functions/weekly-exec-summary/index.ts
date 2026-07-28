@@ -176,6 +176,82 @@ async function fetchWorkstreamCards(admin: any, w: ReportWeek): Promise<{ cards:
   return { cards: cardList, tasks: tasks ?? [] };
 }
 
+// ─── 90 Day Tracker (Plan 90) weekly change digest ─────────────────────────
+async function fetchPlan90Changes(admin: any, w: ReportWeek): Promise<string> {
+  const from = w.monday.toISOString();
+  const to = w.saturdayExcl.toISOString();
+
+  const [{ data: wsRows }, { data: delRows }] = await Promise.all([
+    admin.from("plan90_workstreams").select("id,name,archived").order("display_order"),
+    admin.from("plan90_deliverables").select("id,workstream_id,title,status,priority,owner_display_name,due_date,updated_at,archived"),
+  ]);
+
+  const workstreams = ((wsRows ?? []) as any[]).filter((x) => !x.archived);
+  if (!workstreams.length) return "No 90 Day Tracker workstreams configured.";
+
+  const deliverables = ((delRows ?? []) as any[]).filter((d) => !d.archived);
+  const delById = new Map(deliverables.map((d) => [d.id, d]));
+
+  const { data: updRows } = await admin
+    .from("plan90_deliverable_updates")
+    .select("id,deliverable_id,author_name,message,ryg,created_at")
+    .gte("created_at", from)
+    .lt("created_at", to)
+    .order("created_at", { ascending: true });
+  const updates = (updRows ?? []) as any[];
+
+  const updatesByWs = new Map<string, any[]>();
+  for (const u of updates) {
+    const d = delById.get(u.deliverable_id);
+    if (!d) continue;
+    const arr = updatesByWs.get(d.workstream_id) ?? [];
+    arr.push({ ...u, deliverable_title: d.title });
+    updatesByWs.set(d.workstream_id, arr);
+  }
+
+  const editedByWs = new Map<string, any[]>();
+  for (const d of deliverables) {
+    if (!d.updated_at) continue;
+    if (d.updated_at >= from && d.updated_at < to) {
+      const arr = editedByWs.get(d.workstream_id) ?? [];
+      arr.push(d);
+      editedByWs.set(d.workstream_id, arr);
+    }
+  }
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+  const sections = workstreams.map((ws) => {
+    const ups = updatesByWs.get(ws.id) ?? [];
+    const edits = editedByWs.get(ws.id) ?? [];
+    if (!ups.length && !edits.length) {
+      return `### ${ws.name}\nNo update this week.`;
+    }
+    const lines: string[] = [`### ${ws.name}`];
+    if (ups.length) {
+      lines.push(`Progress updates posted (${ups.length}):`);
+      for (const u of ups) {
+        lines.push(
+          `- [${fmtDate(u.created_at)}] ${u.deliverable_title} — RYG: ${u.ryg} — ${u.author_name}: ${String(u.message).replace(/\s+/g, " ").slice(0, 400)}`,
+        );
+      }
+    }
+    if (edits.length) {
+      lines.push(`Deliverables changed (${edits.length}):`);
+      for (const d of edits) {
+        lines.push(
+          `- ${d.title} — status: ${d.status} · priority: ${d.priority} · owner: ${d.owner_display_name || "Unassigned"}${d.due_date ? ` · due ${fmtDate(d.due_date)}` : ""}`,
+        );
+      }
+    }
+    return lines.join("\n");
+  });
+
+  return sections.join("\n\n");
+}
+
+
 // ─── Build source-data block for the model ─────────────────────────────────
 function formatMeetingsBlock(meetings: MeetingRow[]): string {
   if (!meetings.length) return "No Gemini/Plaud meetings recorded in this window.";
@@ -559,6 +635,7 @@ async function buildSummaryMarkdown(
   workstreamsBlock: string,
   inboxBlock: string,
   weeklyReportEmailsBlock: string,
+  plan90Block: string,
   meetingsCount: number,
   cardsCount: number,
   reportWeek: ReportWeek,
@@ -575,14 +652,16 @@ async function buildSummaryMarkdown(
     `RULES:\n` +
     `- The H1 MUST read exactly: "Weekly Executive Summary — ${reportWeek.label} ${reportWeek.year}".\n` +
     `- Do NOT invent or shift years. The only year that may appear is ${reportWeek.year}.\n` +
-    `- Use ONLY the meetings, workstream activity, inbox signals, and duncan@kabuni.com weekly-report emails provided below. Do not invent items.\n`;
+    `- Use ONLY the meetings, workstream activity, 90 Day Tracker changes, inbox signals, and duncan@kabuni.com weekly-report emails provided below. Do not invent items.\n`;
 
   const system =
     "You are Duncan, Kabuni's executive intelligence engine. " +
-    "Produce a board-ready weekly executive summary in clean Markdown, grounded strictly in: (1) Gemini/Plaud meeting notes, (2) workstream-card activity, (3) inbox signals extracted from opted-in team mailboxes, and (4) any 'weekly report' emails sent to duncan@kabuni.com (including their attached documents). " +
+    "Produce a board-ready weekly executive summary in clean Markdown, grounded strictly in: (1) Gemini/Plaud meeting notes, (2) workstream-card activity, (3) 90 Day Tracker changes, (4) inbox signals extracted from opted-in team mailboxes, and (5) any 'weekly report' emails sent to duncan@kabuni.com (including their attached documents). " +
     "Use H1 for the report title, H2 for sections, bullets where useful, and Markdown tables when comparing items. " +
     "Sections (in order): Executive Snapshot, Meetings This Week (key discussions & decisions), " +
-    "Workstream Progress (RYG table: card · status · update), Team Signals from Inboxes (commitments, risks, escalations, board mentions, customer/vendor signals — with the mailbox that surfaced them), Weekly Reports Received (summarise each report email + its attachments), Wins of the Week, Risks & Blockers (with mitigations), Action Items & Owners, Key Decisions Needed. " +
+    "Workstream Progress (RYG table: card · status · update), 90 Day Tracker Updates, Team Signals from Inboxes (commitments, risks, escalations, board mentions, customer/vendor signals — with the mailbox that surfaced them), Weekly Reports Received (summarise each report email + its attachments), Wins of the Week, Risks & Blockers (with mitigations), Action Items & Owners, Key Decisions Needed. " +
+    "90 DAY TRACKER SECTION RULES: list EVERY workstream from the 90 Day Tracker data as its own sub-heading, in the order given. Under each, summarise exactly what changed this week (progress updates, status/owner/due-date changes). If the data says 'No update this week.' for a workstream, output exactly 'No update this week.' for it — never omit the workstream and never infer change. " +
+    "STRICT EXCLUSION: do NOT include financial decisions, financial facts, figures, budgets, spend, costs, pricing, revenue, funding or any monetary amounts anywhere in the report. Omit such items entirely rather than summarising them. " +
     "Be concise, factual, decision-oriented. Never invent figures or events. " +
     "If a section has no data, state 'No activity recorded this week.' instead of fabricating." +
     dateGrounding;
@@ -593,8 +672,10 @@ async function buildSummaryMarkdown(
     `Meetings ingested: ${meetingsCount} · Workstream cards with activity: ${cardsCount}\n\n` +
     `=== MEETINGS (Gemini / Plaud — all users incl. duncan@kabuni.com) ===\n${meetingsBlock}\n\n` +
     `=== WORKSTREAM CARD ACTIVITY ===\n${workstreamsBlock}\n\n` +
+    `=== 90 DAY TRACKER — CHANGES THIS WEEK (per workstream) ===\n${plan90Block}\n\n` +
     `=== TEAM INBOX SIGNALS (last 7 days, opted-in mailboxes) ===\n${inboxBlock}\n\n` +
     `=== WEEKLY-REPORT EMAILS TO duncan@kabuni.com ===\n${weeklyReportEmailsBlock}\n`;
+
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -886,11 +967,12 @@ Deno.serve(async (req) => {
     const weekRange = reportWeek.label;
 
     // Pull source data — meetings + workstreams + inbox signals + duncan weekly-report emails.
-    const [meetings, ws, inboxAgg, weeklyReportEmailsBlock] = await Promise.all([
+    const [meetings, ws, inboxAgg, weeklyReportEmailsBlock, plan90Block] = await Promise.all([
       fetchMeetings(admin, reportWeek),
       fetchWorkstreamCards(admin, reportWeek),
       scanAllOptedInInboxes(admin, reportWeek),
       fetchDuncanWeeklyReports(admin, reportWeek),
+      fetchPlan90Changes(admin, reportWeek),
     ]);
 
     const meetingsBlock = formatMeetingsBlock(meetings);
@@ -918,7 +1000,9 @@ Deno.serve(async (req) => {
       workstreamsBlock,
       inboxBlock,
       weeklyReportEmailsBlock,
+      plan90Block,
       meetings.length,
+
       ws.cards.length,
       reportWeek,
     );

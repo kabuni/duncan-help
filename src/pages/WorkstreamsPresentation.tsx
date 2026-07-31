@@ -1,4 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { logSavings } from "@/lib/savings";
+
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -27,6 +29,13 @@ const normalize = (s: string) => (s === "amber" ? "yellow" : s);
 
 export default function WorkstreamsPresentation() {
   const { data: cards, isLoading } = useWorkstreamCards();
+
+  // Hours Saved: one event per presentation view (replaces manual status deck prep).
+  useEffect(() => {
+    logSavings("ui.workstream.present_view");
+  }, []);
+
+
 
   const stats = useMemo(() => {
     const c = cards || [];

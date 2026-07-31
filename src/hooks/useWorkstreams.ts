@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { logSavings } from "@/lib/savings";
+
 
 export type CardStatus = "not_started" | "red" | "amber" | "green" | "done";
 export type CardPriority = "low" | "medium" | "high" | "critical";
@@ -507,8 +509,10 @@ export function useCreateCard() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workstream-cards"] });
       qc.invalidateQueries({ queryKey: ["workstream-project-tags"] });
+      logSavings("ui.workstream.create_card");
       toast.success("Card created");
     },
+
     onError: (e: Error) => toast.error(e.message),
   });
 }
@@ -596,6 +600,7 @@ export function useUpdateCard() {
       toast.error(`Couldn't save change: ${e.message}`);
     },
     onSuccess: (result, vars) => {
+      logSavings("ui.workstream.update_card", { card_id: vars.id });
       if (vars.project_tag !== undefined) {
         toast.success(
           vars.project_tag === null || vars.project_tag === ""
@@ -604,6 +609,8 @@ export function useUpdateCard() {
         );
       }
     },
+
+
     onSettled: (_data, _err, vars) => {
       qc.invalidateQueries({ queryKey: ["workstream-cards"] });
       qc.invalidateQueries({ queryKey: ["workstream-card", vars.id] });
@@ -626,9 +633,11 @@ export function useUpdateCardAssignees() {
       }
     },
     onSuccess: () => {
+      logSavings("ui.workstream.assign_users");
       qc.invalidateQueries({ queryKey: ["workstream-cards"] });
       qc.invalidateQueries({ queryKey: ["workstream-card"] });
     },
+
     onError: (e: Error) => toast.error(e.message),
   });
 }
@@ -677,9 +686,11 @@ export function useCreateTask() {
       return data;
     },
     onSuccess: (_, vars) => {
+      logSavings("ui.workstream.add_subtask", { card_id: vars.card_id });
       qc.invalidateQueries({ queryKey: ["workstream-card", vars.card_id] });
       qc.invalidateQueries({ queryKey: ["workstream-cards"] });
     },
+
     onError: (e: Error) => toast.error(e.message),
   });
 }
@@ -764,8 +775,10 @@ export function useAddComment() {
       });
     },
     onSuccess: (_, vars) => {
+      logSavings("ui.workstream.add_comment", { card_id: vars.card_id });
       qc.invalidateQueries({ queryKey: ["workstream-card", vars.card_id] });
     },
+
     onError: (e: Error) => toast.error(e.message),
   });
 }

@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
+import { logSavings } from "@/lib/savings";
+
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import {
@@ -125,6 +127,18 @@ const Workstreams = () => {
     if (!q) return list;
     return list.filter(c => (c.task_code || "").toLowerCase().includes(q));
   }, [cards, taskIdSearch]);
+
+  // Hours Saved: a settled Task ID lookup that actually resolves a card replaces
+  // manually hunting through a spreadsheet. Debounced so typing logs once.
+  useEffect(() => {
+    const q = taskIdSearch.trim();
+    if (q.length < 2) return;
+    const t = setTimeout(() => {
+      if (displayCards.length > 0) logSavings("ui.workstream.find_task", { query: q });
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [taskIdSearch, displayCards.length]);
+
 
   return (
     <>

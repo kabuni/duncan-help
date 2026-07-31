@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { logSavings } from "@/lib/savings";
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -77,8 +79,13 @@ export function DeliverableUpdatesDrawer({
     if (!open) {
       setMessage("");
       setRyg("amber");
+    } else if (updates.length > 0) {
+      // Hours Saved: reading the latest status here replaces chasing the owner.
+      logSavings("ui.plan90.find_latest_update", { deliverable_id: deliverable.id });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
 
   async function submit() {
     if (!message.trim()) return;

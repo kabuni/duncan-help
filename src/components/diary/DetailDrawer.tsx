@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { logSavings } from "@/lib/savings";
+
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -246,7 +248,12 @@ export function DetailDrawer({ open, onOpenChange, event, cards, isAdmin, onChan
       toast.error(error.message);
       return;
     }
+    // Only a genuine date/time move counts as a reschedule.
+    if (startISO !== (event as any).start_at || endISO !== (event as any).end_at) {
+      logSavings("ui.planner.reschedule_event", { event_id: event.id });
+    }
     toast.success("Event updated");
+
     setEditing(false);
     onChanged();
   }

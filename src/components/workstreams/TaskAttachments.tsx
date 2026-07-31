@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Paperclip, Trash2, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { logSavings } from "@/lib/savings";
+
 
 const sanitize = (fileName: string) => {
   const ext = fileName.includes(".") ? fileName.split(".").pop()?.toLowerCase() ?? "" : "";
@@ -66,6 +68,8 @@ export function TaskAttachments({ taskId, compact = false }: { taskId: string; c
         size_bytes: file.size,
       });
       if (insErr) toast.error(`Saved file but record failed: ${file.name}`);
+      else logSavings("ui.workstream.upload_attachment", { task_id: taskId });
+
     }
     setUploading(false);
     if (inputRef.current) inputRef.current.value = "";

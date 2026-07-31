@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logSavings } from "@/lib/savings";
+
 
 export type Plan90Ryg = "green" | "amber" | "red";
 
@@ -99,7 +101,9 @@ export function usePlan90Updates() {
         toast.error(error.message);
         return false;
       }
+      logSavings("ui.plan90.add_update", { deliverable_id: deliverableId });
       return true;
+
     },
     [],
   );

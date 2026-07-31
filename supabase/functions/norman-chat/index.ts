@@ -7987,6 +7987,35 @@ Format as a natural, readable summary with clear sections. If a section has no d
       return "openai";
     }
 
+    // ---- Hours Saved engine: log one savings event per SUCCESSFUL tool execution.
+    // Minutes come from the admin-editable public.effort_savings_config table.
+    let effortConfigCache: Record<string, number> | null = null;
+    async function logToolSaving(toolName: string, uid: string | null | undefined) {
+      try {
+        if (!uid || !toolName) return;
+        if (!effortConfigCache) {
+          const { data } = await supabaseAdmin
+            .from("effort_savings_config")
+            .select("action_key, minutes")
+            .eq("source", "chat_tool");
+          effortConfigCache = {};
+          for (const row of (data ?? []) as any[]) {
+            effortConfigCache[row.action_key] = Number(row.minutes) || 0;
+          }
+        }
+        const minutes = effortConfigCache[toolName];
+        if (minutes === undefined) return;
+        await supabaseAdmin.from("savings_events").insert({
+          user_id: uid,
+          action_key: toolName,
+          source: "chat_tool",
+          minutes_saved: minutes,
+        });
+      } catch (e) {
+        console.error("logToolSaving error:", e);
+      }
+    }
+
     async function executeToolCalls(
       toolCalls: any[],
       provider: "anthropic" | "openai",
@@ -7994,6 +8023,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
     ): Promise<any[]> {
       const emit = opts.emit ?? (() => {});
       const bypassWriteConfirm = !!opts.bypassWriteConfirm;
+
 
       const calendarToolNames = ["list_calendar_events", "create_calendar_event", "update_calendar_event", "delete_calendar_event"];
       const documentToolNames = ["search_knowledge_base", "search_documents", "read_document", "list_documents"];
@@ -8275,6 +8305,11 @@ Format as a natural, readable summary with clear sections. If a section has no d
           } else {
             recordToolSuccess(toolName);
           }
+          // Hours Saved: count only successful executions (never partial/failed/cancelled).
+          if (toolOutcome.status === "success") {
+            await logToolSaving(toolName, userId);
+          }
+
           emit({ duncan_event: "tool_end", id: tc?.id, name: toolName, status: toolOutcome.status });
 
           console.log("TOOL RESULT RAW:", result);

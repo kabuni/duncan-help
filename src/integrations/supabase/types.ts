@@ -1055,6 +1055,33 @@ export type Database = {
         }
         Relationships: []
       }
+      effort_savings_config: {
+        Row: {
+          action_key: string
+          created_at: string
+          label: string | null
+          minutes: number
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          action_key: string
+          created_at?: string
+          label?: string | null
+          minutes: number
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          action_key?: string
+          created_at?: string
+          label?: string | null
+          minutes?: number
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       event_attendees: {
         Row: {
           city: string | null
@@ -4189,6 +4216,36 @@ export type Database = {
         }
         Relationships: []
       }
+      savings_events: {
+        Row: {
+          action_key: string
+          id: string
+          metadata: Json
+          minutes_saved: number
+          occurred_at: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          action_key: string
+          id?: string
+          metadata?: Json
+          minutes_saved?: number
+          occurred_at?: string
+          source?: string
+          user_id: string
+        }
+        Update: {
+          action_key?: string
+          id?: string
+          metadata?: Json
+          minutes_saved?: number
+          occurred_at?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       school_registrations: {
         Row: {
           contact_name: string
@@ -5715,6 +5772,10 @@ export type Database = {
       is_project_member: {
         Args: { _project_id: string; _user_id: string }
         Returns: boolean
+      }
+      log_savings_event: {
+        Args: { _action_key: string; _metadata?: Json }
+        Returns: undefined
       }
       match_documents: {
         Args: {

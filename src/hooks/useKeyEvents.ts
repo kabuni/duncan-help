@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { logSavings } from "@/lib/savings";
+
 
 export interface KeyEvent {
   id: string;
@@ -154,11 +156,13 @@ export function useKeyEvents() {
     try {
       const { error } = await supabase.functions.invoke("duncan-calendar-sync");
       if (error) throw error;
+      logSavings("ui.planner.calendar_sync");
       await refresh();
     } finally {
       setSyncing(false);
     }
   }, [refresh]);
+
 
   return { events, cards, status, lastSync, loading, syncing, refresh, connect, sync };
 }

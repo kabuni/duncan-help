@@ -1,4 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { logSavings } from "@/lib/savings";
+
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Target, ArrowLeft, Printer, CheckCircle2, AlertTriangle, Clock, CalendarDays } from "lucide-react";
@@ -20,6 +22,13 @@ const COLORS = {
 export default function Plan90Presentation() {
   const { workstreams, deliverables, loading } = usePlan90();
   const { latestByDeliverable, items: allUpdates } = usePlan90Updates();
+
+  // Hours Saved: one event per presentation view (replaces manually building a deck).
+  useEffect(() => {
+    logSavings("ui.plan90.presentation");
+  }, []);
+
+
 
   const stats = useMemo(() => {
     const items = deliverables.filter((d) => !d.archived);

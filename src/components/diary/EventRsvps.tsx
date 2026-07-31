@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { logSavings } from "@/lib/savings";
+
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -314,7 +316,9 @@ function InviteAttendeeButton({ eventId }: { eventId: string }) {
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
+      logSavings("ui.planner.add_rsvp", { event_id: eventId });
       toast.success(`RSVP request sent to ${trimmed}`);
+
       reset();
       setOpen(false);
     } catch (e: any) {

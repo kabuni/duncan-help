@@ -124,8 +124,9 @@ function useWeeklyUsage() {
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const weekStart = startOfWeek().toISOString().slice(0, 10);
-      const [usageRes, wsDoneRes, projDoneRes, meetingsRes] = await Promise.all([
+      const [usageRes, savingsRes, wsDoneRes, projDoneRes, meetingsRes] = await Promise.all([
         supabase.from("token_usage").select("total_tokens,request_count,category_counts,usage_date").eq("user_id", user!.id).gte("usage_date", weekStart),
+        (supabase as any).from("savings_events").select("minutes_saved").eq("user_id", user!.id).gte("occurred_at", startOfWeek().toISOString()),
         supabase.from("workstream_tasks").select("id", { count: "exact", head: true }).eq("assignee_id", user!.id).eq("completed", true).gte("updated_at", startOfWeek().toISOString()),
         supabase.from("project_chat_plan_items").select("id", { count: "exact", head: true }).eq("assignee_profile_id", user!.id).eq("status", "done").gte("updated_at", startOfWeek().toISOString()),
         supabase.from("meetings").select("id", { count: "exact", head: true }).gte("created_at", startOfWeek().toISOString()),
@@ -133,8 +134,14 @@ function useWeeklyUsage() {
       const rows = (usageRes.data ?? []) as any[];
       const tokens = rows.reduce((s, r) => s + Number(r.total_tokens ?? 0), 0);
       const requests = rows.reduce((s, r) => s + Number(r.request_count ?? 0), 0);
-      // rough hours-saved estimate matching leaderboard weighting (avg 8m per request)
-      const hoursSaved = (requests * 8) / 60;
+      // Hours saved = sum of real logged savings events (minutes come from the
+      // admin-editable effort_savings_config lookup table), not a flat estimate.
+      const minutesSaved = ((savingsRes as any)?.data ?? []).reduce(
+        (s: number, r: any) => s + Number(r.minutes_saved ?? 0),
+        0,
+      );
+      const hoursSaved = minutesSaved / 60;
+
       return {
         tokens,
         requests,

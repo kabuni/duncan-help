@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logSavings } from "@/lib/savings";
+
 
 export interface Plan90Workstream {
   id: string;
@@ -67,8 +69,10 @@ export function usePlan90() {
   const updateDeliverable = useCallback(async (id: string, patch: Partial<Plan90Deliverable>) => {
     const { error } = await supabase.from("plan90_deliverables" as any).update(patch).eq("id", id);
     if (error) { toast.error(error.message); return false; }
+    logSavings("ui.plan90.update_deliverable", { deliverable_id: id });
     return true;
   }, []);
+
 
   const createDeliverable = useCallback(async (row: Partial<Plan90Deliverable>) => {
     const { error } = await supabase.from("plan90_deliverables" as any).insert(row as any);

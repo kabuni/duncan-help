@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { logSavings } from "@/lib/savings";
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -293,6 +295,9 @@ export function AddEventDialog({ open, onOpenChange, defaultDate, onCreated }: P
       toast.error(error?.message || "Could not save event");
       return;
     }
+
+    logSavings("ui.planner.create_event", { event_id: (inserted as any).id });
+
 
     const { data: userData } = await supabase.auth.getUser();
     const uid = userData.user?.id;

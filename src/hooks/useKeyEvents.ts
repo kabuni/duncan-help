@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { logSavings } from "@/lib/savings";
+
 
 export interface KeyEvent {
   id: string;

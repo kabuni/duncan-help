@@ -154,11 +154,13 @@ export function useKeyEvents() {
     try {
       const { error } = await supabase.functions.invoke("duncan-calendar-sync");
       if (error) throw error;
+      logSavings("ui.planner.calendar_sync");
       await refresh();
     } finally {
       setSyncing(false);
     }
   }, [refresh]);
+
 
   return { events, cards, status, lastSync, loading, syncing, refresh, connect, sync };
 }

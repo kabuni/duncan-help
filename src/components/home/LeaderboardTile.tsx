@@ -135,6 +135,74 @@ export const LeaderboardSection = () => {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+      {/* GLOBAL LEADERBOARD */}
+      <div className="md:col-span-2">
+        <Card icon={Users} label={`Leaderboard${rows.length ? ` · ${rows.length}` : ""}`} delay={0.06}>
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          ) : rows.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No usage recorded yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <div className="mb-5">
+                <Podium rows={rows} meId={user?.id} />
+              </div>
+              <table className="w-full text-xs tabular-nums">
+                <thead>
+                  <tr className="text-[10px] uppercase tracking-widest text-muted-foreground border-b border-border">
+                    <th className="text-left py-1.5 pr-3 w-8">#</th>
+                    <th className="text-left py-1.5 pr-3">User</th>
+                    <th className="text-right py-1.5 pr-3">Tokens spent</th>
+                    <th className="text-right py-1.5">Hours saved</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {top.map((r, i) => {
+                    const hours = r.minutes_saved / 60;
+                    const mine = r.user_id === user?.id;
+                    return (
+                      <tr
+                        key={r.user_id}
+                        className={`border-b border-border/40 last:border-0 ${mine ? "bg-primary/5" : ""}`}
+                      >
+                        <td className="py-1.5 pr-3 text-muted-foreground font-mono">{i + 1}</td>
+                        <td className="py-1.5 pr-3 text-foreground font-medium">
+                          {r.display_name}
+                          {mine && (
+                            <span className="ml-2 text-[10px] text-primary font-mono uppercase tracking-widest">
+                              you
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1.5 pr-3 text-right text-foreground">{fmt(r.total_tokens)}</td>
+                        <td className="py-1.5 text-right text-foreground">{fmtHours(hours)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {rows.length > 10 && (
+                <button
+                  onClick={() => setExpanded((v) => !v)}
+                  className="mt-2 w-full inline-flex items-center justify-center gap-1 rounded-md border border-border py-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+                >
+                  {expanded ? (
+                    <>Show top 10 <ChevronUp className="h-3 w-3" /></>
+                  ) : (
+                    <>Show all {rows.length} users <ChevronDown className="h-3 w-3" /></>
+                  )}
+                </button>
+              )}
+              <div className="text-[10px] text-muted-foreground/70 mt-2">
+                Estimated effort avoided. Each completed Duncan action is valued using the
+                admin-maintained rate table, so the figure reflects manual work replaced —
+                not capacity released.
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
+
       {/* PERSONAL */}
       <Card icon={Trophy} label="Your usage" delay={0.06}>
         {isLoading ? (

@@ -494,7 +494,7 @@ export const PersonalBriefingDashboard = ({ userName }: { userName: string }) =>
       <WeeklyUsageSection />
       <div>
         <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2 px-1">
-          <Trophy className="h-3 w-3" /> Team leaderboard
+          <Trophy className="h-3 w-3" /> Leaderboard
         </div>
         <LeaderboardSection />
       </div>

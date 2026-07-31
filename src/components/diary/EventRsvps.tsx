@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { logSavings } from "@/lib/savings";
+
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

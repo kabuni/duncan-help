@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Trophy, Users, Globe2, Loader2 } from "lucide-react";
+import { Trophy, Users, Globe2, Loader2, ChevronDown, ChevronUp, Medal, Crown } from "lucide-react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";

@@ -157,8 +157,11 @@ export const LeaderboardSection = () => {
                 </tbody>
               </table>
               <div className="text-[10px] text-muted-foreground/70 mt-2">
-                Hours saved is a weighted estimate by task type — summaries ~23m, tasks ~7m, meetings ~10m, email ~8m, other ~4m.
+                Estimated effort avoided. Each completed Duncan action is valued using the
+                admin-maintained rate table, so the figure reflects manual work replaced —
+                not capacity released. Activity before Aug 2026 is a historical estimate.
               </div>
+
             </div>
           )}
         </Card>

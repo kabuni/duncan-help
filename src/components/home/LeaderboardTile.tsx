@@ -72,9 +72,54 @@ const Metric = ({ value, label }: { value: React.ReactNode; label: string }) => 
   </div>
 );
 
+const PODIUM = [
+  { order: "order-2 md:order-1", height: "h-16", ring: "ring-slate-400/40", chip: "bg-slate-400/15 text-slate-500 dark:text-slate-300", icon: Medal, place: 2 },
+  { order: "order-1 md:order-2", height: "h-24", ring: "ring-amber-400/50", chip: "bg-amber-400/15 text-amber-600 dark:text-amber-400", icon: Crown, place: 1 },
+  { order: "order-3", height: "h-12", ring: "ring-orange-500/40", chip: "bg-orange-500/15 text-orange-600 dark:text-orange-400", icon: Medal, place: 3 },
+];
+
+const Podium = ({ rows, meId }: { rows: Row[]; meId?: string }) => {
+  const byPlace = (p: number) => rows[p - 1];
+  return (
+    <div className="grid grid-cols-3 gap-2 sm:gap-3 items-end">
+      {PODIUM.map((p) => {
+        const r = byPlace(p.place);
+        if (!r) return <div key={p.place} className={p.order} />;
+        const Icon = p.icon;
+        const mine = r.user_id === meId;
+        const initials = (r.display_name || "?")
+          .split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+        return (
+          <div key={p.place} className={`${p.order} flex flex-col items-center text-center`}>
+            <div className={`relative rounded-full ring-2 ${p.ring} bg-muted overflow-hidden h-11 w-11 sm:h-12 sm:w-12 flex items-center justify-center`}>
+              {r.avatar_url ? (
+                <img src={r.avatar_url} alt={r.display_name} className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-[11px] font-semibold text-muted-foreground">{initials}</span>
+              )}
+            </div>
+            <div className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-widest ${p.chip}`}>
+              <Icon className="h-2.5 w-2.5" /> #{p.place}
+            </div>
+            <div className="mt-1 text-[11px] font-medium text-foreground truncate max-w-full">
+              {r.display_name}
+              {mine && <span className="ml-1 text-primary">·you</span>}
+            </div>
+            <div className="text-[10px] text-muted-foreground tabular-nums">
+              {fmtHours(r.minutes_saved / 60)} h · {fmt(r.total_tokens)} tk
+            </div>
+            <div className={`${p.height} w-full mt-2 rounded-t-lg border border-b-0 border-border bg-gradient-to-t from-muted/20 to-primary/10`} />
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 export const LeaderboardSection = () => {
   const { user } = useAuth();
   const { data, isLoading } = useLeaderboard();
+  const [expanded, setExpanded] = useState(false);
 
   const rows = data ?? [];
   const me = rows.find((r) => r.user_id === user?.id);
@@ -85,8 +130,8 @@ export const LeaderboardSection = () => {
   const totalRequests = rows.reduce((s, r) => s + r.request_count, 0);
   const totalHours = rows.reduce((s, r) => s + r.minutes_saved, 0) / 60;
 
+  const top = expanded ? rows : rows.slice(0, 10);
 
-  const top = [...rows].slice(0, 10);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">

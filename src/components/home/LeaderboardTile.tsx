@@ -135,9 +135,33 @@ export const LeaderboardSection = () => {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+      {/* PERSONAL */}
+      <Card icon={Trophy} label="Your usage" delay={0.06}>
+        {isLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            <Metric value={fmt(myTokens)} label="Tokens spent" />
+            <Metric value={fmtHours(myHours)} label="Hours saved" />
+          </div>
+        )}
+      </Card>
+
+      {/* COMPANY TOTAL */}
+      <Card icon={Globe2} label="Company total" delay={0.08}>
+        {isLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            <Metric value={fmt(totalTokens)} label="Tokens used (all users)" />
+            <Metric value={fmtHours(totalHours)} label="Hours saved (all users)" />
+          </div>
+        )}
+      </Card>
+
       {/* GLOBAL LEADERBOARD */}
       <div className="md:col-span-2">
-        <Card icon={Users} label={`Leaderboard${rows.length ? ` · ${rows.length}` : ""}`} delay={0.06}>
+        <Card icon={Users} label={`Team leaderboard${rows.length ? ` · ${rows.length}` : ""}`} delay={0.1}>
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           ) : rows.length === 0 ? (
@@ -199,34 +223,10 @@ export const LeaderboardSection = () => {
                 not capacity released.
               </div>
             </div>
+
           )}
         </Card>
       </div>
-
-      {/* PERSONAL */}
-      <Card icon={Trophy} label="Your usage" delay={0.06}>
-        {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-        ) : (
-          <div className="grid grid-cols-2 gap-4">
-            <Metric value={fmt(myTokens)} label="Tokens spent" />
-            <Metric value={fmtHours(myHours)} label="Hours saved" />
-          </div>
-        )}
-      </Card>
-
-      {/* COMPANY TOTAL */}
-      <Card icon={Globe2} label="Company total" delay={0.08}>
-        {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-        ) : (
-          <div className="grid grid-cols-2 gap-4">
-            <Metric value={fmt(totalTokens)} label="Tokens used (all users)" />
-            <Metric value={fmtHours(totalHours)} label="Hours saved (all users)" />
-          </div>
-        )}
-      </Card>
-
     </div>
   );
 };

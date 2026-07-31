@@ -159,8 +159,9 @@ export const LeaderboardSection = () => {
               <div className="text-[10px] text-muted-foreground/70 mt-2">
                 Estimated effort avoided. Each completed Duncan action is valued using the
                 admin-maintained rate table, so the figure reflects manual work replaced —
-                not capacity released. Activity before Aug 2026 is a historical estimate.
+                not capacity released.
               </div>
+
 
             </div>
           )}

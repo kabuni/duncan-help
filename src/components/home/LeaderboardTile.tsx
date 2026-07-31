@@ -168,6 +168,9 @@ export const LeaderboardSection = () => {
             <p className="text-xs text-muted-foreground">No usage recorded yet.</p>
           ) : (
             <div className="overflow-x-auto">
+              <div className="mb-5">
+                <Podium rows={rows} meId={user?.id} />
+              </div>
               <table className="w-full text-xs tabular-nums">
                 <thead>
                   <tr className="text-[10px] uppercase tracking-widest text-muted-foreground border-b border-border">
@@ -202,14 +205,25 @@ export const LeaderboardSection = () => {
                   })}
                 </tbody>
               </table>
+              {rows.length > 10 && (
+                <button
+                  onClick={() => setExpanded((v) => !v)}
+                  className="mt-2 w-full inline-flex items-center justify-center gap-1 rounded-md border border-border py-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+                >
+                  {expanded ? (
+                    <>Show top 10 <ChevronUp className="h-3 w-3" /></>
+                  ) : (
+                    <>Show all {rows.length} users <ChevronDown className="h-3 w-3" /></>
+                  )}
+                </button>
+              )}
               <div className="text-[10px] text-muted-foreground/70 mt-2">
                 Estimated effort avoided. Each completed Duncan action is valued using the
                 admin-maintained rate table, so the figure reflects manual work replaced —
                 not capacity released.
               </div>
-
-
             </div>
+
           )}
         </Card>
       </div>

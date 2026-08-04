@@ -35,6 +35,7 @@ import Gmail from "./pages/Gmail";
 import ReleaseManager from "./pages/ReleaseManager";
 import WhatsNew from "./pages/WhatsNew";
 import CEOBriefing from "./pages/CEOBriefing";
+import CompanyHealth from "./pages/CompanyHealth";
 import KeyEventsDiary from "./pages/KeyEventsDiary";
 import Approvals from "./pages/Approvals";
 import PurchaseOrders from "./pages/PurchaseOrders";
@@ -115,6 +116,8 @@ const AppContent = () => {
             <Route path="/releases" element={<ReleaseManager />} />
             <Route path="/whats-new" element={<WhatsNew />} />
             <Route path="/team-briefing" element={<CEOBriefing />} />
+            <Route path="/company-health" element={<CompanyHealth />} />
+
             <Route path="/diary" element={<KeyEventsDiary />} />
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/purchase-orders" element={<PurchaseOrders />} />

@@ -48,6 +48,7 @@ interface DashboardData {
     stages: { label: string; count: number }[];
   };
   product: Stat[];
+  marketing: Stat[];
   efficiency: Stat[];
   finance: Stat[];
   staff: StaffRow[];
@@ -89,6 +90,16 @@ const DATA: DashboardData = {
     { label: "Model accuracy", value: "92.6%", trend: "up", rag: "on_track" },
     // Velocity: story points completed per sprint (rolling 3-sprint average)
     { label: "Velocity (pts / sprint)", value: "46", trend: "up", rag: "on_track" },
+  ],
+
+  // SOURCE: GA4 + CRM attribution + campaign spend
+  marketing: [
+    { label: "Website sessions (30d)", value: "84.6k", trend: "up", rag: "on_track" },
+    { label: "MQLs generated", value: "312", trend: "down", rag: "attention" },
+    { label: "Pipeline contribution", value: "£1.24M (38%)", trend: "up", rag: "on_track" },
+    { label: "Cost per lead", value: "£38.90", trend: "up", rag: "attention" },
+    { label: "Campaign ROI", value: "3.1x", trend: "flat", rag: "attention" },
+    { label: "Social reach / engagement", value: "412k / 4.2%", trend: "up", rag: "on_track" },
   ],
 
   // SOURCE: model usage logs

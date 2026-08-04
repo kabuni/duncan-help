@@ -82,12 +82,11 @@ const DATA: DashboardData = {
     ],
   },
 
-  // SOURCE: Duncan analytics
+  // SOURCE: Duncan analytics (uploads) + tech ticket system + model eval logs
   product: [
-    { label: "Uploads (this week)", value: "1,284", trend: "up", rag: "on_track" },
-    { label: "Data consumed / inputs processed", value: "3.4 TB", trend: "up", rag: "on_track" },
-    { label: "Active users", value: "218", trend: "flat", rag: "attention" },
-    { label: "Workflows completed", value: "946", trend: "up", rag: "on_track" },
+    { label: "Videos uploaded", value: "342", trend: "up", rag: "on_track" },
+    { label: "Tickets open / closed (tech)", value: "18 / 74", trend: "down", rag: "attention" },
+    { label: "Model accuracy", value: "92.6%", trend: "up", rag: "on_track" },
   ],
 
   // SOURCE: model usage logs

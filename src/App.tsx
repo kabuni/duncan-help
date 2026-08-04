@@ -116,6 +116,8 @@ const AppContent = () => {
             <Route path="/releases" element={<ReleaseManager />} />
             <Route path="/whats-new" element={<WhatsNew />} />
             <Route path="/team-briefing" element={<CEOBriefing />} />
+            <Route path="/company-health" element={<CompanyHealth />} />
+
             <Route path="/diary" element={<KeyEventsDiary />} />
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/purchase-orders" element={<PurchaseOrders />} />

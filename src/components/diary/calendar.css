@@ -62,9 +62,13 @@
 
 /* Let month rows expand to fill the available calendar height so RBC
    can fit more events per cell before collapsing into "+X more". */
-.rbc-month-view { display: flex; flex-direction: column; min-height: 100%; }
+.rbc-calendar { display: flex; flex-direction: column; height: 100%; }
+.rbc-calendar > .rbc-month-view,
+.rbc-calendar > .rbc-time-view,
+.rbc-calendar > .rbc-agenda-view { flex: 1 1 auto; min-height: 0; }
+.rbc-month-view { display: flex; flex-direction: column; }
 .rbc-month-view .rbc-month-header { flex: 0 0 auto; }
-.rbc-month-view .rbc-month-row { flex: 1 1 0; min-height: 7.5rem; overflow: hidden; }
+.rbc-month-view .rbc-month-row { flex: 1 1 0; min-height: 6rem; overflow: hidden; }
 .rbc-month-row .rbc-row-content { flex: 1 1 auto; }
 
 .rbc-header,

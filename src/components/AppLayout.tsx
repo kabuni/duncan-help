@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
-import { PanelLeftOpen } from "lucide-react";
+import { ChevronsRight } from "lucide-react";
 import Sidebar, { MobileMenuButton } from "@/components/Sidebar";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 
@@ -56,11 +56,11 @@ const AppLayout = ({ children }: { children?: React.ReactNode }) => {
           {desktopHidden && (
             <button
               onClick={() => setDesktopHidden(false)}
-              className="hidden md:flex fixed left-3 top-3 z-40 h-9 w-9 items-center justify-center rounded-lg border border-border bg-background/90 backdrop-blur text-muted-foreground hover:text-foreground hover:bg-secondary/60 shadow-sm transition-colors"
+              className="group hidden md:flex fixed left-3 top-3 z-40 h-9 w-9 items-center justify-center rounded-lg border border-border bg-background/90 backdrop-blur text-muted-foreground hover:text-foreground hover:bg-secondary/70 shadow-sm hover:shadow-md active:scale-95 transition-all duration-150"
               aria-label="Show sidebar"
-              title="Show sidebar"
+              title="Expand sidebar"
             >
-              <PanelLeftOpen className="h-4 w-4" />
+              <ChevronsRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
             </button>
           )}
           {/* Mobile header with menu button */}

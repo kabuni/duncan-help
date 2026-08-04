@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LayoutDashboard, Home, Settings, LogOut, X, Mail, FileText, MessageSquare, Calendar, GitBranch, Menu, Layers, Megaphone, Crown, Inbox, Receipt, Users, School, Target, PanelLeftClose } from "lucide-react";
+import { LayoutDashboard, Home, Settings, LogOut, X, Mail, FileText, MessageSquare, Calendar, GitBranch, Menu, Layers, Megaphone, Crown, Inbox, Receipt, Users, School, Target, ChevronsLeft } from "lucide-react";
 import { canViewBriefing } from "@/lib/ceoAccess";
 import ChatHistory from "@/components/ChatHistory";
 import { useGeneralChatsContext } from "@/hooks/GeneralChatsContext";
@@ -99,11 +99,11 @@ const Sidebar = ({
           {onDesktopHide && (
             <button
               onClick={onDesktopHide}
-              className="hidden md:flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+              className="group hidden md:flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/70 hover:border-border active:scale-95 transition-all duration-150"
               aria-label="Hide sidebar"
-              title="Hide sidebar"
+              title="Collapse sidebar"
             >
-              <PanelLeftClose className="h-4 w-4" />
+              <ChevronsLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
             </button>
           )}
           <button

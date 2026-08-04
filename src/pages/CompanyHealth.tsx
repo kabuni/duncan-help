@@ -87,6 +87,8 @@ const DATA: DashboardData = {
     { label: "Videos uploaded", value: "342", trend: "up", rag: "on_track" },
     { label: "Tickets open / closed (tech)", value: "18 / 74", trend: "down", rag: "attention" },
     { label: "Model accuracy", value: "92.6%", trend: "up", rag: "on_track" },
+    // Velocity: story points completed per sprint (rolling 3-sprint average)
+    { label: "Velocity (pts / sprint)", value: "46", trend: "up", rag: "on_track" },
   ],
 
   // SOURCE: model usage logs

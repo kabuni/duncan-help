@@ -63,6 +63,7 @@ const DATA: DashboardData = {
     { area: "Product Usage", descriptor: "Uploads & throughput", rag: "on_track" },
     { area: "Efficiency", descriptor: "Token cost per output", rag: "on_track" },
     { area: "Finance", descriptor: "Cashflow, burn, variance", rag: "attention" },
+    { area: "Marketing", descriptor: "Reach, pipeline contribution, campaign ROI", rag: "attention" },
     { area: "Staff Delivery", descriptor: "Monthly commitments met", rag: "critical" },
     { area: "North Star", descriptor: "Headline company metric", rag: "on_track" },
   ],

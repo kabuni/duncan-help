@@ -293,6 +293,12 @@ export default function CompanyHealth() {
               <div>{d.product.map((s) => <StatRow key={s.label} stat={s} />)}</div>
             </SectionCard>
 
+            {/* Marketing — SOURCE: GA4 + CRM attribution + campaign spend */}
+            <SectionCard title="Marketing" subtitle="Reach, pipeline contribution and campaign ROI">
+              <div>{d.marketing.map((s) => <StatRow key={s.label} stat={s} />)}</div>
+            </SectionCard>
+
+
             {/* Efficiency — SOURCE: model usage logs */}
             <SectionCard title="Efficiency" subtitle="Token cost per output">
               <div>{d.efficiency.map((s) => <StatRow key={s.label} stat={s} />)}</div>

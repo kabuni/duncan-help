@@ -90,7 +90,7 @@ export function Plan90Overview({ items, latestByDeliverable, filters, onFiltersC
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-2">
         {tiles.map((t) => {
           const isActive = activeTile === t.key;
           const clickable = interactive && (t.key !== "total" || (filters && (filters.status !== "all" || filters.priority !== "all" || filters.timeframe !== "all" || filters.owner !== "all" || filters.workstream !== "all" || filters.q)));

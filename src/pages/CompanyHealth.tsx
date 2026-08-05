@@ -298,10 +298,8 @@ export default function CompanyHealth() {
 
 
 
-            {/* Efficiency — SOURCE: model usage logs */}
-            <SectionCard title="Efficiency" subtitle="Token cost per output">
-              <div>{d.efficiency.map((s) => <StatRow key={s.label} stat={s} />)}</div>
-            </SectionCard>
+            {/* Finance — SOURCE: Finance system */}
+
 
             {/* Finance — SOURCE: Finance system */}
             <SectionCard title="Finance" subtitle="Green within ±10% of plan, red at -10% or worse">

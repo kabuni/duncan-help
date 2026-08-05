@@ -39,6 +39,8 @@ const STATUS_META: Record<string, { dot: string }> = {
 export default function Plan90Presentation() {
   const { workstreams, deliverables, loading } = usePlan90();
   const { latestByDeliverable, items: allUpdates } = usePlan90Updates();
+  const [selected, setSelected] = useState<Plan90Deliverable | null>(null);
+
 
   // Hours Saved: one event per presentation view (replaces manually building a deck).
   useEffect(() => {

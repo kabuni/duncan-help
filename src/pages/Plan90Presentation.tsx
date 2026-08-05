@@ -3,7 +3,7 @@ import { logSavings } from "@/lib/savings";
 
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Target, ArrowLeft, Printer, CheckCircle2, AlertTriangle, Clock, CalendarDays } from "lucide-react";
+import { Target, ArrowLeft, Printer, CheckCircle2, AlertTriangle, Clock, CalendarDays, ChevronRight } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, Legend } from "recharts";
 import { format, isPast, differenceInDays } from "date-fns";
 import { Button } from "@/components/ui/button";

@@ -162,7 +162,27 @@ export interface MarketingHealth {
     rag: Rag;
   };
   /** Roll-up used as the Marketing Health score. */
-  score: { value: number; rag: Rag };
+  score: {
+    value: number;
+    rag: Rag;
+    /** Per-KPI contributions to the roll-up (explainability only — no logic change). */
+    breakdown: ScoreContribution[];
+    /** e.g. "(100 + 65 + 30 + 65) / 4 = 65" */
+    formula: string;
+    /** Auto-generated one-line executive summary. */
+    summary: string;
+  };
+}
+
+export interface ScoreContribution {
+  key: "registrations" | "conversion" | "sessions" | "ctaCtr";
+  label: string;
+  rag: Rag;
+  points: number;
+  /** Current value, formatted. */
+  value: string;
+  /** Target, formatted. */
+  target: string;
 }
 
 const nf = new Intl.NumberFormat();

@@ -5744,6 +5744,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_operational_metrics: { Args: never; Returns: Json }
       get_registrations_rollup: {
         Args: { _end: string; _start: string }
         Returns: {

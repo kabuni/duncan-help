@@ -492,3 +492,12 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
     </div>
   );
 }
+
+function DetailField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-xs text-foreground mt-0.5">{value}</div>
+    </div>
+  );
+}

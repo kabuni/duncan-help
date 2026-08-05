@@ -231,6 +231,69 @@ export default function Plan90Presentation() {
           </div>
         </Slide>
 
+        {/* Updates by status */}
+        <Slide title="🗂 Updates by Status" subtitle="Expand a status to read the comments logged against its deliverables">
+          <div className="space-y-3">
+            {PLAN90_STATUS_ORDER.map((status) => {
+              const items = stats.items.filter((d) => d.status === status);
+              const rows = items.map((d) => ({ d, updates: updatesByDeliverable.get(d.id) || [] }));
+              const commentCount = rows.reduce((n, r) => n + r.updates.length, 0);
+              const meta = STATUS_META[status];
+              return (
+                <details key={status} className="group rounded-xl border border-border bg-card overflow-hidden print:open" open={status === "At Risk" || status === "Blocked"}>
+                  <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none select-none hover:bg-secondary/40 transition-colors">
+                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
+                    <span className={`h-2.5 w-2.5 rounded-full ${meta.dot}`} />
+                    <span className="text-sm font-semibold text-foreground">{status}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground bg-secondary/60 px-1.5 py-0.5 rounded">{items.length} deliverables</span>
+                    <span className="ml-auto text-[10px] font-mono text-muted-foreground">{commentCount} update{commentCount === 1 ? "" : "s"}</span>
+                  </summary>
+                  <div className="border-t border-border/60">
+                    {rows.length === 0 ? (
+                      <p className="text-xs text-muted-foreground px-4 py-5 text-center">No deliverables in this status.</p>
+                    ) : (
+                      <div className="divide-y divide-border/60">
+                        {rows.map(({ d, updates }) => (
+                          <div key={d.id} className="px-4 py-3">
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <span className="text-xs font-semibold text-foreground">{d.title}</span>
+                              <span className="shrink-0 text-[9px] font-mono bg-secondary/80 text-muted-foreground px-1.5 py-0.5 rounded">{wsName(d.workstream_id)}</span>
+                            </div>
+                            <div className="text-[10px] font-mono text-muted-foreground mb-2">
+                              {d.owner_display_name || "Unassigned"}
+                              {d.due_date && ` · due ${format(new Date(d.due_date), "MMM d")}`}
+                            </div>
+                            {updates.length === 0 ? (
+                              <p className="text-[11px] text-muted-foreground italic">No updates logged.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {updates.slice(0, 5).map((u) => {
+                                  const dot = u.ryg === "red" ? "bg-red-500" : u.ryg === "amber" ? "bg-amber-500" : "bg-emerald-500";
+                                  return (
+                                    <div key={u.id} className="flex gap-2">
+                                      <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${dot}`} />
+                                      <div className="min-w-0">
+                                        <p className="text-[11px] text-foreground/90 leading-6 whitespace-pre-wrap">{u.message}</p>
+                                        <span className="text-[10px] font-mono text-muted-foreground">{u.author_name} · {format(new Date(u.created_at), "d MMM")}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        </Slide>
+
+
+
         {/* At risk */}
         <Slide title="🔴 At Risk" subtitle="Deliverables flagged red/amber in their latest update, or overdue">
           {stats.atRisk.length === 0 ? (

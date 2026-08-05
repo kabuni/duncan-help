@@ -14,6 +14,9 @@ import { usePlan90Updates } from "@/hooks/usePlan90Updates";
 const COLORS = {
   completed: "hsl(142 71% 45%)",
   inprogress: "hsl(38 92% 50%)",
+  atrisk: "hsl(25 95% 53%)",
+  blocked: "hsl(0 84% 60%)",
+  stopped: "hsl(215 16% 47%)",
   notstarted: "hsl(var(--muted-foreground))",
   red: "hsl(0 84% 60%)",
   primary: "hsl(var(--primary))",

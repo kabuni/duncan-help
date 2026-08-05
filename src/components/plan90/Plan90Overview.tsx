@@ -20,6 +20,9 @@ export function Plan90Overview({ items, latestByDeliverable, filters, onFiltersC
     const active = items.filter((i) => !i.archived);
     const done = active.filter((i) => i.status === "Completed").length;
     const inProg = active.filter((i) => i.status === "In Progress").length;
+    const atRisk = active.filter((i) => i.status === "At Risk").length;
+    const blocked = active.filter((i) => i.status === "Blocked").length;
+    const stopped = active.filter((i) => i.status === "Stopped").length;
     const not = active.filter((i) => i.status === "Not Started").length;
     const overdue = active.filter((i) => i.due_date && new Date(i.due_date) < today && i.status !== "Completed").length;
     const critical = active.filter((i) => i.priority === "Critical" && i.status !== "Completed").length;

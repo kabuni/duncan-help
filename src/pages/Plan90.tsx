@@ -134,6 +134,9 @@ function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, current
   const in7 = new Date(today); in7.setDate(in7.getDate() + 7);
   const done = items.filter((i: any) => i.status === "Completed").length;
   const inProg = items.filter((i: any) => i.status === "In Progress").length;
+  const atRisk = items.filter((i: any) => i.status === "At Risk").length;
+  const blocked = items.filter((i: any) => i.status === "Blocked").length;
+  const stopped = items.filter((i: any) => i.status === "Stopped").length;
   const notStarted = items.filter((i: any) => i.status === "Not Started").length;
   const overdue = items.filter((i: any) => i.due_date && new Date(i.due_date) < today && i.status !== "Completed").length;
   const dueSoon = items.filter((i: any) => {

@@ -217,9 +217,6 @@ export default function CompanyHealth() {
               </p>
             </div>
           </div>
-          <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground shrink-0">
-            Last updated: {d.lastUpdated}
-          </p>
         </header>
 
         {/* 1. Company Health Score */}

@@ -22,7 +22,7 @@ const COLORS = {
   primary: "hsl(var(--primary))",
 };
 
-const PLAN90_STATUS_ORDER = ["In Progress", "Completed", "At Risk", "Stopped", "Blocked", "Not Started"] as const;
+const PLAN90_STATUS_ORDER = ["At Risk", "Blocked", "In Progress", "Stopped", "Not Started", "Completed"] as const;
 
 const STATUS_META: Record<string, { dot: string }> = {
   "In Progress": { dot: "bg-amber-500" },

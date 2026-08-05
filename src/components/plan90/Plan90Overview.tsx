@@ -80,6 +80,9 @@ export function Plan90Overview({ items, latestByDeliverable, filters, onFiltersC
     }
     if (key === "completed") return onFiltersChange({ status: isActive ? "all" : "Completed" });
     if (key === "in_progress") return onFiltersChange({ status: isActive ? "all" : "In Progress" });
+    if (key === "at_risk") return onFiltersChange({ status: isActive ? "all" : "At Risk" });
+    if (key === "blocked") return onFiltersChange({ status: isActive ? "all" : "Blocked" });
+    if (key === "stopped") return onFiltersChange({ status: isActive ? "all" : "Stopped" });
     if (key === "not_started") return onFiltersChange({ status: isActive ? "all" : "Not Started" });
     if (key === "overdue") return onFiltersChange({ timeframe: isActive ? "all" : "overdue" });
     if (key === "critical") return onFiltersChange({ priority: isActive ? "all" : "Critical" });

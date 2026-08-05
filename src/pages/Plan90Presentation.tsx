@@ -22,6 +22,17 @@ const COLORS = {
   primary: "hsl(var(--primary))",
 };
 
+const PLAN90_STATUS_ORDER = ["In Progress", "Completed", "At Risk", "Stopped", "Blocked", "Not Started"] as const;
+
+const STATUS_META: Record<string, { dot: string }> = {
+  "In Progress": { dot: "bg-amber-500" },
+  Completed: { dot: "bg-emerald-500" },
+  "At Risk": { dot: "bg-orange-500" },
+  Stopped: { dot: "bg-slate-500" },
+  Blocked: { dot: "bg-red-500" },
+  "Not Started": { dot: "bg-muted-foreground" },
+};
+
 export default function Plan90Presentation() {
   const { workstreams, deliverables, loading } = usePlan90();
   const { latestByDeliverable, items: allUpdates } = usePlan90Updates();

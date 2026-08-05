@@ -1,5 +1,8 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { logSavings } from "@/lib/savings";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+
 
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -36,6 +39,8 @@ const STATUS_META: Record<string, { dot: string }> = {
 export default function Plan90Presentation() {
   const { workstreams, deliverables, loading } = usePlan90();
   const { latestByDeliverable, items: allUpdates } = usePlan90Updates();
+  const [selected, setSelected] = useState<Plan90Deliverable | null>(null);
+
 
   // Hours Saved: one event per presentation view (replaces manually building a deck).
   useEffect(() => {
@@ -277,7 +282,12 @@ export default function Plan90Presentation() {
                     ) : (
                       <div className="divide-y divide-border/60">
                         {rows.map(({ d, updates }) => (
-                          <div key={d.id} className="px-4 py-3">
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() => setSelected(d)}
+                            className="w-full text-left px-4 py-3 hover:bg-secondary/40 transition-colors"
+                          >
                             <div className="flex items-start justify-between gap-2 mb-1">
                               <span className="text-xs font-semibold text-foreground">{d.title}</span>
                               <span className="shrink-0 text-[9px] font-mono bg-secondary/80 text-muted-foreground px-1.5 py-0.5 rounded">{wsName(d.workstream_id)}</span>
@@ -304,8 +314,9 @@ export default function Plan90Presentation() {
                                 })}
                               </div>
                             )}
-                          </div>
+                          </button>
                         ))}
+
                       </div>
                     )}
                   </div>
@@ -317,37 +328,6 @@ export default function Plan90Presentation() {
 
 
 
-        {/* At risk */}
-        <Slide title="🔴 At Risk" subtitle="Deliverables flagged red/amber in their latest update, or overdue">
-          {stats.atRisk.length === 0 ? (
-            <EmptyState icon={<CheckCircle2 className="h-6 w-6 text-emerald-500" />} text="Nothing at risk — everything is on track." />
-          ) : (
-            <div className="grid sm:grid-cols-2 gap-3">
-              {stats.atRisk.map((d) => {
-                const latest = latestByDeliverable.get(d.id);
-                const border = latest?.ryg === "red" ? "border-l-red-500" : latest?.ryg === "amber" ? "border-l-amber-500" : "border-l-muted-foreground/40";
-                return (
-                  <div key={d.id} className={`rounded-lg border border-l-[4px] ${border} bg-card p-4`}>
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <span className="text-sm font-semibold text-foreground">{d.title}</span>
-                      <span className="shrink-0 text-[9px] font-mono bg-secondary/80 text-muted-foreground px-1.5 py-0.5 rounded">{wsName(d.workstream_id)}</span>
-                    </div>
-                    {latest && <p className="text-[11px] text-muted-foreground line-clamp-2 mb-2">{latest.message}</p>}
-                    <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground">
-                      <span>{d.status}</span>
-                      <span>{d.owner_display_name || "Unassigned"}</span>
-                      {d.due_date && (
-                        <span className={`ml-auto flex items-center gap-1 ${isPast(new Date(d.due_date)) && d.status !== "Completed" ? "text-red-500" : ""}`}>
-                          <CalendarDays className="h-3 w-3" />{format(new Date(d.due_date), "MMM d")}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Slide>
 
         {/* Deadlines */}
         <Slide title="📅 Deadlines" subtitle="Overdue and due within 7 days">
@@ -383,7 +363,69 @@ export default function Plan90Presentation() {
           )}
         </Slide>
       </div>
+
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          {selected && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-base leading-6 pr-6">{selected.title}</DialogTitle>
+              </DialogHeader>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary" className="font-mono text-[10px]">{wsName(selected.workstream_id)}</Badge>
+                <Badge variant="outline" className="font-mono text-[10px]">{selected.status}</Badge>
+                <Badge variant="outline" className="font-mono text-[10px]">{selected.priority}</Badge>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-3 text-xs">
+                <DetailField label="Owner" value={selected.owner_display_name || "Unassigned"} />
+                <DetailField label="Due date" value={selected.due_date ? format(new Date(selected.due_date), "d MMM yyyy") : "—"} />
+                <DetailField label="Progress" value={`${selected.progress_percent ?? 0}%`} />
+                <DetailField label="Last updated" value={format(new Date(selected.updated_at), "d MMM yyyy")} />
+              </div>
+
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Progress</div>
+                <Progress value={selected.progress_percent ?? 0} className="h-2" />
+              </div>
+
+              {selected.notes && (
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Notes</div>
+                  <p className="text-xs text-foreground/90 leading-6 whitespace-pre-wrap">{selected.notes}</p>
+                </div>
+              )}
+
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">
+                  Updates ({(updatesByDeliverable.get(selected.id) || []).length})
+                </div>
+                {(updatesByDeliverable.get(selected.id) || []).length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">No updates logged yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {(updatesByDeliverable.get(selected.id) || []).map((u) => {
+                      const dot = u.ryg === "red" ? "bg-red-500" : u.ryg === "amber" ? "bg-amber-500" : "bg-emerald-500";
+                      return (
+                        <div key={u.id} className="flex gap-2 border-b border-border/50 pb-2 last:border-0">
+                          <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${dot}`} />
+                          <div className="min-w-0">
+                            <p className="text-xs text-foreground/90 leading-6 whitespace-pre-wrap">{u.message}</p>
+                            <span className="text-[10px] font-mono text-muted-foreground">{u.author_name} · {format(new Date(u.created_at), "d MMM yyyy")}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
+
   );
 }
 
@@ -447,6 +489,15 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
     <div className="rounded-xl border border-dashed border-border bg-card/30 p-10 flex flex-col items-center justify-center gap-2">
       {icon}
       <p className="text-sm text-muted-foreground">{text}</p>
+    </div>
+  );
+}
+
+function DetailField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-xs text-foreground mt-0.5">{value}</div>
     </div>
   );
 }

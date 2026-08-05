@@ -293,10 +293,12 @@ export default function CompanyHealth() {
               <div>{d.product.map((s) => <StatRow key={s.label} stat={s} />)}</div>
             </SectionCard>
 
-            {/* Marketing — SOURCE: GA4 + CRM attribution + campaign spend */}
-            <SectionCard title="Marketing" subtitle="Reach, pipeline contribution and campaign ROI">
-              <div>{d.marketing.map((s) => <StatRow key={s.label} stat={s} />)}</div>
+            {/* Marketing — SOURCE: GA4 (sessions, channels, cta_view/cta_click) + Duncan registrations.
+                Data + RAG live in src/hooks/useMarketingHealth.ts */}
+            <SectionCard title="Marketing" subtitle="Website and funnel performance">
+              <MarketingKpis />
             </SectionCard>
+
 
 
             {/* Efficiency — SOURCE: model usage logs */}

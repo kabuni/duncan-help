@@ -99,8 +99,27 @@ export default function Plan90Presentation() {
 
     const recentUpdates = allUpdates.slice(0, 8);
 
-    return { items, byStatus, completionPct, overdue, dueSoon, wsRows, atRisk, recentUpdates };
+    // Accountability: pending (not completed) deliverables per owner
+    const ownerMap = new Map<string, { name: string; pending: number; overdue: number; atRisk: number; blocked: number; total: number }>();
+    for (const d of items) {
+      const name = d.owner_display_name?.trim() || "Unassigned";
+      const row = ownerMap.get(name) || { name, pending: 0, overdue: 0, atRisk: 0, blocked: 0, total: 0 };
+      row.total += 1;
+      if (d.status !== "Completed") {
+        row.pending += 1;
+        if (d.due_date && new Date(d.due_date) < today) row.overdue += 1;
+        if (d.status === "At Risk") row.atRisk += 1;
+        if (d.status === "Blocked" || d.status === "Stopped") row.blocked += 1;
+      }
+      ownerMap.set(name, row);
+    }
+    const ownerRows = Array.from(ownerMap.values())
+      .filter((o) => o.pending > 0)
+      .sort((a, b) => b.pending - a.pending || a.name.localeCompare(b.name));
+
+    return { items, byStatus, completionPct, overdue, dueSoon, wsRows, atRisk, recentUpdates, ownerRows };
   }, [deliverables, workstreams, latestByDeliverable, allUpdates]);
+
 
   const updatesByDeliverable = useMemo(() => {
     const map = new Map<string, typeof allUpdates>();
@@ -258,6 +277,43 @@ export default function Plan90Presentation() {
             </table>
           </div>
         </Slide>
+
+        {/* Accountability */}
+        <Slide title="🙋 Accountability" subtitle="Open (not completed) deliverables by owner">
+          {stats.ownerRows.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-6 text-xs text-muted-foreground text-center">
+              Nothing outstanding — every deliverable is completed.
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/50">
+                  <tr className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
+                    <th className="text-left px-4 py-2">Owner</th>
+                    <th className="text-center px-3 py-2">Pending</th>
+                    <th className="text-center px-3 py-2">Overdue</th>
+                    <th className="text-center px-3 py-2">At risk</th>
+                    <th className="text-center px-3 py-2">Blocked / stopped</th>
+                    <th className="text-center px-3 py-2">Total owned</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.ownerRows.map((o) => (
+                    <tr key={o.name} className="border-t border-border/60">
+                      <td className="px-4 py-2.5 font-medium text-foreground">{o.name}</td>
+                      <td className="px-3 py-2.5 text-center tabular-nums font-semibold">{o.pending}</td>
+                      <td className="px-3 py-2.5 text-center tabular-nums text-red-500">{o.overdue || "—"}</td>
+                      <td className="px-3 py-2.5 text-center tabular-nums text-orange-500">{o.atRisk || "—"}</td>
+                      <td className="px-3 py-2.5 text-center tabular-nums text-slate-500">{o.blocked || "—"}</td>
+                      <td className="px-3 py-2.5 text-center tabular-nums text-muted-foreground">{o.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Slide>
+
 
         {/* Updates by status */}
         <Slide title="🗂 Updates by Status" subtitle="Expand a status to read the comments logged against its deliverables">

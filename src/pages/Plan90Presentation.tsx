@@ -100,6 +100,9 @@ export default function Plan90Presentation() {
   const statusPie = [
     { name: "Completed", value: stats.byStatus["Completed"] || 0, color: COLORS.completed },
     { name: "In Progress", value: stats.byStatus["In Progress"] || 0, color: COLORS.inprogress },
+    { name: "At Risk", value: stats.byStatus["At Risk"] || 0, color: COLORS.atrisk },
+    { name: "Blocked", value: stats.byStatus["Blocked"] || 0, color: COLORS.blocked },
+    { name: "Stopped", value: stats.byStatus["Stopped"] || 0, color: COLORS.stopped },
     { name: "Not Started", value: stats.byStatus["Not Started"] || 0, color: COLORS.notstarted },
   ].filter((s) => s.value > 0);
 

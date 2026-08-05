@@ -303,6 +303,18 @@ export default function CompanyHealth() {
           </div>
         </section>
 
+        {/* 3. AI Efficiency — SOURCE: savings_events + effort_savings_config + token_usage
+             via public.get_ai_efficiency_metrics(). Logic lives in src/hooks/useAiEfficiency.ts */}
+        <section aria-labelledby="ai-efficiency-heading" className="space-y-3">
+          <h2 id="ai-efficiency-heading" className="text-sm font-semibold text-foreground tracking-tight">
+            AI Efficiency
+          </h2>
+          <SectionCard title="Duncan productivity impact" subtitle="Live executive view — hours saved, adoption, usage and business value">
+            <AiEfficiency />
+          </SectionCard>
+        </section>
+
+
         {/* 3. Workstream Delivery Health — SOURCE: plan90_workstreams + plan90_deliverables
              + plan90_deliverable_updates + workstream_cards (live, no stored copy).
              Logic lives in src/hooks/useWorkstreamHealth.ts */}

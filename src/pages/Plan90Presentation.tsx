@@ -97,6 +97,18 @@ export default function Plan90Presentation() {
     return { items, byStatus, completionPct, overdue, dueSoon, wsRows, atRisk, recentUpdates };
   }, [deliverables, workstreams, latestByDeliverable, allUpdates]);
 
+  const updatesByDeliverable = useMemo(() => {
+    const map = new Map<string, typeof allUpdates>();
+    for (const u of allUpdates) {
+      const list = map.get(u.deliverable_id) || [];
+      list.push(u);
+      map.set(u.deliverable_id, list);
+    }
+    return map;
+  }, [allUpdates]);
+
+
+
   if (loading) {
     return (
       <main className="flex-1 flex items-center justify-center">

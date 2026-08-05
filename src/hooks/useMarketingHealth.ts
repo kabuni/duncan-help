@@ -297,7 +297,7 @@ export function computeMarketingHealth(raw: MarketingRaw): MarketingHealth {
       trend: trendFor(ctrDelta),
       rag: ctrRag,
     },
-    score: { value: scoreValue, rag: scoreRag },
+    score: { value: scoreValue, rag: scoreRag, breakdown, formula, summary },
   };
 }
 

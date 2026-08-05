@@ -53,26 +53,25 @@ export default function Plan90Presentation() {
       .filter((w) => !w.archived)
       .map((w) => {
         const list = items.filter((d) => d.workstream_id === w.id);
-        const done = list.filter((d) => d.status === "Completed").length;
-        const inProg = list.filter((d) => d.status === "In Progress").length;
-        const notStarted = list.filter((d) => d.status === "Not Started").length;
-        const red = list.filter((d) => latestByDeliverable.get(d.id)?.ryg === "red").length;
-        const amber = list.filter((d) => latestByDeliverable.get(d.id)?.ryg === "amber").length;
+        const count = (s: string) => list.filter((d) => d.status === s).length;
+        const done = count("Completed");
         return {
           id: w.id,
           name: w.name,
           total: list.length,
           done,
-          inProg,
-          notStarted,
-          red,
-          amber,
+          inProg: count("In Progress"),
+          notStarted: count("Not Started"),
+          atRisk: count("At Risk"),
+          stopped: count("Stopped"),
+          blocked: count("Blocked"),
           pct: list.length ? Math.round((done / list.length) * 100) : 0,
           list,
         };
       })
       .filter((w) => w.total > 0)
       .sort((a, b) => b.total - a.total);
+
 
     const atRisk = items
       .filter((d) => {

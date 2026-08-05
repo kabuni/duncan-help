@@ -277,7 +277,12 @@ export default function Plan90Presentation() {
                     ) : (
                       <div className="divide-y divide-border/60">
                         {rows.map(({ d, updates }) => (
-                          <div key={d.id} className="px-4 py-3">
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() => setSelected(d)}
+                            className="w-full text-left px-4 py-3 hover:bg-secondary/40 transition-colors"
+                          >
                             <div className="flex items-start justify-between gap-2 mb-1">
                               <span className="text-xs font-semibold text-foreground">{d.title}</span>
                               <span className="shrink-0 text-[9px] font-mono bg-secondary/80 text-muted-foreground px-1.5 py-0.5 rounded">{wsName(d.workstream_id)}</span>
@@ -304,8 +309,9 @@ export default function Plan90Presentation() {
                                 })}
                               </div>
                             )}
-                          </div>
+                          </button>
                         ))}
+
                       </div>
                     )}
                   </div>

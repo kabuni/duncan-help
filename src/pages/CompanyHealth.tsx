@@ -308,53 +308,17 @@ export default function CompanyHealth() {
           </div>
         </section>
 
-        {/* 3. Monthly Staff Measurement — SOURCE: 90-Day Tracker commitments + OKR store */}
-        <section aria-labelledby="staff-heading" className="space-y-3">
-          <h2 id="staff-heading" className="text-sm font-semibold text-foreground tracking-tight">
-            Monthly Staff Measurement
+        {/* 3. Workstream Delivery Health — SOURCE: plan90_workstreams + plan90_deliverables
+             + plan90_deliverable_updates + workstream_cards (live, no stored copy).
+             Logic lives in src/hooks/useWorkstreamHealth.ts */}
+        <section aria-labelledby="delivery-heading" className="space-y-3">
+          <h2 id="delivery-heading" className="text-sm font-semibold text-foreground tracking-tight">
+            Workstream Delivery Health
           </h2>
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <caption className="sr-only">Delivery-based monthly measurement by team</caption>
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    <th scope="col" className="text-left font-medium text-[11px] uppercase tracking-wider text-muted-foreground px-4 py-2.5">Team / Person</th>
-                    <th scope="col" className="text-left font-medium text-[11px] uppercase tracking-wider text-muted-foreground px-4 py-2.5">Commitments met</th>
-                    <th scope="col" className="text-left font-medium text-[11px] uppercase tracking-wider text-muted-foreground px-4 py-2.5">OKR progress</th>
-                    <th scope="col" className="text-left font-medium text-[11px] uppercase tracking-wider text-muted-foreground px-4 py-2.5">Delivery predictability</th>
-                    <th scope="col" className="text-left font-medium text-[11px] uppercase tracking-wider text-muted-foreground px-4 py-2.5">Blockers resolved</th>
-                    <th scope="col" className="text-left font-medium text-[11px] uppercase tracking-wider text-muted-foreground px-4 py-2.5">RAG</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {d.staff.map((row) => {
-                    const pct = Math.round((row.commitmentsMet / row.commitmentsTotal) * 100);
-                    return (
-                      <tr key={row.name} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
-                        <th scope="row" className="text-left px-4 py-3 font-medium text-foreground whitespace-nowrap">{row.name}</th>
-                        <td className="px-4 py-3 tabular-nums text-foreground whitespace-nowrap">
-                          {row.commitmentsMet}/{row.commitmentsTotal}
-                          <span className="text-muted-foreground"> ({pct}%)</span>
-                        </td>
-                        <td className="px-4 py-3 min-w-[140px]">
-                          <div className="flex items-center gap-2">
-                            <Progress value={row.okrProgress} className="h-1.5 flex-1" aria-label={`${row.name} OKR progress ${row.okrProgress}%`} />
-                            <span className="text-xs tabular-nums text-muted-foreground">{row.okrProgress}%</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-foreground whitespace-nowrap">{row.predictability}</td>
-                        <td className="px-4 py-3 tabular-nums text-foreground">{row.blockersResolved}</td>
-                        <td className="px-4 py-3"><RagBadge rag={row.rag} /></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <p className="text-[11px] text-muted-foreground">Delivery-based measures only — no single subjective score.</p>
+          <WorkstreamDeliveryHealth />
+          <p className="text-[11px] text-muted-foreground">Live view of the 90-Day Tracker — no manual editing. Click a workstream to investigate its deliverables.</p>
         </section>
+
 
         {/* 4. Operational strip — SOURCE: platform/ops telemetry */}
         <section aria-labelledby="operational-heading" className="space-y-2">

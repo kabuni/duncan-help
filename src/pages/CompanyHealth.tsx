@@ -1,6 +1,8 @@
 import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, HeartPulse } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import MarketingKpis from "@/components/company-health/MarketingKpis";
+
 
 /* ------------------------------------------------------------------
    MOCK DATA — single typed object.

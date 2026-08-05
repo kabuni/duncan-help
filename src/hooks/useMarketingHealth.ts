@@ -221,6 +221,45 @@ export function computeMarketingHealth(raw: MarketingRaw): MarketingHealth {
   const scoreValue = Math.round(rags.reduce((s, r) => s + RAG_POINTS[r], 0) / rags.length);
   const scoreRag: Rag = scoreValue >= 85 ? "on_track" : scoreValue >= 60 ? "attention" : "critical";
 
+  /* ---- explainability only: describes the maths above, never alters it ---- */
+  const breakdown: ScoreContribution[] = [
+    {
+      key: "registrations",
+      label: "Interest registrations",
+      rag: registrationsRag,
+      points: RAG_POINTS[registrationsRag],
+      value: fmtInt(raw.registrations.month),
+      target: fmtInt(MARKETING_TARGETS.registrationsMonthly.target),
+    },
+    {
+      key: "conversion",
+      label: "Visit-to-submission conversion",
+      rag: conversionRag,
+      points: RAG_POINTS[conversionRag],
+      value: fmtPct(conversionValue),
+      target: `${MARKETING_TARGETS.conversionRate.target}%`,
+    },
+    {
+      key: "sessions",
+      label: "Website sessions",
+      rag: sessionsRag,
+      points: RAG_POINTS[sessionsRag],
+      value: fmtInt(raw.sessions.month),
+      target: fmtInt(MARKETING_TARGETS.sessionsMonthly.target),
+    },
+    {
+      key: "ctaCtr",
+      label: "CTA click-through rate",
+      rag: ctrRag,
+      points: RAG_POINTS[ctrRag],
+      value: fmtPct(ctrValue),
+      target: `${MARKETING_TARGETS.ctaCtr.target}%`,
+    },
+  ];
+
+  const formula = `(${breakdown.map((b) => b.points).join(" + ")}) / ${breakdown.length} = ${scoreValue}`;
+  const summary = buildSummary(breakdown, scoreRag);
+
   return {
     live: raw.live,
     generatedAt: raw.generatedAt,

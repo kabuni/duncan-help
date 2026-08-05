@@ -58,7 +58,7 @@ interface DashboardData {
   product: Stat[];
   finance: Stat[];
   staff: StaffRow[];
-  operational: Stat[];
+  
 }
 
 const DATA: DashboardData = {

@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, Plus, Pencil, Trash2, Loader2, Presentation } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -42,7 +42,12 @@ export default function Plan90() {
   const { workstreams, deliverables, loading, updateDeliverable, createDeliverable, deleteDeliverable, createWorkstream, updateWorkstream, deleteWorkstream } = usePlan90();
   const updatesApi = usePlan90Updates();
   const { data: owners = [] } = useOwners();
-  const [filters, setFilters] = useState<Plan90FilterState>(emptyFilters);
+  // Deep link support: /plan-90?workstream=<id> (used by Company Health)
+  const [searchParams] = useSearchParams();
+  const wsParam = searchParams.get("workstream");
+  const [filters, setFilters] = useState<Plan90FilterState>(
+    wsParam ? { ...emptyFilters, workstream: wsParam } : emptyFilters,
+  );
   const [wsMgrOpen, setWsMgrOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
 

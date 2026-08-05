@@ -99,8 +99,27 @@ export default function Plan90Presentation() {
 
     const recentUpdates = allUpdates.slice(0, 8);
 
-    return { items, byStatus, completionPct, overdue, dueSoon, wsRows, atRisk, recentUpdates };
+    // Accountability: pending (not completed) deliverables per owner
+    const ownerMap = new Map<string, { name: string; pending: number; overdue: number; atRisk: number; blocked: number; total: number }>();
+    for (const d of items) {
+      const name = d.owner_display_name?.trim() || "Unassigned";
+      const row = ownerMap.get(name) || { name, pending: 0, overdue: 0, atRisk: 0, blocked: 0, total: 0 };
+      row.total += 1;
+      if (d.status !== "Completed") {
+        row.pending += 1;
+        if (d.due_date && new Date(d.due_date) < today) row.overdue += 1;
+        if (d.status === "At Risk") row.atRisk += 1;
+        if (d.status === "Blocked" || d.status === "Stopped") row.blocked += 1;
+      }
+      ownerMap.set(name, row);
+    }
+    const ownerRows = Array.from(ownerMap.values())
+      .filter((o) => o.pending > 0)
+      .sort((a, b) => b.pending - a.pending || a.name.localeCompare(b.name));
+
+    return { items, byStatus, completionPct, overdue, dueSoon, wsRows, atRisk, recentUpdates, ownerRows };
   }, [deliverables, workstreams, latestByDeliverable, allUpdates]);
+
 
   const updatesByDeliverable = useMemo(() => {
     const map = new Map<string, typeof allUpdates>();

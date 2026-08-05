@@ -361,7 +361,69 @@ export default function Plan90Presentation() {
           )}
         </Slide>
       </div>
+
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          {selected && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-base leading-6 pr-6">{selected.title}</DialogTitle>
+              </DialogHeader>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary" className="font-mono text-[10px]">{wsName(selected.workstream_id)}</Badge>
+                <Badge variant="outline" className="font-mono text-[10px]">{selected.status}</Badge>
+                <Badge variant="outline" className="font-mono text-[10px]">{selected.priority}</Badge>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-3 text-xs">
+                <DetailField label="Owner" value={selected.owner_display_name || "Unassigned"} />
+                <DetailField label="Due date" value={selected.due_date ? format(new Date(selected.due_date), "d MMM yyyy") : "—"} />
+                <DetailField label="Progress" value={`${selected.progress_percent ?? 0}%`} />
+                <DetailField label="Last updated" value={format(new Date(selected.updated_at), "d MMM yyyy")} />
+              </div>
+
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Progress</div>
+                <Progress value={selected.progress_percent ?? 0} className="h-2" />
+              </div>
+
+              {selected.notes && (
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Notes</div>
+                  <p className="text-xs text-foreground/90 leading-6 whitespace-pre-wrap">{selected.notes}</p>
+                </div>
+              )}
+
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">
+                  Updates ({(updatesByDeliverable.get(selected.id) || []).length})
+                </div>
+                {(updatesByDeliverable.get(selected.id) || []).length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">No updates logged yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {(updatesByDeliverable.get(selected.id) || []).map((u) => {
+                      const dot = u.ryg === "red" ? "bg-red-500" : u.ryg === "amber" ? "bg-amber-500" : "bg-emerald-500";
+                      return (
+                        <div key={u.id} className="flex gap-2 border-b border-border/50 pb-2 last:border-0">
+                          <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${dot}`} />
+                          <div className="min-w-0">
+                            <p className="text-xs text-foreground/90 leading-6 whitespace-pre-wrap">{u.message}</p>
+                            <span className="text-[10px] font-mono text-muted-foreground">{u.author_name} · {format(new Date(u.created_at), "d MMM yyyy")}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
+
   );
 }
 

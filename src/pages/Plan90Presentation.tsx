@@ -278,6 +278,43 @@ export default function Plan90Presentation() {
           </div>
         </Slide>
 
+        {/* Accountability */}
+        <Slide title="🙋 Accountability" subtitle="Open (not completed) deliverables by owner">
+          {stats.ownerRows.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-6 text-xs text-muted-foreground text-center">
+              Nothing outstanding — every deliverable is completed.
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/50">
+                  <tr className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
+                    <th className="text-left px-4 py-2">Owner</th>
+                    <th className="text-center px-3 py-2">Pending</th>
+                    <th className="text-center px-3 py-2">Overdue</th>
+                    <th className="text-center px-3 py-2">At risk</th>
+                    <th className="text-center px-3 py-2">Blocked / stopped</th>
+                    <th className="text-center px-3 py-2">Total owned</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.ownerRows.map((o) => (
+                    <tr key={o.name} className="border-t border-border/60">
+                      <td className="px-4 py-2.5 font-medium text-foreground">{o.name}</td>
+                      <td className="px-3 py-2.5 text-center tabular-nums font-semibold">{o.pending}</td>
+                      <td className="px-3 py-2.5 text-center tabular-nums text-red-500">{o.overdue || "—"}</td>
+                      <td className="px-3 py-2.5 text-center tabular-nums text-orange-500">{o.atRisk || "—"}</td>
+                      <td className="px-3 py-2.5 text-center tabular-nums text-slate-500">{o.blocked || "—"}</td>
+                      <td className="px-3 py-2.5 text-center tabular-nums text-muted-foreground">{o.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Slide>
+
+
         {/* Updates by status */}
         <Slide title="🗂 Updates by Status" subtitle="Expand a status to read the comments logged against its deliverables">
           <div className="space-y-3">

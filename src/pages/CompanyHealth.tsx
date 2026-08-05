@@ -295,13 +295,8 @@ export default function CompanyHealth() {
             <SectionCard title="Marketing" subtitle="Website and funnel performance">
               <MarketingKpis />
             </SectionCard>
-
-
-
             {/* Finance — SOURCE: Finance system */}
 
-
-            {/* Finance — SOURCE: Finance system */}
             <SectionCard title="Finance" subtitle="Green within ±10% of plan, red at -10% or worse">
               <div>{d.finance.map((s) => <StatRow key={s.label} stat={s} />)}</div>
             </SectionCard>

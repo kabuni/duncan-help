@@ -46,6 +46,9 @@ export function Plan90Overview({ items, latestByDeliverable, filters, onFiltersC
     if (!filters) return null;
     if (filters.status === "Completed") return "completed";
     if (filters.status === "In Progress") return "in_progress";
+    if (filters.status === "At Risk") return "at_risk";
+    if (filters.status === "Blocked") return "blocked";
+    if (filters.status === "Stopped") return "stopped";
     if (filters.status === "Not Started") return "not_started";
     if (filters.timeframe === "overdue") return "overdue";
     if (filters.priority === "Critical") return "critical";
@@ -56,6 +59,9 @@ export function Plan90Overview({ items, latestByDeliverable, filters, onFiltersC
     { key: "total", label: "Total", value: stats.total },
     { key: "completed", label: "Completed", value: stats.done, cls: "text-emerald-500", activeCls: "border-emerald-500/60 bg-emerald-500/5 ring-1 ring-emerald-500/30" },
     { key: "in_progress", label: "In Progress", value: stats.inProg, cls: "text-amber-500", activeCls: "border-amber-500/60 bg-amber-500/5 ring-1 ring-amber-500/30" },
+    { key: "at_risk", label: "At Risk", value: stats.atRisk, cls: "text-orange-500", activeCls: "border-orange-500/60 bg-orange-500/5 ring-1 ring-orange-500/30" },
+    { key: "blocked", label: "Blocked", value: stats.blocked, cls: "text-red-500", activeCls: "border-red-500/60 bg-red-500/5 ring-1 ring-red-500/30" },
+    { key: "stopped", label: "Stopped", value: stats.stopped, cls: "text-slate-500", activeCls: "border-slate-500/60 bg-slate-500/5 ring-1 ring-slate-500/30" },
     { key: "not_started", label: "Not Started", value: stats.not, cls: "text-muted-foreground", activeCls: "border-foreground/40 bg-secondary ring-1 ring-foreground/20" },
     { key: "overdue", label: "Overdue", value: stats.overdue, cls: "text-red-500", activeCls: "border-red-500/60 bg-red-500/5 ring-1 ring-red-500/30" },
     { key: "critical", label: "Critical", value: stats.critical, cls: "text-orange-500", activeCls: "border-orange-500/60 bg-orange-500/5 ring-1 ring-orange-500/30" },

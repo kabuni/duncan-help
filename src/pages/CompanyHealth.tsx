@@ -4,7 +4,9 @@ import { cn } from "@/lib/utils";
 import MarketingKpis from "@/components/company-health/MarketingKpis";
 import WorkstreamDeliveryHealth from "@/components/company-health/WorkstreamDeliveryHealth";
 import AiEfficiency from "@/components/company-health/AiEfficiency";
+import OperationalStrip from "@/components/company-health/OperationalStrip";
 import { useAiEfficiency } from "@/hooks/useAiEfficiency";
+
 
 
 

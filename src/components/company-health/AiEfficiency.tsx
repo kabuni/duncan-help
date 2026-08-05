@@ -45,6 +45,7 @@ function Block({ title, metrics }: { title: string; metrics: Metric[] }) {
 
 export default function AiEfficiency() {
   const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const d = useAiEfficiency();
 
   if (d.loading) {
@@ -112,37 +113,48 @@ export default function AiEfficiency() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         <Block title="Hours saved" metrics={d.hoursSaved} />
         <Block title="Adoption — active AI users" metrics={d.activeUsers} />
-        <Block title="Tokens consumed" metrics={d.tokens} />
-        <Block title="AI requests" metrics={d.requests} />
         <Block title="Productivity" metrics={d.headline} />
-        <Block title="Tool success rate" metrics={d.toolSuccess} />
-        <Block title="AI cost" metrics={d.cost} />
-        <Block title="Cost vs value" metrics={d.costVsValue} />
-      </div>
-
-      <div className="rounded-lg border border-border bg-background/40 p-3">
-        <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">Most used Duncan tools · 30 days</p>
-        {d.topTools.length === 0 ? (
-          <p className="text-xs text-muted-foreground py-2">No recorded actions in the last 30 days.</p>
-        ) : (
-          <ol className="divide-y divide-border">
-            {d.topTools.map((t, i) => (
-              <li key={t.label} className="flex items-center justify-between gap-3 py-2">
-                <span className="text-xs text-muted-foreground min-w-0 truncate">
-                  <span className="font-mono text-muted-foreground/60 mr-2">{i + 1}</span>
-                  {t.label}
-                </span>
-                <span className="shrink-0 text-xs tabular-nums text-foreground font-semibold">
-                  {t.uses} <span className="font-normal text-muted-foreground">uses · {Math.round(t.minutes)} min saved</span>
-                </span>
-              </li>
-            ))}
-          </ol>
+        {showAll && (
+          <>
+            <Block title="Tokens consumed" metrics={d.tokens} />
+            <Block title="AI requests" metrics={d.requests} />
+            <Block title="Tool success rate" metrics={d.toolSuccess} />
+            <Block title="AI cost" metrics={d.cost} />
+            <Block title="Cost vs value" metrics={d.costVsValue} />
+            <div className="rounded-lg border border-border bg-background/40 p-3">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">Top tools · 30 days</p>
+              {d.topTools.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-2">No recorded actions in the last 30 days.</p>
+              ) : (
+                <ol className="divide-y divide-border">
+                  {d.topTools.slice(0, 5).map((t, i) => (
+                    <li key={t.label} className="flex items-center justify-between gap-3 py-2">
+                      <span className="text-xs text-muted-foreground min-w-0 truncate">
+                        <span className="font-mono text-muted-foreground/60 mr-2">{i + 1}</span>
+                        {t.label}
+                      </span>
+                      <span className="shrink-0 text-xs tabular-nums text-foreground font-semibold">
+                        {t.uses} <span className="font-normal text-muted-foreground">uses</span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          </>
         )}
       </div>
+
+      <button
+        type="button"
+        onClick={() => setShowAll((v) => !v)}
+        className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {showAll ? "Show less" : "Show all metrics — tokens, requests, cost, ROI, top tools"}
+      </button>
 
       {d.generatedAt && (
         <p className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground/70">

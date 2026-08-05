@@ -5676,6 +5676,7 @@ export type Database = {
         Args: { _from_date: string; _to_date: string }
         Returns: Json
       }
+      get_ai_efficiency_metrics: { Args: never; Returns: Json }
       get_company_integration_secret: {
         Args: { p_integration_id: string }
         Returns: string

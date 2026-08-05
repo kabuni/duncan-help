@@ -50,7 +50,6 @@ interface DashboardData {
     stages: { label: string; count: number }[];
   };
   product: Stat[];
-  marketing: Stat[];
   efficiency: Stat[];
   finance: Stat[];
   staff: StaffRow[];
@@ -66,7 +65,7 @@ const DATA: DashboardData = {
     { area: "Product Usage", descriptor: "Uploads & throughput", rag: "on_track" },
     { area: "Efficiency", descriptor: "Token cost per output", rag: "on_track" },
     { area: "Finance", descriptor: "Cashflow, burn, variance", rag: "attention" },
-    { area: "Marketing", descriptor: "Reach, pipeline contribution, campaign ROI", rag: "attention" },
+    { area: "Marketing", descriptor: "Website sessions, conversion, CTA CTR", rag: "attention" },
     { area: "Staff Delivery", descriptor: "Monthly commitments met", rag: "critical" },
     
   ],

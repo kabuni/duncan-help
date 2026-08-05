@@ -14,6 +14,9 @@ import { usePlan90Updates } from "@/hooks/usePlan90Updates";
 const COLORS = {
   completed: "hsl(142 71% 45%)",
   inprogress: "hsl(38 92% 50%)",
+  atrisk: "hsl(25 95% 53%)",
+  blocked: "hsl(0 84% 60%)",
+  stopped: "hsl(215 16% 47%)",
   notstarted: "hsl(var(--muted-foreground))",
   red: "hsl(0 84% 60%)",
   primary: "hsl(var(--primary))",
@@ -34,7 +37,7 @@ export default function Plan90Presentation() {
     const items = deliverables.filter((d) => !d.archived);
     const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    const byStatus = { Completed: 0, "In Progress": 0, "Not Started": 0 } as Record<string, number>;
+    const byStatus = { Completed: 0, "In Progress": 0, "At Risk": 0, Blocked: 0, Stopped: 0, "Not Started": 0 } as Record<string, number>;
     for (const d of items) byStatus[d.status] = (byStatus[d.status] || 0) + 1;
 
     const completionPct = items.length ? Math.round((byStatus["Completed"] / items.length) * 100) : 0;
@@ -97,6 +100,9 @@ export default function Plan90Presentation() {
   const statusPie = [
     { name: "Completed", value: stats.byStatus["Completed"] || 0, color: COLORS.completed },
     { name: "In Progress", value: stats.byStatus["In Progress"] || 0, color: COLORS.inprogress },
+    { name: "At Risk", value: stats.byStatus["At Risk"] || 0, color: COLORS.atrisk },
+    { name: "Blocked", value: stats.byStatus["Blocked"] || 0, color: COLORS.blocked },
+    { name: "Stopped", value: stats.byStatus["Stopped"] || 0, color: COLORS.stopped },
     { name: "Not Started", value: stats.byStatus["Not Started"] || 0, color: COLORS.notstarted },
   ].filter((s) => s.value > 0);
 

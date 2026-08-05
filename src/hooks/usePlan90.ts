@@ -37,7 +37,7 @@ export interface Plan90Attachment {
   created_at: string;
 }
 
-export const PLAN90_STATUSES = ["Not Started", "In Progress", "Completed"] as const;
+export const PLAN90_STATUSES = ["Not Started", "In Progress", "At Risk", "Blocked", "Stopped", "Completed"] as const;
 export const PLAN90_PRIORITIES = ["Low", "Medium", "High", "Critical"] as const;
 
 export function usePlan90() {

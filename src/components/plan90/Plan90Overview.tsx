@@ -12,7 +12,7 @@ interface Props {
   onResetFilters?: () => void;
 }
 
-type TileKey = "total" | "completed" | "in_progress" | "not_started" | "overdue" | "critical";
+type TileKey = "total" | "completed" | "in_progress" | "at_risk" | "blocked" | "stopped" | "not_started" | "overdue" | "critical";
 
 export function Plan90Overview({ items, latestByDeliverable, filters, onFiltersChange, onResetFilters }: Props) {
   const stats = useMemo(() => {
@@ -20,6 +20,9 @@ export function Plan90Overview({ items, latestByDeliverable, filters, onFiltersC
     const active = items.filter((i) => !i.archived);
     const done = active.filter((i) => i.status === "Completed").length;
     const inProg = active.filter((i) => i.status === "In Progress").length;
+    const atRisk = active.filter((i) => i.status === "At Risk").length;
+    const blocked = active.filter((i) => i.status === "Blocked").length;
+    const stopped = active.filter((i) => i.status === "Stopped").length;
     const not = active.filter((i) => i.status === "Not Started").length;
     const overdue = active.filter((i) => i.due_date && new Date(i.due_date) < today && i.status !== "Completed").length;
     const critical = active.filter((i) => i.priority === "Critical" && i.status !== "Completed").length;
@@ -36,13 +39,16 @@ export function Plan90Overview({ items, latestByDeliverable, filters, onFiltersC
       }
     }
 
-    return { total: active.length, done, inProg, not, overdue, critical, completionPct, green, amber, red, noUpdate };
+    return { total: active.length, done, inProg, atRisk, blocked, stopped, not, overdue, critical, completionPct, green, amber, red, noUpdate };
   }, [items, latestByDeliverable]);
 
   const activeTile: TileKey | null = useMemo(() => {
     if (!filters) return null;
     if (filters.status === "Completed") return "completed";
     if (filters.status === "In Progress") return "in_progress";
+    if (filters.status === "At Risk") return "at_risk";
+    if (filters.status === "Blocked") return "blocked";
+    if (filters.status === "Stopped") return "stopped";
     if (filters.status === "Not Started") return "not_started";
     if (filters.timeframe === "overdue") return "overdue";
     if (filters.priority === "Critical") return "critical";
@@ -53,6 +59,9 @@ export function Plan90Overview({ items, latestByDeliverable, filters, onFiltersC
     { key: "total", label: "Total", value: stats.total },
     { key: "completed", label: "Completed", value: stats.done, cls: "text-emerald-500", activeCls: "border-emerald-500/60 bg-emerald-500/5 ring-1 ring-emerald-500/30" },
     { key: "in_progress", label: "In Progress", value: stats.inProg, cls: "text-amber-500", activeCls: "border-amber-500/60 bg-amber-500/5 ring-1 ring-amber-500/30" },
+    { key: "at_risk", label: "At Risk", value: stats.atRisk, cls: "text-orange-500", activeCls: "border-orange-500/60 bg-orange-500/5 ring-1 ring-orange-500/30" },
+    { key: "blocked", label: "Blocked", value: stats.blocked, cls: "text-red-500", activeCls: "border-red-500/60 bg-red-500/5 ring-1 ring-red-500/30" },
+    { key: "stopped", label: "Stopped", value: stats.stopped, cls: "text-slate-500", activeCls: "border-slate-500/60 bg-slate-500/5 ring-1 ring-slate-500/30" },
     { key: "not_started", label: "Not Started", value: stats.not, cls: "text-muted-foreground", activeCls: "border-foreground/40 bg-secondary ring-1 ring-foreground/20" },
     { key: "overdue", label: "Overdue", value: stats.overdue, cls: "text-red-500", activeCls: "border-red-500/60 bg-red-500/5 ring-1 ring-red-500/30" },
     { key: "critical", label: "Critical", value: stats.critical, cls: "text-orange-500", activeCls: "border-orange-500/60 bg-orange-500/5 ring-1 ring-orange-500/30" },
@@ -71,6 +80,9 @@ export function Plan90Overview({ items, latestByDeliverable, filters, onFiltersC
     }
     if (key === "completed") return onFiltersChange({ status: isActive ? "all" : "Completed" });
     if (key === "in_progress") return onFiltersChange({ status: isActive ? "all" : "In Progress" });
+    if (key === "at_risk") return onFiltersChange({ status: isActive ? "all" : "At Risk" });
+    if (key === "blocked") return onFiltersChange({ status: isActive ? "all" : "Blocked" });
+    if (key === "stopped") return onFiltersChange({ status: isActive ? "all" : "Stopped" });
     if (key === "not_started") return onFiltersChange({ status: isActive ? "all" : "Not Started" });
     if (key === "overdue") return onFiltersChange({ timeframe: isActive ? "all" : "overdue" });
     if (key === "critical") return onFiltersChange({ priority: isActive ? "all" : "Critical" });
@@ -78,7 +90,7 @@ export function Plan90Overview({ items, latestByDeliverable, filters, onFiltersC
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-2">
         {tiles.map((t) => {
           const isActive = activeTile === t.key;
           const clickable = interactive && (t.key !== "total" || (filters && (filters.status !== "all" || filters.priority !== "all" || filters.timeframe !== "all" || filters.owner !== "all" || filters.workstream !== "all" || filters.q)));

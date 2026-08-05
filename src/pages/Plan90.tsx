@@ -134,6 +134,9 @@ function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, current
   const in7 = new Date(today); in7.setDate(in7.getDate() + 7);
   const done = items.filter((i: any) => i.status === "Completed").length;
   const inProg = items.filter((i: any) => i.status === "In Progress").length;
+  const atRisk = items.filter((i: any) => i.status === "At Risk").length;
+  const blocked = items.filter((i: any) => i.status === "Blocked").length;
+  const stopped = items.filter((i: any) => i.status === "Stopped").length;
   const notStarted = items.filter((i: any) => i.status === "Not Started").length;
   const overdue = items.filter((i: any) => i.due_date && new Date(i.due_date) < today && i.status !== "Completed").length;
   const dueSoon = items.filter((i: any) => {
@@ -162,6 +165,9 @@ function WorkstreamSection({ ws, items, allWorkstreams, owners, isAdmin, current
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">{done} done</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400">{inProg} in progress</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{notStarted} not started</span>
+            {atRisk > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/30">{atRisk} at risk</span>}
+            {blocked > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30">{blocked} blocked</span>}
+            {stopped > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-600 dark:text-slate-300 border border-slate-500/30">{stopped} stopped</span>}
             {overdue > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 border border-red-500/30">{overdue} overdue</span>}
             {dueSoon > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30">{dueSoon} due ≤7d</span>}
             {critical > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-500 border border-orange-500/30">{critical} critical</span>}

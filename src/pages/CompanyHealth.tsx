@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import MarketingKpis from "@/components/company-health/MarketingKpis";
 import WorkstreamDeliveryHealth from "@/components/company-health/WorkstreamDeliveryHealth";
 import AiEfficiency from "@/components/company-health/AiEfficiency";
+import { useAiEfficiency } from "@/hooks/useAiEfficiency";
 
 
 
@@ -65,7 +66,6 @@ const DATA: DashboardData = {
   companyHealth: [
     { area: "Schools / Sales", descriptor: "Signed vs 400 target", rag: "attention" },
     { area: "Product Usage", descriptor: "Uploads & throughput", rag: "on_track" },
-    { area: "Efficiency", descriptor: "Token cost per output", rag: "on_track" },
     { area: "Finance", descriptor: "Cashflow, burn, variance", rag: "attention" },
     { area: "Marketing", descriptor: "Website sessions, conversion, CTA CTR", rag: "attention" },
     { area: "Staff Delivery", descriptor: "Monthly commitments met", rag: "critical" },
@@ -199,6 +199,8 @@ function SectionCard({ title, subtitle, children }: { title: string; subtitle?: 
 
 export default function CompanyHealth() {
   const d = DATA;
+  // Live AI efficiency roll-up feeds the Company Health tile (react-query dedupes the fetch)
+  const ai = useAiEfficiency();
   const schoolsPct = Math.round((d.schools.signed / d.schools.target) * 100);
 
   return (
@@ -231,7 +233,14 @@ export default function CompanyHealth() {
             Company Health Score
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-            {d.companyHealth.map((tile) => (
+            {[
+              ...d.companyHealth,
+              {
+                area: "AI Efficiency",
+                descriptor: ai.score === null ? "Awaiting live usage data" : `Duncan efficiency score ${ai.score}`,
+                rag: ai.scoreRag ?? ("attention" as Rag),
+              },
+            ].map((tile) => (
               <div key={tile.area} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-2">
                 <p className="text-sm font-semibold text-foreground leading-tight">{tile.area}</p>
                 <p className="text-[11px] text-muted-foreground leading-snug flex-1">{tile.descriptor}</p>

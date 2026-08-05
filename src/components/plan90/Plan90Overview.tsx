@@ -39,7 +39,7 @@ export function Plan90Overview({ items, latestByDeliverable, filters, onFiltersC
       }
     }
 
-    return { total: active.length, done, inProg, not, overdue, critical, completionPct, green, amber, red, noUpdate };
+    return { total: active.length, done, inProg, atRisk, blocked, stopped, not, overdue, critical, completionPct, green, amber, red, noUpdate };
   }, [items, latestByDeliverable]);
 
   const activeTile: TileKey | null = useMemo(() => {

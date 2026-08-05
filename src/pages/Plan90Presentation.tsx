@@ -37,7 +37,7 @@ export default function Plan90Presentation() {
     const items = deliverables.filter((d) => !d.archived);
     const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    const byStatus = { Completed: 0, "In Progress": 0, "Not Started": 0 } as Record<string, number>;
+    const byStatus = { Completed: 0, "In Progress": 0, "At Risk": 0, Blocked: 0, Stopped: 0, "Not Started": 0 } as Record<string, number>;
     for (const d of items) byStatus[d.status] = (byStatus[d.status] || 0) + 1;
 
     const completionPct = items.length ? Math.round((byStatus["Completed"] / items.length) * 100) : 0;

@@ -120,15 +120,8 @@ const DATA: DashboardData = {
     { name: "Marketing", commitmentsMet: 7, commitmentsTotal: 11, okrProgress: 58, predictability: "Medium", blockersResolved: 5, rag: "attention" },
   ],
 
-  // SOURCE: platform/ops telemetry
-  operational: [
-    { label: "Uptime (30d)", value: "99.94%" },
-    { label: "Avg response", value: "1.8s" },
-    { label: "Failed jobs", value: "12" },
-    { label: "Storage used", value: "684 GB" },
-    { label: "Integrations live", value: "9" },
-    { label: "Open incidents", value: "1" },
-  ],
+  // Operational telemetry now lives in src/hooks/useOperationalHealth.ts (live)
+
 };
 
 /* ---------------------------- primitives ---------------------------- */

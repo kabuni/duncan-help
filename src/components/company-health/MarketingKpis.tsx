@@ -159,7 +159,7 @@ export default function MarketingKpis() {
       </KpiBlock>
 
       {/* 5. CTA CTR — SOURCE: GA4 events cta_click / cta_view */}
-      <KpiBlock title="CTA click-through rate" hint="cta_click ÷ cta_view (30d)" rag={m.ctaCtr.rag}>
+      <KpiBlock title="CTA click-through rate" hint="cta_click ÷ cta_view (30d)" target={byKey.ctaCtr?.target} rag={m.ctaCtr.rag}>
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold tabular-nums text-foreground">{m.ctaCtr.formatted}</span>
           <TrendIcon trend={m.ctaCtr.trend} delta={m.ctaCtr.delta} />

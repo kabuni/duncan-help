@@ -330,20 +330,16 @@ export default function CompanyHealth() {
         </section>
 
 
-        {/* 4. Operational strip — SOURCE: platform/ops telemetry */}
+        {/* 4. Operational strip — SOURCE: sync_logs + briefing_runs + kb_documents/documents/
+             project_files + company_integrations/user_integrations + issues, via
+             public.get_operational_metrics(). Logic lives in src/hooks/useOperationalHealth.ts */}
         <section aria-labelledby="operational-heading" className="space-y-2">
           <h2 id="operational-heading" className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
             Operational
           </h2>
-          <div className="rounded-xl border border-border bg-card/50 px-4 py-3 flex flex-wrap gap-x-8 gap-y-3">
-            {d.operational.map((s) => (
-              <div key={s.label} className="min-w-0">
-                <p className="text-sm font-semibold tabular-nums text-foreground">{s.value}</p>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{s.label}</p>
-              </div>
-            ))}
-          </div>
+          <OperationalStrip />
         </section>
+
       </div>
     </main>
   );

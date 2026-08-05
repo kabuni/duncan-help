@@ -35,6 +35,9 @@ interface Props {
 const statusColor: Record<string, string> = {
   "Not Started": "bg-muted text-muted-foreground border-border",
   "In Progress": "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30",
+  "At Risk": "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30",
+  "Blocked": "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30",
+  "Stopped": "bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/30",
   "Completed": "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
 };
 const priorityColor: Record<string, string> = {

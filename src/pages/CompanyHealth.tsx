@@ -3,6 +3,8 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import MarketingKpis from "@/components/company-health/MarketingKpis";
 import WorkstreamDeliveryHealth from "@/components/company-health/WorkstreamDeliveryHealth";
+import AiEfficiency from "@/components/company-health/AiEfficiency";
+import { useAiEfficiency } from "@/hooks/useAiEfficiency";
 
 
 
@@ -52,7 +54,6 @@ interface DashboardData {
     stages: { label: string; count: number }[];
   };
   product: Stat[];
-  efficiency: Stat[];
   finance: Stat[];
   staff: StaffRow[];
   operational: Stat[];
@@ -65,7 +66,6 @@ const DATA: DashboardData = {
   companyHealth: [
     { area: "Schools / Sales", descriptor: "Signed vs 400 target", rag: "attention" },
     { area: "Product Usage", descriptor: "Uploads & throughput", rag: "on_track" },
-    { area: "Efficiency", descriptor: "Token cost per output", rag: "on_track" },
     { area: "Finance", descriptor: "Cashflow, burn, variance", rag: "attention" },
     { area: "Marketing", descriptor: "Website sessions, conversion, CTA CTR", rag: "attention" },
     { area: "Staff Delivery", descriptor: "Monthly commitments met", rag: "critical" },
@@ -99,13 +99,7 @@ const DATA: DashboardData = {
 
 
 
-  // SOURCE: model usage logs
-  efficiency: [
-    { label: "Total tokens", value: "48.2M", trend: "up", rag: "on_track" },
-    { label: "Cost per user", value: "£4.12", trend: "down", rag: "on_track" },
-    { label: "Tokens per task", value: "12.4k", trend: "down", rag: "on_track" },
-    { label: "Spend vs value (hours saved)", value: "156 h / £1.9k", trend: "up", rag: "on_track" },
-  ],
+  // AI Efficiency now lives in src/hooks/useAiEfficiency.ts (live usage data)
 
   // SOURCE: Finance system
   finance: [
@@ -205,6 +199,8 @@ function SectionCard({ title, subtitle, children }: { title: string; subtitle?: 
 
 export default function CompanyHealth() {
   const d = DATA;
+  // Live AI efficiency roll-up feeds the Company Health tile (react-query dedupes the fetch)
+  const ai = useAiEfficiency();
   const schoolsPct = Math.round((d.schools.signed / d.schools.target) * 100);
 
   return (
@@ -237,7 +233,14 @@ export default function CompanyHealth() {
             Company Health Score
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-            {d.companyHealth.map((tile) => (
+            {[
+              ...d.companyHealth,
+              {
+                area: "AI Efficiency",
+                descriptor: ai.score === null ? "Awaiting live usage data" : `Duncan efficiency score ${ai.score}`,
+                rag: ai.scoreRag ?? ("attention" as Rag),
+              },
+            ].map((tile) => (
               <div key={tile.area} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-2">
                 <p className="text-sm font-semibold text-foreground leading-tight">{tile.area}</p>
                 <p className="text-[11px] text-muted-foreground leading-snug flex-1">{tile.descriptor}</p>
@@ -295,20 +298,25 @@ export default function CompanyHealth() {
             <SectionCard title="Marketing" subtitle="Website and funnel performance">
               <MarketingKpis />
             </SectionCard>
-
-
-
-            {/* Efficiency — SOURCE: model usage logs */}
-            <SectionCard title="Efficiency" subtitle="Token cost per output">
-              <div>{d.efficiency.map((s) => <StatRow key={s.label} stat={s} />)}</div>
-            </SectionCard>
-
             {/* Finance — SOURCE: Finance system */}
+
             <SectionCard title="Finance" subtitle="Green within ±10% of plan, red at -10% or worse">
               <div>{d.finance.map((s) => <StatRow key={s.label} stat={s} />)}</div>
             </SectionCard>
           </div>
         </section>
+
+        {/* 3. AI Efficiency — SOURCE: savings_events + effort_savings_config + token_usage
+             via public.get_ai_efficiency_metrics(). Logic lives in src/hooks/useAiEfficiency.ts */}
+        <section aria-labelledby="ai-efficiency-heading" className="space-y-3">
+          <h2 id="ai-efficiency-heading" className="text-sm font-semibold text-foreground tracking-tight">
+            AI Efficiency
+          </h2>
+          <SectionCard title="Duncan productivity impact" subtitle="Live executive view — hours saved, adoption, usage and business value">
+            <AiEfficiency />
+          </SectionCard>
+        </section>
+
 
         {/* 3. Workstream Delivery Health — SOURCE: plan90_workstreams + plan90_deliverables
              + plan90_deliverable_updates + workstream_cards (live, no stored copy).

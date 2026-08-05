@@ -197,10 +197,12 @@ export default function Plan90Presentation() {
                 <tr className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
                   <th className="text-left px-4 py-2">Workstream</th>
                   <th className="text-center px-3 py-2">Total</th>
-                  <th className="text-center px-3 py-2">Done</th>
                   <th className="text-center px-3 py-2">In progress</th>
-                  <th className="text-center px-3 py-2">Not started</th>
+                  <th className="text-center px-3 py-2">Completed</th>
                   <th className="text-center px-3 py-2">At risk</th>
+                  <th className="text-center px-3 py-2">Stopped</th>
+                  <th className="text-center px-3 py-2">Blocked</th>
+                  <th className="text-center px-3 py-2">Not started</th>
                   <th className="text-left px-4 py-2 w-[200px]">Completion</th>
                 </tr>
               </thead>
@@ -209,10 +211,12 @@ export default function Plan90Presentation() {
                   <tr key={w.id} className="border-t border-border/60">
                     <td className="px-4 py-2.5 font-medium text-foreground">{w.name}</td>
                     <td className="px-3 py-2.5 text-center tabular-nums">{w.total}</td>
-                    <td className="px-3 py-2.5 text-center tabular-nums text-emerald-500">{w.done}</td>
-                    <td className="px-3 py-2.5 text-center tabular-nums text-amber-500">{w.inProg}</td>
-                    <td className="px-3 py-2.5 text-center tabular-nums text-muted-foreground">{w.notStarted}</td>
-                    <td className="px-3 py-2.5 text-center tabular-nums text-red-500">{w.red + w.amber || "—"}</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-amber-500">{w.inProg || "—"}</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-emerald-500">{w.done || "—"}</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-orange-500">{w.atRisk || "—"}</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-slate-500">{w.stopped || "—"}</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-red-500">{w.blocked || "—"}</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-muted-foreground">{w.notStarted || "—"}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <Progress value={w.pct} className="h-2 flex-1" />
@@ -221,6 +225,7 @@ export default function Plan90Presentation() {
                     </td>
                   </tr>
                 ))}
+
               </tbody>
             </table>
           </div>

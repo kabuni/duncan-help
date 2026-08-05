@@ -317,37 +317,6 @@ export default function Plan90Presentation() {
 
 
 
-        {/* At risk */}
-        <Slide title="🔴 At Risk" subtitle="Deliverables flagged red/amber in their latest update, or overdue">
-          {stats.atRisk.length === 0 ? (
-            <EmptyState icon={<CheckCircle2 className="h-6 w-6 text-emerald-500" />} text="Nothing at risk — everything is on track." />
-          ) : (
-            <div className="grid sm:grid-cols-2 gap-3">
-              {stats.atRisk.map((d) => {
-                const latest = latestByDeliverable.get(d.id);
-                const border = latest?.ryg === "red" ? "border-l-red-500" : latest?.ryg === "amber" ? "border-l-amber-500" : "border-l-muted-foreground/40";
-                return (
-                  <div key={d.id} className={`rounded-lg border border-l-[4px] ${border} bg-card p-4`}>
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <span className="text-sm font-semibold text-foreground">{d.title}</span>
-                      <span className="shrink-0 text-[9px] font-mono bg-secondary/80 text-muted-foreground px-1.5 py-0.5 rounded">{wsName(d.workstream_id)}</span>
-                    </div>
-                    {latest && <p className="text-[11px] text-muted-foreground line-clamp-2 mb-2">{latest.message}</p>}
-                    <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground">
-                      <span>{d.status}</span>
-                      <span>{d.owner_display_name || "Unassigned"}</span>
-                      {d.due_date && (
-                        <span className={`ml-auto flex items-center gap-1 ${isPast(new Date(d.due_date)) && d.status !== "Completed" ? "text-red-500" : ""}`}>
-                          <CalendarDays className="h-3 w-3" />{format(new Date(d.due_date), "MMM d")}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Slide>
 
         {/* Deadlines */}
         <Slide title="📅 Deadlines" subtitle="Overdue and due within 7 days">

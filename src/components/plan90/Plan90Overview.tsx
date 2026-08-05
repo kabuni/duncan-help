@@ -12,7 +12,7 @@ interface Props {
   onResetFilters?: () => void;
 }
 
-type TileKey = "total" | "completed" | "in_progress" | "not_started" | "overdue" | "critical";
+type TileKey = "total" | "completed" | "in_progress" | "at_risk" | "blocked" | "stopped" | "not_started" | "overdue" | "critical";
 
 export function Plan90Overview({ items, latestByDeliverable, filters, onFiltersChange, onResetFilters }: Props) {
   const stats = useMemo(() => {

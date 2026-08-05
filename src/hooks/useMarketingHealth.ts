@@ -162,7 +162,27 @@ export interface MarketingHealth {
     rag: Rag;
   };
   /** Roll-up used as the Marketing Health score. */
-  score: { value: number; rag: Rag };
+  score: {
+    value: number;
+    rag: Rag;
+    /** Per-KPI contributions to the roll-up (explainability only — no logic change). */
+    breakdown: ScoreContribution[];
+    /** e.g. "(100 + 65 + 30 + 65) / 4 = 65" */
+    formula: string;
+    /** Auto-generated one-line executive summary. */
+    summary: string;
+  };
+}
+
+export interface ScoreContribution {
+  key: "registrations" | "conversion" | "sessions" | "ctaCtr";
+  label: string;
+  rag: Rag;
+  points: number;
+  /** Current value, formatted. */
+  value: string;
+  /** Target, formatted. */
+  target: string;
 }
 
 const nf = new Intl.NumberFormat();
@@ -175,6 +195,30 @@ function period(label: string, value: number, prev: number): KpiPeriod {
 }
 
 const RAG_POINTS: Record<Rag, number> = { on_track: 100, attention: 65, critical: 30 };
+
+const listOf = (items: string[]) =>
+  items.length <= 1 ? items[0] ?? "" : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+
+/** Plain-English narration of the score — derived from the same RAGs, changes nothing. */
+function buildSummary(breakdown: ScoreContribution[], overall: Rag): string {
+  const green = breakdown.filter((b) => b.rag === "on_track").map((b) => b.label.toLowerCase());
+  const amber = breakdown.filter((b) => b.rag === "attention").map((b) => b.label.toLowerCase());
+  const red = breakdown.filter((b) => b.rag === "critical").map((b) => b.label.toLowerCase());
+
+  if (!amber.length && !red.length) return "All marketing KPIs are at or above target — the funnel is performing on plan.";
+
+  const strong = green.length ? `${listOf(green)} ${green.length > 1 ? "are" : "is"} on target` : null;
+  const drag = [
+    red.length ? `significantly below-target ${listOf(red)}` : null,
+    amber.length ? `slightly below-target ${listOf(amber)}` : null,
+  ].filter(Boolean) as string[];
+
+  const head = strong ? `${strong.charAt(0).toUpperCase()}${strong.slice(1)}, but the` : "The";
+  const tail = overall === "critical" ? "score is being pulled down by" : "overall score is reduced by";
+  return `${head} ${tail} ${listOf(drag)}.`;
+}
+
+
 
 export function computeMarketingHealth(raw: MarketingRaw): MarketingHealth {
   const registrationsRag = ragFor(raw.registrations.month, MARKETING_TARGETS.registrationsMonthly);
@@ -200,6 +244,45 @@ export function computeMarketingHealth(raw: MarketingRaw): MarketingHealth {
   const rags: Rag[] = [registrationsRag, conversionRag, sessionsRag, ctrRag];
   const scoreValue = Math.round(rags.reduce((s, r) => s + RAG_POINTS[r], 0) / rags.length);
   const scoreRag: Rag = scoreValue >= 85 ? "on_track" : scoreValue >= 60 ? "attention" : "critical";
+
+  /* ---- explainability only: describes the maths above, never alters it ---- */
+  const breakdown: ScoreContribution[] = [
+    {
+      key: "registrations",
+      label: "Interest registrations",
+      rag: registrationsRag,
+      points: RAG_POINTS[registrationsRag],
+      value: fmtInt(raw.registrations.month),
+      target: fmtInt(MARKETING_TARGETS.registrationsMonthly.target),
+    },
+    {
+      key: "conversion",
+      label: "Visit-to-submission conversion",
+      rag: conversionRag,
+      points: RAG_POINTS[conversionRag],
+      value: fmtPct(conversionValue),
+      target: `${MARKETING_TARGETS.conversionRate.target}%`,
+    },
+    {
+      key: "sessions",
+      label: "Website sessions",
+      rag: sessionsRag,
+      points: RAG_POINTS[sessionsRag],
+      value: fmtInt(raw.sessions.month),
+      target: fmtInt(MARKETING_TARGETS.sessionsMonthly.target),
+    },
+    {
+      key: "ctaCtr",
+      label: "CTA click-through rate",
+      rag: ctrRag,
+      points: RAG_POINTS[ctrRag],
+      value: fmtPct(ctrValue),
+      target: `${MARKETING_TARGETS.ctaCtr.target}%`,
+    },
+  ];
+
+  const formula = `(${breakdown.map((b) => b.points).join(" + ")}) / ${breakdown.length} = ${scoreValue}`;
+  const summary = buildSummary(breakdown, scoreRag);
 
   return {
     live: raw.live,
@@ -238,7 +321,7 @@ export function computeMarketingHealth(raw: MarketingRaw): MarketingHealth {
       trend: trendFor(ctrDelta),
       rag: ctrRag,
     },
-    score: { value: scoreValue, rag: scoreRag },
+    score: { value: scoreValue, rag: scoreRag, breakdown, formula, summary },
   };
 }
 

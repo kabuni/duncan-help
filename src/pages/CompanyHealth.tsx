@@ -3,6 +3,7 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import MarketingKpis from "@/components/company-health/MarketingKpis";
 import WorkstreamDeliveryHealth from "@/components/company-health/WorkstreamDeliveryHealth";
+import AiEfficiency from "@/components/company-health/AiEfficiency";
 
 
 
@@ -52,7 +53,6 @@ interface DashboardData {
     stages: { label: string; count: number }[];
   };
   product: Stat[];
-  efficiency: Stat[];
   finance: Stat[];
   staff: StaffRow[];
   operational: Stat[];
@@ -99,13 +99,7 @@ const DATA: DashboardData = {
 
 
 
-  // SOURCE: model usage logs
-  efficiency: [
-    { label: "Total tokens", value: "48.2M", trend: "up", rag: "on_track" },
-    { label: "Cost per user", value: "£4.12", trend: "down", rag: "on_track" },
-    { label: "Tokens per task", value: "12.4k", trend: "down", rag: "on_track" },
-    { label: "Spend vs value (hours saved)", value: "156 h / £1.9k", trend: "up", rag: "on_track" },
-  ],
+  // AI Efficiency now lives in src/hooks/useAiEfficiency.ts (live usage data)
 
   // SOURCE: Finance system
   finance: [

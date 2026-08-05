@@ -196,6 +196,30 @@ function period(label: string, value: number, prev: number): KpiPeriod {
 
 const RAG_POINTS: Record<Rag, number> = { on_track: 100, attention: 65, critical: 30 };
 
+const listOf = (items: string[]) =>
+  items.length <= 1 ? items[0] ?? "" : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+
+/** Plain-English narration of the score — derived from the same RAGs, changes nothing. */
+function buildSummary(breakdown: ScoreContribution[], overall: Rag): string {
+  const green = breakdown.filter((b) => b.rag === "on_track").map((b) => b.label.toLowerCase());
+  const amber = breakdown.filter((b) => b.rag === "attention").map((b) => b.label.toLowerCase());
+  const red = breakdown.filter((b) => b.rag === "critical").map((b) => b.label.toLowerCase());
+
+  if (!amber.length && !red.length) return "All marketing KPIs are at or above target — the funnel is performing on plan.";
+
+  const strong = green.length ? `${listOf(green)} ${green.length > 1 ? "are" : "is"} on target` : null;
+  const drag = [
+    red.length ? `significantly below-target ${listOf(red)}` : null,
+    amber.length ? `slightly below-target ${listOf(amber)}` : null,
+  ].filter(Boolean) as string[];
+
+  const head = strong ? `${strong.charAt(0).toUpperCase()}${strong.slice(1)}, but the` : "The";
+  const tail = overall === "critical" ? "score is being pulled down by" : "overall score is reduced by";
+  return `${head} ${tail} ${listOf(drag)}.`;
+}
+
+
+
 export function computeMarketingHealth(raw: MarketingRaw): MarketingHealth {
   const registrationsRag = ragFor(raw.registrations.month, MARKETING_TARGETS.registrationsMonthly);
 

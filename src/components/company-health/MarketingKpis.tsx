@@ -1,5 +1,7 @@
+import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { useMarketingHealth } from "@/hooks/useMarketingHealth";
-import { RagBadge, TrendIcon } from "@/components/company-health/HealthPrimitives";
+import { RagBadge, TrendIcon, ragConfig } from "@/components/company-health/HealthPrimitives";
 import { cn } from "@/lib/utils";
 
 /* Marketing KPI dashboard — website & funnel performance.
@@ -8,11 +10,13 @@ import { cn } from "@/lib/utils";
 function KpiBlock({
   title,
   hint,
+  target,
   rag,
   children,
 }: {
   title: string;
   hint?: string;
+  target?: string;
   rag?: React.ComponentProps<typeof RagBadge>["rag"];
   children: React.ReactNode;
 }) {
@@ -23,7 +27,12 @@ function KpiBlock({
           <p className="text-xs font-medium text-foreground">{title}</p>
           {hint && <p className="text-[10px] text-muted-foreground mt-0.5">{hint}</p>}
         </div>
-        {rag && <RagBadge rag={rag} />}
+        <div className="flex items-center gap-2 shrink-0">
+          {target && (
+            <span className="text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">Target: {target}</span>
+          )}
+          {rag && <RagBadge rag={rag} />}
+        </div>
       </div>
       {children}
     </div>

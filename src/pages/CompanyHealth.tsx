@@ -229,6 +229,11 @@ export default function CompanyHealth() {
               ...d.companyHealth,
               {
                 area: "People & Culture",
+                descriptor: "Engagement, retention and team health",
+                rag: "attention" as Rag,
+              },
+              {
+                area: "AI Efficiency",
                 descriptor: ai.score === null ? "Awaiting live usage data" : `Duncan efficiency score ${ai.score}`,
                 rag: ai.scoreRag ?? ("attention" as Rag),
               },
@@ -323,7 +328,7 @@ export default function CompanyHealth() {
              via public.get_ai_efficiency_metrics(). Logic lives in src/hooks/useAiEfficiency.ts */}
         <section aria-labelledby="ai-efficiency-heading" className="space-y-3">
           <h2 id="ai-efficiency-heading" className="text-sm font-semibold text-foreground tracking-tight">
-            People &amp; Culture
+            AI Efficiency
           </h2>
           <SectionCard title="Duncan productivity impact" subtitle="Live executive view — hours saved, adoption, usage and business value">
             <AiEfficiency />

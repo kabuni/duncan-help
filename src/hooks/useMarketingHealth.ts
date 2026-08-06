@@ -104,26 +104,28 @@ export function rate(numerator: number, denominator: number): number {
   return (numerator / denominator) * 100;
 }
 
-/* ---------------------------- placeholder ---------------------------- */
+/* ------------------------------ empty state ------------------------------ */
 
-const PLACEHOLDER_RAW: MarketingRaw = {
-  registrations: { today: 9, week: 54, month: 214 },
-  registrationsPrev: { today: 7, week: 48, month: 187 },
-  sessions: { today: 3120, week: 21480, month: 84620 },
-  sessionsPrev: { today: 2960, week: 19870, month: 78140 },
+/** Zeros — used only when GA4 isn't connected. Never mocked values. */
+const EMPTY_RAW: MarketingRaw = {
+  registrations: { today: 0, week: 0, month: 0 },
+  registrationsPrev: { today: 0, week: 0, month: 0 },
+  sessions: { today: 0, week: 0, month: 0 },
+  sessionsPrev: { today: 0, week: 0, month: 0 },
   trafficSources: {
-    "Organic Search": 34210,
-    Direct: 19870,
-    "Paid Search": 12440,
-    Social: 9860,
-    Referral: 5320,
-    Email: 2920,
+    "Organic Search": 0,
+    Direct: 0,
+    "Paid Search": 0,
+    Social: 0,
+    Referral: 0,
+    Email: 0,
   },
-  cta: { views: 61200, clicks: 3486 },
-  ctaPrev: { views: 57400, clicks: 3010 },
+  cta: { views: 0, clicks: 0 },
+  ctaPrev: { views: 0, clicks: 0 },
   generatedAt: new Date().toISOString(),
   live: false,
 };
+
 
 /* ----------------------------- derived ------------------------------ */
 

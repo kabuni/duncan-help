@@ -182,6 +182,19 @@ function StatRow({ stat }: { stat: Stat }) {
   );
 }
 
+function MetricCell({ label, value, trend }: { label: string; value: string; trend?: Trend }) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-3">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight">{label}</p>
+      <p className="mt-1 flex items-center gap-1.5 text-xl font-bold tabular-nums text-foreground">
+        {value}
+        <TrendIcon trend={trend} />
+      </p>
+    </div>
+  );
+}
+
+
 function SectionCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 sm:p-5">

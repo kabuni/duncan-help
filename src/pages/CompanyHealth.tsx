@@ -6,6 +6,7 @@ import WorkstreamDeliveryHealth from "@/components/company-health/WorkstreamDeli
 import AiEfficiency from "@/components/company-health/AiEfficiency";
 import OperationalStrip from "@/components/company-health/OperationalStrip";
 import { useAiEfficiency } from "@/hooks/useAiEfficiency";
+import { useProductAdoption } from "@/hooks/useProductAdoption";
 
 
 
@@ -282,8 +283,29 @@ export default function CompanyHealth() {
 
             {/* Product Measurement — SOURCE: Duncan analytics */}
             <SectionCard title="Product Adoption" subtitle="Uploads, usage and throughput">
-              <div>{d.product.map((s) => <StatRow key={s.label} stat={s} />)}</div>
+              <div>
+                {d.product.map((s) => <StatRow key={s.label} stat={s} />)}
+                <StatRow
+                  stat={{
+                    label: "Tickets open / closed (Azure DevOps)",
+                    value: product.tickets?.formatted ?? (product.isLoading ? "…" : "—"),
+                  }}
+                />
+                <StatRow
+                  stat={{
+                    label: "Velocity (tickets closed / week)",
+                    value: product.velocity?.formatted ?? (product.isLoading ? "…" : "—"),
+                    trend: product.velocity?.trend,
+                  }}
+                />
+              </div>
+              {product.error && (
+                <p className="pt-2 text-[10px] text-destructive">
+                  Azure DevOps unavailable: {product.error.message}
+                </p>
+              )}
             </SectionCard>
+
 
             {/* Marketing — SOURCE: GA4 (sessions, channels, cta_view/cta_click) + Duncan registrations.
                 Data + RAG live in src/hooks/useMarketingHealth.ts */}

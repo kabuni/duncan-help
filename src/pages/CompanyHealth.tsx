@@ -234,7 +234,7 @@ export default function CompanyHealth() {
               },
               {
                 area: "AI Efficiency",
-                descriptor: ai.score === null ? "Awaiting live usage data" : `Duncan efficiency score ${ai.score}`,
+                descriptor: "Hours saved, adoption and usage",
                 rag: ai.scoreRag ?? ("attention" as Rag),
               },
             ].map((tile) => (

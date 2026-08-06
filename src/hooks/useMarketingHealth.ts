@@ -1,3 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
+
 /* ------------------------------------------------------------------
    Marketing Health — reusable data layer.
 
@@ -326,10 +329,52 @@ export function computeMarketingHealth(raw: MarketingRaw): MarketingHealth {
 }
 
 /**
- * Marketing health data layer.
- * Swap PLACEHOLDER_RAW for a React Query call against the GA4 edge function
- * + `school_registrations` aggregation; the return shape stays identical.
+ * Marketing health data layer — LIVE.
+ * Sessions / traffic sources / CTA events come from GA4 via the
+ * `google-analytics-api` edge function (action: "marketing_health"),
+ * registrations from `public.school_registrations` (aggregated server-side).
+ * Falls back to placeholder numbers only when GA is not connected.
  */
-export function useMarketingHealth(): MarketingHealth {
-  return computeMarketingHealth(PLACEHOLDER_RAW);
+export function useMarketingHealth(): MarketingHealth & { isLoading: boolean; error: Error | null } {
+  const { session } = useAuth();
+
+  const query = useQuery({
+    queryKey: ["marketing-health", session?.user?.id],
+    enabled: !!session,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<MarketingRaw | null> => {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-analytics-api`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session!.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "marketing_health" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.code === "NOT_CONNECTED" || data.connected === false) return null;
+      if (!res.ok) throw new Error(data.error || "Failed to load marketing analytics");
+
+      const channels = (data.trafficSources ?? {}) as Record<string, number>;
+      const trafficSources = Object.fromEntries(
+        TRAFFIC_CHANNELS.map((c) => [c, Number(channels[c] ?? 0)]),
+      ) as Record<TrafficChannel, number>;
+
+      return {
+        registrations: data.registrations,
+        registrationsPrev: data.registrationsPrev,
+        sessions: data.sessions,
+        sessionsPrev: data.sessionsPrev,
+        trafficSources,
+        cta: data.cta,
+        ctaPrev: data.ctaPrev,
+        generatedAt: data.generatedAt,
+        live: true,
+      };
+    },
+  });
+
+  const health = computeMarketingHealth(query.data ?? PLACEHOLDER_RAW);
+  return { ...health, isLoading: query.isLoading, error: (query.error as Error) ?? null };
 }

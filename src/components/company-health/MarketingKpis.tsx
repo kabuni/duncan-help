@@ -169,11 +169,15 @@ export default function MarketingKpis() {
         </div>
       </KpiBlock>
 
-      {!m.live && (
+      {m.isLoading ? (
+        <p className="pt-3 text-[10px] text-muted-foreground">Loading live marketing data…</p>
+      ) : m.error ? (
+        <p className="pt-3 text-[10px] text-destructive">{m.error.message}</p>
+      ) : !m.live ? (
         <p className={cn("pt-3 text-[10px] text-muted-foreground")}>
-          Placeholder data — awaiting GA4 event wiring (cta_view / cta_click) and registrations aggregation.
+          Placeholder data — Google Analytics isn't connected. Connect it in Settings → Integrations for live numbers.
         </p>
-      )}
+      ) : null}
     </div>
   );
 }

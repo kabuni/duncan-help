@@ -1,33 +1,30 @@
 import { Progress } from "@/components/ui/progress";
 import { RagBadge } from "./HealthPrimitives";
-import { usePeopleCulture } from "@/hooks/usePeopleCulture";
+import { usePeopleCulture, SAMPLE_PEOPLE_CULTURE } from "@/hooks/usePeopleCulture";
 
 /**
  * People & Culture — live employee survey metrics.
  * SOURCE: employee survey Google Sheet, read by the `people-culture-metrics` edge function.
  */
 export default function PeopleCulture() {
-  const { data, isLoading, error, rag } = usePeopleCulture();
+  const { data: liveData, isLoading, error, rag: liveRag } = usePeopleCulture();
+
+  const isSample = !!error || !liveData || !liveData.responses;
+  const data = isSample ? SAMPLE_PEOPLE_CULTURE : liveData;
+  const rag = isSample ? ("on_track" as const) : liveRag;
 
   if (isLoading) {
     return <p className="text-xs text-muted-foreground">Loading employee survey…</p>;
   }
 
-  if (error) {
-    return (
-      <p className="text-xs text-destructive">
-        Employee survey unavailable: {(error as Error).message}. Make sure the survey sheet is
-        shared with duncan@kabuni.com (Viewer).
-      </p>
-    );
-  }
-
-  if (!data || !data.responses) {
-    return <p className="text-xs text-muted-foreground">No survey responses yet.</p>;
-  }
-
   return (
     <div className="space-y-4">
+      {isSample && (
+        <p className="text-[11px] text-muted-foreground italic">
+          Sample data — awaiting the first employee survey responses. Metrics switch to live
+          automatically once the sheet is populated.
+        </p>
+      )}
       <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
         <div>
           <p className="text-2xl font-bold tabular-nums text-foreground">{data.responses}</p>

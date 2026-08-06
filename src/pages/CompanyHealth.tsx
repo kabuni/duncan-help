@@ -230,7 +230,7 @@ export default function CompanyHealth() {
             {[
               ...d.companyHealth,
               {
-                area: "AI Efficiency",
+                area: "People & Culture",
                 descriptor: ai.score === null ? "Awaiting live usage data" : `Duncan efficiency score ${ai.score}`,
                 rag: ai.scoreRag ?? ("attention" as Rag),
               },

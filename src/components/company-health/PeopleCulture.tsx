@@ -22,15 +22,15 @@ export default function PeopleCulture() {
   const rag = isSample ? ("attention" as const) : liveRag;
 
   if (isLoading) {
-    return <p className="text-xs text-muted-foreground">Loading employee survey…</p>;
+    return <p className="text-xs text-muted-foreground">Loading team sentiment…</p>;
   }
 
   return (
     <div className="space-y-4">
       {isSample && (
         <p className="text-[11px] text-muted-foreground italic">
-          Illustrative model — awaiting the first employee survey responses. Indices switch to live
-          survey data automatically once responses land.
+          Illustrative model — awaiting the first responses. Indices switch to live data
+          automatically once responses land.
         </p>
       )}
 

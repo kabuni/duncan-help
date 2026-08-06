@@ -86,28 +86,8 @@ export default function MarketingKpis() {
         <PeriodGrid periods={m.sessions.periods} />
       </KpiBlock>
 
-      {/* Interest Registration Submissions — SOURCE: GA4 registration conversion event */}
-      <KpiBlock
-        title="Interest registration submissions"
-        hint={`GA4 event ${m.instrumentation?.registrationEvent ?? "interest_registration"} · vs previous period`}
-        target={byKey.registrations?.target}
-        rag={m.registrations.rag}
-      >
-        <PeriodGrid periods={m.registrations.periods} />
-      </KpiBlock>
 
-      {/* Visit-to-Submission Conversion — SOURCE: GA4 registration events ÷ GA4 sessions */}
-      <KpiBlock
-        title="Visit-to-submission conversion"
-        hint="GA4 registration events ÷ GA4 sessions (30d)"
-        target={byKey.conversion?.target}
-        rag={m.conversion.rag}
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-lg font-bold tabular-nums text-foreground">{m.conversion.formatted}</span>
-          <TrendIcon trend={m.conversion.trend} delta={m.conversion.delta} />
-        </div>
-      </KpiBlock>
+
 
       {/* Traffic Sources — SOURCE: GA4 sessionDefaultChannelGroup */}
       <KpiBlock title="Traffic sources" hint="Share of sessions (30d)">

@@ -154,6 +154,43 @@ Deno.serve(async (req) => {
         );
       }
 
+      /* Ticket counts for the Company Health "Product Adoption" tile.
+         Live WIQL counts across the whole organisation:
+           • open      -> [System.State] = 'In Progress'
+           • closed    -> [System.State] = 'Closed'
+           • closed30  -> Closed and [Microsoft.VSTS.Common.ClosedDate] >= @today - 30
+         Velocity is derived client-side as closed30 / ~4.3 weeks. */
+      case "work_item_counts": {
+        const runCount = async (where: string): Promise<number> => {
+          const r = await fetch(`${orgUrl}/_apis/wit/wiql?api-version=7.1`, {
+            method: "POST",
+            headers: { Authorization: adoAuthHeader, "Content-Type": "application/json" },
+            body: JSON.stringify({ query: `SELECT [System.Id] FROM workitems WHERE ${where}` }),
+          });
+          if (!r.ok) {
+            const details = await r.text();
+            throw new Error(`[${r.status}] WIQL failed: ${details}`);
+          }
+          const j = await r.json();
+          return (j.workItems || []).length;
+        };
+
+        const [inProgress, closed, closed30, closedPrev30] = await Promise.all([
+          runCount(`[System.State] = 'In Progress'`),
+          runCount(`[System.State] = 'Closed'`),
+          runCount(`[System.State] = 'Closed' AND [Microsoft.VSTS.Common.ClosedDate] >= @today - 30`),
+          runCount(
+            `[System.State] = 'Closed' AND [Microsoft.VSTS.Common.ClosedDate] >= @today - 60 AND [Microsoft.VSTS.Common.ClosedDate] < @today - 30`,
+          ),
+        ]);
+
+        return new Response(
+          JSON.stringify({ inProgress, closed, closed30, closedPrev30, generatedAt: new Date().toISOString() }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400,

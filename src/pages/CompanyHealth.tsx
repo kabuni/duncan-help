@@ -71,7 +71,7 @@ const DATA: DashboardData = {
     { area: "Financial Health", descriptor: "Variance", rag: "attention" },
     { area: "Marketing Impact", descriptor: "Reach, pipeline contribution and campaign ROI", rag: "attention" },
     { area: "Operational Performance", descriptor: "Cost per output", rag: "attention" },
-    { area: "People & Culture", descriptor: "Commitments met and engagement", rag: "critical" },
+    
     
   ],
 
@@ -230,7 +230,7 @@ export default function CompanyHealth() {
             {[
               ...d.companyHealth,
               {
-                area: "AI Efficiency",
+                area: "People & Culture",
                 descriptor: ai.score === null ? "Awaiting live usage data" : `Duncan efficiency score ${ai.score}`,
                 rag: ai.scoreRag ?? ("attention" as Rag),
               },

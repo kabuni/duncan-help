@@ -9,7 +9,18 @@ export interface PeopleCultureMetric {
   responses: number;
 }
 
+export interface PeopleCultureTheme {
+  key: string;
+  label: string;
+  description: string;
+  score: number; // 0-100
+  questions: number;
+}
+
 export interface PeopleCultureData {
+  themes: PeopleCultureTheme[];
+  strength: PeopleCultureTheme | null;
+  risk: PeopleCultureTheme | null;
   responses: number;
   lastResponse: string | null;
   overall: number | null; // 0-100 sentiment index
@@ -23,16 +34,20 @@ export type Rag = "on_track" | "attention" | "critical";
 export const SAMPLE_PEOPLE_CULTURE: PeopleCultureData = {
   responses: 24,
   lastResponse: new Date().toISOString(),
-  overall: 78,
+  overall: 74,
   enps: 42,
-  metrics: [
-    { question: "I understand how my work contributes to Kabuni's goals", average: 4.3, scaleMax: 5, normalised: 86, responses: 24 },
-    { question: "I have the tools and information I need to do my job well", average: 3.9, scaleMax: 5, normalised: 78, responses: 24 },
-    { question: "I feel recognised for the work I do", average: 3.4, scaleMax: 5, normalised: 68, responses: 24 },
-    { question: "My workload is manageable", average: 3.2, scaleMax: 5, normalised: 64, responses: 23 },
-    { question: "I can raise concerns openly with leadership", average: 4.1, scaleMax: 5, normalised: 82, responses: 24 },
-    { question: "I see a clear path to grow my career here", average: 3.6, scaleMax: 5, normalised: 72, responses: 22 },
+  metrics: [],
+  themes: [
+    { key: "wellbeing", label: "Wellbeing & Workload", description: "Sustainable pace, balance and stress", score: 61, questions: 3 },
+    { key: "recognition", label: "Recognition & Reward", description: "Being valued, recognised and fairly rewarded", score: 66, questions: 2 },
+    { key: "growth", label: "Growth & Development", description: "Learning, progression and career path", score: 71, questions: 3 },
+    { key: "enablement", label: "Enablement", description: "Tools, information and clarity to do the job", score: 77, questions: 4 },
+    { key: "leadership", label: "Leadership & Trust", description: "Confidence in leadership and transparency", score: 80, questions: 3 },
+    { key: "engagement", label: "Engagement & Motivation", description: "Energy, pride and discretionary effort", score: 83, questions: 3 },
+    { key: "belonging", label: "Belonging & Inclusion", description: "Psychological safety, respect and team connection", score: 85, questions: 2 },
   ],
+  strength: { key: "belonging", label: "Belonging & Inclusion", description: "Psychological safety, respect and team connection", score: 85, questions: 2 },
+  risk: { key: "wellbeing", label: "Wellbeing & Workload", description: "Sustainable pace, balance and stress", score: 61, questions: 3 },
 };
 
 function ragFor(overall: number | null): Rag {
@@ -60,6 +75,9 @@ export function usePeopleCulture() {
         overall: data.overall ?? null,
         enps: data.enps ?? null,
         metrics: data.metrics ?? [],
+        themes: data.themes ?? [],
+        strength: data.strength ?? null,
+        risk: data.risk ?? null,
       };
     },
   });

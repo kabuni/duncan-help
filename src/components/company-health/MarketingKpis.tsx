@@ -113,19 +113,9 @@ export default function MarketingKpis() {
           Google Analytics isn't connected — showing zeros, not sample data. Connect GA4 in Settings → Integrations.
         </p>
       ) : (
-        <p className="pt-3 text-[10px] text-muted-foreground">
-          Live GA4 data.
-          {(() => {
-            const i = m.instrumentation;
-            if (!i) return null;
-            const missing = [!i.registrationEventPresent ? i.registrationEvent : null].filter(Boolean);
-
-            return missing.length
-              ? ` Awaiting website event instrumentation for: ${missing.join(", ")} — these KPIs report 0 until the events fire.`
-              : null;
-          })()}
-        </p>
+        <p className="pt-3 text-[10px] text-muted-foreground">Live GA4 data.</p>
       )}
+
 
       {/* ---------------- Social Media ---------------- */}
       <div className="mt-4 pt-3 border-t border-border">

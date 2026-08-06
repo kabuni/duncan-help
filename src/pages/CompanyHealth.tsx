@@ -334,16 +334,7 @@ export default function CompanyHealth() {
         </section>
 
 
-        {/* 3. Workstream Delivery Health — SOURCE: plan90_workstreams + plan90_deliverables
-             + plan90_deliverable_updates + workstream_cards (live, no stored copy).
-             Logic lives in src/hooks/useWorkstreamHealth.ts */}
-        <section aria-labelledby="delivery-heading" className="space-y-3">
-          <h2 id="delivery-heading" className="text-sm font-semibold text-foreground tracking-tight">
-            Workstream Delivery Health
-          </h2>
-          <WorkstreamDeliveryHealth />
-          <p className="text-[11px] text-muted-foreground">Live view of the 90-Day Tracker — no manual editing. Click a workstream to investigate its deliverables.</p>
-        </section>
+
 
 
         {/* 4. Operational strip — SOURCE: sync_logs + briefing_runs + kb_documents/documents/

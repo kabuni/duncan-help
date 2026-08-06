@@ -44,6 +44,15 @@ export default function ReportedBugsAdmin() {
     toast.success("Deleted");
   };
 
+  const toggleResolved = async (r: Issue) => {
+    const resolved_at = r.resolved_at ? null : new Date().toISOString();
+    const { error } = await supabase.from("issues").update({ resolved_at } as any).eq("id", r.id);
+    if (error) return toast.error(error.message);
+    setIssues((prev) => prev.map((i) => (i.id === r.id ? { ...i, resolved_at } : i)));
+    toast.success(resolved_at ? "Marked solved" : "Reopened");
+  };
+
+
   const downloadAttachment = async (path: string) => {
     setDownloadingPath(path);
     const { data, error } = await supabase.storage

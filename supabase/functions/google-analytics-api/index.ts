@@ -892,7 +892,7 @@ serve(async (req) => {
     // Marketing health KPIs for the Company Health page (live GA4 + Duncan registrations).
     if (action === "marketing_health") {
       const R = (startDate: string, endDate: string) => ({ startDate, endDate });
-      const [sessionsA, sessionsB, channels, ctaNow, ctaPrev] = await runLimited(2, [
+      const [sessionsA, sessionsB, channels, ctaNow, ctaPrev, eventsDaily] = await runLimited(2, [
         () => runReport(accessToken, propertyId, {
           dateRanges: [R("today", "today"), R("yesterday", "yesterday"), R("6daysAgo", "today"), R("13daysAgo", "7daysAgo")],
           metrics: [{ name: "sessions" }],

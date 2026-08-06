@@ -19,6 +19,22 @@ export interface PeopleCultureData {
 
 export type Rag = "on_track" | "attention" | "critical";
 
+/** Illustrative placeholder shown until the first real survey responses land. */
+export const SAMPLE_PEOPLE_CULTURE: PeopleCultureData = {
+  responses: 24,
+  lastResponse: new Date().toISOString(),
+  overall: 78,
+  enps: 42,
+  metrics: [
+    { question: "I understand how my work contributes to Kabuni's goals", average: 4.3, scaleMax: 5, normalised: 86, responses: 24 },
+    { question: "I have the tools and information I need to do my job well", average: 3.9, scaleMax: 5, normalised: 78, responses: 24 },
+    { question: "I feel recognised for the work I do", average: 3.4, scaleMax: 5, normalised: 68, responses: 24 },
+    { question: "My workload is manageable", average: 3.2, scaleMax: 5, normalised: 64, responses: 23 },
+    { question: "I can raise concerns openly with leadership", average: 4.1, scaleMax: 5, normalised: 82, responses: 24 },
+    { question: "I see a clear path to grow my career here", average: 3.6, scaleMax: 5, normalised: 72, responses: 22 },
+  ],
+};
+
 function ragFor(overall: number | null): Rag {
   if (overall === null) return "attention";
   if (overall >= 75) return "on_track";

@@ -9,9 +9,9 @@ import { usePeopleCulture, SAMPLE_PEOPLE_CULTURE } from "@/hooks/usePeopleCultur
  * not raw question wording.
  */
 function scoreTone(score: number) {
-  if (score >= 75) return "bg-emerald-500";
-  if (score >= 65) return "bg-amber-500";
-  return "bg-destructive";
+  if (score >= 75) return "[&>*]:bg-emerald-500";
+  if (score >= 65) return "[&>*]:bg-amber-500";
+  return "[&>*]:bg-destructive";
 }
 
 export default function PeopleCulture() {
@@ -108,7 +108,7 @@ export default function PeopleCulture() {
             </div>
             <Progress
               value={t.score}
-              indicatorClassName={scoreTone(t.score)}
+              className={scoreTone(t.score)}
               aria-label={`${t.label}: ${Math.round(t.score)} out of 100`}
             />
           </div>

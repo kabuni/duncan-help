@@ -3,7 +3,6 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import MarketingKpis from "@/components/company-health/MarketingKpis";
 import AiEfficiency from "@/components/company-health/AiEfficiency";
-import OperationalStrip from "@/components/company-health/OperationalStrip";
 import { useAiEfficiency } from "@/hooks/useAiEfficiency";
 import { useProductAdoption } from "@/hooks/useProductAdoption";
 
@@ -70,7 +69,6 @@ const DATA: DashboardData = {
     { area: "Product Adoption", descriptor: "Uploads, usage and throughput", rag: "on_track" },
     { area: "Financial Health", descriptor: "Variance", rag: "attention" },
     { area: "Marketing Impact", descriptor: "Reach, pipeline contribution and campaign ROI", rag: "attention" },
-    { area: "Operational Performance", descriptor: "Cost per output", rag: "attention" },
     
     
   ],

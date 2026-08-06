@@ -107,13 +107,6 @@ export default function EAInbox() {
   }, [requests, filter]);
 
   if (roleLoading) return null;
-  if (!isAdmin) {
-    return (
-      <div className="p-8 text-center text-muted-foreground">
-        EA Inbox is admin-only.
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-6">

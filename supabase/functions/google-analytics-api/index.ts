@@ -889,8 +889,99 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // Marketing health KPIs for the Company Health page (live GA4 + Duncan registrations).
+    if (action === "marketing_health") {
+      const R = (startDate: string, endDate: string) => ({ startDate, endDate });
+      const [sessionsA, sessionsB, channels, ctaNow, ctaPrev] = await runLimited(2, [
+        () => runReport(accessToken, propertyId, {
+          dateRanges: [R("today", "today"), R("yesterday", "yesterday"), R("6daysAgo", "today"), R("13daysAgo", "7daysAgo")],
+          metrics: [{ name: "sessions" }],
+        }),
+        () => runReport(accessToken, propertyId, {
+          dateRanges: [R("29daysAgo", "today"), R("59daysAgo", "30daysAgo")],
+          metrics: [{ name: "sessions" }],
+        }),
+        () => runReport(accessToken, propertyId, {
+          dateRanges: [R("29daysAgo", "today")],
+          dimensions: [{ name: "sessionDefaultChannelGroup" }],
+          metrics: [{ name: "sessions" }],
+          orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+          limit: 15,
+        }),
+        () => runReport(accessToken, propertyId, {
+          dateRanges: [R("29daysAgo", "today")],
+          dimensions: [{ name: "eventName" }],
+          metrics: [{ name: "eventCount" }],
+          limit: 200,
+        }),
+        () => runReport(accessToken, propertyId, {
+          dateRanges: [R("59daysAgo", "30daysAgo")],
+          dimensions: [{ name: "eventName" }],
+          metrics: [{ name: "eventCount" }],
+          limit: 200,
+        }),
+      ]);
 
+      // Multi-date-range reports return one row per range, tagged by dateRange dimension.
+      const byRange = (report: any) => {
+        const out: number[] = [];
+        for (const row of report.rows ?? []) {
+          const tag = String(row.dimensionValues?.[row.dimensionValues.length - 1]?.value ?? "date_range_0");
+          const idx = Number(tag.replace("date_range_", "")) || 0;
+          out[idx] = (out[idx] ?? 0) + Number(row.metricValues?.[0]?.value ?? 0);
+        }
+        return out;
+      };
+      const a = byRange(sessionsA);
+      const b = byRange(sessionsB);
 
+      const eventCount = (report: any, name: string) =>
+        (report.rows ?? [])
+          .filter((r: any) => dimensionValue(r, 0) === name)
+          .reduce((s: number, r: any) => s + metricValue(r, 0), 0);
+
+      const trafficSources: Record<string, number> = {};
+      for (const row of channels.rows ?? []) {
+        trafficSources[dimensionValue(row, 0)] = metricValue(row, 0);
+      }
+
+      // Registrations (Duncan DB) over the same windows.
+      const now = new Date();
+      const daysAgo = (d: number) => new Date(now.getTime() - d * 86400000).toISOString();
+      const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+      const startOfYesterday = new Date(Date.parse(startOfToday) - 86400000).toISOString();
+      const regCount = async (gte: string, lt?: string) => {
+        let q = supabaseAdmin.from("school_registrations").select("id", { count: "exact", head: true }).gte("created_at", gte);
+        if (lt) q = q.lt("created_at", lt);
+        const { count } = await q;
+        return count ?? 0;
+      };
+      const [rToday, rYesterday, rWeek, rWeekPrev, rMonth, rMonthPrev] = await Promise.all([
+        regCount(startOfToday),
+        regCount(startOfYesterday, startOfToday),
+        regCount(daysAgo(7)),
+        regCount(daysAgo(14), daysAgo(7)),
+        regCount(daysAgo(30)),
+        regCount(daysAgo(60), daysAgo(30)),
+      ]);
+
+      return new Response(
+        JSON.stringify({
+          connected: true,
+          live: true,
+          propertyId,
+          registrations: { today: rToday, week: rWeek, month: rMonth },
+          registrationsPrev: { today: rYesterday, week: rWeekPrev, month: rMonthPrev },
+          sessions: { today: a[0] ?? 0, week: a[2] ?? 0, month: b[0] ?? 0 },
+          sessionsPrev: { today: a[1] ?? 0, week: a[3] ?? 0, month: b[1] ?? 0 },
+          trafficSources,
+          cta: { views: eventCount(ctaNow, "cta_view"), clicks: eventCount(ctaNow, "cta_click") },
+          ctaPrev: { views: eventCount(ctaPrev, "cta_view"), clicks: eventCount(ctaPrev, "cta_click") },
+          generatedAt: new Date().toISOString(),
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     if (action === "dashboard") {
       return new Response(JSON.stringify(dashboard), { headers: { ...corsHeaders, "Content-Type": "application/json" } });

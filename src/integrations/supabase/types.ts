@@ -2313,6 +2313,7 @@ export type Database = {
           frequency: string
           id: string
           issue_type: string
+          resolved_at: string | null
           retrieval_relevant: string | null
           severity: string
           steps_to_reproduce: string | null
@@ -2332,6 +2333,7 @@ export type Database = {
           frequency?: string
           id?: string
           issue_type?: string
+          resolved_at?: string | null
           retrieval_relevant?: string | null
           severity?: string
           steps_to_reproduce?: string | null
@@ -2351,6 +2353,7 @@ export type Database = {
           frequency?: string
           id?: string
           issue_type?: string
+          resolved_at?: string | null
           retrieval_relevant?: string | null
           severity?: string
           steps_to_reproduce?: string | null

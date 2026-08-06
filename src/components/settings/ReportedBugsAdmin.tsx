@@ -15,6 +15,7 @@ interface Issue {
   affected_area: string | null;
   attachment_paths: string[] | null;
   created_at: string;
+  resolved_at: string | null;
 }
 
 export default function ReportedBugsAdmin() {
@@ -42,6 +43,15 @@ export default function ReportedBugsAdmin() {
     setIssues((prev) => prev.filter((r) => r.id !== id));
     toast.success("Deleted");
   };
+
+  const toggleResolved = async (r: Issue) => {
+    const resolved_at = r.resolved_at ? null : new Date().toISOString();
+    const { error } = await supabase.from("issues").update({ resolved_at } as any).eq("id", r.id);
+    if (error) return toast.error(error.message);
+    setIssues((prev) => prev.map((i) => (i.id === r.id ? { ...i, resolved_at } : i)));
+    toast.success(resolved_at ? "Marked solved" : "Reopened");
+  };
+
 
   const downloadAttachment = async (path: string) => {
     setDownloadingPath(path);
@@ -79,9 +89,23 @@ export default function ReportedBugsAdmin() {
                 {r.affected_area && <> · {r.affected_area}</>}
               </p>
             </div>
-            <button onClick={() => remove(r.id)} className="text-destructive hover:bg-destructive/10 rounded p-1.5 transition-colors" title="Delete">
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => toggleResolved(r)}
+                className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${
+                  r.resolved_at
+                    ? "bg-primary/10 text-primary hover:bg-primary/20"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+                title={r.resolved_at ? "Mark as unsolved" : "Mark as solved"}
+              >
+                {r.resolved_at ? "Solved" : "Mark solved"}
+              </button>
+              <button onClick={() => remove(r.id)} className="text-destructive hover:bg-destructive/10 rounded p-1.5 transition-colors" title="Delete">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
           </div>
           <p className="text-xs text-foreground/90 whitespace-pre-wrap">{r.description}</p>
           {r.expected_behavior && (

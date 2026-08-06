@@ -78,15 +78,16 @@ const DATA: DashboardData = {
 
   // SOURCE: CRM + 90-Day Tracker
   schools: {
-    signed: 120,
+    signed: 4,
     target: 400,
-    weeklyGrowth: 8,
+    weeklyGrowth: 0,
     forecast: "Behind target",
-    forecastRag: "attention",
+    forecastRag: "critical",
     stages: [
-      { label: "Prospect", count: 412 },
-      { label: "Pipeline", count: 186 },
-      { label: "Signed", count: 120 },
+      // Prospect / Pipeline are placeholders until confirmed values are supplied
+      { label: "Prospect", count: 0 },
+      { label: "Pipeline", count: 0 },
+      { label: "Signed", count: 4 },
     ],
   },
 

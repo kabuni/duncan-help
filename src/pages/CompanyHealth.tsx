@@ -3,8 +3,10 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import MarketingKpis from "@/components/company-health/MarketingKpis";
 import AiEfficiency from "@/components/company-health/AiEfficiency";
+import PeopleCulture from "@/components/company-health/PeopleCulture";
 import { useAiEfficiency } from "@/hooks/useAiEfficiency";
 import { useProductAdoption } from "@/hooks/useProductAdoption";
+import { usePeopleCulture } from "@/hooks/usePeopleCulture";
 
 
 

@@ -249,7 +249,7 @@ export default function CompanyHealth() {
           </h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Schools & Pipeline — SOURCE: CRM + 90-Day Tracker */}
-            <SectionCard title="Schools &amp; Pipeline" subtitle="Signed schools against annual target">
+            <SectionCard title="Commercial Growth" subtitle="Schools signed vs target">
               <div className="space-y-3">
                 <div className="flex items-end justify-between gap-3">
                   <p className="text-2xl font-bold tabular-nums text-foreground">
@@ -281,18 +281,18 @@ export default function CompanyHealth() {
             </SectionCard>
 
             {/* Product Measurement — SOURCE: Duncan analytics */}
-            <SectionCard title="Product Measurement" subtitle="Usage and throughput this week">
+            <SectionCard title="Product Adoption" subtitle="Uploads, usage and throughput">
               <div>{d.product.map((s) => <StatRow key={s.label} stat={s} />)}</div>
             </SectionCard>
 
             {/* Marketing — SOURCE: GA4 (sessions, channels, cta_view/cta_click) + Duncan registrations.
                 Data + RAG live in src/hooks/useMarketingHealth.ts */}
-            <SectionCard title="Marketing" subtitle="Website and funnel performance">
+            <SectionCard title="Marketing Impact" subtitle="Reach, pipeline contribution and campaign ROI">
               <MarketingKpis />
             </SectionCard>
             {/* Finance — SOURCE: Finance system */}
 
-            <SectionCard title="Finance" subtitle="Green within ±10% of plan, red at -10% or worse">
+            <SectionCard title="Financial Health" subtitle="Variance — green within ±10% of plan, red at -10% or worse">
               <div>{d.finance.map((s) => <StatRow key={s.label} stat={s} />)}</div>
             </SectionCard>
           </div>
@@ -327,7 +327,7 @@ export default function CompanyHealth() {
              public.get_operational_metrics(). Logic lives in src/hooks/useOperationalHealth.ts */}
         <section aria-labelledby="operational-heading" className="space-y-2">
           <h2 id="operational-heading" className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
-            Operational
+            Operational Performance — Cost per output
           </h2>
           <OperationalStrip />
         </section>

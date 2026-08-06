@@ -66,13 +66,15 @@ const DATA: DashboardData = {
 
   // SOURCE: aggregate roll-up of the four domains below
   companyHealth: [
-    { area: "Schools / Sales", descriptor: "Signed vs 400 target", rag: "attention" },
-    { area: "Product Usage", descriptor: "Uploads & throughput", rag: "on_track" },
-    { area: "Finance", descriptor: "Cashflow, burn, variance", rag: "attention" },
-    { area: "Marketing", descriptor: "Website sessions, conversion, CTA CTR", rag: "attention" },
-    { area: "Staff Delivery", descriptor: "Monthly commitments met", rag: "critical" },
+    { area: "Commercial Growth", descriptor: "Schools signed vs target", rag: "attention" },
+    { area: "Product Adoption", descriptor: "Uploads, usage and throughput", rag: "on_track" },
+    { area: "Financial Health", descriptor: "Variance", rag: "attention" },
+    { area: "Marketing Impact", descriptor: "Reach, pipeline contribution and campaign ROI", rag: "attention" },
+    { area: "Operational Performance", descriptor: "Cost per output", rag: "attention" },
+    { area: "People & Culture", descriptor: "Commitments met and engagement", rag: "critical" },
     
   ],
+
 
   // SOURCE: CRM + 90-Day Tracker
   schools: {

@@ -1,0 +1,1 @@
+ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS resolved_at timestamptz;

@@ -333,19 +333,6 @@ export default function CompanyHealth() {
         </section>
 
 
-
-
-
-        {/* 4. Operational strip — SOURCE: sync_logs + briefing_runs + kb_documents/documents/
-             project_files + company_integrations/user_integrations + issues, via
-             public.get_operational_metrics(). Logic lives in src/hooks/useOperationalHealth.ts */}
-        <section aria-labelledby="operational-heading" className="space-y-2">
-          <h2 id="operational-heading" className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
-            Operational Performance — Cost per output
-          </h2>
-          <OperationalStrip />
-        </section>
-
       </div>
     </main>
   );

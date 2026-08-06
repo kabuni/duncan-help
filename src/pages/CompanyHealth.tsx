@@ -2,7 +2,6 @@ import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, HeartPulse } from "
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import MarketingKpis from "@/components/company-health/MarketingKpis";
-import WorkstreamDeliveryHealth from "@/components/company-health/WorkstreamDeliveryHealth";
 import AiEfficiency from "@/components/company-health/AiEfficiency";
 import OperationalStrip from "@/components/company-health/OperationalStrip";
 import { useAiEfficiency } from "@/hooks/useAiEfficiency";

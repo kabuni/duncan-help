@@ -57,25 +57,18 @@ function toNum(v: any): number | null {
 // Survey questions are classified into stable culture themes so leadership sees
 // indices ("Wellbeing & Workload: 64") rather than raw question wording.
 const THEMES: { key: string; label: string; description: string; patterns: RegExp }[] = [
-  { key: "engagement", label: "Engagement & Motivation", description: "Energy, pride and discretionary effort",
-    patterns: /motivat|engag|proud|energis|energiz|enjoy|look forward|meaning|purpose/i },
-  { key: "enablement", label: "Enablement", description: "Tools, information and clarity to do the job",
-    patterns: /tool|resource|information|equip|enable|clear|clarity|understand|priorit|process/i },
-  { key: "wellbeing", label: "Wellbeing & Workload", description: "Sustainable pace, balance and stress",
-    patterns: /workload|balance|stress|burn|hours|pace|pressure|wellbeing|well-being|health|time off/i },
-  { key: "growth", label: "Growth & Development", description: "Learning, progression and career path",
-    patterns: /grow|develop|career|learn|train|progress|promot|skill|feedback on my/i },
-  { key: "leadership", label: "Leadership & Trust", description: "Confidence in leadership and transparency",
-    patterns: /leader|manager|management|trust|direction|strategy|communicat|transparen|listen/i },
-  { key: "belonging", label: "Belonging & Inclusion", description: "Psychological safety, respect and team connection",
-    patterns: /belong|inclus|respect|safe|voice|team|colleague|culture|diverse|opinion/i },
-  { key: "recognition", label: "Recognition & Reward", description: "Being valued, recognised and fairly rewarded",
-    patterns: /recogni|valued|apprecia|reward|pay|salary|compensat|fair/i },
+  { key: "culture", label: "Culture & Connection", description: "Belonging, inclusion, trust in leadership and team connection",
+    patterns: /belong|inclus|respect|safe|voice|team|colleague|culture|diverse|opinion|leader|manager|management|trust|transparen|listen|communicat/i },
+  { key: "alignment", label: "Alignment & Growth", description: "Clarity of direction, enablement, learning and progression",
+    patterns: /grow|develop|career|learn|train|progress|promot|skill|direction|strategy|goal|clear|clarity|understand|priorit|tool|resource|information|equip|enable|process|feedback/i },
+  { key: "satisfaction", label: "Employee Satisfaction", description: "Engagement, wellbeing, recognition and overall happiness",
+    patterns: /satisf|happy|motivat|engag|proud|energis|energiz|enjoy|look forward|meaning|purpose|workload|balance|stress|burn|hours|pace|pressure|wellbeing|well-being|health|time off|recogni|valued|apprecia|reward|pay|salary|compensat|fair/i },
 ];
 
 function classify(question: string): { key: string; label: string; description: string } {
   for (const t of THEMES) if (t.patterns.test(question)) return { key: t.key, label: t.label, description: t.description };
-  return { key: "other", label: "Other Signals", description: "Questions not mapped to a core culture theme" };
+  const f = THEMES[2];
+  return { key: f.key, label: f.label, description: f.description };
 }
 
 serve(async (req) => {

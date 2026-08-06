@@ -38,16 +38,12 @@ export const SAMPLE_PEOPLE_CULTURE: PeopleCultureData = {
   enps: 42,
   metrics: [],
   themes: [
-    { key: "wellbeing", label: "Wellbeing & Workload", description: "Sustainable pace, balance and stress", score: 61, questions: 3 },
-    { key: "recognition", label: "Recognition & Reward", description: "Being valued, recognised and fairly rewarded", score: 66, questions: 2 },
-    { key: "growth", label: "Growth & Development", description: "Learning, progression and career path", score: 71, questions: 3 },
-    { key: "enablement", label: "Enablement", description: "Tools, information and clarity to do the job", score: 77, questions: 4 },
-    { key: "leadership", label: "Leadership & Trust", description: "Confidence in leadership and transparency", score: 80, questions: 3 },
-    { key: "engagement", label: "Engagement & Motivation", description: "Energy, pride and discretionary effort", score: 83, questions: 3 },
-    { key: "belonging", label: "Belonging & Inclusion", description: "Psychological safety, respect and team connection", score: 85, questions: 2 },
+    { key: "satisfaction", label: "Employee Satisfaction", description: "Engagement, wellbeing, recognition and overall happiness", score: 70, questions: 5 },
+    { key: "alignment", label: "Alignment & Growth", description: "Clarity of direction, enablement, learning and progression", score: 74, questions: 6 },
+    { key: "culture", label: "Culture & Connection", description: "Belonging, inclusion, trust in leadership and team connection", score: 82, questions: 5 },
   ],
-  strength: { key: "belonging", label: "Belonging & Inclusion", description: "Psychological safety, respect and team connection", score: 85, questions: 2 },
-  risk: { key: "wellbeing", label: "Wellbeing & Workload", description: "Sustainable pace, balance and stress", score: 61, questions: 3 },
+  strength: { key: "culture", label: "Culture & Connection", description: "Belonging, inclusion, trust in leadership and team connection", score: 82, questions: 5 },
+  risk: { key: "satisfaction", label: "Employee Satisfaction", description: "Engagement, wellbeing, recognition and overall happiness", score: 70, questions: 5 },
 };
 
 function ragFor(overall: number | null): Rag {

@@ -293,29 +293,48 @@ export default function CompanyHealth() {
               </div>
             </SectionCard>
 
-            {/* Product Measurement — SOURCE: Duncan analytics */}
+            {/* Product Measurement — SOURCE: Duncan analytics + Azure DevOps */}
             <SectionCard title="Product Adoption" subtitle="Uploads, usage and throughput">
-              <div>
-                {d.product.map((s) => <StatRow key={s.label} stat={s} />)}
-                {/* Tickets + velocity clubbed into a single delivery throughput row */}
-                <StatRow
-                  stat={{
-                    label: "Delivery throughput (tickets open / closed · velocity per week)",
-                    value: product.isLoading
-                      ? "…"
-                      : [product.tickets?.formatted, product.velocity?.formatted]
-                          .filter(Boolean)
-                          .join(" · ") || "—",
-                    trend: product.velocity?.trend,
-                  }}
-                />
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <MetricCell label="Shots uploaded" value="342" trend="up" />
+                  <MetricCell
+                    label="Tickets in progress"
+                    value={product.isLoading ? "…" : product.tickets ? String(product.tickets.inProgress) : "—"}
+                  />
+                  <MetricCell
+                    label="Tickets closed"
+                    value={product.isLoading ? "…" : product.tickets ? String(product.tickets.closed) : "—"}
+                  />
+                  <MetricCell
+                    label="Velocity / week"
+                    value={product.isLoading ? "…" : product.velocity ? product.velocity.value.toFixed(1) : "—"}
+                    trend={product.velocity?.trend}
+                  />
+                </div>
+
+                <div className="pt-3 border-t border-border space-y-1.5">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-muted-foreground">Manufacturing output</p>
+                      <p className="text-lg font-bold tabular-nums text-foreground">
+                        186 <span className="text-sm font-medium text-muted-foreground">/ 220 units</span>
+                      </p>
+                    </div>
+                    <RagBadge rag="attention" />
+                  </div>
+                  <Progress value={85} aria-label="85% of weekly production plan" />
+                  <p className="text-[11px] text-muted-foreground tabular-nums">85% of weekly plan</p>
+                </div>
               </div>
+
               {product.error && (
                 <p className="pt-2 text-[10px] text-destructive">
                   Azure DevOps unavailable: {product.error.message}
                 </p>
               )}
             </SectionCard>
+
 
 
             {/* Marketing — SOURCE: GA4 (sessions, channels, cta_view/cta_click) + Duncan registrations.

@@ -53,6 +53,31 @@ function toNum(v: any): number | null {
   return isFinite(n) ? n : null;
 }
 
+// --- Agentic theme derivation -------------------------------------------------
+// Survey questions are classified into stable culture themes so leadership sees
+// indices ("Wellbeing & Workload: 64") rather than raw question wording.
+const THEMES: { key: string; label: string; description: string; patterns: RegExp }[] = [
+  { key: "engagement", label: "Engagement & Motivation", description: "Energy, pride and discretionary effort",
+    patterns: /motivat|engag|proud|energis|energiz|enjoy|look forward|meaning|purpose/i },
+  { key: "enablement", label: "Enablement", description: "Tools, information and clarity to do the job",
+    patterns: /tool|resource|information|equip|enable|clear|clarity|understand|priorit|process/i },
+  { key: "wellbeing", label: "Wellbeing & Workload", description: "Sustainable pace, balance and stress",
+    patterns: /workload|balance|stress|burn|hours|pace|pressure|wellbeing|well-being|health|time off/i },
+  { key: "growth", label: "Growth & Development", description: "Learning, progression and career path",
+    patterns: /grow|develop|career|learn|train|progress|promot|skill|feedback on my/i },
+  { key: "leadership", label: "Leadership & Trust", description: "Confidence in leadership and transparency",
+    patterns: /leader|manager|management|trust|direction|strategy|communicat|transparen|listen/i },
+  { key: "belonging", label: "Belonging & Inclusion", description: "Psychological safety, respect and team connection",
+    patterns: /belong|inclus|respect|safe|voice|team|colleague|culture|diverse|opinion/i },
+  { key: "recognition", label: "Recognition & Reward", description: "Being valued, recognised and fairly rewarded",
+    patterns: /recogni|valued|apprecia|reward|pay|salary|compensat|fair/i },
+];
+
+function classify(question: string): { key: string; label: string; description: string } {
+  for (const t of THEMES) if (t.patterns.test(question)) return { key: t.key, label: t.label, description: t.description };
+  return { key: "other", label: "Other Signals", description: "Questions not mapped to a core culture theme" };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
@@ -140,6 +165,26 @@ serve(async (req) => {
       }
     }
 
+    // Roll individual questions up into culture themes
+    const buckets = new Map<string, { key: string; label: string; description: string; values: number[]; questions: number }>();
+    for (const m of metrics) {
+      const t = classify(m.question);
+      const b = buckets.get(t.key) ?? { ...t, values: [], questions: 0 };
+      b.values.push(m.normalised);
+      b.questions += 1;
+      buckets.set(t.key, b);
+    }
+    const themes = [...buckets.values()].map((b) => ({
+      key: b.key,
+      label: b.label,
+      description: b.description,
+      score: Math.round((b.values.reduce((a, v) => a + v, 0) / b.values.length) * 10) / 10,
+      questions: b.questions,
+    })).sort((a, b) => a.score - b.score);
+
+    const strength = themes.length ? themes[themes.length - 1] : null;
+    const risk = themes.length ? themes[0] : null;
+
     const overall = metrics.length
       ? Math.round((metrics.reduce((a, m) => a + m.normalised, 0) / metrics.length) * 10) / 10
       : null;
@@ -152,6 +197,10 @@ serve(async (req) => {
       overall,          // 0-100 sentiment index
       enps,
       metrics,
+      themes,
+      strength,
+      risk,
+      questions: header.filter((h, i) => h && i !== tsIdx),
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {
     console.error("[people-culture-metrics]", e);

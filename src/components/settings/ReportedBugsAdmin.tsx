@@ -15,6 +15,7 @@ interface Issue {
   affected_area: string | null;
   attachment_paths: string[] | null;
   created_at: string;
+  resolved_at: string | null;
 }
 
 export default function ReportedBugsAdmin() {

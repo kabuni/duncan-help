@@ -892,7 +892,7 @@ serve(async (req) => {
     // Marketing health KPIs for the Company Health page (live GA4 + Duncan registrations).
     if (action === "marketing_health") {
       const R = (startDate: string, endDate: string) => ({ startDate, endDate });
-      const [sessionsA, sessionsB, channels, ctaNow, ctaPrev] = await runLimited(2, [
+      const [sessionsA, sessionsB, channels, ctaNow, ctaPrev, eventsDaily] = await runLimited(2, [
         () => runReport(accessToken, propertyId, {
           dateRanges: [R("today", "today"), R("yesterday", "yesterday"), R("6daysAgo", "today"), R("13daysAgo", "7daysAgo")],
           metrics: [{ name: "sessions" }],
@@ -920,7 +920,14 @@ serve(async (req) => {
           metrics: [{ name: "eventCount" }],
           limit: 200,
         }),
-      ]);
+        () => runReport(accessToken, propertyId, {
+          dateRanges: [R("today", "today"), R("yesterday", "yesterday"), R("6daysAgo", "today"), R("13daysAgo", "7daysAgo")],
+          dimensions: [{ name: "eventName" }],
+          metrics: [{ name: "eventCount" }],
+          limit: 200,
+        }),
+      ]) as any[];
+
 
       // Multi-date-range reports return one row per range, tagged by dateRange dimension.
       const byRange = (report: any) => {
@@ -945,33 +952,37 @@ serve(async (req) => {
         trafficSources[dimensionValue(row, 0)] = metricValue(row, 0);
       }
 
-      // Registrations (Duncan DB) over the same windows.
-      const now = new Date();
-      const daysAgo = (d: number) => new Date(now.getTime() - d * 86400000).toISOString();
-      const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
-      const startOfYesterday = new Date(Date.parse(startOfToday) - 86400000).toISOString();
-      const regCount = async (gte: string, lt?: string) => {
-        let q = supabaseAdmin.from("school_registrations").select("id", { count: "exact", head: true }).gte("created_at", gte);
-        if (lt) q = q.lt("created_at", lt);
-        const { count } = await q;
-        return count ?? 0;
+      // Registrations — GA4 only. Pick the first registration-style event present in the property.
+      const REG_EVENT_CANDIDATES = ["interest_registration", "registration_submit", "generate_lead", "form_submit", "sign_up"];
+      const allEventNames = new Set<string>();
+      for (const rep of [ctaNow, ctaPrev, eventsDaily]) {
+        for (const row of (rep as any).rows ?? []) allEventNames.add(dimensionValue(row, 0));
+      }
+      const regEvent = REG_EVENT_CANDIDATES.find((n) => allEventNames.has(n)) ?? "interest_registration";
+
+      // eventsDaily rows: [eventName, dateRange]; ranges = today, yesterday, 7d, prior 7d
+      const eventByRange = (report: any, name: string) => {
+        const out: number[] = [];
+        for (const row of report.rows ?? []) {
+          if (dimensionValue(row, 0) !== name) continue;
+          const tag = String(row.dimensionValues?.[row.dimensionValues.length - 1]?.value ?? "date_range_0");
+          const idx = Number(tag.replace("date_range_", "")) || 0;
+          out[idx] = (out[idx] ?? 0) + metricValue(row, 0);
+        }
+        return out;
       };
-      const [rToday, rYesterday, rWeek, rWeekPrev, rMonth, rMonthPrev] = await Promise.all([
-        regCount(startOfToday),
-        regCount(startOfYesterday, startOfToday),
-        regCount(daysAgo(7)),
-        regCount(daysAgo(14), daysAgo(7)),
-        regCount(daysAgo(30)),
-        regCount(daysAgo(60), daysAgo(30)),
-      ]);
+      const regDaily = eventByRange(eventsDaily, regEvent);
 
       return new Response(
         JSON.stringify({
           connected: true,
           live: true,
           propertyId,
-          registrations: { today: rToday, week: rWeek, month: rMonth },
-          registrationsPrev: { today: rYesterday, week: rWeekPrev, month: rMonthPrev },
+          registrationEvent: regEvent,
+          registrationEventPresent: allEventNames.has(regEvent),
+          ctaEventsPresent: { cta_view: allEventNames.has("cta_view"), cta_click: allEventNames.has("cta_click") },
+          registrations: { today: regDaily[0] ?? 0, week: regDaily[2] ?? 0, month: eventCount(ctaNow, regEvent) },
+          registrationsPrev: { today: regDaily[1] ?? 0, week: regDaily[3] ?? 0, month: eventCount(ctaPrev, regEvent) },
           sessions: { today: a[0] ?? 0, week: a[2] ?? 0, month: b[0] ?? 0 },
           sessionsPrev: { today: a[1] ?? 0, week: a[3] ?? 0, month: b[1] ?? 0 },
           trafficSources,
@@ -981,6 +992,7 @@ serve(async (req) => {
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+
     }
 
     if (action === "dashboard") {

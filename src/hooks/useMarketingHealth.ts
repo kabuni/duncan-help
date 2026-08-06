@@ -7,17 +7,16 @@ import { useAuth } from "@/hooks/useAuth";
    All calculations (rates, trends, RAG) live here, NOT in the UI.
    The UI only renders what this hook returns.
 
-   PRODUCTION DATA SOURCES (wire these in place of PLACEHOLDER_RAW):
-     • registrations   -> Duncan table `public.school_registrations`
-                          (count by created_at buckets: today / 7d / 30d,
-                           plus the equal-length previous period)
-     • sessions        -> GA4 `sessions` metric via the existing
-                          `google-analytics-api` edge function
-                          (action: "weekly_report" / custom date ranges)
-     • trafficSources  -> GA4 `sessionDefaultChannelGroup` dimension
-                          x `sessions` metric
+   DATA SOURCE: Google Analytics 4 only (via the `google-analytics-api`
+   edge function, action: "marketing_health"). No Duncan/Supabase data.
+     • registrations   -> GA4 conversion event (`interest_registration`,
+                          falling back to the first registration-style event
+                          present in the property) x `eventCount`
+     • sessions        -> GA4 `sessions` metric
+     • trafficSources  -> GA4 `sessionDefaultChannelGroup` x `sessions`
      • ctaViews        -> GA4 custom event `cta_view`   (eventCount)
      • ctaClicks       -> GA4 custom event `cta_click`  (eventCount)
+
 
    Conversion rate and CTR are derived — never store them.
 ------------------------------------------------------------------- */
@@ -104,26 +103,28 @@ export function rate(numerator: number, denominator: number): number {
   return (numerator / denominator) * 100;
 }
 
-/* ---------------------------- placeholder ---------------------------- */
+/* ------------------------------ empty state ------------------------------ */
 
-const PLACEHOLDER_RAW: MarketingRaw = {
-  registrations: { today: 9, week: 54, month: 214 },
-  registrationsPrev: { today: 7, week: 48, month: 187 },
-  sessions: { today: 3120, week: 21480, month: 84620 },
-  sessionsPrev: { today: 2960, week: 19870, month: 78140 },
+/** Zeros — used only when GA4 isn't connected. Never mocked values. */
+const EMPTY_RAW: MarketingRaw = {
+  registrations: { today: 0, week: 0, month: 0 },
+  registrationsPrev: { today: 0, week: 0, month: 0 },
+  sessions: { today: 0, week: 0, month: 0 },
+  sessionsPrev: { today: 0, week: 0, month: 0 },
   trafficSources: {
-    "Organic Search": 34210,
-    Direct: 19870,
-    "Paid Search": 12440,
-    Social: 9860,
-    Referral: 5320,
-    Email: 2920,
+    "Organic Search": 0,
+    Direct: 0,
+    "Paid Search": 0,
+    Social: 0,
+    Referral: 0,
+    Email: 0,
   },
-  cta: { views: 61200, clicks: 3486 },
-  ctaPrev: { views: 57400, clicks: 3010 },
+  cta: { views: 0, clicks: 0 },
+  ctaPrev: { views: 0, clicks: 0 },
   generatedAt: new Date().toISOString(),
   live: false,
 };
+
 
 /* ----------------------------- derived ------------------------------ */
 
@@ -328,14 +329,25 @@ export function computeMarketingHealth(raw: MarketingRaw): MarketingHealth {
   };
 }
 
+export interface MarketingInstrumentation {
+  registrationEvent: string;
+  registrationEventPresent: boolean;
+  ctaViewPresent: boolean;
+  ctaClickPresent: boolean;
+}
+
 /**
- * Marketing health data layer — LIVE.
- * Sessions / traffic sources / CTA events come from GA4 via the
- * `google-analytics-api` edge function (action: "marketing_health"),
- * registrations from `public.school_registrations` (aggregated server-side).
- * Falls back to placeholder numbers only when GA is not connected.
+ * Marketing health data layer — GA4 is the single source of truth.
+ * Sessions, traffic sources, registration events and CTA events all come from
+ * GA4 via the `google-analytics-api` edge function (action: "marketing_health").
+ * No Duncan/Supabase data and no mocked values: if GA4 isn't connected the
+ * dashboard renders zeros with `live: false`.
  */
-export function useMarketingHealth(): MarketingHealth & { isLoading: boolean; error: Error | null } {
+export function useMarketingHealth(): MarketingHealth & {
+  isLoading: boolean;
+  error: Error | null;
+  instrumentation: MarketingInstrumentation | null;
+} {
   const { session } = useAuth();
 
   const query = useQuery({
@@ -343,7 +355,7 @@ export function useMarketingHealth(): MarketingHealth & { isLoading: boolean; er
     enabled: !!session,
     retry: false,
     staleTime: 5 * 60 * 1000,
-    queryFn: async (): Promise<MarketingRaw | null> => {
+    queryFn: async (): Promise<(MarketingRaw & { instrumentation: MarketingInstrumentation }) | null> => {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-analytics-api`, {
         method: "POST",
         headers: {
@@ -371,10 +383,22 @@ export function useMarketingHealth(): MarketingHealth & { isLoading: boolean; er
         ctaPrev: data.ctaPrev,
         generatedAt: data.generatedAt,
         live: true,
+        instrumentation: {
+          registrationEvent: String(data.registrationEvent ?? "interest_registration"),
+          registrationEventPresent: !!data.registrationEventPresent,
+          ctaViewPresent: !!data.ctaEventsPresent?.cta_view,
+          ctaClickPresent: !!data.ctaEventsPresent?.cta_click,
+        },
       };
     },
   });
 
-  const health = computeMarketingHealth(query.data ?? PLACEHOLDER_RAW);
-  return { ...health, isLoading: query.isLoading, error: (query.error as Error) ?? null };
+  const health = computeMarketingHealth(query.data ?? EMPTY_RAW);
+  return {
+    ...health,
+    isLoading: query.isLoading,
+    error: (query.error as Error) ?? null,
+    instrumentation: query.data?.instrumentation ?? null,
+  };
 }
+

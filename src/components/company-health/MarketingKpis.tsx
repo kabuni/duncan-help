@@ -114,20 +114,21 @@ export default function MarketingKpis() {
         )}
       </div>
 
-      {/* 1. Interest Registration Submissions — SOURCE: public.school_registrations */}
+      {/* 1. Interest Registration Submissions — SOURCE: GA4 registration conversion event */}
       <KpiBlock
         title="Interest registration submissions"
-        hint="Duncan registrations · vs previous period"
+        hint={`GA4 event ${m.instrumentation?.registrationEvent ?? "interest_registration"} · vs previous period`}
         target={byKey.registrations?.target}
         rag={m.registrations.rag}
       >
         <PeriodGrid periods={m.registrations.periods} />
       </KpiBlock>
 
-      {/* 2. Visit-to-Submission Conversion — SOURCE: registrations ÷ GA4 sessions */}
+      {/* 2. Visit-to-Submission Conversion — SOURCE: GA4 registration events ÷ GA4 sessions */}
       <KpiBlock
         title="Visit-to-submission conversion"
-        hint="Submissions ÷ sessions (30d)"
+        hint="GA4 registration events ÷ GA4 sessions (30d)"
+
         target={byKey.conversion?.target}
         rag={m.conversion.rag}
       >
@@ -170,14 +171,31 @@ export default function MarketingKpis() {
       </KpiBlock>
 
       {m.isLoading ? (
-        <p className="pt-3 text-[10px] text-muted-foreground">Loading live marketing data…</p>
+        <p className="pt-3 text-[10px] text-muted-foreground">Loading live GA4 marketing data…</p>
       ) : m.error ? (
         <p className="pt-3 text-[10px] text-destructive">{m.error.message}</p>
       ) : !m.live ? (
         <p className={cn("pt-3 text-[10px] text-muted-foreground")}>
-          Placeholder data — Google Analytics isn't connected. Connect it in Settings → Integrations for live numbers.
+          Google Analytics isn't connected — showing zeros, not sample data. Connect GA4 in Settings → Integrations.
         </p>
-      ) : null}
+      ) : (
+        <p className="pt-3 text-[10px] text-muted-foreground">
+          Live GA4 data (single source of truth).
+          {(() => {
+            const i = m.instrumentation;
+            if (!i) return null;
+            const missing = [
+              !i.registrationEventPresent ? i.registrationEvent : null,
+              !i.ctaViewPresent ? "cta_view" : null,
+              !i.ctaClickPresent ? "cta_click" : null,
+            ].filter(Boolean);
+            return missing.length
+              ? ` Awaiting website event instrumentation for: ${missing.join(", ")} — these KPIs report 0 until the events fire.`
+              : null;
+          })()}
+        </p>
+      )}
+
     </div>
   );
 }

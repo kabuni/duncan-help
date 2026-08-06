@@ -124,17 +124,6 @@ export default function MarketingKpis() {
         </ul>
       </KpiBlock>
 
-      {/* CTA CTR — SOURCE: GA4 events cta_click / cta_view */}
-      <KpiBlock title="CTA click-through rate" hint="cta_click ÷ cta_view (30d)" target={byKey.ctaCtr?.target} rag={m.ctaCtr.rag}>
-        <div className="flex items-center gap-2">
-          <span className="text-lg font-bold tabular-nums text-foreground">{m.ctaCtr.formatted}</span>
-          <TrendIcon trend={m.ctaCtr.trend} delta={m.ctaCtr.delta} />
-          <span className="text-[10px] text-muted-foreground tabular-nums">
-            {new Intl.NumberFormat().format(m.ctaCtr.clicks)} / {new Intl.NumberFormat().format(m.ctaCtr.views)}
-          </span>
-        </div>
-      </KpiBlock>
-
       {m.isLoading ? (
         <p className="pt-3 text-[10px] text-muted-foreground">Loading live GA4 marketing data…</p>
       ) : m.error ? (
@@ -149,11 +138,8 @@ export default function MarketingKpis() {
           {(() => {
             const i = m.instrumentation;
             if (!i) return null;
-            const missing = [
-              !i.registrationEventPresent ? i.registrationEvent : null,
-              !i.ctaViewPresent ? "cta_view" : null,
-              !i.ctaClickPresent ? "cta_click" : null,
-            ].filter(Boolean);
+            const missing = [!i.registrationEventPresent ? i.registrationEvent : null].filter(Boolean);
+
             return missing.length
               ? ` Awaiting website event instrumentation for: ${missing.join(", ")} — these KPIs report 0 until the events fire.`
               : null;

@@ -6,6 +6,7 @@ import WorkstreamDeliveryHealth from "@/components/company-health/WorkstreamDeli
 import AiEfficiency from "@/components/company-health/AiEfficiency";
 import OperationalStrip from "@/components/company-health/OperationalStrip";
 import { useAiEfficiency } from "@/hooks/useAiEfficiency";
+import { useProductAdoption } from "@/hooks/useProductAdoption";
 
 
 
@@ -90,14 +91,12 @@ const DATA: DashboardData = {
     ],
   },
 
-  // SOURCE: Duncan analytics (uploads) + tech ticket system + model eval logs
+  // SOURCE: Duncan analytics (shots uploaded). Tickets + velocity are LIVE from
+  // Azure DevOps via src/hooks/useProductAdoption.ts and are injected at render.
   product: [
-    { label: "Videos uploaded", value: "342", trend: "up", rag: "on_track" },
-    { label: "Tickets open / closed (tech)", value: "18 / 74", trend: "down", rag: "attention" },
-    { label: "Model accuracy", value: "92.6%", trend: "up", rag: "on_track" },
-    // Velocity: story points completed per sprint (rolling 3-sprint average)
-    { label: "Velocity (pts / sprint)", value: "46", trend: "up", rag: "on_track" },
+    { label: "Shots uploaded", value: "342", trend: "up", rag: "on_track" },
   ],
+
 
   // Marketing KPIs now live in src/hooks/useMarketingHealth.ts (GA4 + registrations)
 
@@ -198,6 +197,8 @@ export default function CompanyHealth() {
   const d = DATA;
   // Live AI efficiency roll-up feeds the Company Health tile (react-query dedupes the fetch)
   const ai = useAiEfficiency();
+  // Live Azure DevOps ticket counts + derived velocity
+  const product = useProductAdoption();
   const schoolsPct = Math.round((d.schools.signed / d.schools.target) * 100);
 
   return (
@@ -284,8 +285,29 @@ export default function CompanyHealth() {
 
             {/* Product Measurement — SOURCE: Duncan analytics */}
             <SectionCard title="Product Adoption" subtitle="Uploads, usage and throughput">
-              <div>{d.product.map((s) => <StatRow key={s.label} stat={s} />)}</div>
+              <div>
+                {d.product.map((s) => <StatRow key={s.label} stat={s} />)}
+                <StatRow
+                  stat={{
+                    label: "Tickets open / closed (Azure DevOps)",
+                    value: product.tickets?.formatted ?? (product.isLoading ? "…" : "—"),
+                  }}
+                />
+                <StatRow
+                  stat={{
+                    label: "Velocity (tickets closed / week)",
+                    value: product.velocity?.formatted ?? (product.isLoading ? "…" : "—"),
+                    trend: product.velocity?.trend,
+                  }}
+                />
+              </div>
+              {product.error && (
+                <p className="pt-2 text-[10px] text-destructive">
+                  Azure DevOps unavailable: {product.error.message}
+                </p>
+              )}
             </SectionCard>
+
 
             {/* Marketing — SOURCE: GA4 (sessions, channels, cta_view/cta_click) + Duncan registrations.
                 Data + RAG live in src/hooks/useMarketingHealth.ts */}

@@ -78,6 +78,8 @@ export default function AiEfficiency() {
         <Block title="Hours saved" metrics={d.hoursSaved} />
         <Block title="Adoption — active AI users" metrics={d.activeUsers} />
         <Block title="Productivity" metrics={d.headline} />
+        <BugsTile />
+
         {showAll && (
           <>
             <Block title="Tokens consumed" metrics={d.tokens} />

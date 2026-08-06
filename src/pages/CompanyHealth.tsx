@@ -198,7 +198,8 @@ export default function CompanyHealth() {
   const ai = useAiEfficiency();
   // Live Azure DevOps ticket counts + derived velocity
   const product = useProductAdoption();
-  const schoolsPct = Math.round((d.schools.signed / d.schools.target) * 100);
+  // Live employee survey metrics (Google Sheet)
+  const people = usePeopleCulture();
 
   return (
     <main className="flex-1 overflow-y-auto">

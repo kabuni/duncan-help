@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ChevronRight, Loader2, Lock } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RagBadge, TrendIcon } from "@/components/company-health/HealthPrimitives";
+import BugsTile from "@/components/company-health/BugsTile";
 import { useAiEfficiency, type Metric } from "@/hooks/useAiEfficiency";
 
 /**

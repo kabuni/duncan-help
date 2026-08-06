@@ -347,7 +347,7 @@ export default function CompanyHealth() {
           <h2 id="people-culture-heading" className="text-sm font-semibold text-foreground tracking-tight">
             People &amp; Culture
           </h2>
-          <SectionCard title="Team Sentiment" subtitle="Engagement, retention and team health">
+          <SectionCard title="Employee Satisfaction" subtitle="Engagement, retention and team health">
             <PeopleCulture />
           </SectionCard>
         </section>

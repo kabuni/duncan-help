@@ -200,6 +200,7 @@ export default function CompanyHealth() {
   const product = useProductAdoption();
   // Live employee survey metrics (Google Sheet)
   const people = usePeopleCulture();
+  const schoolsPct = Math.round((d.schools.signed / d.schools.target) * 100);
 
   return (
     <main className="flex-1 overflow-y-auto">

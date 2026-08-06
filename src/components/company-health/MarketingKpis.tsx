@@ -114,20 +114,21 @@ export default function MarketingKpis() {
         )}
       </div>
 
-      {/* 1. Interest Registration Submissions — SOURCE: public.school_registrations */}
+      {/* 1. Interest Registration Submissions — SOURCE: GA4 registration conversion event */}
       <KpiBlock
         title="Interest registration submissions"
-        hint="Duncan registrations · vs previous period"
+        hint={`GA4 event ${m.instrumentation?.registrationEvent ?? "interest_registration"} · vs previous period`}
         target={byKey.registrations?.target}
         rag={m.registrations.rag}
       >
         <PeriodGrid periods={m.registrations.periods} />
       </KpiBlock>
 
-      {/* 2. Visit-to-Submission Conversion — SOURCE: registrations ÷ GA4 sessions */}
+      {/* 2. Visit-to-Submission Conversion — SOURCE: GA4 registration events ÷ GA4 sessions */}
       <KpiBlock
         title="Visit-to-submission conversion"
-        hint="Submissions ÷ sessions (30d)"
+        hint="GA4 registration events ÷ GA4 sessions (30d)"
+
         target={byKey.conversion?.target}
         rag={m.conversion.rag}
       >

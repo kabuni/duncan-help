@@ -7,17 +7,16 @@ import { useAuth } from "@/hooks/useAuth";
    All calculations (rates, trends, RAG) live here, NOT in the UI.
    The UI only renders what this hook returns.
 
-   PRODUCTION DATA SOURCES (wire these in place of PLACEHOLDER_RAW):
-     • registrations   -> Duncan table `public.school_registrations`
-                          (count by created_at buckets: today / 7d / 30d,
-                           plus the equal-length previous period)
-     • sessions        -> GA4 `sessions` metric via the existing
-                          `google-analytics-api` edge function
-                          (action: "weekly_report" / custom date ranges)
-     • trafficSources  -> GA4 `sessionDefaultChannelGroup` dimension
-                          x `sessions` metric
+   DATA SOURCE: Google Analytics 4 only (via the `google-analytics-api`
+   edge function, action: "marketing_health"). No Duncan/Supabase data.
+     • registrations   -> GA4 conversion event (`interest_registration`,
+                          falling back to the first registration-style event
+                          present in the property) x `eventCount`
+     • sessions        -> GA4 `sessions` metric
+     • trafficSources  -> GA4 `sessionDefaultChannelGroup` x `sessions`
      • ctaViews        -> GA4 custom event `cta_view`   (eventCount)
      • ctaClicks       -> GA4 custom event `cta_click`  (eventCount)
+
 
    Conversion rate and CTR are derived — never store them.
 ------------------------------------------------------------------- */

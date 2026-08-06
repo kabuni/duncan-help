@@ -920,7 +920,14 @@ serve(async (req) => {
           metrics: [{ name: "eventCount" }],
           limit: 200,
         }),
-      ]);
+        () => runReport(accessToken, propertyId, {
+          dateRanges: [R("today", "today"), R("yesterday", "yesterday"), R("6daysAgo", "today"), R("13daysAgo", "7daysAgo")],
+          dimensions: [{ name: "eventName" }],
+          metrics: [{ name: "eventCount" }],
+          limit: 200,
+        }),
+      ]) as any[];
+
 
       // Multi-date-range reports return one row per range, tagged by dateRange dimension.
       const byRange = (report: any) => {

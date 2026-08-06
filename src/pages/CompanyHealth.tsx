@@ -94,6 +94,9 @@ const DATA: DashboardData = {
   // Azure DevOps via src/hooks/useProductAdoption.ts and are injected at render.
   product: [
     { label: "Shots uploaded", value: "342", trend: "up", rag: "on_track" },
+    // SOURCE: Manufacturing (placeholder until the production feed is wired).
+    // Units completed vs weekly production plan — the core manufacturing throughput signal.
+    { label: "Manufacturing output (units vs weekly plan)", value: "186 / 220 (85%)", trend: "up", rag: "attention" },
   ],
 
 
@@ -293,16 +296,15 @@ export default function CompanyHealth() {
             <SectionCard title="Product Adoption" subtitle="Uploads, usage and throughput">
               <div>
                 {d.product.map((s) => <StatRow key={s.label} stat={s} />)}
+                {/* Tickets + velocity clubbed into a single delivery throughput row */}
                 <StatRow
                   stat={{
-                    label: "Tickets open / closed (Azure DevOps)",
-                    value: product.tickets?.formatted ?? (product.isLoading ? "…" : "—"),
-                  }}
-                />
-                <StatRow
-                  stat={{
-                    label: "Velocity (tickets closed / week)",
-                    value: product.velocity?.formatted ?? (product.isLoading ? "…" : "—"),
+                    label: "Delivery throughput (tickets open / closed · velocity per week)",
+                    value: product.isLoading
+                      ? "…"
+                      : [product.tickets?.formatted, product.velocity?.formatted]
+                          .filter(Boolean)
+                          .join(" · ") || "—",
                     trend: product.velocity?.trend,
                   }}
                 />

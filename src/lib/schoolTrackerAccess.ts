@@ -8,7 +8,8 @@ export const SCHOOL_TRACKER_ALLOWED_USER_IDS: ReadonlySet<string> = new Set([
   "8f8607b0-9074-41c9-a9fb-43d48639feba",
 ]);
 
+// Viewing is now open to every signed-in user; the allowlist above is kept for
+// reference only.
 export function canAccessSchoolTracker(userId: string | null | undefined): boolean {
-  if (!userId) return false;
-  return SCHOOL_TRACKER_ALLOWED_USER_IDS.has(userId);
+  return !!userId;
 }

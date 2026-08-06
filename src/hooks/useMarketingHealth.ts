@@ -330,14 +330,25 @@ export function computeMarketingHealth(raw: MarketingRaw): MarketingHealth {
   };
 }
 
+export interface MarketingInstrumentation {
+  registrationEvent: string;
+  registrationEventPresent: boolean;
+  ctaViewPresent: boolean;
+  ctaClickPresent: boolean;
+}
+
 /**
- * Marketing health data layer — LIVE.
- * Sessions / traffic sources / CTA events come from GA4 via the
- * `google-analytics-api` edge function (action: "marketing_health"),
- * registrations from `public.school_registrations` (aggregated server-side).
- * Falls back to placeholder numbers only when GA is not connected.
+ * Marketing health data layer — GA4 is the single source of truth.
+ * Sessions, traffic sources, registration events and CTA events all come from
+ * GA4 via the `google-analytics-api` edge function (action: "marketing_health").
+ * No Duncan/Supabase data and no mocked values: if GA4 isn't connected the
+ * dashboard renders zeros with `live: false`.
  */
-export function useMarketingHealth(): MarketingHealth & { isLoading: boolean; error: Error | null } {
+export function useMarketingHealth(): MarketingHealth & {
+  isLoading: boolean;
+  error: Error | null;
+  instrumentation: MarketingInstrumentation | null;
+} {
   const { session } = useAuth();
 
   const query = useQuery({
@@ -345,7 +356,7 @@ export function useMarketingHealth(): MarketingHealth & { isLoading: boolean; er
     enabled: !!session,
     retry: false,
     staleTime: 5 * 60 * 1000,
-    queryFn: async (): Promise<MarketingRaw | null> => {
+    queryFn: async (): Promise<(MarketingRaw & { instrumentation: MarketingInstrumentation }) | null> => {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-analytics-api`, {
         method: "POST",
         headers: {
@@ -373,10 +384,22 @@ export function useMarketingHealth(): MarketingHealth & { isLoading: boolean; er
         ctaPrev: data.ctaPrev,
         generatedAt: data.generatedAt,
         live: true,
+        instrumentation: {
+          registrationEvent: String(data.registrationEvent ?? "interest_registration"),
+          registrationEventPresent: !!data.registrationEventPresent,
+          ctaViewPresent: !!data.ctaEventsPresent?.cta_view,
+          ctaClickPresent: !!data.ctaEventsPresent?.cta_click,
+        },
       };
     },
   });
 
-  const health = computeMarketingHealth(query.data ?? PLACEHOLDER_RAW);
-  return { ...health, isLoading: query.isLoading, error: (query.error as Error) ?? null };
+  const health = computeMarketingHealth(query.data ?? EMPTY_RAW);
+  return {
+    ...health,
+    isLoading: query.isLoading,
+    error: (query.error as Error) ?? null,
+    instrumentation: query.data?.instrumentation ?? null,
+  };
 }
+

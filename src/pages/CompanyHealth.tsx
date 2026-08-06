@@ -234,7 +234,7 @@ export default function CompanyHealth() {
               {
                 area: "People & Culture",
                 descriptor: "Engagement, retention and team health",
-                rag: "attention" as Rag,
+                rag: people.rag as Rag,
               },
               {
                 area: "AI Efficiency",
@@ -336,6 +336,16 @@ export default function CompanyHealth() {
           </h2>
           <SectionCard title="Duncan productivity impact" subtitle="Live executive view — hours saved, adoption, usage and business value">
             <AiEfficiency />
+          </SectionCard>
+        </section>
+
+        {/* 4. People & Culture — SOURCE: employee survey Google Sheet via people-culture-metrics */}
+        <section aria-labelledby="people-culture-heading" className="space-y-3">
+          <h2 id="people-culture-heading" className="text-sm font-semibold text-foreground tracking-tight">
+            People &amp; Culture
+          </h2>
+          <SectionCard title="Employee survey" subtitle="Engagement, retention and team health — captured from our employees">
+            <PeopleCulture />
           </SectionCard>
         </section>
 

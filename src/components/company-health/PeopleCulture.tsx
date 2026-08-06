@@ -22,7 +22,7 @@ export default function PeopleCulture() {
   const rag = isSample ? ("attention" as const) : liveRag;
 
   if (isLoading) {
-    return <p className="text-xs text-muted-foreground">Loading team sentiment…</p>;
+    return <p className="text-xs text-muted-foreground">Loading employee satisfaction…</p>;
   }
 
   return (

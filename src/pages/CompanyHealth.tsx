@@ -197,6 +197,8 @@ export default function CompanyHealth() {
   const d = DATA;
   // Live AI efficiency roll-up feeds the Company Health tile (react-query dedupes the fetch)
   const ai = useAiEfficiency();
+  // Live Azure DevOps ticket counts + derived velocity
+  const product = useProductAdoption();
   const schoolsPct = Math.round((d.schools.signed / d.schools.target) * 100);
 
   return (

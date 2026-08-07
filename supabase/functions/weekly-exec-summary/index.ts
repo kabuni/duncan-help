@@ -766,6 +766,77 @@ async function buildSummaryMarkdown(
   return data.choices?.[0]?.message?.content ?? "";
 }
 
+// ─── Deterministic financial scrubber ─────────────────────────────────────
+const FINANCIAL_RE = new RegExp(
+  [
+    "invoice", "invoices", "invoicing", "\\bbill\\b", "\\bbills\\b", "billing", "billed",
+    "payment", "payments", "\\bpaid\\b", "unpaid", "overdue", "outstanding balance", "arrears",
+    "receipt", "receipts", "remittance", "purchase order", "\\bPO\\b", "\\bPOs\\b", "quotation", "\\bquote\\b",
+    "revolut", "bank transaction", "bank transfer", "cash flow", "cashflow", "burn rate", "runway",
+    "revenue", "turnover", "profit", "\\bP&L\\b", "loss statement", "budget", "budgets", "budgeted",
+    "\\bspend\\b", "spending", "expense", "expenses", "expenditure", "\\bcost\\b", "\\bcosts\\b", "pricing",
+    "funding", "fundraise", "financial", "finance", "accounts payable", "accounts receivable",
+    "xero", "vat\\b", "payroll", "salary", "salaries",
+    "[£$€]\\s?\\d", "\\d+\\s?(gbp|usd|eur)\\b", "\\b(gbp|usd|eur)\\s?\\d",
+  ].join("|"),
+  "i",
+);
+
+function isFinancialLine(line: string): boolean {
+  return FINANCIAL_RE.test(line);
+}
+
+/** Removes any bullet, table row, or paragraph containing financial content,
+ *  then drops sections/tables left empty. */
+function scrubFinancialMarkdown(md: string): string {
+  const lines = md.split("\n");
+  const kept: string[] = [];
+
+  for (const line of lines) {
+    const t = line.trim();
+    // Never drop headings here — empty sections are pruned below.
+    if (t.startsWith("#")) { kept.push(line); continue; }
+    // Table separator rows always follow their header; keep for now.
+    if (/^\|[\s\-:|]+\|$/.test(t)) { kept.push(line); continue; }
+    if (t && isFinancialLine(t)) continue;
+    kept.push(line);
+  }
+
+  // Drop tables whose data rows were all removed (header + separator only)
+  const pruned: string[] = [];
+  for (let i = 0; i < kept.length; i++) {
+    const t = kept[i].trim();
+    const next = kept[i + 1]?.trim() ?? "";
+    if (t.startsWith("|") && /^\|[\s\-:|]+\|$/.test(next)) {
+      const after = kept[i + 2]?.trim() ?? "";
+      if (!after.startsWith("|")) { i++; continue; } // skip header + separator
+    }
+    pruned.push(kept[i]);
+  }
+
+  // Drop headings that now have no content beneath them
+  const out: string[] = [];
+  for (let i = 0; i < pruned.length; i++) {
+    const t = pruned[i].trim();
+    const headingMatch = /^(#{1,6})\s/.exec(t);
+    if (headingMatch && headingMatch[1].length >= 2) {
+      let j = i + 1;
+      let hasContent = false;
+      while (j < pruned.length) {
+        const n = pruned[j].trim();
+        if (/^#{1,6}\s/.test(n)) break;
+        if (n) { hasContent = true; break; }
+        j++;
+      }
+      if (!hasContent) continue;
+    }
+    out.push(pruned[i]);
+  }
+
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+
 // ─── Gmail send ───────────────────────────────────────────────────────────
 async function getGmailSenderToken(admin: any): Promise<string | null> {
   const { data: row } = await admin

@@ -245,7 +245,7 @@ async function fetchPlan90Changes(admin: any, w: ReportWeek): Promise<string> {
     if (!ups?.length) continue; // omit workstreams with no updates this week
     ups.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     const lines: string[] = [
-      `#### ${ws.name}`,
+      `**${ws.name}**`,
       ``,
       `| | Deliverable | Latest update | Updated by | Date |`,
       `| --- | --- | --- | --- | --- |`,

@@ -1035,13 +1035,15 @@ Deno.serve(async (req) => {
     const weekRange = reportWeek.label;
 
     // Pull source data — meetings + workstreams + inbox signals + duncan weekly-report emails.
-    const [meetings, ws, inboxAgg, weeklyReportEmailsBlock, plan90Block] = await Promise.all([
+    const [meetings, ws, inboxAgg, weeklyReportEmailsBlock, plan90Block, capacityBlock] = await Promise.all([
       fetchMeetings(admin, reportWeek),
       fetchWorkstreamCards(admin, reportWeek),
       scanAllOptedInInboxes(admin, reportWeek),
       fetchDuncanWeeklyReports(admin, reportWeek),
       fetchPlan90Changes(admin, reportWeek),
+      fetchCapacityDashboard(admin, reportWeek),
     ]);
+
 
     const meetingsBlock = formatMeetingsBlock(meetings);
     const workstreamsBlock = formatWorkstreamBlock(ws.cards, ws.tasks);

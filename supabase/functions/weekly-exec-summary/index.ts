@@ -1157,7 +1157,7 @@ Deno.serve(async (req) => {
     const subject = `Weekly Executive Summary | ${weekRange} ${reportWeek.year}`;
 
     await admin.from("exec_summary_runs").update({
-      summary_chars: summaryMd.length,
+      summary_chars: scrubbedMd.length,
     }).eq("id", runId);
 
     // Dry-run mode: return the composed markdown without emailing.
@@ -1178,7 +1178,7 @@ Deno.serve(async (req) => {
         inbox_mailboxes_scanned: inboxAgg.mailboxes_scanned,
         inbox_emails_scanned: inboxAgg.emails_scanned,
         weekly_report_emails_preview: weeklyReportEmailsBlock.slice(0, 400),
-        summary_markdown: summaryMd,
+        summary_markdown: scrubbedMd,
       });
     }
 
@@ -1190,7 +1190,7 @@ Deno.serve(async (req) => {
       weekRange: `${weekRange} ${reportWeek.year}`,
       meetingsCount: meetings.length,
       cardsCount: ws.cards.length,
-      summaryMd,
+      summaryMd: scrubbedMd,
     });
     const messageId = await sendEmail(gmailToken, recipientHeader, subject, html);
 

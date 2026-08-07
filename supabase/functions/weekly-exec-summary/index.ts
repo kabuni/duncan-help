@@ -759,28 +759,27 @@ async function buildSummaryMarkdown(
     `RULES:\n` +
     `- The H1 MUST read exactly: "Weekly Executive Summary — ${reportWeek.label} ${reportWeek.year}".\n` +
     `- Do NOT invent or shift years. The only year that may appear is ${reportWeek.year}.\n` +
-    `- Use ONLY the meetings, workstream activity, 90 Day Tracker changes, inbox signals, and duncan@kabuni.com weekly-report emails provided below. Do not invent items.\n`;
+    `- Use ONLY the meetings, 90 Day Tracker changes, inbox signals, and duncan@kabuni.com weekly-report emails provided below. Do not invent items.\n`;
 
   const system =
     "You are Duncan, Kabuni's executive intelligence engine. " +
-    "Produce a board-ready weekly executive summary in clean Markdown, grounded strictly in: (1) Gemini/Plaud meeting notes, (2) workstream-card activity, (3) 90 Day Tracker changes, (4) inbox signals extracted from opted-in team mailboxes, and (5) any 'weekly report' emails sent to duncan@kabuni.com (including their attached documents). " +
+    "Produce a board-ready weekly executive summary in clean Markdown, grounded strictly in: (1) Gemini/Plaud meeting notes, (2) 90 Day Tracker changes, (3) inbox signals extracted from opted-in team mailboxes, and (4) any 'weekly report' emails sent to duncan@kabuni.com (including their attached documents). " +
     "Use H1 for the report title, H2 for sections, bullets where useful, and Markdown tables when comparing items. " +
     "Sections (in order): Executive Snapshot, Meetings This Week (key discussions & decisions), " +
-    "Workstream Progress (RYG table: card · status · update), 90 Day Tracker Updates, Productivity per week (ONLY if a capacity dashboard block is supplied), Team Signals from Inboxes (commitments, risks, escalations, board mentions, customer/vendor signals — with the mailbox that surfaced them), Weekly Reports Received (summarise each report email + its attachments), Wins of the Week, Risks & Blockers (with mitigations), Action Items & Owners, Key Decisions Needed. " +
+    "90 Day Tracker Updates, Productivity per week (ONLY if a capacity dashboard block is supplied), Team Signals from Inboxes (commitments, risks, escalations, board mentions, customer/vendor signals — with the mailbox that surfaced them), Weekly Reports Received (summarise each report email + its attachments), Wins of the Week, Risks & Blockers (with mitigations), Action Items & Owners, Key Decisions Needed. " +
     "PRODUCTIVITY PER WEEK RULES: include this section ONLY when the '=== WEEKLY CAPACITY DASHBOARD ===' block is present below; if it is absent or empty, omit the section entirely (no heading, no placeholder). When present, title it exactly 'Productivity per week', place it immediately after '90-Day Tracker Updates' and before 'Wins of the Week', and derive it EXCLUSIVELY from that block — never from meetings, workstreams, Azure DevOps, emails or any other data. Output 5–8 concise executive bullet points covering the most important KPIs and insights only: total capacity vs actual hours logged and utilisation %, stories closed, highest effort allocation, notable module/team utilisation (AI/ML, Backend, Frontend, QA, DevOps, Firmware), major engineering accomplishments, areas in progress or with no completed work, and overall delivery health. Do NOT reproduce tables, do NOT list every metric, do NOT copy the document. Never invent numbers not in the block. " +
 
     "90 DAY TRACKER SECTION RULES: the section MUST be titled '90-Day Tracker Updates' and MUST reproduce the supplied '90 DAY TRACKER' block VERBATIM — same workstream sub-headings and the same Markdown tables, rows, columns, cell text and RYG dot, in the same order. Do not add, merge, reorder, re-summarise, reformat into bullets, or infer entries, and never source it from meeting transcripts or workstream card comments. If the block says 'No 90-Day Tracker updates were recorded this week.', output exactly that line and nothing else in the section. " +
     "ABSOLUTE FINANCIAL EXCLUSION: the report must contain NO financial information from ANY source (emails, meetings, documents, attachments, OCR, transcripts). Omit entirely — never with a placeholder — anything about invoices, payments, outstanding/overdue payments, receipts, purchase orders, quotes, Revolut, bank transactions, cash flow, burn rate, revenue, profit/loss, budgets, spend, costs, pricing, funding, financial documents, vendor payment status, and any monetary amount or currency symbol (£, $, €). This applies to every section including Executive Snapshot, Meetings, Commitments, Risks, Board Mentions, Vendor Signals, Action Items, Decisions and any AI-generated summary. If an item's only substance is financial, drop the whole item. " +
     "Be concise, factual, decision-oriented. Never invent figures or events. " +
-    "If a section has no data, state 'No activity recorded this week.' instead of fabricating." +
+    "NEVER include a 'Workstream Progress' or workstream-card activity section — workstream cards are excluded from this report entirely. If a section has no data, state 'No activity recorded this week.' instead of fabricating." +
     dateGrounding;
 
   const user =
     `Report week: ${reportWeek.label} ${reportWeek.year} (Monday–Sunday)\n` +
     `Today: ${reportWeek.todayLabel}\n` +
-    `Meetings ingested: ${meetingsCount} · Workstream cards with activity: ${cardsCount}\n\n` +
+    `Meetings ingested: ${meetingsCount}\n\n` +
     `=== MEETINGS (Gemini / Plaud — all users incl. duncan@kabuni.com) ===\n${stripFinancialLines(meetingsBlock)}\n\n` +
-    `=== WORKSTREAM CARD ACTIVITY ===\n${workstreamsBlock}\n\n` +
     `=== 90 DAY TRACKER — CHANGES THIS WEEK (per workstream) ===\n${plan90Block}\n\n` +
     (capacityBlock ? `=== WEEKLY CAPACITY DASHBOARD (Knowledge Base — sole source for Productivity per week) ===\n${capacityBlock}\n\n` : "") +
 
@@ -1041,7 +1040,7 @@ function emailHtml(opts: {
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#1a1a1a;background:#ffffff">
   <div style="border-bottom:2px solid #0f172a;padding-bottom:14px;margin-bottom:20px">
     <h1 style="margin:0 0 4px;color:#0f172a;font-size:24px">${escapeHtml(opts.title)}</h1>
-    <div style="color:#64748b;font-size:13px">${escapeHtml(opts.weekRange)} &nbsp;·&nbsp; <strong>${opts.meetingsCount}</strong> meeting${opts.meetingsCount === 1 ? "" : "s"} &nbsp;·&nbsp; <strong>${opts.cardsCount}</strong> workstream card${opts.cardsCount === 1 ? "" : "s"}</div>
+    <div style="color:#64748b;font-size:13px">${escapeHtml(opts.weekRange)} &nbsp;·&nbsp; <strong>${opts.meetingsCount}</strong> meeting${opts.meetingsCount === 1 ? "" : "s"}</div>
   </div>
   ${mdToHtml(opts.summaryMd)}
   <div style="margin-top:32px;padding-top:14px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px;text-align:center">

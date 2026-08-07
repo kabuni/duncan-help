@@ -1071,6 +1071,8 @@ Deno.serve(async (req) => {
       inboxBlock,
       weeklyReportEmailsBlock,
       plan90Block,
+      capacityBlock,
+
       meetings.length,
 
       ws.cards.length,

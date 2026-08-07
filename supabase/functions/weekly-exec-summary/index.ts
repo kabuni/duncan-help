@@ -739,6 +739,8 @@ async function buildSummaryMarkdown(
     `=== MEETINGS (Gemini / Plaud — all users incl. duncan@kabuni.com) ===\n${meetingsBlock}\n\n` +
     `=== WORKSTREAM CARD ACTIVITY ===\n${workstreamsBlock}\n\n` +
     `=== 90 DAY TRACKER — CHANGES THIS WEEK (per workstream) ===\n${plan90Block}\n\n` +
+    (capacityBlock ? `=== WEEKLY CAPACITY DASHBOARD (Knowledge Base — sole source for Engineering Delivery Summary) ===\n${capacityBlock}\n\n` : "") +
+
     `=== TEAM INBOX SIGNALS (last 7 days, opted-in mailboxes) ===\n${inboxBlock}\n\n` +
     `=== WEEKLY-REPORT EMAILS TO duncan@kabuni.com ===\n${weeklyReportEmailsBlock}\n`;
 

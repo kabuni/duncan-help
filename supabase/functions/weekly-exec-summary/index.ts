@@ -200,56 +200,52 @@ async function fetchPlan90Changes(admin: any, w: ReportWeek): Promise<string> {
     .order("created_at", { ascending: true });
   const updates = (updRows ?? []) as any[];
 
-  const updatesByWs = new Map<string, any[]>();
+  // Keep ONLY the most recent update per deliverable within the reporting period
+  const latestByDeliverable = new Map<string, any>();
   for (const u of updates) {
     const d = delById.get(u.deliverable_id);
     if (!d) continue;
-    const arr = updatesByWs.get(d.workstream_id) ?? [];
-    arr.push({ ...u, deliverable_title: d.title });
-    updatesByWs.set(d.workstream_id, arr);
+    const prev = latestByDeliverable.get(u.deliverable_id);
+    if (!prev || u.created_at > prev.created_at) {
+      latestByDeliverable.set(u.deliverable_id, { ...u, deliverable: d });
+    }
   }
 
-  const editedByWs = new Map<string, any[]>();
-  for (const d of deliverables) {
-    if (!d.updated_at) continue;
-    if (d.updated_at >= from && d.updated_at < to) {
-      const arr = editedByWs.get(d.workstream_id) ?? [];
-      arr.push(d);
-      editedByWs.set(d.workstream_id, arr);
-    }
+  if (!latestByDeliverable.size) {
+    return "No 90-Day Tracker updates were recorded this week.";
   }
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-  const sections = workstreams.map((ws) => {
-    const ups = updatesByWs.get(ws.id) ?? [];
-    const edits = editedByWs.get(ws.id) ?? [];
-    if (!ups.length && !edits.length) {
-      return `### ${ws.name}\nNo update this week.`;
-    }
-    const lines: string[] = [`### ${ws.name}`];
-    if (ups.length) {
-      lines.push(`Progress updates posted (${ups.length}):`);
-      for (const u of ups) {
-        lines.push(
-          `- [${fmtDate(u.created_at)}] ${u.deliverable_title} — RYG: ${u.ryg} — ${u.author_name}: ${String(u.message).replace(/\s+/g, " ").slice(0, 400)}`,
-        );
-      }
-    }
-    if (edits.length) {
-      lines.push(`Deliverables changed (${edits.length}):`);
-      for (const d of edits) {
-        lines.push(
-          `- ${d.title} — status: ${d.status} · priority: ${d.priority} · owner: ${d.owner_display_name || "Unassigned"}${d.due_date ? ` · due ${fmtDate(d.due_date)}` : ""}`,
-        );
-      }
-    }
-    return lines.join("\n");
-  });
+  const byWs = new Map<string, any[]>();
+  for (const u of latestByDeliverable.values()) {
+    const arr = byWs.get(u.deliverable.workstream_id) ?? [];
+    arr.push(u);
+    byWs.set(u.deliverable.workstream_id, arr);
+  }
 
+  const sections: string[] = [];
+  for (const ws of workstreams) {
+    const ups = byWs.get(ws.id);
+    if (!ups?.length) continue; // omit workstreams with no updates this week
+    ups.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+    const lines: string[] = [`### ${ws.name}`];
+    for (const u of ups) {
+      lines.push(
+        `- **Deliverable:** ${u.deliverable.title}`,
+        `  - **Latest update:** "${String(u.message).replace(/\s+/g, " ").slice(0, 600)}"`,
+        `  - **Updated by:** ${u.author_name || "Unknown"}`,
+        `  - **Date:** ${fmtDate(u.created_at)}`,
+      );
+    }
+    sections.push(lines.join("\n"));
+  }
+
+  if (!sections.length) return "No 90-Day Tracker updates were recorded this week.";
   return sections.join("\n\n");
 }
+
 
 
 // ─── Build source-data block for the model ─────────────────────────────────

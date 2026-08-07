@@ -200,56 +200,52 @@ async function fetchPlan90Changes(admin: any, w: ReportWeek): Promise<string> {
     .order("created_at", { ascending: true });
   const updates = (updRows ?? []) as any[];
 
-  const updatesByWs = new Map<string, any[]>();
+  // Keep ONLY the most recent update per deliverable within the reporting period
+  const latestByDeliverable = new Map<string, any>();
   for (const u of updates) {
     const d = delById.get(u.deliverable_id);
     if (!d) continue;
-    const arr = updatesByWs.get(d.workstream_id) ?? [];
-    arr.push({ ...u, deliverable_title: d.title });
-    updatesByWs.set(d.workstream_id, arr);
+    const prev = latestByDeliverable.get(u.deliverable_id);
+    if (!prev || u.created_at > prev.created_at) {
+      latestByDeliverable.set(u.deliverable_id, { ...u, deliverable: d });
+    }
   }
 
-  const editedByWs = new Map<string, any[]>();
-  for (const d of deliverables) {
-    if (!d.updated_at) continue;
-    if (d.updated_at >= from && d.updated_at < to) {
-      const arr = editedByWs.get(d.workstream_id) ?? [];
-      arr.push(d);
-      editedByWs.set(d.workstream_id, arr);
-    }
+  if (!latestByDeliverable.size) {
+    return "No 90-Day Tracker updates were recorded this week.";
   }
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-  const sections = workstreams.map((ws) => {
-    const ups = updatesByWs.get(ws.id) ?? [];
-    const edits = editedByWs.get(ws.id) ?? [];
-    if (!ups.length && !edits.length) {
-      return `### ${ws.name}\nNo update this week.`;
-    }
-    const lines: string[] = [`### ${ws.name}`];
-    if (ups.length) {
-      lines.push(`Progress updates posted (${ups.length}):`);
-      for (const u of ups) {
-        lines.push(
-          `- [${fmtDate(u.created_at)}] ${u.deliverable_title} — RYG: ${u.ryg} — ${u.author_name}: ${String(u.message).replace(/\s+/g, " ").slice(0, 400)}`,
-        );
-      }
-    }
-    if (edits.length) {
-      lines.push(`Deliverables changed (${edits.length}):`);
-      for (const d of edits) {
-        lines.push(
-          `- ${d.title} — status: ${d.status} · priority: ${d.priority} · owner: ${d.owner_display_name || "Unassigned"}${d.due_date ? ` · due ${fmtDate(d.due_date)}` : ""}`,
-        );
-      }
-    }
-    return lines.join("\n");
-  });
+  const byWs = new Map<string, any[]>();
+  for (const u of latestByDeliverable.values()) {
+    const arr = byWs.get(u.deliverable.workstream_id) ?? [];
+    arr.push(u);
+    byWs.set(u.deliverable.workstream_id, arr);
+  }
 
+  const sections: string[] = [];
+  for (const ws of workstreams) {
+    const ups = byWs.get(ws.id);
+    if (!ups?.length) continue; // omit workstreams with no updates this week
+    ups.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+    const lines: string[] = [`### ${ws.name}`];
+    for (const u of ups) {
+      lines.push(
+        `- **Deliverable:** ${u.deliverable.title}`,
+        `  - **Latest update:** "${String(u.message).replace(/\s+/g, " ").slice(0, 600)}"`,
+        `  - **Updated by:** ${u.author_name || "Unknown"}`,
+        `  - **Date:** ${fmtDate(u.created_at)}`,
+      );
+    }
+    sections.push(lines.join("\n"));
+  }
+
+  if (!sections.length) return "No 90-Day Tracker updates were recorded this week.";
   return sections.join("\n\n");
 }
+
 
 
 // ─── Build source-data block for the model ─────────────────────────────────
@@ -660,8 +656,8 @@ async function buildSummaryMarkdown(
     "Use H1 for the report title, H2 for sections, bullets where useful, and Markdown tables when comparing items. " +
     "Sections (in order): Executive Snapshot, Meetings This Week (key discussions & decisions), " +
     "Workstream Progress (RYG table: card · status · update), 90 Day Tracker Updates, Team Signals from Inboxes (commitments, risks, escalations, board mentions, customer/vendor signals — with the mailbox that surfaced them), Weekly Reports Received (summarise each report email + its attachments), Wins of the Week, Risks & Blockers (with mitigations), Action Items & Owners, Key Decisions Needed. " +
-    "90 DAY TRACKER SECTION RULES: list EVERY workstream from the 90 Day Tracker data as its own sub-heading, in the order given. Under each, summarise exactly what changed this week (progress updates, status/owner/due-date changes). If the data says 'No update this week.' for a workstream, output exactly 'No update this week.' for it — never omit the workstream and never infer change. " +
-    "STRICT EXCLUSION: do NOT include financial decisions, financial facts, figures, budgets, spend, costs, pricing, revenue, funding or any monetary amounts anywhere in the report. Omit such items entirely rather than summarising them. " +
+    "90 DAY TRACKER SECTION RULES: the section MUST be titled '90-Day Tracker Updates' and MUST reproduce the supplied '90 DAY TRACKER' block VERBATIM — same workstream sub-headings, deliverables, quoted latest update, 'Updated by' and 'Date'. Do not add, merge, reorder, re-summarise, or infer entries, and never source it from meeting transcripts or workstream card comments. If the block says 'No 90-Day Tracker updates were recorded this week.', output exactly that line and nothing else in the section. " +
+    "ABSOLUTE FINANCIAL EXCLUSION: the report must contain NO financial information from ANY source (emails, meetings, documents, attachments, OCR, transcripts). Omit entirely — never with a placeholder — anything about invoices, payments, outstanding/overdue payments, receipts, purchase orders, quotes, Revolut, bank transactions, cash flow, burn rate, revenue, profit/loss, budgets, spend, costs, pricing, funding, financial documents, vendor payment status, and any monetary amount or currency symbol (£, $, €). This applies to every section including Executive Snapshot, Meetings, Commitments, Risks, Board Mentions, Vendor Signals, Action Items, Decisions and any AI-generated summary. If an item's only substance is financial, drop the whole item. " +
     "Be concise, factual, decision-oriented. Never invent figures or events. " +
     "If a section has no data, state 'No activity recorded this week.' instead of fabricating." +
     dateGrounding;

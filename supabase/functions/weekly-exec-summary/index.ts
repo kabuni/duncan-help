@@ -264,6 +264,54 @@ async function fetchPlan90Changes(admin: any, w: ReportWeek): Promise<string> {
   return sections.join("\n\n");
 }
 
+// ─── Weekly Capacity Dashboard (Knowledge Base) ────────────────────────────
+// Finds the most recently uploaded "Weekly Capacity Dashboard" (or Weekly
+// Capacity & Delivery report) relevant to the reporting period and returns its
+// extracted text. Returns "" when none exists → section is omitted entirely.
+async function fetchCapacityDashboard(admin: any, w: ReportWeek): Promise<string> {
+  const from = w.monday.toISOString();
+  // Dashboards are frequently uploaded after the week closes, so accept
+  // anything uploaded from the start of the reporting week up to now.
+  const to = new Date(Math.max(w.saturdayExcl.getTime(), Date.now())).toISOString();
+
+  const { data: docs, error } = await admin
+    .from("documents")
+    .select("id,title,file_name,created_at,status")
+    .eq("status", "ready")
+    .gte("created_at", from)
+    .lte("created_at", to)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) {
+    console.warn("[weekly-exec-summary] capacity dashboard lookup failed:", error.message);
+    return "";
+  }
+
+  const matches = ((docs ?? []) as any[]).filter((d) => {
+    const hay = `${d.title ?? ""} ${d.file_name ?? ""}`.toLowerCase();
+    return hay.includes("capacity") &&
+      (hay.includes("dashboard") || hay.includes("weekly") || hay.includes("delivery"));
+  });
+  if (!matches.length) return "";
+
+  const doc = matches[0]; // most recently uploaded
+  const { data: chunks } = await admin
+    .from("document_chunks")
+    .select("content,chunk_index")
+    .eq("document_id", doc.id)
+    .order("chunk_index", { ascending: true });
+
+  const text = ((chunks ?? []) as any[]).map((c) => c.content).join("\n").trim();
+  if (!text) return "";
+
+  const uploaded = new Date(doc.created_at).toLocaleDateString("en-GB", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+  return `Document: ${doc.file_name} (uploaded ${uploaded})\n\n${truncate(text, 30_000)}`;
+}
+
+
+
 
 
 // ─── Build source-data block for the model ─────────────────────────────────

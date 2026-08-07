@@ -96,7 +96,7 @@ export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
     queryFn: async () => {
       const response = await fetch(ANALYTICS_API_URL, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ action: "dashboard" }),
       });
 
@@ -116,7 +116,7 @@ export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
     queryFn: async () => {
       const response = await fetch(ANALYTICS_API_URL, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ action: "weekly_report", filters: weeklyFilters ?? {} }),
       });
       const data = await response.json().catch(() => ({}));
@@ -133,7 +133,7 @@ export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
     try {
       const response = await fetch(ANALYTICS_AUTH_URL, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.url) throw new Error(data.error || "Failed to connect Google Analytics");
@@ -148,7 +148,7 @@ export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
     try {
       const response = await fetch(ANALYTICS_API_URL, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ action: "askQuestion", question }),
       });
       const data = await response.json().catch(() => ({}));
@@ -162,7 +162,7 @@ export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
   const disconnect = useCallback(async () => {
     const response = await fetch(ANALYTICS_API_URL, {
       method: "POST",
-      headers: getAuthHeaders(),
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ action: "disconnect" }),
     });
     if (!response.ok) throw new Error("Failed to disconnect Google Analytics");

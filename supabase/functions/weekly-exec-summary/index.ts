@@ -247,13 +247,13 @@ async function fetchPlan90Changes(admin: any, w: ReportWeek): Promise<string> {
     const lines: string[] = [
       `**${ws.name}**`,
       ``,
-      `| | Deliverable | Latest update | Updated by | Date |`,
-      `| --- | --- | --- | --- | --- |`,
+      `| | Deliverable | Latest update |`,
+      `| --- | --- | --- |`,
     ];
     for (const u of ups) {
       const msg = clean(u.message);
       lines.push(
-        `| ${rygDot(u.ryg)} | **${clean(u.deliverable.title)}** | ${msg.length > 320 ? msg.slice(0, 317) + "…" : msg} | ${clean(u.author_name) || "Unknown"} | ${fmtDate(u.created_at)} |`,
+        `| ${rygDot(u.ryg)} | **${clean(u.deliverable.title)}** | ${msg.length > 320 ? msg.slice(0, 317) + "…" : msg} |`,
       );
     }
     sections.push(lines.join("\n"));
@@ -726,7 +726,7 @@ async function buildSummaryMarkdown(
     "Workstream Progress (RYG table: card · status · update), 90 Day Tracker Updates, Productivity per week (ONLY if a capacity dashboard block is supplied), Team Signals from Inboxes (commitments, risks, escalations, board mentions, customer/vendor signals — with the mailbox that surfaced them), Weekly Reports Received (summarise each report email + its attachments), Wins of the Week, Risks & Blockers (with mitigations), Action Items & Owners, Key Decisions Needed. " +
     "PRODUCTIVITY PER WEEK RULES: include this section ONLY when the '=== WEEKLY CAPACITY DASHBOARD ===' block is present below; if it is absent or empty, omit the section entirely (no heading, no placeholder). When present, title it exactly 'Productivity per week', place it immediately after '90-Day Tracker Updates' and before 'Wins of the Week', and derive it EXCLUSIVELY from that block — never from meetings, workstreams, Azure DevOps, emails or any other data. Output 5–8 concise executive bullet points covering the most important KPIs and insights only: total capacity vs actual hours logged and utilisation %, stories closed, highest effort allocation, notable module/team utilisation (AI/ML, Backend, Frontend, QA, DevOps, Firmware), major engineering accomplishments, areas in progress or with no completed work, and overall delivery health. Do NOT reproduce tables, do NOT list every metric, do NOT copy the document. Never invent numbers not in the block. " +
 
-    "90 DAY TRACKER SECTION RULES: the section MUST be titled '90-Day Tracker Updates' and MUST reproduce the supplied '90 DAY TRACKER' block VERBATIM — same workstream sub-headings and the same Markdown tables, rows, columns, cell text, RYG dot, author and date, in the same order. Do not add, merge, reorder, re-summarise, reformat into bullets, or infer entries, and never source it from meeting transcripts or workstream card comments. If the block says 'No 90-Day Tracker updates were recorded this week.', output exactly that line and nothing else in the section. " +
+    "90 DAY TRACKER SECTION RULES: the section MUST be titled '90-Day Tracker Updates' and MUST reproduce the supplied '90 DAY TRACKER' block VERBATIM — same workstream sub-headings and the same Markdown tables, rows, columns, cell text and RYG dot, in the same order. Do not add, merge, reorder, re-summarise, reformat into bullets, or infer entries, and never source it from meeting transcripts or workstream card comments. If the block says 'No 90-Day Tracker updates were recorded this week.', output exactly that line and nothing else in the section. " +
     "ABSOLUTE FINANCIAL EXCLUSION: the report must contain NO financial information from ANY source (emails, meetings, documents, attachments, OCR, transcripts). Omit entirely — never with a placeholder — anything about invoices, payments, outstanding/overdue payments, receipts, purchase orders, quotes, Revolut, bank transactions, cash flow, burn rate, revenue, profit/loss, budgets, spend, costs, pricing, funding, financial documents, vendor payment status, and any monetary amount or currency symbol (£, $, €). This applies to every section including Executive Snapshot, Meetings, Commitments, Risks, Board Mentions, Vendor Signals, Action Items, Decisions and any AI-generated summary. If an item's only substance is financial, drop the whole item. " +
     "Be concise, factual, decision-oriented. Never invent figures or events. " +
     "If a section has no data, state 'No activity recorded this week.' instead of fabricating." +

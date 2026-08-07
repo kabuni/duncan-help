@@ -20,16 +20,18 @@ const corsHeaders = {
 };
 
 const RECIPIENT_EMAILS = [
-  "simon@kabuni.com",
   "nimesh@kabuni.com",
   "patrick@kabuni.com",
+  "simon@kabuni.com",
   "ellaine@kabuni.com",
   "matt@kabuni.com",
+  "tim@kabuni.com",
   "parmy@kabuni.com",
+  "palash@kabuni.com",
   "arzoo@kabuni.com",
   "aashrey@kabuni.com",
-  "tim@kabuni.com",
-  "palash@kabuni.com",
+  "maya@kabuni.com",
+  "pratik@kabuni.com",
 ];
 const SENDER_EMAIL = "duncan@kabuni.com";
 

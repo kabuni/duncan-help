@@ -1150,6 +1150,8 @@ Deno.serve(async (req) => {
       reportWeek,
     );
     if (!summaryMd) throw new Error("OpenAI returned empty summary");
+    const scrubbedMd = scrubFinancialMarkdown(summaryMd);
+
 
     const title = "Weekly Executive Summary";
     const subject = `Weekly Executive Summary | ${weekRange} ${reportWeek.year}`;

@@ -698,6 +698,8 @@ async function buildSummaryMarkdown(
   inboxBlock: string,
   weeklyReportEmailsBlock: string,
   plan90Block: string,
+  capacityBlock: string,
+
   meetingsCount: number,
   cardsCount: number,
   reportWeek: ReportWeek,

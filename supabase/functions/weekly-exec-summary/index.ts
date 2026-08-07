@@ -247,13 +247,13 @@ async function fetchPlan90Changes(admin: any, w: ReportWeek): Promise<string> {
     const lines: string[] = [
       `**${ws.name}**`,
       ``,
-      `| | Deliverable | Latest update | Updated by | Date |`,
-      `| --- | --- | --- | --- | --- |`,
+      `| | Deliverable | Latest update |`,
+      `| --- | --- | --- |`,
     ];
     for (const u of ups) {
       const msg = clean(u.message);
       lines.push(
-        `| ${rygDot(u.ryg)} | **${clean(u.deliverable.title)}** | ${msg.length > 320 ? msg.slice(0, 317) + "…" : msg} | ${clean(u.author_name) || "Unknown"} | ${fmtDate(u.created_at)} |`,
+        `| ${rygDot(u.ryg)} | **${clean(u.deliverable.title)}** | ${msg.length > 320 ? msg.slice(0, 317) + "…" : msg} |`,
       );
     }
     sections.push(lines.join("\n"));

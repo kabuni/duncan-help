@@ -179,7 +179,12 @@ async function fetchWorkstreamCards(admin: any, w: ReportWeek): Promise<{ cards:
 // ─── 90 Day Tracker (Plan 90) weekly change digest ─────────────────────────
 async function fetchPlan90Changes(admin: any, w: ReportWeek): Promise<string> {
   const from = w.monday.toISOString();
-  const to = w.saturdayExcl.toISOString();
+  // Tracker updates are often entered retrospectively (after the reporting week
+  // has closed). Extend the upper bound to "now" so late entries are captured
+  // instead of silently falling outside the Mon–Sun window.
+  const now = new Date();
+  const to = new Date(Math.max(w.saturdayExcl.getTime(), now.getTime())).toISOString();
+
 
   const [{ data: wsRows }, { data: delRows }] = await Promise.all([
     admin.from("plan90_workstreams").select("id,name,archived").order("display_order"),

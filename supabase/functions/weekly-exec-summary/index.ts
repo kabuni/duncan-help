@@ -774,7 +774,7 @@ const FINANCIAL_RE = new RegExp(
     "receipt", "receipts", "remittance", "purchase order", "\\bPO\\b", "\\bPOs\\b", "quotation", "\\bquote\\b",
     "revolut", "bank transaction", "bank transfer", "cash flow", "cashflow", "burn rate", "runway",
     "revenue", "turnover", "profit", "\\bP&L\\b", "loss statement", "budget", "budgets", "budgeted",
-    "\\bspend\\b", "spending", "expense", "expenses", "expenditure", "\\bcost\\b", "\\bcosts\\b", "pricing",
+    "\\bspend\\b", "spending", "expense", "expenses", "expenditure", "\\bcost\\b", "\\bcosts\\b", "costing", "priced", "pricing",
     "funding", "fundraise", "financial", "finance", "accounts payable", "accounts receivable",
     "xero", "vat\\b", "payroll", "salary", "salaries",
     "[£$€]\\s?\\d", "\\d+\\s?(gbp|usd|eur)\\b", "\\b(gbp|usd|eur)\\s?\\d",

@@ -230,22 +230,35 @@ async function fetchPlan90Changes(admin: any, w: ReportWeek): Promise<string> {
     byWs.set(u.deliverable.workstream_id, arr);
   }
 
+  const clean = (s: string) => String(s ?? "").replace(/\s+/g, " ").replace(/\|/g, "\\|").trim();
+  const rygDot = (r?: string) => {
+    const v = String(r ?? "").toLowerCase();
+    if (v.startsWith("g")) return "🟢";
+    if (v.startsWith("a") || v.startsWith("y")) return "🟡";
+    if (v.startsWith("r")) return "🔴";
+    return "⚪";
+  };
+
   const sections: string[] = [];
   for (const ws of workstreams) {
     const ups = byWs.get(ws.id);
     if (!ups?.length) continue; // omit workstreams with no updates this week
     ups.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-    const lines: string[] = [`### ${ws.name}`];
+    const lines: string[] = [
+      `#### ${ws.name}`,
+      ``,
+      `| | Deliverable | Latest update | Updated by | Date |`,
+      `| --- | --- | --- | --- | --- |`,
+    ];
     for (const u of ups) {
+      const msg = clean(u.message);
       lines.push(
-        `- **Deliverable:** ${u.deliverable.title}`,
-        `  - **Latest update:** "${String(u.message).replace(/\s+/g, " ").slice(0, 600)}"`,
-        `  - **Updated by:** ${u.author_name || "Unknown"}`,
-        `  - **Date:** ${fmtDate(u.created_at)}`,
+        `| ${rygDot(u.ryg)} | **${clean(u.deliverable.title)}** | ${msg.length > 320 ? msg.slice(0, 317) + "…" : msg} | ${clean(u.author_name) || "Unknown"} | ${fmtDate(u.created_at)} |`,
       );
     }
     sections.push(lines.join("\n"));
   }
+
 
   if (!sections.length) return "No 90-Day Tracker updates were recorded this week.";
   return sections.join("\n\n");

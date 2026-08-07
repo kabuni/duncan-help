@@ -1153,7 +1153,13 @@ Deno.serve(async (req) => {
   try {
     const asOfRaw = typeof body?.as_of === "string" ? body.as_of : null;
     const asOfDate = asOfRaw ? new Date(asOfRaw) : undefined;
-    const reportWeek = buildReportWeek(asOfDate && !isNaN(asOfDate.getTime()) ? asOfDate : undefined);
+    const weekStartRaw = typeof body?.week_start === "string" ? body.week_start : null;
+    const weekEndRaw = typeof body?.week_end === "string" ? body.week_end : null;
+    const reportWeek = weekStartRaw
+      ? buildCustomWeek(weekStartRaw, weekEndRaw ?? weekStartRaw)
+      : body?.current_week === true
+        ? buildCurrentWeek()
+        : buildReportWeek(asOfDate && !isNaN(asOfDate.getTime()) ? asOfDate : undefined);
     const weekRange = reportWeek.label;
 
     // Pull source data — meetings + workstreams + inbox signals + duncan weekly-report emails.

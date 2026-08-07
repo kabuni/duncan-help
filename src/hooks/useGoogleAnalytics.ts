@@ -78,13 +78,16 @@ export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
 
-  const getAuthHeaders = useCallback(() => {
-    if (!session?.access_token) throw new Error("Not authenticated");
+  const getAuthHeaders = useCallback(async () => {
+    // Fresh token each call; the cached session may hold an expired access_token.
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) throw new Error("Not authenticated");
     return {
-      Authorization: `Bearer ${session.access_token}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     };
-  }, [session]);
+  }, []);
 
   const dashboardQuery = useQuery({
     queryKey: ["google-analytics-dashboard", session?.user?.id],

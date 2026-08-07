@@ -736,13 +736,13 @@ async function buildSummaryMarkdown(
     `Report week: ${reportWeek.label} ${reportWeek.year} (Monday–Sunday)\n` +
     `Today: ${reportWeek.todayLabel}\n` +
     `Meetings ingested: ${meetingsCount} · Workstream cards with activity: ${cardsCount}\n\n` +
-    `=== MEETINGS (Gemini / Plaud — all users incl. duncan@kabuni.com) ===\n${meetingsBlock}\n\n` +
+    `=== MEETINGS (Gemini / Plaud — all users incl. duncan@kabuni.com) ===\n${stripFinancialLines(meetingsBlock)}\n\n` +
     `=== WORKSTREAM CARD ACTIVITY ===\n${workstreamsBlock}\n\n` +
     `=== 90 DAY TRACKER — CHANGES THIS WEEK (per workstream) ===\n${plan90Block}\n\n` +
     (capacityBlock ? `=== WEEKLY CAPACITY DASHBOARD (Knowledge Base — sole source for Productivity per week) ===\n${capacityBlock}\n\n` : "") +
 
-    `=== TEAM INBOX SIGNALS (last 7 days, opted-in mailboxes) ===\n${inboxBlock}\n\n` +
-    `=== WEEKLY-REPORT EMAILS TO duncan@kabuni.com ===\n${weeklyReportEmailsBlock}\n`;
+    `=== TEAM INBOX SIGNALS (last 7 days, opted-in mailboxes) ===\n${stripFinancialLines(inboxBlock)}\n\n` +
+    `=== WEEKLY-REPORT EMAILS TO duncan@kabuni.com ===\n${stripFinancialLines(weeklyReportEmailsBlock)}\n`;
 
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -781,6 +781,14 @@ const FINANCIAL_RE = new RegExp(
   ].join("|"),
   "i",
 );
+
+/** Line-level filter for raw source blocks fed to the model. */
+function stripFinancialLines(block: string): string {
+  return (block || "")
+    .split("\n")
+    .filter((l) => !(l.trim() && FINANCIAL_RE.test(l)))
+    .join("\n");
+}
 
 function isFinancialLine(line: string): boolean {
   return FINANCIAL_RE.test(line);

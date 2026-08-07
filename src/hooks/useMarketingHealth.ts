@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 /* ------------------------------------------------------------------
    Marketing Health — reusable data layer.
@@ -356,10 +357,16 @@ export function useMarketingHealth(): MarketingHealth & {
     retry: false,
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<(MarketingRaw & { instrumentation: MarketingInstrumentation }) | null> => {
+      // Always pull a fresh (auto-refreshed) token — the cached session object
+      // can hold an expired access_token, which the edge function rejects with 401.
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Not authenticated");
+
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-analytics-api`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${session!.access_token}`,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ action: "marketing_health" }),

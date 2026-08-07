@@ -78,13 +78,16 @@ export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
 
-  const getAuthHeaders = useCallback(() => {
-    if (!session?.access_token) throw new Error("Not authenticated");
+  const getAuthHeaders = useCallback(async () => {
+    // Fresh token each call; the cached session may hold an expired access_token.
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) throw new Error("Not authenticated");
     return {
-      Authorization: `Bearer ${session.access_token}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     };
-  }, [session]);
+  }, []);
 
   const dashboardQuery = useQuery({
     queryKey: ["google-analytics-dashboard", session?.user?.id],
@@ -93,7 +96,7 @@ export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
     queryFn: async () => {
       const response = await fetch(ANALYTICS_API_URL, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ action: "dashboard" }),
       });
 
@@ -113,7 +116,7 @@ export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
     queryFn: async () => {
       const response = await fetch(ANALYTICS_API_URL, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ action: "weekly_report", filters: weeklyFilters ?? {} }),
       });
       const data = await response.json().catch(() => ({}));
@@ -130,7 +133,7 @@ export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
     try {
       const response = await fetch(ANALYTICS_AUTH_URL, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.url) throw new Error(data.error || "Failed to connect Google Analytics");
@@ -145,7 +148,7 @@ export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
     try {
       const response = await fetch(ANALYTICS_API_URL, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ action: "askQuestion", question }),
       });
       const data = await response.json().catch(() => ({}));
@@ -159,7 +162,7 @@ export function useGoogleAnalytics(weeklyFilters?: WeeklyFilters) {
   const disconnect = useCallback(async () => {
     const response = await fetch(ANALYTICS_API_URL, {
       method: "POST",
-      headers: getAuthHeaders(),
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ action: "disconnect" }),
     });
     if (!response.ok) throw new Error("Failed to disconnect Google Analytics");

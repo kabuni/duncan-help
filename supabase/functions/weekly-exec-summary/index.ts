@@ -264,6 +264,54 @@ async function fetchPlan90Changes(admin: any, w: ReportWeek): Promise<string> {
   return sections.join("\n\n");
 }
 
+// ─── Weekly Capacity Dashboard (Knowledge Base) ────────────────────────────
+// Finds the most recently uploaded "Weekly Capacity Dashboard" (or Weekly
+// Capacity & Delivery report) relevant to the reporting period and returns its
+// extracted text. Returns "" when none exists → section is omitted entirely.
+async function fetchCapacityDashboard(admin: any, w: ReportWeek): Promise<string> {
+  const from = w.monday.toISOString();
+  // Dashboards are frequently uploaded after the week closes, so accept
+  // anything uploaded from the start of the reporting week up to now.
+  const to = new Date(Math.max(w.saturdayExcl.getTime(), Date.now())).toISOString();
+
+  const { data: docs, error } = await admin
+    .from("documents")
+    .select("id,title,file_name,created_at,status")
+    .eq("status", "ready")
+    .gte("created_at", from)
+    .lte("created_at", to)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) {
+    console.warn("[weekly-exec-summary] capacity dashboard lookup failed:", error.message);
+    return "";
+  }
+
+  const matches = ((docs ?? []) as any[]).filter((d) => {
+    const hay = `${d.title ?? ""} ${d.file_name ?? ""}`.toLowerCase();
+    return hay.includes("capacity") &&
+      (hay.includes("dashboard") || hay.includes("weekly") || hay.includes("delivery"));
+  });
+  if (!matches.length) return "";
+
+  const doc = matches[0]; // most recently uploaded
+  const { data: chunks } = await admin
+    .from("document_chunks")
+    .select("content,chunk_index")
+    .eq("document_id", doc.id)
+    .order("chunk_index", { ascending: true });
+
+  const text = ((chunks ?? []) as any[]).map((c) => c.content).join("\n").trim();
+  if (!text) return "";
+
+  const uploaded = new Date(doc.created_at).toLocaleDateString("en-GB", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+  return `Document: ${doc.file_name} (uploaded ${uploaded})\n\n${truncate(text, 30_000)}`;
+}
+
+
+
 
 
 // ─── Build source-data block for the model ─────────────────────────────────
@@ -650,6 +698,8 @@ async function buildSummaryMarkdown(
   inboxBlock: string,
   weeklyReportEmailsBlock: string,
   plan90Block: string,
+  capacityBlock: string,
+
   meetingsCount: number,
   cardsCount: number,
   reportWeek: ReportWeek,
@@ -673,7 +723,9 @@ async function buildSummaryMarkdown(
     "Produce a board-ready weekly executive summary in clean Markdown, grounded strictly in: (1) Gemini/Plaud meeting notes, (2) workstream-card activity, (3) 90 Day Tracker changes, (4) inbox signals extracted from opted-in team mailboxes, and (5) any 'weekly report' emails sent to duncan@kabuni.com (including their attached documents). " +
     "Use H1 for the report title, H2 for sections, bullets where useful, and Markdown tables when comparing items. " +
     "Sections (in order): Executive Snapshot, Meetings This Week (key discussions & decisions), " +
-    "Workstream Progress (RYG table: card · status · update), 90 Day Tracker Updates, Team Signals from Inboxes (commitments, risks, escalations, board mentions, customer/vendor signals — with the mailbox that surfaced them), Weekly Reports Received (summarise each report email + its attachments), Wins of the Week, Risks & Blockers (with mitigations), Action Items & Owners, Key Decisions Needed. " +
+    "Workstream Progress (RYG table: card · status · update), 90 Day Tracker Updates, Engineering Delivery Summary (ONLY if a capacity dashboard block is supplied), Team Signals from Inboxes (commitments, risks, escalations, board mentions, customer/vendor signals — with the mailbox that surfaced them), Weekly Reports Received (summarise each report email + its attachments), Wins of the Week, Risks & Blockers (with mitigations), Action Items & Owners, Key Decisions Needed. " +
+    "ENGINEERING DELIVERY SUMMARY RULES: include this section ONLY when the '=== WEEKLY CAPACITY DASHBOARD ===' block is present below; if it is absent or empty, omit the section entirely (no heading, no placeholder). When present, title it exactly 'Engineering Delivery Summary', place it immediately after '90-Day Tracker Updates' and before 'Wins of the Week', and derive it EXCLUSIVELY from that block — never from meetings, workstreams, Azure DevOps, emails or any other data. Output 5–8 concise executive bullet points covering the most important KPIs and insights only: total capacity vs actual hours logged and utilisation %, stories closed, highest effort allocation, notable module/team utilisation (AI/ML, Backend, Frontend, QA, DevOps, Firmware), major engineering accomplishments, areas in progress or with no completed work, and overall delivery health. Do NOT reproduce tables, do NOT list every metric, do NOT copy the document. Never invent numbers not in the block. " +
+
     "90 DAY TRACKER SECTION RULES: the section MUST be titled '90-Day Tracker Updates' and MUST reproduce the supplied '90 DAY TRACKER' block VERBATIM — same workstream sub-headings and the same Markdown tables, rows, columns, cell text, RYG dot, author and date, in the same order. Do not add, merge, reorder, re-summarise, reformat into bullets, or infer entries, and never source it from meeting transcripts or workstream card comments. If the block says 'No 90-Day Tracker updates were recorded this week.', output exactly that line and nothing else in the section. " +
     "ABSOLUTE FINANCIAL EXCLUSION: the report must contain NO financial information from ANY source (emails, meetings, documents, attachments, OCR, transcripts). Omit entirely — never with a placeholder — anything about invoices, payments, outstanding/overdue payments, receipts, purchase orders, quotes, Revolut, bank transactions, cash flow, burn rate, revenue, profit/loss, budgets, spend, costs, pricing, funding, financial documents, vendor payment status, and any monetary amount or currency symbol (£, $, €). This applies to every section including Executive Snapshot, Meetings, Commitments, Risks, Board Mentions, Vendor Signals, Action Items, Decisions and any AI-generated summary. If an item's only substance is financial, drop the whole item. " +
     "Be concise, factual, decision-oriented. Never invent figures or events. " +
@@ -687,6 +739,8 @@ async function buildSummaryMarkdown(
     `=== MEETINGS (Gemini / Plaud — all users incl. duncan@kabuni.com) ===\n${meetingsBlock}\n\n` +
     `=== WORKSTREAM CARD ACTIVITY ===\n${workstreamsBlock}\n\n` +
     `=== 90 DAY TRACKER — CHANGES THIS WEEK (per workstream) ===\n${plan90Block}\n\n` +
+    (capacityBlock ? `=== WEEKLY CAPACITY DASHBOARD (Knowledge Base — sole source for Engineering Delivery Summary) ===\n${capacityBlock}\n\n` : "") +
+
     `=== TEAM INBOX SIGNALS (last 7 days, opted-in mailboxes) ===\n${inboxBlock}\n\n` +
     `=== WEEKLY-REPORT EMAILS TO duncan@kabuni.com ===\n${weeklyReportEmailsBlock}\n`;
 
@@ -981,13 +1035,15 @@ Deno.serve(async (req) => {
     const weekRange = reportWeek.label;
 
     // Pull source data — meetings + workstreams + inbox signals + duncan weekly-report emails.
-    const [meetings, ws, inboxAgg, weeklyReportEmailsBlock, plan90Block] = await Promise.all([
+    const [meetings, ws, inboxAgg, weeklyReportEmailsBlock, plan90Block, capacityBlock] = await Promise.all([
       fetchMeetings(admin, reportWeek),
       fetchWorkstreamCards(admin, reportWeek),
       scanAllOptedInInboxes(admin, reportWeek),
       fetchDuncanWeeklyReports(admin, reportWeek),
       fetchPlan90Changes(admin, reportWeek),
+      fetchCapacityDashboard(admin, reportWeek),
     ]);
+
 
     const meetingsBlock = formatMeetingsBlock(meetings);
     const workstreamsBlock = formatWorkstreamBlock(ws.cards, ws.tasks);
@@ -1015,6 +1071,8 @@ Deno.serve(async (req) => {
       inboxBlock,
       weeklyReportEmailsBlock,
       plan90Block,
+      capacityBlock,
+
       meetings.length,
 
       ws.cards.length,

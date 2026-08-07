@@ -116,6 +116,49 @@ function buildReportWeek(asOf?: Date): ReportWeek {
   };
 }
 
+// Explicit window override: week_start / week_end (YYYY-MM-DD, inclusive).
+// Also used by current_week=true (this week's Monday → today).
+function buildCustomWeek(startISO: string, endISO: string): ReportWeek {
+  const monday = new Date(`${startISO}T00:00:00Z`);
+  const endIncl = new Date(`${endISO}T00:00:00Z`);
+  const saturdayExcl = new Date(endIncl);
+  saturdayExcl.setUTCDate(endIncl.getUTCDate() + 1); // exclusive upper bound
+  const friday = new Date(endIncl);
+
+  const startMonth = monday.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  const endMonth = endIncl.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  const label = startMonth === endMonth
+    ? `${ordinalNum(monday.getUTCDate())} - ${ordinalNum(endIncl.getUTCDate())} ${endMonth}`
+    : `${ordinalNum(monday.getUTCDate())} ${startMonth} - ${ordinalNum(endIncl.getUTCDate())} ${endMonth}`;
+
+  return {
+    monday,
+    saturdayExcl,
+    friday,
+    sunday: endIncl,
+    year: monday.getUTCFullYear(),
+    label,
+    isoLabel: `${startISO}/${endISO}`,
+    todayLabel: new Date().toLocaleDateString("en-GB", {
+      weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London",
+    }),
+  };
+}
+
+// This week's Monday → today (UK), for mid-week manual runs.
+function buildCurrentWeek(): ReportWeek {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(new Date()).map((x) => [x.type, x.value]),
+  );
+  const ukToday = new Date(Date.UTC(+p.year, +p.month - 1, +p.day));
+  const dow = ukToday.getUTCDay();
+  const mon = new Date(ukToday);
+  mon.setUTCDate(ukToday.getUTCDate() - (dow === 0 ? 6 : dow - 1));
+  return buildCustomWeek(mon.toISOString().slice(0, 10), ukToday.toISOString().slice(0, 10));
+}
+
 function truncate(s: string, max: number) {
   return s.length <= max ? s : s.slice(0, max) + "\n…[truncated]";
 }

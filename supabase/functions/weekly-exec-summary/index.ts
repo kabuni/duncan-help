@@ -230,22 +230,35 @@ async function fetchPlan90Changes(admin: any, w: ReportWeek): Promise<string> {
     byWs.set(u.deliverable.workstream_id, arr);
   }
 
+  const clean = (s: string) => String(s ?? "").replace(/\s+/g, " ").replace(/\|/g, "\\|").trim();
+  const rygDot = (r?: string) => {
+    const v = String(r ?? "").toLowerCase();
+    if (v.startsWith("g")) return "🟢";
+    if (v.startsWith("a") || v.startsWith("y")) return "🟡";
+    if (v.startsWith("r")) return "🔴";
+    return "⚪";
+  };
+
   const sections: string[] = [];
   for (const ws of workstreams) {
     const ups = byWs.get(ws.id);
     if (!ups?.length) continue; // omit workstreams with no updates this week
     ups.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-    const lines: string[] = [`### ${ws.name}`];
+    const lines: string[] = [
+      `#### ${ws.name}`,
+      ``,
+      `| | Deliverable | Latest update | Updated by | Date |`,
+      `| --- | --- | --- | --- | --- |`,
+    ];
     for (const u of ups) {
+      const msg = clean(u.message);
       lines.push(
-        `- **Deliverable:** ${u.deliverable.title}`,
-        `  - **Latest update:** "${String(u.message).replace(/\s+/g, " ").slice(0, 600)}"`,
-        `  - **Updated by:** ${u.author_name || "Unknown"}`,
-        `  - **Date:** ${fmtDate(u.created_at)}`,
+        `| ${rygDot(u.ryg)} | **${clean(u.deliverable.title)}** | ${msg.length > 320 ? msg.slice(0, 317) + "…" : msg} | ${clean(u.author_name) || "Unknown"} | ${fmtDate(u.created_at)} |`,
       );
     }
     sections.push(lines.join("\n"));
   }
+
 
   if (!sections.length) return "No 90-Day Tracker updates were recorded this week.";
   return sections.join("\n\n");
@@ -661,7 +674,7 @@ async function buildSummaryMarkdown(
     "Use H1 for the report title, H2 for sections, bullets where useful, and Markdown tables when comparing items. " +
     "Sections (in order): Executive Snapshot, Meetings This Week (key discussions & decisions), " +
     "Workstream Progress (RYG table: card · status · update), 90 Day Tracker Updates, Team Signals from Inboxes (commitments, risks, escalations, board mentions, customer/vendor signals — with the mailbox that surfaced them), Weekly Reports Received (summarise each report email + its attachments), Wins of the Week, Risks & Blockers (with mitigations), Action Items & Owners, Key Decisions Needed. " +
-    "90 DAY TRACKER SECTION RULES: the section MUST be titled '90-Day Tracker Updates' and MUST reproduce the supplied '90 DAY TRACKER' block VERBATIM — same workstream sub-headings, deliverables, quoted latest update, 'Updated by' and 'Date'. Do not add, merge, reorder, re-summarise, or infer entries, and never source it from meeting transcripts or workstream card comments. If the block says 'No 90-Day Tracker updates were recorded this week.', output exactly that line and nothing else in the section. " +
+    "90 DAY TRACKER SECTION RULES: the section MUST be titled '90-Day Tracker Updates' and MUST reproduce the supplied '90 DAY TRACKER' block VERBATIM — same workstream sub-headings and the same Markdown tables, rows, columns, cell text, RYG dot, author and date, in the same order. Do not add, merge, reorder, re-summarise, reformat into bullets, or infer entries, and never source it from meeting transcripts or workstream card comments. If the block says 'No 90-Day Tracker updates were recorded this week.', output exactly that line and nothing else in the section. " +
     "ABSOLUTE FINANCIAL EXCLUSION: the report must contain NO financial information from ANY source (emails, meetings, documents, attachments, OCR, transcripts). Omit entirely — never with a placeholder — anything about invoices, payments, outstanding/overdue payments, receipts, purchase orders, quotes, Revolut, bank transactions, cash flow, burn rate, revenue, profit/loss, budgets, spend, costs, pricing, funding, financial documents, vendor payment status, and any monetary amount or currency symbol (£, $, €). This applies to every section including Executive Snapshot, Meetings, Commitments, Risks, Board Mentions, Vendor Signals, Action Items, Decisions and any AI-generated summary. If an item's only substance is financial, drop the whole item. " +
     "Be concise, factual, decision-oriented. Never invent figures or events. " +
     "If a section has no data, state 'No activity recorded this week.' instead of fabricating." +

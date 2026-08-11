@@ -37,7 +37,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ImportTasksFromNotesDialog } from "@/components/projects/ImportTasksFromNotesDialog";
+import TodoSection, { NewTodoDialog } from "@/components/todos/TodoSection";
 import type { ProjectMember } from "@/hooks/useProjects";
+
 
 /* ------------ helpers ------------ */
 const startOfDay = (d = new Date()) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };

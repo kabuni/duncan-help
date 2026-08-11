@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
 import { useMyPendingTasks } from "@/hooks/useHomeDashboard";
+import { useTodos } from "@/hooks/useTodos";
 import { useGoogleCalendar, type CalendarEvent } from "@/hooks/useGoogleCalendar";
 import { LeaderboardSection } from "@/components/home/LeaderboardTile";
 import { ProductFeedbackTiles } from "@/components/home/ProductFeedbackTiles";
@@ -236,7 +237,7 @@ function MeetingList({ label, events, emptyLabel }: { label: string; events: Cal
 type UnifiedTask = {
   id: string;
   title: string;
-  source: "Workstream" | "Project";
+  source: "Workstream" | "Project" | "To-Do";
   context: string;
   status: string;
   due_date: string | null;
@@ -246,6 +247,7 @@ type UnifiedTask = {
 function useUnifiedTasks() {
   const ws = useMyPendingTasks();
   const proj = useMyProjectTasks();
+  const todos = useTodos();
   const tasks: UnifiedTask[] = useMemo(() => {
     const a: UnifiedTask[] = (ws.data ?? []).map((t) => ({
       id: `ws-${t.id}`,
@@ -265,9 +267,18 @@ function useUnifiedTasks() {
       due_date: t.due_date,
       href: `/projects/${t.project_id}`,
     }));
-    return [...a, ...b];
-  }, [ws.data, proj.data]);
-  return { tasks, isLoading: ws.isLoading || proj.isLoading };
+    const c: UnifiedTask[] = (todos.data ?? []).map((t) => ({
+      id: `td-${t.id}`,
+      title: t.title,
+      source: "To-Do",
+      context: t.created_by_name ? `From ${t.created_by_name}` : "Personal",
+      status: t.completed ? "done" : "todo",
+      due_date: t.due_date,
+      href: "/tasks",
+    }));
+    return [...c, ...a, ...b];
+  }, [ws.data, proj.data, todos.data]);
+  return { tasks, isLoading: ws.isLoading || proj.isLoading || todos.isLoading };
 }
 
 function bucketTasks(tasks: UnifiedTask[]) {

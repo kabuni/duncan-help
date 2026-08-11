@@ -43,7 +43,9 @@ export type MyTask = {
   due_date: string | null;
   card_id: string;
   card_title: string;
+  created_at?: string | null;
 };
+
 
 export type WorkstreamsStats = {
   active: number;
@@ -334,12 +336,12 @@ export function useMyPendingTasks() {
       const [directRes, multiRes] = await Promise.all([
         supabase
           .from("workstream_tasks")
-          .select("id, title, status, completed, due_date, card_id")
+          .select("id, title, status, completed, due_date, card_id, created_at")
           .eq("assignee_id", uid)
           .eq("completed", false),
         (supabase as any)
           .from("workstream_task_assignees")
-          .select("task_id, workstream_tasks!inner(id, title, status, completed, due_date, card_id)")
+          .select("task_id, workstream_tasks!inner(id, title, status, completed, due_date, card_id, created_at)")
           .eq("user_id", uid),
       ]);
 
@@ -368,6 +370,7 @@ export function useMyPendingTasks() {
           completed: t.completed,
           due_date: t.due_date,
           card_id: t.card_id,
+          created_at: t.created_at,
           card_title: cardMap[t.card_id] || "Workstream",
         }))
         .sort((a, b) => {

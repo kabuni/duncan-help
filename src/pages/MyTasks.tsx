@@ -9,6 +9,7 @@ import {
   Loader2,
   ExternalLink,
   ChevronLeft,
+  Sparkle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,6 +39,8 @@ import {
 } from "@/components/ui/select";
 import { ImportTasksFromNotesDialog } from "@/components/projects/ImportTasksFromNotesDialog";
 import TodoSection, { NewTodoDialog } from "@/components/todos/TodoSection";
+import { useTaskSeen } from "@/hooks/useTaskSeen";
+import { useTodos } from "@/hooks/useTodos";
 import type { ProjectMember } from "@/hooks/useProjects";
 
 
@@ -58,6 +61,8 @@ type UnifiedTask = {
   due_date: string | null;
   deadline: string | null;
   notes: string | null;
+  created_at: string | null;
+  created_by: string | null;
   href: string;
 };
 
@@ -75,7 +80,7 @@ function useProjectTasks() {
       if (prof?.id) ids.push(prof.id);
       const { data, error } = await supabase
         .from("project_chat_plan_items")
-        .select("id,title,status,due_date,deadline,notes,project_id,projects(name)")
+        .select("id,title,status,due_date,deadline,notes,created_at,created_by,project_id,projects(name)")
         .in("assignee_profile_id", ids)
         .neq("status", "done");
       if (error) throw error;
@@ -86,6 +91,8 @@ function useProjectTasks() {
         due_date: r.due_date,
         deadline: r.deadline,
         notes: r.notes,
+        created_at: r.created_at,
+        created_by: r.created_by,
         project_id: r.project_id,
         project_name: r.projects?.name ?? "Project",
       }));
@@ -502,6 +509,8 @@ export default function MyTasks() {
   const qc = useQueryClient();
   const ws = useMyPendingTasks();
   const proj = useProjectTasks();
+  const { isNew, markSeen } = useTaskSeen();
+  const { data: todosForCount = [] } = useTodos();
   const { data: projects = [] } = useAllProjects();
 
   const [newOpen, setNewOpen] = useState(false);
@@ -526,6 +535,8 @@ export default function MyTasks() {
       due_date: t.due_date,
       deadline: null,
       notes: null,
+      created_at: t.created_at ?? null,
+      created_by: null,
       href: `/workstreams?card=${t.card_id}`,
     }));
     const b: UnifiedTask[] = (proj.data ?? []).map((t: any) => ({
@@ -539,6 +550,8 @@ export default function MyTasks() {
       due_date: t.due_date,
       deadline: t.deadline,
       notes: t.notes,
+      created_at: t.created_at ?? null,
+      created_by: t.created_by ?? null,
       href: `/projects/${t.project_id}`,
     }));
     return [...a, ...b];
@@ -608,6 +621,16 @@ export default function MyTasks() {
     }
   }
 
+  const newTaskCount = useMemo(
+    () => tasks.filter((t) => isNew(t.created_at, t.created_by)).length,
+    [tasks, isNew],
+  );
+  const newTodoCount = useMemo(
+    () => (todosForCount as any[]).filter((t) => isNew(t.created_at, t.created_by)).length,
+    [todosForCount, isNew],
+  );
+  const newTotal = newTaskCount + newTodoCount;
+
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -638,6 +661,30 @@ export default function MyTasks() {
         </div>
       </div>
 
+      {newTotal > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/40 bg-primary/5 px-4 py-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Sparkle className="h-4 w-4 text-primary shrink-0" />
+            <p className="text-sm text-foreground truncate">
+              <span className="font-semibold">{newTotal} new</span>{" "}
+              {newTotal === 1 ? "item has" : "items have"} been allocated to you since your last visit
+              {newTaskCount > 0 && newTodoCount > 0
+                ? ` — ${newTaskCount} task${newTaskCount === 1 ? "" : "s"} and ${newTodoCount} to-do${newTodoCount === 1 ? "" : "s"}`
+                : ""}
+              .
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs shrink-0"
+            onClick={() => { markSeen(); window.location.reload(); }}
+          >
+            Mark all seen
+          </Button>
+        </div>
+      )}
+
       <TodoSection />
 
       {isLoading ? (
@@ -657,25 +704,25 @@ export default function MyTasks() {
           {buckets.overdue.length > 0 && (
             <Bucket
               title={`Overdue · ${buckets.overdue.length}`} tone="overdue" rows={buckets.overdue}
-              busyIds={busyIds} onToggle={handleToggle} onEdit={setEditing} onOpen={(t) => navigate(t.href)}
+              busyIds={busyIds} onToggle={handleToggle} onEdit={setEditing} onOpen={(t) => navigate(t.href)} isNew={isNew}
             />
           )}
           {buckets.dueToday.length > 0 && (
             <Bucket
               title={`Due today · ${buckets.dueToday.length}`} tone="today" rows={buckets.dueToday}
-              busyIds={busyIds} onToggle={handleToggle} onEdit={setEditing} onOpen={(t) => navigate(t.href)}
+              busyIds={busyIds} onToggle={handleToggle} onEdit={setEditing} onOpen={(t) => navigate(t.href)} isNew={isNew}
             />
           )}
           {buckets.upcoming.length > 0 && (
             <Bucket
               title={`Next 7 days · ${buckets.upcoming.length}`} tone="upcoming" rows={buckets.upcoming}
-              busyIds={busyIds} onToggle={handleToggle} onEdit={setEditing} onOpen={(t) => navigate(t.href)}
+              busyIds={busyIds} onToggle={handleToggle} onEdit={setEditing} onOpen={(t) => navigate(t.href)} isNew={isNew}
             />
           )}
           {buckets.later.length > 0 && (
             <Bucket
               title={`Later / no due date · ${buckets.later.length}`} rows={buckets.later}
-              busyIds={busyIds} onToggle={handleToggle} onEdit={setEditing} onOpen={(t) => navigate(t.href)}
+              busyIds={busyIds} onToggle={handleToggle} onEdit={setEditing} onOpen={(t) => navigate(t.href)} isNew={isNew}
             />
           )}
         </div>
@@ -724,6 +771,7 @@ function Bucket({
   onToggle,
   onEdit,
   onOpen,
+  isNew,
 }: {
   title: string;
   tone?: "overdue" | "today" | "upcoming";
@@ -732,6 +780,7 @@ function Bucket({
   onToggle: (t: UnifiedTask, next: boolean) => void;
   onEdit: (t: UnifiedTask) => void;
   onOpen: (t: UnifiedTask) => void;
+  isNew: (createdAt?: string | null, createdBy?: string | null) => boolean;
 }) {
   return (
     <div className="rounded-xl border border-border bg-card">
@@ -747,8 +796,12 @@ function Bucket({
             tone === "today" ? "text-amber-600 dark:text-amber-400 font-medium" :
             "text-muted-foreground";
           const busy = busyIds.has(t.id);
+          const fresh = isNew(t.created_at, t.created_by);
           return (
-            <li key={t.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
+            <li
+              key={t.id}
+              className={`flex items-center gap-3 px-4 py-3 transition-colors ${fresh ? "bg-primary/5 border-l-2 border-l-primary hover:bg-primary/10" : "hover:bg-muted/40"}`}
+            >
               <div className="pt-0.5">
                 {busy ? (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -764,7 +817,14 @@ function Bucket({
                 onClick={() => onEdit(t)}
                 className="min-w-0 flex-1 text-left"
               >
-                <div className="text-sm font-medium text-foreground truncate">{t.title}</div>
+                <div className="text-sm font-medium text-foreground truncate flex items-center gap-2">
+                  {fresh && (
+                    <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary-foreground">
+                      New
+                    </span>
+                  )}
+                  <span className="truncate">{t.title}</span>
+                </div>
                 <div className="text-[11px] text-muted-foreground truncate mt-0.5">
                   <span className="uppercase tracking-widest mr-1.5">{t.source}</span>
                   · {t.context}

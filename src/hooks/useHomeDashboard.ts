@@ -43,7 +43,9 @@ export type MyTask = {
   due_date: string | null;
   card_id: string;
   card_title: string;
+  created_at?: string | null;
 };
+
 
 export type WorkstreamsStats = {
   active: number;

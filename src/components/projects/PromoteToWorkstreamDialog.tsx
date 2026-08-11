@@ -63,6 +63,7 @@ export function PromoteToWorkstreamDialog({
           default_card_title: cardTitle.trim() || defaultCardTitle || "Plan",
           project_tag: tag === "none" ? null : tag,
           default_due_date: dueDate || null,
+          visibility,
         },
       });
       if (error) throw error;
@@ -139,6 +140,26 @@ export function PromoteToWorkstreamDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs">Visibility</Label>
+            <RadioGroup value={visibility} onValueChange={(v) => setVisibility(v as any)} className="space-y-1">
+              <div className="flex items-start gap-2 rounded-md border border-border px-2.5 py-2">
+                <RadioGroupItem value="public" id="v-public" className="mt-0.5" />
+                <label htmlFor="v-public" className="text-xs leading-snug cursor-pointer">
+                  <span className="font-medium">Public</span>
+                  <span className="block text-muted-foreground">Visible to everyone on the workstreams board.</span>
+                </label>
+              </div>
+              <div className="flex items-start gap-2 rounded-md border border-border px-2.5 py-2">
+                <RadioGroupItem value="private" id="v-private" className="mt-0.5" />
+                <label htmlFor="v-private" className="text-xs leading-snug cursor-pointer">
+                  <span className="font-medium">Private to this project</span>
+                  <span className="block text-muted-foreground">Only this project's collaborators (plus assignees and admins) can see the card.</span>
+                </label>
+              </div>
+            </RadioGroup>
           </div>
 
           <div className="space-y-1">

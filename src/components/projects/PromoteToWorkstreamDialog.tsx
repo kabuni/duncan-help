@@ -50,6 +50,7 @@ export function PromoteToWorkstreamDialog({
   const [mode, setMode] = useState<"single_card" | "by_group">("single_card");
   const [cardTitle, setCardTitle] = useState(defaultCardTitle || "");
   const [dueDate, setDueDate] = useState("");
+  const [visibility, setVisibility] = useState<"public" | "private">("public");
   const [submitting, setSubmitting] = useState(false);
 
   async function submit() {

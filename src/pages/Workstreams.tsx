@@ -297,10 +297,14 @@ const Workstreams = ({ raidOnly = false }: { raidOnly?: boolean }) => {
           ) : displayCards.length === 0 ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-16">
               <Target className="h-12 w-12 text-muted-foreground/30 mb-4" />
-              <p className="text-sm text-muted-foreground mb-4">No workstream cards yet</p>
-              <Button onClick={() => setShowCreate(true)} variant="outline" className="gap-2">
-                <Plus className="h-4 w-4" /> Create your first card
-              </Button>
+              <p className="text-sm text-muted-foreground mb-4">
+                {raidOnly ? "No RAID cards yet" : "No workstream cards yet"}
+              </p>
+              {!raidOnly && (
+                <Button onClick={() => setShowCreate(true)} variant="outline" className="gap-2">
+                  <Plus className="h-4 w-4" /> Create your first card
+                </Button>
+              )}
             </motion.div>
           ) : viewMode === "board" ? (
             <motion.div data-tour="ws-board" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>

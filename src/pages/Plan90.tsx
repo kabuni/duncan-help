@@ -134,6 +134,14 @@ export default function Plan90() {
 
       {isAdmin && <AddDeliverableDialog open={addOpen} onOpenChange={setAddOpen} workstreams={activeWorkstreams} owners={owners} onCreate={createDeliverable} />}
       {isAdmin && <WorkstreamsDialog open={wsMgrOpen} onOpenChange={setWsMgrOpen} workstreams={workstreams} onCreate={createWorkstream} onUpdate={updateWorkstream} onDelete={deleteWorkstream} deliverables={deliverables} />}
+      <Plan90ArchiveDialog
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        deliverables={deliverables}
+        workstreams={workstreams}
+        isAdmin={isAdmin}
+        onRestore={(id) => updateDeliverable(id, { status: "In Progress" } as any)}
+      />
     </div>
   );
 }

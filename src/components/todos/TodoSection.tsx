@@ -33,6 +33,7 @@ import {
   type Todo,
   type TodoPriority,
 } from "@/hooks/useTodos";
+import { useTaskSeen } from "@/hooks/useTaskSeen";
 
 const PRIORITY_LABEL: Record<TodoPriority, string> = {
   high: "High",
@@ -162,7 +163,9 @@ export default function TodoSection() {
   const { data: todos = [], isLoading } = useTodos();
   const toggle = useToggleTodo();
   const del = useDeleteTodo();
+  const { isNew } = useTaskSeen();
   const [open, setOpen] = useState(false);
+  const newCount = todos.filter((t: Todo) => isNew(t.created_at, t.created_by)).length;
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
 
@@ -172,6 +175,12 @@ export default function TodoSection() {
         <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
           To-Dos · {todos.length}
         </span>
+        {newCount > 0 && (
+          <span className="rounded-full bg-primary px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary-foreground">
+            {newCount} new
+          </span>
+        )}
+        <span className="flex-1" />
         <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setOpen(true)}>
           <Plus className="h-3.5 w-3.5 mr-1" /> New to-do
         </Button>
@@ -189,8 +198,12 @@ export default function TodoSection() {
         <ul className="divide-y divide-border/60">
           {todos.map((t: Todo) => {
             const overdue = t.due_date && new Date(t.due_date + "T00:00:00") < today;
+            const fresh = isNew(t.created_at, t.created_by);
             return (
-              <li key={t.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
+              <li
+                key={t.id}
+                className={`flex items-center gap-3 px-4 py-3 transition-colors ${fresh ? "bg-primary/5 border-l-2 border-l-primary hover:bg-primary/10" : "hover:bg-muted/40"}`}
+              >
                 <Checkbox
                   aria-label="Mark complete"
                   checked={t.completed}
@@ -198,7 +211,14 @@ export default function TodoSection() {
                   onCheckedChange={(v) => toggle.mutate({ id: t.id, completed: !!v })}
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-foreground truncate">{t.title}</div>
+                  <div className="text-sm font-medium text-foreground truncate flex items-center gap-2">
+                    {fresh && (
+                      <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary-foreground">
+                        New
+                      </span>
+                    )}
+                    <span className="truncate">{t.title}</span>
+                  </div>
                   <div className="text-[11px] text-muted-foreground truncate mt-0.5">
                     <span className={`uppercase tracking-widest mr-1.5 ${priorityClass(t.priority)}`}>
                       {PRIORITY_LABEL[t.priority] ?? t.priority}

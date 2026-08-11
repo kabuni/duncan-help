@@ -125,12 +125,9 @@ function useWeeklyUsage() {
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const weekStart = startOfWeek().toISOString().slice(0, 10);
-      const [usageRes, savingsRes, wsDoneRes, projDoneRes, meetingsRes] = await Promise.all([
+      const [usageRes, savingsRes] = await Promise.all([
         supabase.from("token_usage").select("total_tokens,request_count,category_counts,usage_date").eq("user_id", user!.id).gte("usage_date", weekStart),
         (supabase as any).from("savings_events").select("minutes_saved").eq("user_id", user!.id).gte("occurred_at", startOfWeek().toISOString()),
-        supabase.from("workstream_tasks").select("id", { count: "exact", head: true }).eq("assignee_id", user!.id).eq("completed", true).gte("updated_at", startOfWeek().toISOString()),
-        supabase.from("project_chat_plan_items").select("id", { count: "exact", head: true }).eq("assignee_profile_id", user!.id).eq("status", "done").gte("updated_at", startOfWeek().toISOString()),
-        supabase.from("meetings").select("id", { count: "exact", head: true }).gte("created_at", startOfWeek().toISOString()),
       ]);
       const rows = (usageRes.data ?? []) as any[];
       const tokens = rows.reduce((s, r) => s + Number(r.total_tokens ?? 0), 0);
@@ -143,13 +140,7 @@ function useWeeklyUsage() {
       );
       const hoursSaved = minutesSaved / 60;
 
-      return {
-        tokens,
-        requests,
-        hoursSaved,
-        tasksCompleted: (wsDoneRes.count ?? 0) + (projDoneRes.count ?? 0),
-        meetingsAttended: meetingsRes.count ?? 0,
-      };
+      return { tokens, requests, hoursSaved };
     },
   });
 }
@@ -407,8 +398,6 @@ function WeeklyUsageSection() {
   const items = [
     { label: "Tokens used", value: data ? fmt(data.tokens) : "—" },
     { label: "Hours saved", value: data ? data.hoursSaved.toFixed(data.hoursSaved >= 10 ? 1 : 2) : "—" },
-    { label: "Tasks completed", value: data ? fmt(data.tasksCompleted) : "—" },
-    { label: "Meetings ingested", value: data ? fmt(data.meetingsAttended) : "—" },
   ];
   return (
     <Tile delay={0.12}>
@@ -416,7 +405,7 @@ function WeeklyUsageSection() {
       {isLoading ? (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           {items.map((m) => (
             <div key={m.label}>
               <div className="text-xl sm:text-2xl font-bold text-foreground tracking-tight tabular-nums">{m.value}</div>
@@ -426,7 +415,7 @@ function WeeklyUsageSection() {
         </div>
       )}
       <div className="text-[10px] text-muted-foreground/70 mt-3">
-        Rolling since Monday. Hours saved is a rough estimate (~8 min per Duncan request).
+        Rolling since Monday. Hours saved is based on logged time-savings events.
       </div>
     </Tile>
   );

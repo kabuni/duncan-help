@@ -17,7 +17,7 @@ function scoreTone(score: number) {
 }
 
 export default function PeopleCulture() {
-  const { data: liveData, isLoading, error, rag: liveRag } = usePeopleCulture();
+  const { data: liveData, isLoading, isFetching, refetch, error, rag: liveRag } = usePeopleCulture();
 
   const isSample = !!error || !liveData || !liveData.responses || !liveData.themes.length;
   const data = isSample ? SAMPLE_PEOPLE_CULTURE : liveData;
@@ -29,6 +29,19 @@ export default function PeopleCulture() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-end">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1.5 text-[11px] text-muted-foreground"
+          onClick={() => refetch()}
+          disabled={isFetching}
+        >
+          <RefreshCw className={`h-3 w-3 ${isFetching ? "animate-spin" : ""}`} />
+          {isFetching ? "Syncing…" : "Refresh from survey"}
+        </Button>
+      </div>
+
       {isSample && (
         <p className="text-[11px] text-muted-foreground italic">
           Illustrative model — awaiting the first responses. Indices switch to live data

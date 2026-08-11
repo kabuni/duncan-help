@@ -118,11 +118,44 @@ export function Plan90ArchiveDialog({ open, onOpenChange, deliverables, workstre
                 <Field label="Last updated" value={format(new Date(selected.updated_at), "d MMM yyyy, HH:mm")} />
               </div>
               <div>
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
+                  Updates ({updates.length})
+                </div>
+                {updates.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
+                    No updates were posted on this deliverable.
+                  </div>
+                ) : (
+                  <ul className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {updates.map((u) => (
+                      <li key={u.id} className="rounded-md border border-border bg-secondary/30 p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span
+                            className={cn(
+                              "h-2 w-2 rounded-full",
+                              u.ryg === "green" && "bg-emerald-500",
+                              u.ryg === "amber" && "bg-amber-500",
+                              u.ryg === "red" && "bg-red-500",
+                            )}
+                          />
+                          <span className="text-xs font-medium">{u.author_name}</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {format(new Date(u.created_at), "d MMM yyyy, HH:mm")}
+                          </span>
+                        </div>
+                        <div className="text-sm whitespace-pre-wrap">{u.message}</div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
                 <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Notes</div>
                 <div className="rounded-md border border-border bg-secondary/30 p-3 text-sm whitespace-pre-wrap">
                   {selected.notes?.trim() || "No notes recorded."}
                 </div>
               </div>
+
               {isAdmin && (
                 <div className="flex justify-end">
                   <Button

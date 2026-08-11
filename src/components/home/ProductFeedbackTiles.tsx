@@ -131,32 +131,61 @@ function useLatestBugs() {
     queryKey: ["home-latest-bugs"],
     staleTime: 60 * 1000,
     queryFn: async () => {
-      const { data, error, count } = await supabase
-        .from("issues")
-        .select("id, title, severity, user_email, created_at, resolved_at", { count: "exact" })
-        .order("created_at", { ascending: false })
-        .limit(3);
-      if (error) throw error;
-      return { rows: (data ?? []) as BugRow[], total: count ?? 0 };
+      const [list, fixed] = await Promise.all([
+        supabase
+          .from("issues")
+          .select("id, title, severity, user_email, created_at, resolved_at", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .limit(3),
+        supabase.from("issues").select("id", { count: "exact", head: true }).not("resolved_at", "is", null),
+      ]);
+      if (list.error) throw list.error;
+      const total = list.count ?? 0;
+      const fixedCount = fixed.count ?? 0;
+      return { rows: (list.data ?? []) as BugRow[], total, fixed: fixedCount, open: Math.max(total - fixedCount, 0) };
     },
   });
 }
+
+const DONE_STATUSES = ["completed", "released"];
 
 function useLatestFeatures() {
   return useQuery({
     queryKey: ["home-latest-features"],
     staleTime: 60 * 1000,
     queryFn: async () => {
-      const { data, error, count } = await supabase
-        .from("feature_requests")
-        .select("id, title, status, user_email, created_at", { count: "exact" })
-        .order("created_at", { ascending: false })
-        .limit(3);
-      if (error) throw error;
-      return { rows: (data ?? []) as FeatureRow[], total: count ?? 0 };
+      const [list, done] = await Promise.all([
+        supabase
+          .from("feature_requests")
+          .select("id, title, status, user_email, created_at", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .limit(3),
+        supabase.from("feature_requests").select("id", { count: "exact", head: true }).in("status", DONE_STATUSES),
+      ]);
+      if (list.error) throw list.error;
+      const total = list.count ?? 0;
+      const doneCount = done.count ?? 0;
+      return { rows: (list.data ?? []) as FeatureRow[], total, completed: doneCount, open: Math.max(total - doneCount, 0) };
     },
   });
 }
+
+const HeadlineStats = ({
+  items,
+}: {
+  items: { label: string; value: number; className?: string }[];
+}) => (
+  <div className="grid grid-cols-3 gap-2 mb-3">
+    {items.map((i) => (
+      <div key={i.label} className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
+        <div className={`text-2xl sm:text-3xl font-bold tracking-tight tabular-nums ${i.className ?? "text-foreground"}`}>
+          {i.value}
+        </div>
+        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{i.label}</div>
+      </div>
+    ))}
+  </div>
+);
 
 const Meta = ({ by, date }: { by: string | null; date: string }) => (
   <div className="text-[10px] text-muted-foreground truncate">

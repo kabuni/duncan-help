@@ -91,6 +91,9 @@ export default function Plan90() {
           <p className="text-sm text-muted-foreground mt-0.5">Execution across workstreams for the 90-day plan.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setArchiveOpen(true)}>
+            <Archive className="h-4 w-4 mr-1.5" />Archive
+          </Button>
           <Button asChild size="sm" variant="outline">
             <Link to="/plan-90/present"><Presentation className="h-4 w-4 mr-1.5" />Present</Link>
           </Button>

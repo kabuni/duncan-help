@@ -5139,6 +5139,35 @@ export type Database = {
           },
         ]
       }
+      workstream_card_viewers: {
+        Row: {
+          card_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workstream_card_viewers_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "workstream_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workstream_cards: {
         Row: {
           archived_at: string | null
@@ -5157,6 +5186,7 @@ export type Database = {
           task_code: string
           title: string
           updated_at: string
+          visibility: string
         }
         Insert: {
           archived_at?: string | null
@@ -5175,6 +5205,7 @@ export type Database = {
           task_code?: string
           title: string
           updated_at?: string
+          visibility?: string
         }
         Update: {
           archived_at?: string | null
@@ -5193,6 +5224,7 @@ export type Database = {
           task_code?: string
           title?: string
           updated_at?: string
+          visibility?: string
         }
         Relationships: []
       }
@@ -5663,12 +5695,20 @@ export type Database = {
         Returns: boolean
       }
       can_edit_plan90: { Args: { _user_id: string }; Returns: boolean }
+      can_manage_workstream_card: {
+        Args: { _card_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_view_candidate_plan: {
         Args: { _candidate_id: string; _user_id: string }
         Returns: boolean
       }
       can_view_holiday: {
         Args: { _region: string; _user_id: string }
+        Returns: boolean
+      }
+      can_view_workstream_card: {
+        Args: { _card_id: string; _user_id: string }
         Returns: boolean
       }
       get_action_items_around: {

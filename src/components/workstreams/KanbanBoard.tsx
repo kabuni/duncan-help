@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarDays, Users, CheckCircle2, Circle, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarDays, Users, CheckCircle2, Circle, ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import type { WorkstreamCard, CardStatus } from "@/hooks/useWorkstreams";
@@ -160,6 +160,9 @@ function KanbanCard({ card, onClick, onDragStart }: {
       </div>
 
       <h4 className="text-sm font-semibold text-foreground leading-snug mb-2 line-clamp-2">
+        {card.visibility === "private" && (
+          <Lock className="inline-block h-3 w-3 mr-1 -mt-0.5 text-muted-foreground" aria-label="Private card" />
+        )}
         {card.title}
       </h4>
 

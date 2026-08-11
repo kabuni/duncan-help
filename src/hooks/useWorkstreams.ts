@@ -7,6 +7,7 @@ import { logSavings } from "@/lib/savings";
 
 export type CardStatus = "not_started" | "red" | "amber" | "green" | "done";
 export type CardPriority = "low" | "medium" | "high" | "critical";
+export type CardVisibility = "public" | "private";
 
 export const WORKSTREAM_CATEGORIES = [
   "HR & People",
@@ -31,6 +32,7 @@ export interface WorkstreamCard {
   due_date: string | null;
   project_tag: string | null;
   category: string | null;
+  visibility?: CardVisibility;
   created_by: string;
   created_by_name?: string;
   archived_at: string | null;
@@ -484,9 +486,10 @@ export function useCreateCard() {
     mutationFn: async (input: {
       title: string; description?: string; status?: CardStatus; priority?: CardPriority;
       owner_id?: string; due_date?: string; project_tag?: string; category?: string; assignee_ids?: string[];
+      visibility?: CardVisibility; viewer_ids?: string[];
     }) => {
       if (!user) throw new Error("Not authenticated");
-      const { assignee_ids, ...cardInput } = input;
+      const { assignee_ids, viewer_ids, ...cardInput } = input;
       const { data, error } = await supabase
         .from("workstream_cards")
         .insert({ status: "not_started", ...cardInput, created_by: user.id })
@@ -499,6 +502,16 @@ export function useCreateCard() {
         await supabase.from("workstream_card_assignees").insert(
           assignee_ids.map(uid => ({ card_id: data.id, user_id: uid }))
         );
+      }
+
+      // Private cards: grant explicit viewers
+      if (input.visibility === "private" && viewer_ids && viewer_ids.length > 0) {
+        const unique = Array.from(new Set(viewer_ids.filter(uid => uid && uid !== user.id)));
+        if (unique.length > 0) {
+          await supabase.from("workstream_card_viewers").insert(
+            unique.map(uid => ({ card_id: data.id, user_id: uid }))
+          );
+        }
       }
 
       await supabase.from("workstream_activity").insert({

@@ -505,12 +505,14 @@ export default function MyTasks() {
   const { data: projects = [] } = useAllProjects();
 
   const [newOpen, setNewOpen] = useState(false);
+  const [newTodoOpen, setNewTodoOpen] = useState(false);
   const [pickOpen, setPickOpen] = useState(false);
   const [importProject, setImportProject] = useState<Project | null>(null);
   const [importMembers, setImportMembers] = useState<ProjectMember[]>([]);
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<UnifiedTask | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+
 
   const tasks: UnifiedTask[] = useMemo(() => {
     const a: UnifiedTask[] = (ws.data ?? []).map((t: any) => ({

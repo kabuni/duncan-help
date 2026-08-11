@@ -60,7 +60,9 @@ function ragFor(overall: number | null): Rag {
 export function usePeopleCulture() {
   const query = useQuery({
     queryKey: ["people-culture-metrics"],
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     queryFn: async (): Promise<PeopleCultureData> => {
       const { data, error } = await supabase.functions.invoke("people-culture-metrics");
       if (error) throw error;

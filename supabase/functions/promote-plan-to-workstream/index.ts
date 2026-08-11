@@ -14,6 +14,7 @@ interface PromoteBody {
   default_due_date?: string | null;
   default_assignee_user_ids?: string[];
   item_ids?: string[];
+  visibility?: "public" | "private";
 }
 
 Deno.serve(async (req) => {
@@ -52,6 +53,7 @@ Deno.serve(async (req) => {
       default_due_date,
       default_assignee_user_ids,
       item_ids,
+      visibility = "public",
     } = body;
     if (!chat_id) {
       return new Response(JSON.stringify({ error: "chat_id is required" }), {
@@ -121,6 +123,27 @@ Deno.serve(async (req) => {
       }
     }
 
+    // For private cards, every collaborator on the project gets viewer access
+    const projectViewerIds = new Set<string>();
+    if (visibility === "private") {
+      projectViewerIds.add(user.id);
+      if (project?.id) {
+        const { data: owner } = await admin
+          .from("projects")
+          .select("user_id")
+          .eq("id", project.id)
+          .maybeSingle();
+        if (owner?.user_id) projectViewerIds.add(owner.user_id);
+        const { data: members } = await admin
+          .from("project_members")
+          .select("user_id")
+          .eq("project_id", project.id);
+        for (const m of members || []) {
+          if (m.user_id) projectViewerIds.add(m.user_id);
+        }
+      }
+    }
+
     const cardsCreated: Array<{ id: string; title: string; tasks: number }> = [];
 
     for (const [cardTitle, groupItems] of groups.entries()) {
@@ -148,6 +171,7 @@ Deno.serve(async (req) => {
             due_date: default_due_date || null,
             created_by: user.id,
             owner_id: user.id,
+            visibility,
           })
           .select("id, title")
           .single();
@@ -162,6 +186,12 @@ Deno.serve(async (req) => {
           card_id: cardId,
           user_id: user.id,
         });
+
+        if (visibility === "private" && projectViewerIds.size > 0) {
+          await admin.from("workstream_card_viewers").insert(
+            Array.from(projectViewerIds).map((uid) => ({ card_id: cardId, user_id: uid })),
+          );
+        }
 
         // Add per-item assignees as card-level assignees too (deduped)
         const itemAssignees = new Set<string>();

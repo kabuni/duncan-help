@@ -161,13 +161,34 @@ const Workstreams = ({ raidOnly = false }: { raidOnly?: boolean }) => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
             <div>
               <div className="flex items-center gap-2.5 mb-1">
-                <Target className="h-5 w-5 text-primary" />
-                <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Workstreams</h2>
+                {raidOnly ? <ShieldAlert className="h-5 w-5 text-primary" /> : <Target className="h-5 w-5 text-primary" />}
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+                  {raidOnly ? "RAID Board" : "Workstreams"}
+                </h2>
               </div>
-              <p className="text-xs text-muted-foreground font-mono">Track projects, tasks, and team progress</p>
+              <p className="text-xs text-muted-foreground font-mono">
+                {raidOnly
+                  ? "Risks, Assumptions, Issues and Dependencies"
+                  : "Track projects, tasks, and team progress"}
+              </p>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <TutorialButton tourId="workstreams" />
+              {raidOnly ? (
+                <Button asChild variant="outline" className="gap-2 flex-1 sm:flex-none">
+                  <Link to="/workstreams">
+                    <ArrowLeft className="h-4 w-4" /> Back to Workstreams
+                  </Link>
+                </Button>
+              ) : (
+                <>
+                  <TutorialButton tourId="workstreams" />
+                  <Button asChild variant="outline" className="gap-2 flex-1 sm:flex-none">
+                    <Link to="/workstreams/raid">
+                      <ShieldAlert className="h-4 w-4" /> RAID Board
+                    </Link>
+                  </Button>
+                </>
+              )}
               <Button asChild variant="outline" className="gap-2 flex-1 sm:flex-none" data-tour="ws-present">
                 <Link to="/workstreams/present">
                   <Presentation className="h-4 w-4" /> Present

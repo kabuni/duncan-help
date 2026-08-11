@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useMyPendingTasks } from "@/hooks/useHomeDashboard";
 import { useGoogleCalendar, type CalendarEvent } from "@/hooks/useGoogleCalendar";
 import { LeaderboardSection } from "@/components/home/LeaderboardTile";
+import { ProductFeedbackTiles } from "@/components/home/ProductFeedbackTiles";
 
 /* ---------- helpers ---------- */
 const getGreeting = () => {
@@ -491,6 +492,7 @@ export const PersonalBriefingDashboard = ({ userName }: { userName: string }) =>
         <AssignedTasksSection />
       </div>
       <ActionItemsSection />
+      <ProductFeedbackTiles />
       <WeeklyUsageSection />
       <div>
         <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2 px-1">

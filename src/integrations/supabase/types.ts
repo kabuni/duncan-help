@@ -3360,6 +3360,7 @@ export type Database = {
       plan90_deliverables: {
         Row: {
           archived: boolean
+          completed_at: string | null
           created_at: string
           created_by: string | null
           display_order: number | null
@@ -3378,6 +3379,7 @@ export type Database = {
         }
         Insert: {
           archived?: boolean
+          completed_at?: string | null
           created_at?: string
           created_by?: string | null
           display_order?: number | null
@@ -3396,6 +3398,7 @@ export type Database = {
         }
         Update: {
           archived?: boolean
+          completed_at?: string | null
           created_at?: string
           created_by?: string | null
           display_order?: number | null

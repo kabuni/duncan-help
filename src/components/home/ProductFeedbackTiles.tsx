@@ -251,9 +251,17 @@ function LatestFeatureRequestsTile() {
       <TileHeader
         icon={Lightbulb}
         label="Latest feature requests"
-        count={data?.total}
         onViewAll={() => navigate("/feature-requests")}
       />
+      {!isLoading && data && (
+        <HeadlineStats
+          items={[
+            { label: "Total", value: data.total },
+            { label: "Completed", value: data.completed, className: "text-emerald-600 dark:text-emerald-400" },
+            { label: "In flight", value: data.open, className: "text-primary" },
+          ]}
+        />
+      )}
       {isLoading ? (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
       ) : rows.length === 0 ? (

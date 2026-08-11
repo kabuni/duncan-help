@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useMyPendingTasks } from "@/hooks/useHomeDashboard";
 import { useGoogleCalendar, type CalendarEvent } from "@/hooks/useGoogleCalendar";
 import { LeaderboardSection } from "@/components/home/LeaderboardTile";
+import { ProductFeedbackTiles } from "@/components/home/ProductFeedbackTiles";
 
 /* ---------- helpers ---------- */
 const getGreeting = () => {

@@ -1940,6 +1940,39 @@ const PROJECT_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "create_todo",
+      description: "Create a personal or assigned TO-DO item (a single, short, individual action — not a company-wide initiative). Use this INSTEAD of create_workstream_card whenever the request is a simple personal action, reminder, follow-up, or one-off task that does not need collaboration, RYG status tracking or sub-tasks. Examples: 'remind me to call the printer', 'add reviewing the contract to my list', 'give Matt a to-do to send the deck'. Resolve assignee names to user_id UUIDs via list_team_members FIRST; omit assignee_user_id to assign it to the caller. Executes immediately — no confirmation card.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Short action title" },
+          notes: { type: "string", description: "Optional extra detail" },
+          due_date: { type: "string", description: "Due date in YYYY-MM-DD" },
+          priority: { type: "string", enum: ["low", "medium", "high"], description: "Priority (default medium)" },
+          assignee_user_id: { type: "string", description: "User ID of the person this to-do is for (defaults to the caller)" },
+        },
+        required: ["title"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_my_todos",
+      description: "List the caller's to-do items (personal / assigned single actions, distinct from workstream cards and project planning tasks). Use when the user asks about their to-do list, reminders, or personal actions. RENDERING: bullet list `- <✅|⬜> **Title** — due <date> · <priority>` (omit missing parts), then an italic one-line count.",
+      parameters: {
+        type: "object",
+        properties: {
+          include_completed: { type: "boolean", description: "Include completed to-dos (default false)" },
+          limit: { type: "number", description: "Max items (default 50)" },
+        },
+        required: [],
+      },
+    },
+  },
 ];
 
 // ==================== PLANNER (KEY EVENTS DIARY) TOOLS ====================
@@ -3060,6 +3093,43 @@ async function executeWorkstreamTool(
         caller_timezone: callerTz,
         task_duration_minutes: taskDuration,
       };
+    }
+
+    case "create_todo": {
+      const title = String(args?.title || "").trim();
+      if (!title) return { error: "title is required" };
+      const assignee = args?.assignee_user_id || identity?.user_id;
+      if (!assignee) return { error: "Could not resolve who this to-do is for" };
+      const { data: todo, error: todoErr } = await supabaseAdmin
+        .from("todos")
+        .insert({
+          title,
+          notes: args?.notes || null,
+          due_date: args?.due_date || null,
+          priority: args?.priority || "medium",
+          user_id: assignee,
+          created_by: identity?.user_id || assignee,
+          source: "duncan_chat",
+        })
+        .select("id, title, due_date, priority, user_id")
+        .single();
+      if (todoErr) throw new Error(`Failed to create to-do: ${todoErr.message}`);
+      return { success: true, todo, url: "/tasks" };
+    }
+
+    case "list_my_todos": {
+      const uid = identity?.user_id;
+      if (!uid) return { error: "User not found", status: "no_data" };
+      let q = supabaseAdmin
+        .from("todos")
+        .select("id, title, notes, due_date, priority, completed, created_by")
+        .eq("user_id", uid)
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .limit(Math.min(Number(args?.limit) || 50, 200));
+      if (!args?.include_completed) q = q.eq("completed", false);
+      const { data: todos, error: todosErr } = await q;
+      if (todosErr) throw new Error(`Failed to list to-dos: ${todosErr.message}`);
+      return { count: (todos || []).length, todos: todos || [], url: "/tasks" };
     }
 
     case "list_my_project_tasks": {
@@ -8040,7 +8110,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const driveToolNames = ["drive_list_files", "drive_search", "drive_get_content"];
       const slackToolNames = ["list_slack_channels", "read_slack_channel_messages", "send_slack_message"];
       const analyticsToolNames = ["get_workstream_analytics", "get_recruitment_analytics", "get_team_activity_analytics", "get_operational_summary", "get_google_analytics_dashboard"];
-      const workstreamMgmtToolNames = ["list_team_members", "list_workstream_cards", "get_workstream_card", "create_workstream_card", "add_tasks_to_card", "update_workstream_card", "check_team_availability", "list_my_project_tasks"];
+      const workstreamMgmtToolNames = ["list_team_members", "list_workstream_cards", "get_workstream_card", "create_workstream_card", "add_tasks_to_card", "update_workstream_card", "check_team_availability", "list_my_project_tasks", "create_todo", "list_my_todos"];
       const plannerToolNames = ["list_planner_events", "update_planner_event_meta"];
       const registrationsToolNames = ["list_school_registrations", "get_school_registrations_summary"];
       const execSummaryToolNames = ["generate_exec_summary_document"];

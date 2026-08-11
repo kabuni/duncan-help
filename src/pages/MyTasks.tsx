@@ -622,12 +622,15 @@ export default function MyTasks() {
             <ListChecks className="h-5 w-5" /> My tasks
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Everything assigned to you across workstreams and projects.
+            Your to-dos, plus everything assigned to you across workstreams and projects.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => setPickOpen(true)}>
             <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Import from meetings
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setNewTodoOpen(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1.5" /> New to-do
           </Button>
           <Button size="sm" onClick={() => setNewOpen(true)}>
             <Plus className="h-3.5 w-3.5 mr-1.5" /> New task
@@ -635,11 +638,14 @@ export default function MyTasks() {
         </div>
       </div>
 
+      <TodoSection />
+
       {isLoading ? (
         <div className="py-10 flex justify-center">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       ) : tasks.length === 0 ? (
+
         <div className="rounded-xl border border-border bg-card p-8 text-center">
           <p className="text-sm text-muted-foreground">You're all clear. No open tasks assigned to you.</p>
           <Button size="sm" className="mt-4" onClick={() => setNewOpen(true)}>

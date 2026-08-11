@@ -26,7 +26,10 @@ import { format } from "date-fns";
 
 type ViewMode = "board" | "list" | "tasks";
 
-const Workstreams = () => {
+const isRaidCard = (title?: string | null) =>
+  (title || "").trim().toUpperCase().startsWith("RAID");
+
+const Workstreams = ({ raidOnly = false }: { raidOnly?: boolean }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<ViewMode>("board");
   const [search, setSearch] = useState("");

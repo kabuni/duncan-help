@@ -20,6 +20,8 @@ interface Props {
 export function Plan90ArchiveDialog({ open, onOpenChange, deliverables, workstreams, isAdmin, onRestore }: Props) {
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Plan90Deliverable | null>(null);
+  const { listFor } = usePlan90Updates();
+  const updates = selected ? listFor(selected.id) : [];
 
   const groups = useMemo(() => {
     const archived = deliverables.filter((d) => d.archived);

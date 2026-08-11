@@ -710,6 +710,8 @@ export default function MyTasks() {
         onOpenChange={(v) => { if (!v) setEditing(null); }}
         onSaved={refetchAll}
       />
+      <NewTodoDialog open={newTodoOpen} onOpenChange={setNewTodoOpen} />
+
     </div>
   );
 }

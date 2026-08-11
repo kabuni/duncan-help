@@ -32,6 +32,7 @@ export interface WorkstreamCard {
   due_date: string | null;
   project_tag: string | null;
   category: string | null;
+  visibility?: CardVisibility;
   created_by: string;
   created_by_name?: string;
   archived_at: string | null;

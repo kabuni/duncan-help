@@ -24,6 +24,7 @@ export interface Plan90Deliverable {
   progress_percent: number | null;
   notes: string | null;
   archived: boolean;
+  completed_at: string | null;
   updated_at: string;
 }
 

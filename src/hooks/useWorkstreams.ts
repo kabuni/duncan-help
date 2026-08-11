@@ -7,6 +7,7 @@ import { logSavings } from "@/lib/savings";
 
 export type CardStatus = "not_started" | "red" | "amber" | "green" | "done";
 export type CardPriority = "low" | "medium" | "high" | "critical";
+export type CardVisibility = "public" | "private";
 
 export const WORKSTREAM_CATEGORIES = [
   "HR & People",

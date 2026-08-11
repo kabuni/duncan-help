@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 import {
   Plus, Search, Filter, LayoutGrid, List, Loader2,
   AlertTriangle, Clock, User, CheckCircle2, Target,
-  CalendarDays, ArrowUpDown, ListChecks, Presentation,
+  CalendarDays, ArrowUpDown, ListChecks, Presentation, ShieldAlert, ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,10 @@ import { format } from "date-fns";
 
 type ViewMode = "board" | "list" | "tasks";
 
-const Workstreams = () => {
+const isRaidCard = (title?: string | null) =>
+  (title || "").trim().toUpperCase().startsWith("RAID");
+
+const Workstreams = ({ raidOnly = false }: { raidOnly?: boolean }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<ViewMode>("board");
   const [search, setSearch] = useState("");
@@ -86,10 +89,18 @@ const Workstreams = () => {
     search: search || undefined,
   }), [filterStatus, filterPriority, filterAssignee, filterCategory, search]);
 
-  const { data: cards, isLoading } = useWorkstreamCards(filters.status || filters.priority || filters.assignee || filters.category || filters.search ? filters : undefined);
+  const { data: rawCards, isLoading } = useWorkstreamCards(filters.status || filters.priority || filters.assignee || filters.category || filters.search ? filters : undefined);
+  const cards = useMemo(
+    () => (raidOnly ? (rawCards || []).filter(c => isRaidCard(c.title)) : rawCards),
+    [rawCards, raidOnly]
+  );
 
   // For dashboard: fetch ALL cards (unfiltered) separately for stats
-  const { data: allCards } = useWorkstreamCards();
+  const { data: rawAllCards } = useWorkstreamCards();
+  const allCards = useMemo(
+    () => (raidOnly ? (rawAllCards || []).filter(c => isRaidCard(c.title)) : rawAllCards),
+    [rawAllCards, raidOnly]
+  );
 
   // Global progress overview (ignores filters; uses all cards)
   const overview = useMemo(() => {
@@ -150,13 +161,34 @@ const Workstreams = () => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
             <div>
               <div className="flex items-center gap-2.5 mb-1">
-                <Target className="h-5 w-5 text-primary" />
-                <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Workstreams</h2>
+                {raidOnly ? <ShieldAlert className="h-5 w-5 text-primary" /> : <Target className="h-5 w-5 text-primary" />}
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+                  {raidOnly ? "RAID Board" : "Workstreams"}
+                </h2>
               </div>
-              <p className="text-xs text-muted-foreground font-mono">Track projects, tasks, and team progress</p>
+              <p className="text-xs text-muted-foreground font-mono">
+                {raidOnly
+                  ? "Risks, Assumptions, Issues and Dependencies"
+                  : "Track projects, tasks, and team progress"}
+              </p>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <TutorialButton tourId="workstreams" />
+              {raidOnly ? (
+                <Button asChild variant="outline" className="gap-2 flex-1 sm:flex-none">
+                  <Link to="/workstreams">
+                    <ArrowLeft className="h-4 w-4" /> Back to Workstreams
+                  </Link>
+                </Button>
+              ) : (
+                <>
+                  <TutorialButton tourId="workstreams" />
+                  <Button asChild variant="outline" className="gap-2 flex-1 sm:flex-none">
+                    <Link to="/workstreams/raid">
+                      <ShieldAlert className="h-4 w-4" /> RAID Board
+                    </Link>
+                  </Button>
+                </>
+              )}
               <Button asChild variant="outline" className="gap-2 flex-1 sm:flex-none" data-tour="ws-present">
                 <Link to="/workstreams/present">
                   <Presentation className="h-4 w-4" /> Present
@@ -286,10 +318,14 @@ const Workstreams = () => {
           ) : displayCards.length === 0 ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-16">
               <Target className="h-12 w-12 text-muted-foreground/30 mb-4" />
-              <p className="text-sm text-muted-foreground mb-4">No workstream cards yet</p>
-              <Button onClick={() => setShowCreate(true)} variant="outline" className="gap-2">
-                <Plus className="h-4 w-4" /> Create your first card
-              </Button>
+              <p className="text-sm text-muted-foreground mb-4">
+                {raidOnly ? "No RAID cards yet" : "No workstream cards yet"}
+              </p>
+              {!raidOnly && (
+                <Button onClick={() => setShowCreate(true)} variant="outline" className="gap-2">
+                  <Plus className="h-4 w-4" /> Create your first card
+                </Button>
+              )}
             </motion.div>
           ) : viewMode === "board" ? (
             <motion.div data-tour="ws-board" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>

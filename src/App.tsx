@@ -107,6 +107,7 @@ const AppContent = () => {
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:projectId" element={<ProjectWorkspace />} />
             <Route path="/workstreams" element={<Workstreams />} />
+            <Route path="/workstreams/raid" element={<Workstreams raidOnly />} />
             <Route path="/workstreams/present" element={<WorkstreamsPresentation />} />
           <Route path="/plan-90" element={<Plan90 />} />
           <Route path="/plan-90/present" element={<Plan90Presentation />} />

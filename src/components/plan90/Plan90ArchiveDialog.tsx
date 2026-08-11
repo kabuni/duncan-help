@@ -7,6 +7,7 @@ import { ChevronDown, RotateCcw, Archive } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { Plan90Deliverable, Plan90Workstream } from "@/hooks/usePlan90";
+import { usePlan90Updates } from "@/hooks/usePlan90Updates";
 
 interface Props {
   open: boolean;

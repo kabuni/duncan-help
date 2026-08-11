@@ -200,7 +200,16 @@ function LatestBugsTile() {
 
   return (
     <Tile delay={0.06}>
-      <TileHeader icon={Bug} label="Latest bug reports" count={data?.total} onViewAll={() => navigate("/feedback")} />
+      <TileHeader icon={Bug} label="Latest bug reports" onViewAll={() => navigate("/feedback")} />
+      {!isLoading && data && (
+        <HeadlineStats
+          items={[
+            { label: "Total", value: data.total },
+            { label: "Fixed", value: data.fixed, className: "text-emerald-600 dark:text-emerald-400" },
+            { label: "Open", value: data.open, className: "text-amber-600 dark:text-amber-400" },
+          ]}
+        />
+      )}
       {isLoading ? (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
       ) : rows.length === 0 ? (

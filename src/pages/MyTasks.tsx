@@ -37,7 +37,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ImportTasksFromNotesDialog } from "@/components/projects/ImportTasksFromNotesDialog";
+import TodoSection, { NewTodoDialog } from "@/components/todos/TodoSection";
 import type { ProjectMember } from "@/hooks/useProjects";
+
 
 /* ------------ helpers ------------ */
 const startOfDay = (d = new Date()) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
@@ -503,12 +505,14 @@ export default function MyTasks() {
   const { data: projects = [] } = useAllProjects();
 
   const [newOpen, setNewOpen] = useState(false);
+  const [newTodoOpen, setNewTodoOpen] = useState(false);
   const [pickOpen, setPickOpen] = useState(false);
   const [importProject, setImportProject] = useState<Project | null>(null);
   const [importMembers, setImportMembers] = useState<ProjectMember[]>([]);
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<UnifiedTask | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+
 
   const tasks: UnifiedTask[] = useMemo(() => {
     const a: UnifiedTask[] = (ws.data ?? []).map((t: any) => ({
@@ -618,12 +622,15 @@ export default function MyTasks() {
             <ListChecks className="h-5 w-5" /> My tasks
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Everything assigned to you across workstreams and projects.
+            Your to-dos, plus everything assigned to you across workstreams and projects.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => setPickOpen(true)}>
             <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Import from meetings
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setNewTodoOpen(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1.5" /> New to-do
           </Button>
           <Button size="sm" onClick={() => setNewOpen(true)}>
             <Plus className="h-3.5 w-3.5 mr-1.5" /> New task
@@ -631,11 +638,14 @@ export default function MyTasks() {
         </div>
       </div>
 
+      <TodoSection />
+
       {isLoading ? (
         <div className="py-10 flex justify-center">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       ) : tasks.length === 0 ? (
+
         <div className="rounded-xl border border-border bg-card p-8 text-center">
           <p className="text-sm text-muted-foreground">You're all clear. No open tasks assigned to you.</p>
           <Button size="sm" className="mt-4" onClick={() => setNewOpen(true)}>
@@ -700,6 +710,8 @@ export default function MyTasks() {
         onOpenChange={(v) => { if (!v) setEditing(null); }}
         onSaved={refetchAll}
       />
+      <NewTodoDialog open={newTodoOpen} onOpenChange={setNewTodoOpen} />
+
     </div>
   );
 }

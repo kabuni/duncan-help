@@ -56,6 +56,14 @@ const SYSTEM_PROMPT = `You are Duncan, an advanced reasoning and agentic operati
 
 **TASK IDs (WS-XXXX):** Workstream cards each have a canonical Task ID like \`WS-0042\`. If the user's message contains \`WS-\` followed by digits, immediately call \`get_workstream_card\` with that task_code — do NOT ask which project it is on, and do NOT call \`list_workstream_cards\` first. Always render the Task ID in your reply (e.g. "**WS-0042 — <title>**") so the frontend can auto-linkify it. Task IDs are READ ONLY through chat: never modify a card just because the user referenced its Task ID.
 
+**TASK CLASSIFICATION — WORKSTREAM CARD vs TO-DO (decide BEFORE any write):**
+- **Workstream card** (\`create_workstream_card\`): a collaborative, company-wide or cross-functional initiative with an outcome, an owner, RYG status, and usually multiple sub-tasks or people. Signals: "project", "initiative", "launch", "campaign", "workstream", multiple contributors, needs tracking/reporting/visibility, spans days or weeks.
+- **To-Do** (\`create_todo\`): a single, short, individual action owned by one person. Signals: "remind me", "add to my list", "follow up", "chase", "book", "send", one step, no status reporting, done in one sitting. To-Dos may be assigned to another person, but they stay a single action.
+- If the request is a single action, ALWAYS use \`create_todo\` — do NOT create a workstream card for it, and do NOT clutter Workstreams with personal actions.
+- If it is genuinely ambiguous, ask one short question: "Is this a personal to-do, or a workstream we should track?"
+- Reading: \`list_my_todos\` for personal actions, \`list_workstream_cards\` / \`list_my_project_tasks\` for tracked work. To-Dos live at \`/tasks\`.
+
+
 **NEGATIVE GROUNDING (NEVER hallucinate disconnected systems):** The following systems are NOT connected and have NO runtime tools in this environment: Basecamp, Trello, Jira (non-DevOps), Asana, Monday.com, ClickUp, Notion (entire workspace — decommissioned). NEVER offer them, ask about them, imply they exist, or use them as a "should I pull from X or Y?" alternative. Workstreams is the canonical task/card system. Planner / Key Events is the canonical diary system. Azure DevOps is the canonical engineering work-item system. Gmail/Calendar/Drive/Slack/Xero/Meetings are the only other connected sources — if a tool for a system isn't in your tool list, that system is not connected. Period.
 
 
@@ -1940,6 +1948,39 @@ const PROJECT_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "create_todo",
+      description: "Create a personal or assigned TO-DO item (a single, short, individual action — not a company-wide initiative). Use this INSTEAD of create_workstream_card whenever the request is a simple personal action, reminder, follow-up, or one-off task that does not need collaboration, RYG status tracking or sub-tasks. Examples: 'remind me to call the printer', 'add reviewing the contract to my list', 'give Matt a to-do to send the deck'. Resolve assignee names to user_id UUIDs via list_team_members FIRST; omit assignee_user_id to assign it to the caller. Executes immediately — no confirmation card.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Short action title" },
+          notes: { type: "string", description: "Optional extra detail" },
+          due_date: { type: "string", description: "Due date in YYYY-MM-DD" },
+          priority: { type: "string", enum: ["low", "medium", "high"], description: "Priority (default medium)" },
+          assignee_user_id: { type: "string", description: "User ID of the person this to-do is for (defaults to the caller)" },
+        },
+        required: ["title"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_my_todos",
+      description: "List the caller's to-do items (personal / assigned single actions, distinct from workstream cards and project planning tasks). Use when the user asks about their to-do list, reminders, or personal actions. RENDERING: bullet list `- <✅|⬜> **Title** — due <date> · <priority>` (omit missing parts), then an italic one-line count.",
+      parameters: {
+        type: "object",
+        properties: {
+          include_completed: { type: "boolean", description: "Include completed to-dos (default false)" },
+          limit: { type: "number", description: "Max items (default 50)" },
+        },
+        required: [],
+      },
+    },
+  },
 ];
 
 // ==================== PLANNER (KEY EVENTS DIARY) TOOLS ====================
@@ -3060,6 +3101,43 @@ async function executeWorkstreamTool(
         caller_timezone: callerTz,
         task_duration_minutes: taskDuration,
       };
+    }
+
+    case "create_todo": {
+      const title = String(args?.title || "").trim();
+      if (!title) return { error: "title is required" };
+      const assignee = args?.assignee_user_id || identity?.user_id;
+      if (!assignee) return { error: "Could not resolve who this to-do is for" };
+      const { data: todo, error: todoErr } = await supabaseAdmin
+        .from("todos")
+        .insert({
+          title,
+          notes: args?.notes || null,
+          due_date: args?.due_date || null,
+          priority: args?.priority || "medium",
+          user_id: assignee,
+          created_by: identity?.user_id || assignee,
+          source: "duncan_chat",
+        })
+        .select("id, title, due_date, priority, user_id")
+        .single();
+      if (todoErr) throw new Error(`Failed to create to-do: ${todoErr.message}`);
+      return { success: true, todo, url: "/tasks" };
+    }
+
+    case "list_my_todos": {
+      const uid = identity?.user_id;
+      if (!uid) return { error: "User not found", status: "no_data" };
+      let q = supabaseAdmin
+        .from("todos")
+        .select("id, title, notes, due_date, priority, completed, created_by")
+        .eq("user_id", uid)
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .limit(Math.min(Number(args?.limit) || 50, 200));
+      if (!args?.include_completed) q = q.eq("completed", false);
+      const { data: todos, error: todosErr } = await q;
+      if (todosErr) throw new Error(`Failed to list to-dos: ${todosErr.message}`);
+      return { count: (todos || []).length, todos: todos || [], url: "/tasks" };
     }
 
     case "list_my_project_tasks": {
@@ -8040,7 +8118,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       const driveToolNames = ["drive_list_files", "drive_search", "drive_get_content"];
       const slackToolNames = ["list_slack_channels", "read_slack_channel_messages", "send_slack_message"];
       const analyticsToolNames = ["get_workstream_analytics", "get_recruitment_analytics", "get_team_activity_analytics", "get_operational_summary", "get_google_analytics_dashboard"];
-      const workstreamMgmtToolNames = ["list_team_members", "list_workstream_cards", "get_workstream_card", "create_workstream_card", "add_tasks_to_card", "update_workstream_card", "check_team_availability", "list_my_project_tasks"];
+      const workstreamMgmtToolNames = ["list_team_members", "list_workstream_cards", "get_workstream_card", "create_workstream_card", "add_tasks_to_card", "update_workstream_card", "check_team_availability", "list_my_project_tasks", "create_todo", "list_my_todos"];
       const plannerToolNames = ["list_planner_events", "update_planner_event_meta"];
       const registrationsToolNames = ["list_school_registrations", "get_school_registrations_summary"];
       const execSummaryToolNames = ["generate_exec_summary_document"];

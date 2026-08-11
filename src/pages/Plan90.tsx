@@ -14,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, Plus, Pencil, Trash2, Loader2, Presentation } from "lucide-react";
+import { ChevronDown, Plus, Pencil, Trash2, Loader2, Presentation, Archive } from "lucide-react";
+import { Plan90ArchiveDialog } from "@/components/plan90/Plan90ArchiveDialog";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { format } from "date-fns";
@@ -50,6 +51,7 @@ export default function Plan90() {
   );
   const [wsMgrOpen, setWsMgrOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   const filteredDeliverables = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -89,6 +91,9 @@ export default function Plan90() {
           <p className="text-sm text-muted-foreground mt-0.5">Execution across workstreams for the 90-day plan.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setArchiveOpen(true)}>
+            <Archive className="h-4 w-4 mr-1.5" />Archive
+          </Button>
           <Button asChild size="sm" variant="outline">
             <Link to="/plan-90/present"><Presentation className="h-4 w-4 mr-1.5" />Present</Link>
           </Button>
@@ -129,6 +134,14 @@ export default function Plan90() {
 
       {isAdmin && <AddDeliverableDialog open={addOpen} onOpenChange={setAddOpen} workstreams={activeWorkstreams} owners={owners} onCreate={createDeliverable} />}
       {isAdmin && <WorkstreamsDialog open={wsMgrOpen} onOpenChange={setWsMgrOpen} workstreams={workstreams} onCreate={createWorkstream} onUpdate={updateWorkstream} onDelete={deleteWorkstream} deliverables={deliverables} />}
+      <Plan90ArchiveDialog
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        deliverables={deliverables}
+        workstreams={workstreams}
+        isAdmin={isAdmin}
+        onRestore={(id) => updateDeliverable(id, { status: "In Progress" } as any)}
+      />
     </div>
   );
 }

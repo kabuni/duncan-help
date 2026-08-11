@@ -89,10 +89,18 @@ const Workstreams = ({ raidOnly = false }: { raidOnly?: boolean }) => {
     search: search || undefined,
   }), [filterStatus, filterPriority, filterAssignee, filterCategory, search]);
 
-  const { data: cards, isLoading } = useWorkstreamCards(filters.status || filters.priority || filters.assignee || filters.category || filters.search ? filters : undefined);
+  const { data: rawCards, isLoading } = useWorkstreamCards(filters.status || filters.priority || filters.assignee || filters.category || filters.search ? filters : undefined);
+  const cards = useMemo(
+    () => (raidOnly ? (rawCards || []).filter(c => isRaidCard(c.title)) : rawCards),
+    [rawCards, raidOnly]
+  );
 
   // For dashboard: fetch ALL cards (unfiltered) separately for stats
-  const { data: allCards } = useWorkstreamCards();
+  const { data: rawAllCards } = useWorkstreamCards();
+  const allCards = useMemo(
+    () => (raidOnly ? (rawAllCards || []).filter(c => isRaidCard(c.title)) : rawAllCards),
+    [rawAllCards, raidOnly]
+  );
 
   // Global progress overview (ignores filters; uses all cards)
   const overview = useMemo(() => {

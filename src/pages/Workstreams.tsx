@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 import {
   Plus, Search, Filter, LayoutGrid, List, Loader2,
   AlertTriangle, Clock, User, CheckCircle2, Target,
-  CalendarDays, ArrowUpDown, ListChecks, Presentation,
+  CalendarDays, ArrowUpDown, ListChecks, Presentation, ShieldAlert, ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

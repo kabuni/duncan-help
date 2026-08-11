@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { Plus, CalendarDays, Tag, User, Flag, Check, X } from "lucide-react";
+import { Plus, CalendarDays, Tag, User, Flag, Check, X, Globe, Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCreateCard, useUserProfiles, useProjectTags, WORKSTREAM_CATEGORIES, type CardStatus, type CardPriority } from "@/hooks/useWorkstreams";
+import { useCreateCard, useUserProfiles, useProjectTags, WORKSTREAM_CATEGORIES, type CardStatus, type CardPriority, type CardVisibility } from "@/hooks/useWorkstreams";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import MultiAssigneeSelect from "./MultiAssigneeSelect";
 
@@ -29,6 +29,8 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
   const [dueDate, setDueDate] = useState("");
   const [projectTag, setProjectTag] = useState("");
   const [category, setCategory] = useState<string>("");
+  const [visibility, setVisibility] = useState<CardVisibility>("public");
+  const [viewerIds, setViewerIds] = useState<string[]>([]);
   const [addingNew, setAddingNew] = useState(false);
   const [newTag, setNewTag] = useState("");
 
@@ -44,6 +46,7 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
     setTitle(""); setDescription(""); setStatus("not_started");
     setAssigneeIds([]); setDueDate(""); setProjectTag(""); setCategory("");
     setAddingNew(false); setNewTag("");
+    setVisibility("public"); setViewerIds([]);
   };
 
   const handleSubmit = async () => {
@@ -58,6 +61,8 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
       project_tag: projectTag.trim() || undefined,
       category: category || undefined,
       assignee_ids: assigneeIds,
+      visibility,
+      viewer_ids: visibility === "private" ? viewerIds : [],
     });
     reset();
     onOpenChange(false);
@@ -83,6 +88,43 @@ export default function CreateCardDialog({ open, onOpenChange, prefillTag }: Pro
             <Label className="text-xs font-medium">Description</Label>
             <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What's this workstream about?" className="min-h-[80px]" />
           </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Visibility</Label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setVisibility("public")}
+                className={`flex-1 rounded-md border p-3 text-left transition-colors ${visibility === "public" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:border-primary/40"}`}
+              >
+                <Globe className="h-4 w-4 mb-1 text-primary" />
+                <div className="text-sm font-medium">Public</div>
+                <div className="text-xs text-muted-foreground">Everyone can see this card</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setVisibility("private")}
+                className={`flex-1 rounded-md border p-3 text-left transition-colors ${visibility === "private" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:border-primary/40"}`}
+              >
+                <Lock className="h-4 w-4 mb-1 text-primary" />
+                <div className="text-sm font-medium">Private</div>
+                <div className="text-xs text-muted-foreground">Only you and people you choose</div>
+              </button>
+            </div>
+          </div>
+
+          {visibility === "private" && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium flex items-center gap-1"><Lock className="h-3 w-3" /> Who can access this card</Label>
+              <MultiAssigneeSelect
+                users={users || []}
+                selectedIds={viewerIds}
+                onChange={setViewerIds}
+                placeholder="Add people who can see this card"
+              />
+              <p className="text-[11px] text-muted-foreground">You, the people you add here, anyone assigned to the card, and admins can see it. Nobody else can.</p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">

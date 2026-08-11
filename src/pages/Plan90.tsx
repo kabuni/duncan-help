@@ -14,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, Plus, Pencil, Trash2, Loader2, Presentation } from "lucide-react";
+import { ChevronDown, Plus, Pencil, Trash2, Loader2, Presentation, Archive } from "lucide-react";
+import { Plan90ArchiveDialog } from "@/components/plan90/Plan90ArchiveDialog";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { format } from "date-fns";
@@ -50,6 +51,7 @@ export default function Plan90() {
   );
   const [wsMgrOpen, setWsMgrOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   const filteredDeliverables = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);

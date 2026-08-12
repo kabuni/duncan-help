@@ -33,7 +33,6 @@ const Workstreams = ({ raidOnly = false }: { raidOnly?: boolean }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<ViewMode>("board");
   const [search, setSearch] = useState("");
-  const [taskIdSearch, setTaskIdSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterPriority] = useState<string>("all");
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
@@ -132,23 +131,18 @@ const Workstreams = ({ raidOnly = false }: { raidOnly?: boolean }) => {
     return { totalCards, totalTasks, doneTasks, completionPct, taskTotals, cardCounts };
   }, [allCards]);
 
-  const displayCards = useMemo(() => {
-    const list = cards || [];
-    const q = taskIdSearch.trim().toLowerCase().replace(/^ws-?/, "");
-    if (!q) return list;
-    return list.filter(c => (c.task_code || "").toLowerCase().includes(q));
-  }, [cards, taskIdSearch]);
+  const displayCards = cards || [];
 
-  // Hours Saved: a settled Task ID lookup that actually resolves a card replaces
+  // Hours Saved: a settled search that actually resolves cards replaces
   // manually hunting through a spreadsheet. Debounced so typing logs once.
   useEffect(() => {
-    const q = taskIdSearch.trim();
+    const q = search.trim();
     if (q.length < 2) return;
     const t = setTimeout(() => {
       if (displayCards.length > 0) logSavings("ui.workstream.find_task", { query: q });
     }, 1200);
     return () => clearTimeout(t);
-  }, [taskIdSearch, displayCards.length]);
+  }, [search, displayCards.length]);
 
 
   return (
@@ -210,23 +204,14 @@ const Workstreams = ({ raidOnly = false }: { raidOnly?: boolean }) => {
             transition={{ delay: 0.1 }}
             className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6"
           >
-            <div className="relative flex-1 w-full sm:max-w-xs">
+            <div className="relative flex-1 w-full sm:max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search cards & tasks…"
+                placeholder="Search cards, tasks, or Task ID (e.g. WS-0042)…"
                 className="pl-9 h-9 text-sm"
-              />
-            </div>
-
-            <div className="relative w-full sm:w-[170px]">
-              <Input
-                value={taskIdSearch}
-                onChange={e => setTaskIdSearch(e.target.value)}
-                placeholder="Task ID (e.g. WS-0042)"
-                className="pl-3 h-9 text-sm"
-                aria-label="Search by Task ID"
+                aria-label="Search cards, tasks, or Task ID"
               />
             </div>
 

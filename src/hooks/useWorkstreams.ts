@@ -216,8 +216,9 @@ export function useWorkstreamCards(filters?: {
         const term = filters.search.replace(/[%,()]/g, " ").trim();
         if (term) {
           const like = `%${term}%`;
-          // Cards whose own title/description match
-          const [cardMatch, taskMatch] = await Promise.all([
+          const codeLike = `%${term.replace(/^ws-?/i, "").trim()}%`;
+          // Cards whose own title/description match, tasks that match, or task codes that match
+          const [cardMatch, taskMatch, codeMatch] = await Promise.all([
             supabase
               .from("workstream_cards")
               .select("id")
@@ -227,10 +228,16 @@ export function useWorkstreamCards(filters?: {
               .from("workstream_tasks")
               .select("card_id")
               .or(`title.ilike.${like},description.ilike.${like}`),
+            supabase
+              .from("workstream_cards")
+              .select("id")
+              .is("archived_at", null)
+              .ilike("task_code", codeLike),
           ]);
           const ids = new Set<string>();
           (cardMatch.data || []).forEach((c: any) => c.id && ids.add(c.id));
           (taskMatch.data || []).forEach((t: any) => t.card_id && ids.add(t.card_id));
+          (codeMatch.data || []).forEach((c: any) => c.id && ids.add(c.id));
           if (ids.size === 0) return [];
           query = query.in("id", Array.from(ids));
         }

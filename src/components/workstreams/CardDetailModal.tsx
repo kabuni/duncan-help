@@ -779,8 +779,9 @@ function TaskRow({
             </button>
           </div>
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="w-[120px]">
+
             <MultiAssigneeSelect
               users={users}
               selectedIds={(task.assignees || []).map(a => a.user_id)}

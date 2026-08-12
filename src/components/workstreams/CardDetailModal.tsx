@@ -842,12 +842,12 @@ function TaskRow({
           </div>
 
           {/* Add comment */}
-          <div className="flex items-start gap-2">
+          <div className="flex items-start gap-2 min-w-0">
             <Textarea
               value={newComment}
               onChange={e => setNewComment(e.target.value)}
               placeholder="Add a comment…"
-              className="text-xs min-h-[40px] py-1.5"
+              className="text-xs min-h-[40px] py-1.5 flex-1 min-w-0"
               onKeyDown={e => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
@@ -857,13 +857,14 @@ function TaskRow({
             />
             <Button
               size="sm"
-              className="h-8"
+              className="h-8 shrink-0"
               onClick={handleAddComment}
               disabled={!newComment.trim() || addTaskComment.isPending}
             >
               <Send className="h-3 w-3" />
             </Button>
           </div>
+
         </div>
       )}
 

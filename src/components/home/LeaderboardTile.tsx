@@ -18,6 +18,25 @@ const fmt = (n: number) => new Intl.NumberFormat("en-US").format(Math.round(n));
 const fmtHours = (h: number) =>
   h >= 100 ? fmt(h) : h.toFixed(h >= 10 ? 1 : 2);
 
+/** Productivity Score weighting — adjust here to re-balance the leaderboard. */
+export const HOURS_SAVED_WEIGHT = 0.7;
+export const TOKENS_USED_WEIGHT = 0.3;
+
+/** Ranks users by Productivity Score (normalized hours saved + tokens used). */
+export function rankByProductivity(rows: Row[]): Row[] {
+  const maxHours = Math.max(...rows.map((r) => r.minutes_saved), 0);
+  const maxTokens = Math.max(...rows.map((r) => r.total_tokens), 0);
+  const score = (r: Row) =>
+    HOURS_SAVED_WEIGHT * (maxHours > 0 ? r.minutes_saved / maxHours : 0) +
+    TOKENS_USED_WEIGHT * (maxTokens > 0 ? r.total_tokens / maxTokens : 0);
+  return [...rows].sort(
+    (a, b) =>
+      score(b) - score(a) ||
+      b.minutes_saved - a.minutes_saved ||
+      b.total_tokens - a.total_tokens
+  );
+}
+
 function useLeaderboard() {
   return useQuery<Row[]>({
     queryKey: ["home-dashboard", "token-leaderboard"],
@@ -25,7 +44,7 @@ function useLeaderboard() {
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("get_token_leaderboard");
       if (error) throw error;
-      return (data ?? []).map((r: any) => ({
+      const mapped: Row[] = (data ?? []).map((r: any) => ({
         user_id: r.user_id,
         display_name: r.display_name ?? "Unknown",
         avatar_url: r.avatar_url ?? null,
@@ -33,9 +52,11 @@ function useLeaderboard() {
         request_count: Number(r.request_count ?? 0),
         minutes_saved: Number(r.minutes_saved ?? 0),
       }));
+      return rankByProductivity(mapped);
     },
   });
 }
+
 
 
 const Card = ({

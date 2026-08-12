@@ -131,23 +131,18 @@ const Workstreams = ({ raidOnly = false }: { raidOnly?: boolean }) => {
     return { totalCards, totalTasks, doneTasks, completionPct, taskTotals, cardCounts };
   }, [allCards]);
 
-  const displayCards = useMemo(() => {
-    const list = cards || [];
-    const q = taskIdSearch.trim().toLowerCase().replace(/^ws-?/, "");
-    if (!q) return list;
-    return list.filter(c => (c.task_code || "").toLowerCase().includes(q));
-  }, [cards, taskIdSearch]);
+  const displayCards = cards || [];
 
-  // Hours Saved: a settled Task ID lookup that actually resolves a card replaces
+  // Hours Saved: a settled search that actually resolves cards replaces
   // manually hunting through a spreadsheet. Debounced so typing logs once.
   useEffect(() => {
-    const q = taskIdSearch.trim();
+    const q = search.trim();
     if (q.length < 2) return;
     const t = setTimeout(() => {
       if (displayCards.length > 0) logSavings("ui.workstream.find_task", { query: q });
     }, 1200);
     return () => clearTimeout(t);
-  }, [taskIdSearch, displayCards.length]);
+  }, [search, displayCards.length]);
 
 
   return (

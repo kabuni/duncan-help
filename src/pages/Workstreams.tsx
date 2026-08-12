@@ -225,7 +225,7 @@ const Workstreams = ({ raidOnly = false }: { raidOnly?: boolean }) => {
                 value={taskIdSearch}
                 onChange={e => setTaskIdSearch(e.target.value)}
                 placeholder="Task ID (e.g. WS-0042)"
-                className="pl-3 h-9 text-xs font-mono"
+                className="pl-3 h-9 text-sm"
                 aria-label="Search by Task ID"
               />
             </div>

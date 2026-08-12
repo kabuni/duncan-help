@@ -368,8 +368,9 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
             )}
 
             {/* Body with tabs */}
-            <ScrollArea className="flex-1">
-              <div className="px-6 py-4">
+            <ScrollArea className="flex-1 w-full [&>[data-radix-scroll-area-viewport]>div]:!block [&>[data-radix-scroll-area-viewport]>div]:!min-w-0">
+              <div className="px-6 py-4 min-w-0 max-w-full overflow-x-hidden">
+
                 {/* Meta row */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
                   <div className="space-y-1 col-span-2">
@@ -778,8 +779,9 @@ function TaskRow({
             </button>
           </div>
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="w-[120px]">
+
             <MultiAssigneeSelect
               users={users}
               selectedIds={(task.assignees || []).map(a => a.user_id)}
@@ -841,12 +843,12 @@ function TaskRow({
           </div>
 
           {/* Add comment */}
-          <div className="flex items-start gap-2">
+          <div className="flex items-start gap-2 min-w-0">
             <Textarea
               value={newComment}
               onChange={e => setNewComment(e.target.value)}
               placeholder="Add a comment…"
-              className="text-xs min-h-[40px] py-1.5"
+              className="text-xs min-h-[40px] py-1.5 flex-1 min-w-0"
               onKeyDown={e => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
@@ -856,13 +858,14 @@ function TaskRow({
             />
             <Button
               size="sm"
-              className="h-8"
+              className="h-8 shrink-0"
               onClick={handleAddComment}
               disabled={!newComment.trim() || addTaskComment.isPending}
             >
               <Send className="h-3 w-3" />
             </Button>
           </div>
+
         </div>
       )}
 

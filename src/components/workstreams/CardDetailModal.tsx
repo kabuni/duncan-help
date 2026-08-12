@@ -368,8 +368,9 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
             )}
 
             {/* Body with tabs */}
-            <ScrollArea className="flex-1">
-              <div className="px-6 py-4">
+            <ScrollArea className="flex-1 w-full [&>[data-radix-scroll-area-viewport]>div]:!block [&>[data-radix-scroll-area-viewport]>div]:!min-w-0">
+              <div className="px-6 py-4 min-w-0 max-w-full overflow-x-hidden">
+
                 {/* Meta row */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
                   <div className="space-y-1 col-span-2">

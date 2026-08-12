@@ -186,13 +186,13 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
 
   return (
     <Dialog open={!!cardId} onOpenChange={() => onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] p-0 overflow-hidden">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[85vh] p-0 overflow-hidden">
         {isLoading || !card ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
         ) : (
-          <div className="flex flex-col max-h-[85vh]">
+          <div className="flex min-w-0 flex-col max-h-[85vh] overflow-hidden">
             {/* Header */}
             <div className="px-6 pt-5 pb-4 border-b border-border">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -368,8 +368,8 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
             )}
 
             {/* Body with tabs */}
-            <ScrollArea className="flex-1 w-full [&>[data-radix-scroll-area-viewport]>div]:!block [&>[data-radix-scroll-area-viewport]>div]:!min-w-0">
-              <div className="px-6 py-4 min-w-0 max-w-full overflow-x-hidden">
+            <ScrollArea className="min-h-0 min-w-0 flex-1 w-full [&>[data-radix-scroll-area-viewport]]:min-w-0 [&>[data-radix-scroll-area-viewport]]:overflow-x-hidden [&>[data-radix-scroll-area-viewport]>div]:!block [&>[data-radix-scroll-area-viewport]>div]:!min-w-0 [&>[data-radix-scroll-area-viewport]>div]:!max-w-full">
+              <div className="w-full min-w-0 max-w-full overflow-x-hidden px-6 py-4">
 
                 {/* Meta row */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
@@ -503,7 +503,7 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
 
                 <Separator className="mb-5" />
 
-                <Tabs defaultValue="tasks">
+                <Tabs defaultValue="tasks" className="w-full min-w-0 max-w-full overflow-hidden">
                   <TabsList className="mb-4">
                     <TabsTrigger value="tasks" className="text-xs gap-1.5">
                       <CheckCircle2 className="h-3.5 w-3.5" /> Tasks ({tasks.length})
@@ -517,7 +517,7 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                   </TabsList>
 
                   {/* Tasks Tab */}
-                  <TabsContent value="tasks" className="space-y-2">
+                  <TabsContent value="tasks" className="w-full min-w-0 max-w-full space-y-2 overflow-hidden">
                     {tasks.map(task => (
                       <TaskRow
                         key={task.id}
@@ -540,22 +540,22 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                     ))}
 
                     {/* Add task input */}
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex min-w-0 items-center gap-2 pt-1">
                       <Input
                         value={newTaskTitle}
                         onChange={e => setNewTaskTitle(e.target.value)}
                         placeholder="Add a task…"
-                        className="text-sm h-9"
+                        className="h-9 min-w-0 flex-1 text-sm"
                         onKeyDown={e => e.key === "Enter" && handleAddTask()}
                       />
-                      <Button size="sm" variant="outline" onClick={handleAddTask} disabled={!newTaskTitle.trim()}>
+                      <Button size="sm" variant="outline" className="shrink-0" onClick={handleAddTask} disabled={!newTaskTitle.trim()}>
                         <Plus className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </TabsContent>
 
                   {/* Comments Tab */}
-                  <TabsContent value="comments" className="space-y-3">
+                  <TabsContent value="comments" className="w-full min-w-0 max-w-full space-y-3 overflow-hidden">
 
                     {comments.map(c => (
                       <CardCommentRow
@@ -570,21 +570,21 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                       <p className="text-xs text-muted-foreground text-center py-4">No comments yet</p>
                     )}
 
-                    <div className="flex items-start gap-2 pt-1">
+                    <div className="flex min-w-0 items-start gap-2 pt-1">
                       <Textarea
                         value={commentText}
                         onChange={e => setCommentText(e.target.value)}
                         placeholder="Write a comment…"
-                        className="text-sm min-h-[60px]"
+                        className="min-h-[60px] min-w-0 flex-1 text-sm"
                       />
-                      <Button size="sm" onClick={handleAddComment} disabled={!commentText.trim()}>
+                      <Button size="sm" className="shrink-0" onClick={handleAddComment} disabled={!commentText.trim()}>
                         <Send className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </TabsContent>
 
                   {/* Activity Tab */}
-                  <TabsContent value="activity">
+                  <TabsContent value="activity" className="w-full min-w-0 max-w-full overflow-hidden">
                     <div className="space-y-2">
                       {activity.map(a => (
                         <div key={a.id} className="flex items-start gap-2.5 py-1.5">
@@ -723,8 +723,8 @@ function TaskRow({
   };
 
   return (
-    <div className="group rounded-lg border border-border/60 bg-card/50 p-2.5">
-      <div className="flex items-start gap-2">
+    <div className="group w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-border/60 bg-card/50 p-2.5">
+      <div className="flex min-w-0 items-start gap-2">
         <button onClick={onToggle} className="mt-0.5 shrink-0">
           {task.completed ? (
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -743,7 +743,7 @@ function TaskRow({
                 if (e.key === "Enter") { e.preventDefault(); saveTitle(); }
                 if (e.key === "Escape") { setEditingTitle(false); setTitleDraft(task.title); }
               }}
-              className="h-7 text-sm"
+              className="h-7 w-full min-w-0 text-sm"
             />
           ) : (
             <button
@@ -800,7 +800,7 @@ function TaskRow({
       </div>
 
       {expanded && (
-        <div className="mt-3 pt-3 border-t border-border/60 space-y-3">
+        <div className="mt-3 min-w-0 max-w-full space-y-3 overflow-hidden border-t border-border/60 pt-3">
           {/* Due date editor */}
           <div className="flex items-center gap-2">
             <Label className="text-[10px] text-muted-foreground flex items-center gap-1 shrink-0">

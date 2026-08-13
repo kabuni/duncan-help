@@ -287,6 +287,16 @@ export default function CompanyHealth() {
           </div>
         </section>
 
+        {/* 1. People & Culture — SOURCE: employee survey Google Sheet via people-culture-metrics */}
+        <section aria-labelledby="people-culture-heading" className="space-y-3">
+          <h2 id="people-culture-heading" className="text-sm font-semibold text-foreground tracking-tight">
+            People &amp; Culture
+          </h2>
+          <SectionCard title="Employee Satisfaction" subtitle="Engagement, retention and team health">
+            <PeopleCulture />
+          </SectionCard>
+        </section>
+
         {/* 2. Strategic Metrics */}
         <section aria-labelledby="strategic-heading" className="space-y-3">
           <h2 id="strategic-heading" className="text-sm font-semibold text-foreground tracking-tight">
@@ -367,15 +377,13 @@ export default function CompanyHealth() {
               )}
             </SectionCard>
 
-
-
             {/* Marketing — SOURCE: GA4 (sessions, channels, cta_view/cta_click) + Duncan registrations.
                 Data + RAG live in src/hooks/useMarketingHealth.ts */}
             <SectionCard title="Marketing Impact" subtitle="Reach, pipeline contribution and campaign ROI">
               <MarketingKpis />
             </SectionCard>
-            {/* Finance — SOURCE: Finance system */}
 
+            {/* Finance — SOURCE: Finance system */}
             <SectionCard title="Financial Health" subtitle="Variance — green within ±10% of plan, red at -10% or worse">
               <div>{d.finance.map((s) => <StatRow key={s.label} stat={s} />)}</div>
             </SectionCard>
@@ -390,16 +398,6 @@ export default function CompanyHealth() {
           </h2>
           <SectionCard title="Duncan productivity impact" subtitle="Live executive view — hours saved, adoption, usage and business value">
             <AiEfficiency />
-          </SectionCard>
-        </section>
-
-        {/* 4. People & Culture — SOURCE: employee survey Google Sheet via people-culture-metrics */}
-        <section aria-labelledby="people-culture-heading" className="space-y-3">
-          <h2 id="people-culture-heading" className="text-sm font-semibold text-foreground tracking-tight">
-            People &amp; Culture
-          </h2>
-          <SectionCard title="Employee Satisfaction" subtitle="Engagement, retention and team health">
-            <PeopleCulture />
           </SectionCard>
         </section>
 

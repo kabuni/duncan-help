@@ -109,7 +109,7 @@ export default function BugReportsBoard() {
         shortId(r.id).toLowerCase().includes(q)
       );
     });
-  }, [rows, search, filter]);
+  }, [rows, search, filter, codeById]);
 
   const toggleResolved = async (r: Issue) => {
     const resolved_at = r.resolved_at ? null : new Date().toISOString();

@@ -30,7 +30,7 @@ const Badge = ({ className, children }: { className: string; children: React.Rea
   </span>
 );
 
-const shortId = (id: string) => `BUG-${id.replace(/-/g, "").slice(0, 4).toUpperCase()}`;
+const formatCode = (n: number) => `BUG-${String(n).padStart(4, "0")}`;
 
 const severityStyle = (s?: string | null) => {
   const v = (s || "").toLowerCase();
@@ -84,6 +84,13 @@ export default function BugReportsBoard() {
   });
 
   const rows = data ?? [];
+  // Sequential numbers: oldest report is BUG-0001 (rows arrive newest-first)
+  const codeById = useMemo(() => {
+    const map = new Map<string, string>();
+    rows.forEach((r, i) => map.set(r.id, formatCode(rows.length - i)));
+    return map;
+  }, [rows]);
+  const shortId = (id: string) => codeById.get(id) ?? "BUG-0000";
   const total = rows.length;
   const fixed = rows.filter((r) => r.resolved_at).length;
   const open = total - fixed;
@@ -102,7 +109,7 @@ export default function BugReportsBoard() {
         shortId(r.id).toLowerCase().includes(q)
       );
     });
-  }, [rows, search, filter]);
+  }, [rows, search, filter, codeById]);
 
   const toggleResolved = async (r: Issue) => {
     const resolved_at = r.resolved_at ? null : new Date().toISOString();

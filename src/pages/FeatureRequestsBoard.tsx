@@ -47,7 +47,7 @@ const Badge = ({ className, children }: { className: string; children: React.Rea
   </span>
 );
 
-const shortId = (id: string) => `FR-${id.replace(/-/g, "").slice(0, 4).toUpperCase()}`;
+const formatCode = (n: number) => `FR-${String(n).padStart(4, "0")}`;
 
 const Stat = ({
   label,
@@ -87,6 +87,13 @@ export default function FeatureRequestsBoard() {
   });
 
   const rows = data ?? [];
+  // Sequential numbers: oldest request is FR-0001 (rows arrive newest-first)
+  const codeById = useMemo(() => {
+    const map = new Map<string, string>();
+    rows.forEach((r, i) => map.set(r.id, formatCode(rows.length - i)));
+    return map;
+  }, [rows]);
+  const shortId = (id: string) => codeById.get(id) ?? "FR-0000";
   const total = rows.length;
   const completed = rows.filter((r) => DONE.includes((r.status || "").toLowerCase())).length;
   const inFlight = total - completed;
@@ -106,7 +113,7 @@ export default function FeatureRequestsBoard() {
         shortId(r.id).toLowerCase().includes(q)
       );
     });
-  }, [rows, search, filter]);
+  }, [rows, search, filter, codeById]);
 
   const updateStatus = async (id: string, status: string) => {
     const { error } = await supabase.from("feature_requests").update({ status }).eq("id", id);

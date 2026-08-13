@@ -247,11 +247,30 @@ export default function CompanyHealth() {
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
             {[
-              ...d.companyHealth,
               {
                 area: "People & Culture",
                 descriptor: "Engagement, retention and team health",
                 rag: people.rag as Rag,
+              },
+              {
+                area: "Commercial Growth",
+                descriptor: "Schools signed vs target",
+                rag: d.companyHealth.find((t) => t.area === "Commercial Growth")?.rag ?? "attention",
+              },
+              {
+                area: "Product Adoption",
+                descriptor: "Uploads, usage and throughput",
+                rag: d.companyHealth.find((t) => t.area === "Product Adoption")?.rag ?? "on_track",
+              },
+              {
+                area: "Marketing Impact",
+                descriptor: "Reach, pipeline contribution and campaign ROI",
+                rag: d.companyHealth.find((t) => t.area === "Marketing Impact")?.rag ?? "attention",
+              },
+              {
+                area: "Financial Health",
+                descriptor: "Variance",
+                rag: d.companyHealth.find((t) => t.area === "Financial Health")?.rag ?? "attention",
               },
               {
                 area: "AI Efficiency",
@@ -266,6 +285,16 @@ export default function CompanyHealth() {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* 1. People & Culture — SOURCE: employee survey Google Sheet via people-culture-metrics */}
+        <section aria-labelledby="people-culture-heading" className="space-y-3">
+          <h2 id="people-culture-heading" className="text-sm font-semibold text-foreground tracking-tight">
+            People &amp; Culture
+          </h2>
+          <SectionCard title="Employee Satisfaction" subtitle="Engagement, retention and team health">
+            <PeopleCulture />
+          </SectionCard>
         </section>
 
         {/* 2. Strategic Metrics */}
@@ -348,15 +377,13 @@ export default function CompanyHealth() {
               )}
             </SectionCard>
 
-
-
             {/* Marketing — SOURCE: GA4 (sessions, channels, cta_view/cta_click) + Duncan registrations.
                 Data + RAG live in src/hooks/useMarketingHealth.ts */}
             <SectionCard title="Marketing Impact" subtitle="Reach, pipeline contribution and campaign ROI">
               <MarketingKpis />
             </SectionCard>
-            {/* Finance — SOURCE: Finance system */}
 
+            {/* Finance — SOURCE: Finance system */}
             <SectionCard title="Financial Health" subtitle="Variance — green within ±10% of plan, red at -10% or worse">
               <div>{d.finance.map((s) => <StatRow key={s.label} stat={s} />)}</div>
             </SectionCard>
@@ -371,16 +398,6 @@ export default function CompanyHealth() {
           </h2>
           <SectionCard title="Duncan productivity impact" subtitle="Live executive view — hours saved, adoption, usage and business value">
             <AiEfficiency />
-          </SectionCard>
-        </section>
-
-        {/* 4. People & Culture — SOURCE: employee survey Google Sheet via people-culture-metrics */}
-        <section aria-labelledby="people-culture-heading" className="space-y-3">
-          <h2 id="people-culture-heading" className="text-sm font-semibold text-foreground tracking-tight">
-            People &amp; Culture
-          </h2>
-          <SectionCard title="Employee Satisfaction" subtitle="Engagement, retention and team health">
-            <PeopleCulture />
           </SectionCard>
         </section>
 

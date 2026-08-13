@@ -1,0 +1,2 @@
+CREATE POLICY "Authenticated can view all issues" ON public.issues FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Authenticated can view all feature requests" ON public.feature_requests FOR SELECT TO authenticated USING (true);

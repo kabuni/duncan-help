@@ -407,7 +407,8 @@ export default function CompanyHealth() {
                 <div className="grid grid-cols-3 gap-3 pt-3 border-t border-border">
                   {d.schools.stages.map((s) => (
                     <div key={s.label}>
-                      <p className="text-lg font-bold tabular-nums text-foreground">{s.count}</p>
+                      <p className="text-lg font-bold tabular-nums text-foreground">{s.label === "Signed" ? schoolsSigned : s.count}</p>
+
                       <p className="text-[11px] text-muted-foreground">{s.label}</p>
                     </div>
                   ))}

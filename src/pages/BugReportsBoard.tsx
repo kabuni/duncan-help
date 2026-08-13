@@ -84,6 +84,13 @@ export default function BugReportsBoard() {
   });
 
   const rows = data ?? [];
+  // Sequential numbers: oldest report is BUG-0001 (rows arrive newest-first)
+  const codeById = useMemo(() => {
+    const map = new Map<string, string>();
+    rows.forEach((r, i) => map.set(r.id, formatCode(rows.length - i)));
+    return map;
+  }, [rows]);
+  const shortId = (id: string) => codeById.get(id) ?? "BUG-0000";
   const total = rows.length;
   const fixed = rows.filter((r) => r.resolved_at).length;
   const open = total - fixed;

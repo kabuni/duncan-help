@@ -47,7 +47,7 @@ const Badge = ({ className, children }: { className: string; children: React.Rea
   </span>
 );
 
-const shortId = (id: string) => `FR-${id.replace(/-/g, "").slice(0, 4).toUpperCase()}`;
+const formatCode = (n: number) => `FR-${String(n).padStart(4, "0")}`;
 
 const Stat = ({
   label,

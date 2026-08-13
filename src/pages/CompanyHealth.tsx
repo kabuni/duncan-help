@@ -314,11 +314,77 @@ export default function CompanyHealth() {
             <SectionCard title="Commercial Growth" subtitle="Schools signed vs target">
               <div className="space-y-3">
                 <div className="flex items-end justify-between gap-3">
-                  <p className="text-2xl font-bold tabular-nums text-foreground">
-                    {d.schools.signed} <span className="text-base font-medium text-muted-foreground">/ {d.schools.target}</span>
-                  </p>
+                  <div className="flex items-end gap-2 min-w-0">
+                    {editingSigned ? (
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={signedDraft}
+                          onChange={(e) => setSignedDraft(e.target.value)}
+                          className="h-8 w-24 text-sm"
+                          aria-label="Schools signed"
+                          autoFocus
+                        />
+                        <span className="text-base font-medium text-muted-foreground">/ {d.schools.target}</span>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          aria-label="Save schools signed"
+                          disabled={schools.save.isPending}
+                          onClick={async () => {
+                            const n = Number(signedDraft);
+                            if (!Number.isFinite(n) || n < 0) {
+                              toast({ title: "Enter a valid number", variant: "destructive" });
+                              return;
+                            }
+                            try {
+                              await schools.save.mutateAsync(Math.round(n));
+                              setEditingSigned(false);
+                              toast({ title: "Schools signed updated" });
+                            } catch (e) {
+                              toast({ title: "Could not save", description: (e as Error).message, variant: "destructive" });
+                            }
+                          }}
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          aria-label="Cancel editing"
+                          onClick={() => setEditingSigned(false)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-2xl font-bold tabular-nums text-foreground">
+                          {schoolsSigned} <span className="text-base font-medium text-muted-foreground">/ {d.schools.target}</span>
+                        </p>
+                        {isAdmin && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-muted-foreground"
+                            aria-label="Edit schools signed"
+                            onClick={() => {
+                              setSignedDraft(String(schoolsSigned));
+                              setEditingSigned(true);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </div>
                   <RagBadge rag={d.schools.forecastRag} size="md" />
                 </div>
+
                 <div className="space-y-1">
                   <Progress value={schoolsPct} aria-label={`${schoolsPct}% of target signed`} />
                   <p className="text-[11px] text-muted-foreground tabular-nums">{schoolsPct}% of target</p>

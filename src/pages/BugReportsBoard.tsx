@@ -46,10 +46,21 @@ const severityLabel = (s?: string | null) => {
   return s!.charAt(0).toUpperCase() + s!.slice(1);
 };
 
-const Stat = ({ label, value, className }: { label: string; value: number | string; className?: string }) => (
-  <div className="rounded-xl border border-border bg-card px-4 py-3">
+const Stat = ({
+  label,
+  value,
+  className,
+  accent = "bg-border",
+}: {
+  label: string;
+  value: number | string;
+  className?: string;
+  accent?: string;
+}) => (
+  <div className="group relative overflow-hidden rounded-xl border border-border bg-card px-4 py-3.5 transition-all duration-300 hover:border-primary/30 hover:shadow-[0_8px_30px_-12px_hsl(var(--norman-glow)/0.35)]">
+    <span className={`absolute inset-x-0 top-0 h-0.5 ${accent} opacity-70`} />
     <div className={`text-3xl font-bold tracking-tight tabular-nums ${className ?? "text-foreground"}`}>{value}</div>
-    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mt-0.5">{label}</div>
+    <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{label}</div>
   </div>
 );
 

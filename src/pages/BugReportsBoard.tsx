@@ -30,7 +30,7 @@ const Badge = ({ className, children }: { className: string; children: React.Rea
   </span>
 );
 
-const shortId = (id: string) => `BUG-${id.replace(/-/g, "").slice(0, 4).toUpperCase()}`;
+const formatCode = (n: number) => `BUG-${String(n).padStart(4, "0")}`;
 
 const severityStyle = (s?: string | null) => {
   const v = (s || "").toLowerCase();

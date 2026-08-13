@@ -113,7 +113,7 @@ export default function FeatureRequestsBoard() {
         shortId(r.id).toLowerCase().includes(q)
       );
     });
-  }, [rows, search, filter]);
+  }, [rows, search, filter, codeById]);
 
   const updateStatus = async (id: string, status: string) => {
     const { error } = await supabase.from("feature_requests").update({ status }).eq("id", id);

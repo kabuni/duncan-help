@@ -87,6 +87,13 @@ export default function FeatureRequestsBoard() {
   });
 
   const rows = data ?? [];
+  // Sequential numbers: oldest request is FR-0001 (rows arrive newest-first)
+  const codeById = useMemo(() => {
+    const map = new Map<string, string>();
+    rows.forEach((r, i) => map.set(r.id, formatCode(rows.length - i)));
+    return map;
+  }, [rows]);
+  const shortId = (id: string) => codeById.get(id) ?? "FR-0000";
   const total = rows.length;
   const completed = rows.filter((r) => DONE.includes((r.status || "").toLowerCase())).length;
   const inFlight = total - completed;

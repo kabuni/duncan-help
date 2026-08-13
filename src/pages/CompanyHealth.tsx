@@ -247,11 +247,30 @@ export default function CompanyHealth() {
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
             {[
-              ...d.companyHealth,
               {
                 area: "People & Culture",
                 descriptor: "Engagement, retention and team health",
                 rag: people.rag as Rag,
+              },
+              {
+                area: "Commercial Growth",
+                descriptor: "Schools signed vs target",
+                rag: d.companyHealth.find((t) => t.area === "Commercial Growth")?.rag ?? "attention",
+              },
+              {
+                area: "Product Adoption",
+                descriptor: "Uploads, usage and throughput",
+                rag: d.companyHealth.find((t) => t.area === "Product Adoption")?.rag ?? "on_track",
+              },
+              {
+                area: "Marketing Impact",
+                descriptor: "Reach, pipeline contribution and campaign ROI",
+                rag: d.companyHealth.find((t) => t.area === "Marketing Impact")?.rag ?? "attention",
+              },
+              {
+                area: "Financial Health",
+                descriptor: "Variance",
+                rag: d.companyHealth.find((t) => t.area === "Financial Health")?.rag ?? "attention",
               },
               {
                 area: "AI Efficiency",

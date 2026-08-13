@@ -200,7 +200,7 @@ function LatestBugsTile() {
 
   return (
     <Tile delay={0.06}>
-      <TileHeader icon={Bug} label="Latest bug reports" onViewAll={() => navigate("/feedback")} />
+      <TileHeader icon={Bug} label="Latest bug reports" onViewAll={() => navigate("/bug-reports")} />
       {!isLoading && data && (
         <HeadlineStats
           items={[
@@ -219,7 +219,7 @@ function LatestBugsTile() {
           {rows.map((r) => (
             <button
               key={r.id}
-              onClick={() => navigate("/feedback")}
+              onClick={() => navigate("/bug-reports")}
               className="w-full text-left flex items-center gap-3 py-2 hover:bg-muted/30 rounded-md px-1 -mx-1 transition-colors"
             >
               <div className="min-w-0 flex-1">

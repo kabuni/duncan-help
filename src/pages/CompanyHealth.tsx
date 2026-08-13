@@ -1,5 +1,8 @@
-import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, HeartPulse } from "lucide-react";
+import { useState } from "react";
+import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Check, HeartPulse, Pencil, X } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import MarketingKpis from "@/components/company-health/MarketingKpis";
 import AiEfficiency from "@/components/company-health/AiEfficiency";
@@ -7,6 +10,10 @@ import PeopleCulture from "@/components/company-health/PeopleCulture";
 import { useAiEfficiency } from "@/hooks/useAiEfficiency";
 import { useProductAdoption } from "@/hooks/useProductAdoption";
 import { usePeopleCulture } from "@/hooks/usePeopleCulture";
+import { useSchoolsSigned } from "@/hooks/useSchoolsSigned";
+import { useIsAdmin } from "@/hooks/useUserRoles";
+import { toast } from "@/hooks/use-toast";
+
 
 
 

@@ -1,0 +1,1 @@
+UPDATE app_settings SET value = '["palash@kabuni.com","adit@kabuni.com","aashrey@kabuni.com","simon@kabuni.com"]'::jsonb, updated_at = now() WHERE key = 'weekly_ga_report_recipients';

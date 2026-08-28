@@ -14,6 +14,8 @@ import { Mail, RefreshCw, Users, Briefcase, Loader2, CheckCircle, AlertCircle, S
 import { toast } from "sonner";
 import { JobRolesManager } from "@/components/recruitment/JobRolesManager";
 import { MarkAsHiredDialog } from "@/components/recruitment/MarkAsHiredDialog";
+import { AddCandidateDialog } from "@/components/recruitment/AddCandidateDialog";
+
 import { RejectCandidateDialog } from "@/components/recruitment/RejectCandidateDialog";
 import { OnboardingPlanDialog } from "@/components/recruitment/OnboardingPlanDialog";
 import { useSearchParams } from "react-router-dom";
@@ -569,6 +571,15 @@ const Recruitment = () => {
                 Connect Gmail
               </Button>
             )}
+            <AddCandidateDialog
+              jobRoles={(jobRoles ?? []) as any}
+              defaultRoleId={selectedRoleId}
+              onAdded={(roleId) => {
+                if (roleId !== selectedRoleId) handleRoleChange(roleId);
+                else refetchCandidates();
+              }}
+            />
+
           </div>
         </div>
 

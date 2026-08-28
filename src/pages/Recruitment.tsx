@@ -569,6 +569,15 @@ const Recruitment = () => {
                 Connect Gmail
               </Button>
             )}
+            <AddCandidateDialog
+              jobRoles={(jobRoles ?? []) as any}
+              defaultRoleId={selectedRoleId}
+              onAdded={(roleId) => {
+                if (roleId !== selectedRoleId) handleRoleChange(roleId);
+                else refetchCandidates();
+              }}
+            />
+
           </div>
         </div>
 

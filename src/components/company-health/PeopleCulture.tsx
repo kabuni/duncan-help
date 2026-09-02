@@ -1,6 +1,7 @@
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import { RagBadge } from "./HealthPrimitives";
 import { usePeopleCulture, SAMPLE_PEOPLE_CULTURE } from "@/hooks/usePeopleCulture";
 

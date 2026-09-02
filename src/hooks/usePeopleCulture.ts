@@ -52,7 +52,11 @@ export const SAMPLE_PEOPLE_CULTURE: PeopleCultureData = {
   lastResponse: new Date().toISOString(),
   overall: 74,
   enps: 42,
+  enpsBreakdown: null,
   metrics: [],
+  comments: [],
+  breakdowns: [],
+  timeline: [],
   themes: [
     { key: "satisfaction", label: "Employee Satisfaction", description: "Engagement, wellbeing, recognition and overall happiness", score: 70, questions: 5 },
     { key: "alignment", label: "Alignment & Growth", description: "Clarity of direction, enablement, learning and progression", score: 74, questions: 6 },
@@ -88,10 +92,14 @@ export function usePeopleCulture() {
         lastResponse: data.lastResponse ?? null,
         overall: data.overall ?? null,
         enps: data.enps ?? null,
+        enpsBreakdown: data.enpsBreakdown ?? null,
         metrics: data.metrics ?? [],
         themes: data.themes ?? [],
         strength: data.strength ?? null,
         risk: data.risk ?? null,
+        comments: data.comments ?? [],
+        breakdowns: data.breakdowns ?? [],
+        timeline: data.timeline ?? [],
       };
     },
   });

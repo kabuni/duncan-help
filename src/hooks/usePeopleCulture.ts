@@ -7,6 +7,18 @@ export interface PeopleCultureMetric {
   scaleMax: number;
   normalised: number; // 0-100
   responses: number;
+  distribution?: { value: number; count: number }[];
+  theme?: string;
+}
+
+export interface PeopleCultureComment {
+  question: string;
+  answers: string[];
+}
+
+export interface PeopleCultureBreakdown {
+  question: string;
+  options: { label: string; count: number }[];
 }
 
 export interface PeopleCultureTheme {

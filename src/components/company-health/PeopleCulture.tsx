@@ -23,6 +23,22 @@ export default function PeopleCulture() {
   const data = isSample ? SAMPLE_PEOPLE_CULTURE : liveData;
   const rag = isSample ? ("attention" as const) : liveRag;
 
+  const handleRefresh = async () => {
+    const res = await refetch();
+    if (res.error) {
+      toast.error("Couldn't reach the survey sheet", {
+        description: (res.error as Error).message,
+      });
+      return;
+    }
+    const n = res.data?.responses ?? 0;
+    toast.success(`Synced ${n} survey ${n === 1 ? "response" : "responses"}`, {
+      description: res.data?.lastResponse
+        ? `Latest response ${new Date(res.data.lastResponse).toLocaleString()}`
+        : undefined,
+    });
+  };
+
   if (isLoading) {
     return <p className="text-xs text-muted-foreground">Loading employee satisfaction…</p>;
   }
@@ -34,7 +50,7 @@ export default function PeopleCulture() {
           variant="ghost"
           size="sm"
           className="h-7 gap-1.5 text-[11px] text-muted-foreground"
-          onClick={() => refetch()}
+          onClick={handleRefresh}
           disabled={isFetching}
         >
           <RefreshCw className={`h-3 w-3 ${isFetching ? "animate-spin" : ""}`} />
@@ -44,10 +60,12 @@ export default function PeopleCulture() {
 
       {isSample && (
         <p className="text-[11px] text-muted-foreground italic">
-          Illustrative model — awaiting the first responses. Indices switch to live data
-          automatically once responses land.
+          {error
+            ? `Survey sync failed: ${(error as Error).message}. Showing illustrative model.`
+            : "Illustrative model — awaiting the first responses. Indices switch to live data automatically once responses land."}
         </p>
       )}
+
 
       <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
         <div>

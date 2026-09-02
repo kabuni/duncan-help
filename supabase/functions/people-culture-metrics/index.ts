@@ -232,6 +232,19 @@ serve(async (req) => {
       ? Math.round((metrics.reduce((a, m) => a + m.normalised, 0) / metrics.length) * 10) / 10
       : null;
 
+    // Submissions over time (month buckets) so leadership can see participation trend
+    const timeline: { period: string; count: number }[] = [];
+    if (tsIdx >= 0) {
+      const counts = new Map<string, number>();
+      for (const r of data) {
+        const d = parseTs(r[tsIdx]);
+        if (!d) continue;
+        const k = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+      timeline.push(...[...counts.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([period, count]) => ({ period, count })));
+    }
+
     return new Response(JSON.stringify({
       ok: true,
       tab,
@@ -239,10 +252,14 @@ serve(async (req) => {
       lastResponse,
       overall,          // 0-100 sentiment index
       enps,
+      enpsBreakdown,
       metrics,
       themes,
       strength,
       risk,
+      comments,
+      breakdowns,
+      timeline,
       questions: header.filter((h, i) => h && i !== tsIdx),
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {

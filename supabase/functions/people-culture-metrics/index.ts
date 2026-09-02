@@ -115,13 +115,31 @@ serve(async (req) => {
     const header = (rows[0] || []).map((h) => String(h ?? "").trim());
     const data = rows.slice(1).filter((r) => r && r.some((c) => c !== "" && c !== null && c !== undefined));
 
-    // Timestamp column (Google Forms always writes it first)
+    // Timestamp column (Google Forms always writes it first).
+    // Google Forms writes DD/MM/YYYY HH:MM:SS for UK locale sheets — `new Date()`
+    // would misread that as MM/DD, so parse it explicitly.
+    const parseTs = (raw: any): Date | null => {
+      const s = String(raw ?? "").trim();
+      if (!s) return null;
+      const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})[ ,]*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+      if (m) {
+        let [, a, b, y, hh, mm, ss] = m;
+        let day = Number(a), month = Number(b);
+        if (day > 12 && month <= 12) { /* clearly DD/MM */ }
+        else if (month > 12) { const t = day; day = month; month = t; } // was MM/DD
+        const d = new Date(Date.UTC(Number(y), month - 1, day, Number(hh), Number(mm), Number(ss ?? 0)));
+        return isNaN(d.getTime()) ? null : d;
+      }
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? null : d;
+    };
     const tsIdx = header.findIndex((h) => /timestamp|date submitted|submitted/i.test(h));
     let lastResponse: string | null = null;
     if (tsIdx >= 0) {
-      const vals = data.map((r) => new Date(String(r[tsIdx] ?? ""))).filter((d) => !isNaN(d.getTime()));
+      const vals = data.map((r) => parseTs(r[tsIdx])).filter((d): d is Date => !!d);
       if (vals.length) lastResponse = new Date(Math.max(...vals.map((d) => d.getTime()))).toISOString();
     }
+
 
     // Numeric (Likert / rating) questions
     const metrics: {

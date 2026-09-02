@@ -144,28 +144,59 @@ serve(async (req) => {
     // Numeric (Likert / rating) questions
     const metrics: {
       question: string; average: number; scaleMax: number; normalised: number; responses: number;
+      distribution: { value: number; count: number }[]; theme: string;
     }[] = [];
+    // Free-text questions (verbatim comments)
+    const comments: { question: string; answers: string[] }[] = [];
+    // Single-choice / categorical questions (e.g. department, tenure)
+    const breakdowns: { question: string; options: { label: string; count: number }[] }[] = [];
 
     header.forEach((q, i) => {
       if (i === tsIdx || !q) return;
+      const raw = data.map((r) => r[i]).filter((v) => v !== "" && v !== null && v !== undefined);
       const nums = data.map((r) => toNum(r[i])).filter((n): n is number => n !== null);
-      if (nums.length < Math.max(2, data.length * 0.4)) return; // mostly free text -> skip
-      const max = Math.max(...nums);
-      const min = Math.min(...nums);
-      if (max > 10 || min < 0) return; // not a rating scale
-      const scaleMax = max <= 5 ? 5 : 10;
-      const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
-      metrics.push({
-        question: q,
-        average: Math.round(avg * 10) / 10,
-        scaleMax,
-        normalised: Math.round((avg / scaleMax) * 1000) / 10,
-        responses: nums.length,
-      });
+      const isRating =
+        nums.length >= Math.max(2, data.length * 0.4) &&
+        Math.max(...(nums.length ? nums : [99])) <= 10 &&
+        Math.min(...(nums.length ? nums : [-1])) >= 0;
+
+      if (isRating) {
+        const max = Math.max(...nums);
+        const scaleMax = max <= 5 ? 5 : 10;
+        const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
+        const counts = new Map<number, number>();
+        for (const n of nums) counts.set(n, (counts.get(n) ?? 0) + 1);
+        metrics.push({
+          question: q,
+          average: Math.round(avg * 10) / 10,
+          scaleMax,
+          normalised: Math.round((avg / scaleMax) * 1000) / 10,
+          responses: nums.length,
+          distribution: [...counts.entries()].sort((a, b) => a[0] - b[0]).map(([value, count]) => ({ value, count })),
+          theme: classify(q).key,
+        });
+        return;
+      }
+
+      const strings = raw.map((v) => String(v).trim()).filter(Boolean);
+      if (!strings.length) return;
+      const unique = new Set(strings);
+      const avgLen = strings.reduce((a, s) => a + s.length, 0) / strings.length;
+      if (unique.size <= Math.max(6, strings.length * 0.4) && avgLen < 40) {
+        const counts = new Map<string, number>();
+        for (const s of strings) counts.set(s, (counts.get(s) ?? 0) + 1);
+        breakdowns.push({
+          question: q,
+          options: [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count })),
+        });
+      } else {
+        comments.push({ question: q, answers: strings.slice(-100).reverse() });
+      }
     });
 
     // eNPS from a 0-10 recommend/likelihood question, if present
     let enps: number | null = null;
+    let enpsBreakdown: { promoters: number; passives: number; detractors: number; responses: number } | null = null;
     const enpsIdx = header.findIndex((h) => /recommend|nps|likely/i.test(h));
     if (enpsIdx >= 0) {
       const nums = data.map((r) => toNum(r[enpsIdx])).filter((n): n is number => n !== null);
@@ -173,6 +204,7 @@ serve(async (req) => {
         const prom = nums.filter((n) => n >= 9).length;
         const det = nums.filter((n) => n <= 6).length;
         enps = Math.round(((prom - det) / nums.length) * 100);
+        enpsBreakdown = { promoters: prom, passives: nums.length - prom - det, detractors: det, responses: nums.length };
       }
     }
 
@@ -200,6 +232,19 @@ serve(async (req) => {
       ? Math.round((metrics.reduce((a, m) => a + m.normalised, 0) / metrics.length) * 10) / 10
       : null;
 
+    // Submissions over time (month buckets) so leadership can see participation trend
+    const timeline: { period: string; count: number }[] = [];
+    if (tsIdx >= 0) {
+      const counts = new Map<string, number>();
+      for (const r of data) {
+        const d = parseTs(r[tsIdx]);
+        if (!d) continue;
+        const k = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+      timeline.push(...[...counts.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([period, count]) => ({ period, count })));
+    }
+
     return new Response(JSON.stringify({
       ok: true,
       tab,
@@ -207,10 +252,14 @@ serve(async (req) => {
       lastResponse,
       overall,          // 0-100 sentiment index
       enps,
+      enpsBreakdown,
       metrics,
       themes,
       strength,
       risk,
+      comments,
+      breakdowns,
+      timeline,
       questions: header.filter((h, i) => h && i !== tsIdx),
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {

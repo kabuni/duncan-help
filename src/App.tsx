@@ -36,6 +36,7 @@ import ReleaseManager from "./pages/ReleaseManager";
 import WhatsNew from "./pages/WhatsNew";
 import CEOBriefing from "./pages/CEOBriefing";
 import CompanyHealth from "./pages/CompanyHealth";
+import PeopleCultureDashboard from "./pages/PeopleCultureDashboard";
 import KeyEventsDiary from "./pages/KeyEventsDiary";
 import Approvals from "./pages/Approvals";
 import PurchaseOrders from "./pages/PurchaseOrders";
@@ -119,6 +120,7 @@ const AppContent = () => {
             <Route path="/whats-new" element={<WhatsNew />} />
             <Route path="/team-briefing" element={<CEOBriefing />} />
             <Route path="/company-health" element={<CompanyHealth />} />
+            <Route path="/company-health/people" element={<PeopleCultureDashboard />} />
 
             <Route path="/diary" element={<KeyEventsDiary />} />
             <Route path="/approvals" element={<Approvals />} />

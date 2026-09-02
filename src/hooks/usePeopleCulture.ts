@@ -37,7 +37,11 @@ export interface PeopleCultureData {
   lastResponse: string | null;
   overall: number | null; // 0-100 sentiment index
   enps: number | null;
+  enpsBreakdown: { promoters: number; passives: number; detractors: number; responses: number } | null;
   metrics: PeopleCultureMetric[];
+  comments: PeopleCultureComment[];
+  breakdowns: PeopleCultureBreakdown[];
+  timeline: { period: string; count: number }[];
 }
 
 export type Rag = "on_track" | "attention" | "critical";

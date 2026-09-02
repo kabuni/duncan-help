@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Check, HeartPulse, Pencil, X } from "lucide-react";
+import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Check, ChevronRight, HeartPulse, Pencil, X } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -202,12 +203,15 @@ function MetricCell({ label, value, trend }: { label: string; value: string; tre
 }
 
 
-function SectionCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function SectionCard({ title, subtitle, children, action }: { title: string; subtitle?: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
-      <div className="mb-3">
-        <h3 className="text-sm font-semibold text-foreground tracking-tight">{title}</h3>
-        {subtitle && <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>}
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-foreground tracking-tight">{title}</h3>
+          {subtitle && <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>}
+        </div>
+        {action}
       </div>
       {children}
     </div>
@@ -306,7 +310,17 @@ export default function CompanyHealth() {
           <h2 id="people-culture-heading" className="text-sm font-semibold text-foreground tracking-tight">
             People &amp; Culture
           </h2>
-          <SectionCard title="Employee Satisfaction" subtitle="Engagement, retention and team health">
+          <SectionCard
+            title="Employee Satisfaction"
+            subtitle="Engagement, retention and team health"
+            action={
+              <Button asChild variant="outline" size="sm" className="h-7 gap-1.5 text-[11px]">
+                <Link to="/company-health/people">
+                  Open full dashboard <ChevronRight className="h-3 w-3" />
+                </Link>
+              </Button>
+            }
+          >
             <PeopleCulture />
           </SectionCard>
         </section>

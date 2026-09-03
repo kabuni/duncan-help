@@ -179,11 +179,13 @@ export default function PeopleCultureDashboard() {
             </section>
 
             <Tabs defaultValue="questions">
-              <TabsList>
+              <TabsList className="flex-wrap h-auto">
                 <TabsTrigger value="questions">Questions ({metrics.length})</TabsTrigger>
-                <TabsTrigger value="comments">Comments ({data.comments.reduce((a, c) => a + c.answers.length, 0)})</TabsTrigger>
+                <TabsTrigger value="summary">Comment summary</TabsTrigger>
+                <TabsTrigger value="comments">Comments ({totalComments})</TabsTrigger>
                 <TabsTrigger value="demographics">Breakdowns ({data.breakdowns.length})</TabsTrigger>
                 <TabsTrigger value="participation">Participation</TabsTrigger>
+
               </TabsList>
 
               {/* Every scored question with its distribution */}

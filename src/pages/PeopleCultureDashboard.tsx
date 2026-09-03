@@ -1,14 +1,32 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, MessageSquareQuote, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, MessageSquareQuote, RefreshCw, Sparkles, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { RagBadge } from "@/components/company-health/HealthPrimitives";
 import { usePeopleCulture } from "@/hooks/usePeopleCulture";
+import { supabase } from "@/integrations/supabase/client";
+
+interface CommentSummary {
+  headline: string;
+  sentiment?: "positive" | "mixed" | "negative";
+  themes?: { title: string; detail: string; weight?: string; sentiment?: string }[];
+  risks?: string[];
+  actions?: string[];
+  perQuestion?: { question: string; summary: string; sentiment?: string; responses?: number }[];
+}
+
+function sentimentTone(s?: string) {
+  if (s === "positive") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+  if (s === "negative") return "border-destructive/30 bg-destructive/10 text-destructive";
+  return "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+}
+
 
 function tone(score: number) {
   if (score >= 75) return "[&>*]:bg-emerald-500";

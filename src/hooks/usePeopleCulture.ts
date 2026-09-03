@@ -29,7 +29,24 @@ export interface PeopleCultureTheme {
   questions: number;
 }
 
+export interface ScoreboardMetric {
+  key: "satisfaction" | "alignment" | "culture";
+  label: string;
+  score: number | null; // out of 5
+  questions: number;
+  trend: { period: string; score: number | null }[];
+}
+
+export interface Scoreboard {
+  month: string | null;
+  responses: number;
+  overall: number | null; // out of 5
+  metrics: ScoreboardMetric[];
+  trend: { period: string; responses: number; satisfaction: number | null; alignment: number | null; culture: number | null }[];
+}
+
 export interface PeopleCultureData {
+  scoreboard: Scoreboard | null;
   themes: PeopleCultureTheme[];
   strength: PeopleCultureTheme | null;
   risk: PeopleCultureTheme | null;
@@ -48,6 +65,7 @@ export type Rag = "on_track" | "attention" | "critical";
 
 /** Illustrative placeholder shown until the first real survey responses land. */
 export const SAMPLE_PEOPLE_CULTURE: PeopleCultureData = {
+  scoreboard: null,
   responses: 24,
   lastResponse: new Date().toISOString(),
   overall: 74,
@@ -88,6 +106,7 @@ export function usePeopleCulture() {
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       return {
+        scoreboard: data.scoreboard ?? null,
         responses: data.responses ?? 0,
         lastResponse: data.lastResponse ?? null,
         overall: data.overall ?? null,

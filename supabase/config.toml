@@ -220,3 +220,6 @@ verify_jwt = false
 [functions.export-all-tables]
 verify_jwt = false
 
+
+[functions.people-culture-comment-summary]
+verify_jwt = false

@@ -39,6 +39,7 @@ serve(async (req) => {
             "Return STRICT JSON only with this shape: {\"headline\": string, \"sentiment\": \"positive\"|\"mixed\"|\"negative\", " +
             "\"themes\": [{\"title\": string, \"detail\": string, \"weight\": \"high\"|\"medium\"|\"low\", \"sentiment\": \"positive\"|\"mixed\"|\"negative\"}], " +
             "\"risks\": [string], \"actions\": [string], " +
+            "\"tags\": [{\"label\": string, \"count\": number, \"tone\": \"concern\"|\"mixed\"|\"positive\"}], " +
             "\"perQuestion\": [{\"question\": string, \"summary\": string, \"sentiment\": \"positive\"|\"mixed\"|\"negative\", \"responses\": number}]}",
         },
         { role: "user", content: `Employee survey free-text answers:\n\n${corpus}` },

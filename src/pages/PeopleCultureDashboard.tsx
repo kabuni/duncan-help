@@ -53,6 +53,9 @@ const THEME_LABELS: Record<string, string> = {
 export default function PeopleCultureDashboard() {
   const { data, isLoading, isFetching, refetch, error, rag } = usePeopleCulture();
   const [q, setQ] = useState("");
+  const [summary, setSummary] = useState<CommentSummary | null>(null);
+  const [summarising, setSummarising] = useState(false);
+
 
   const metrics = data?.metrics ?? [];
   const filtered = useMemo(() => {

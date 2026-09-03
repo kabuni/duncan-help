@@ -75,6 +75,34 @@ export default function PeopleCultureDashboard() {
     toast.success(`Synced ${res.data?.responses ?? 0} survey responses`);
   };
 
+  const totalComments = (data?.comments ?? []).reduce((a, c) => a + c.answers.length, 0);
+
+  const generateSummary = async () => {
+    if (!data?.comments?.length) {
+      toast.error("No free-text answers to summarise yet");
+      return;
+    }
+    setSummarising(true);
+    try {
+      const { data: res, error: fnErr } = await supabase.functions.invoke("people-culture-comment-summary", {
+        body: { comments: data.comments },
+      });
+      if (fnErr) throw fnErr;
+      if ((res as any)?.error) throw new Error((res as any).error);
+      if (!(res as any)?.summary) {
+        toast.error("No comments available to summarise");
+        return;
+      }
+      setSummary((res as any).summary as CommentSummary);
+      toast.success(`Summarised ${totalComments} comments`);
+    } catch (e: any) {
+      toast.error("Couldn't summarise comments", { description: e?.message });
+    } finally {
+      setSummarising(false);
+    }
+  };
+
+
   return (
     <main className="flex-1 overflow-y-auto">
       <div className="pointer-events-none fixed top-0 lg:left-64 left-0 right-0 h-72 gradient-radial z-0" />

@@ -140,6 +140,96 @@ serve(async (req) => {
       if (vals.length) lastResponse = new Date(Math.max(...vals.map((d) => d.getTime()))).toISOString();
     }
 
+    // ---- Corrected question → metric mapping (positional, Q1..Q9) --------------
+    // Q1 satisfaction, Q2-Q4 culture, Q5 alignment, Q6 culture, Q7 alignment,
+    // Q8 alignment (categorical Yes/Somewhat/No), Q9 satisfaction.
+    const questionCols = header.map((h, i) => ({ h, i })).filter((c) => c.h && c.i !== tsIdx);
+    const MAP: Record<number, "satisfaction" | "alignment" | "culture"> = {
+      1: "satisfaction", 2: "culture", 3: "culture", 4: "culture", 5: "alignment",
+      6: "culture", 7: "alignment", 8: "alignment", 9: "satisfaction",
+    };
+    const METRIC_META = [
+      { key: "satisfaction", label: "Employee Satisfaction" },
+      { key: "alignment", label: "Alignment & Growth" },
+      { key: "culture", label: "Culture & Connection" },
+    ] as const;
+
+    // Categorical answers on a 1-5 equivalent scale
+    const catScore = (v: string): number | null => {
+      const s = v.toLowerCase().trim();
+      const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
+      const one = (p: string): number | null => {
+        if (/^yes/.test(p)) return 5;
+        if (/somewhat|partly|sometimes|neutral/.test(p)) return 3;
+        if (/^no/.test(p)) return 1;
+        return null;
+      };
+      const vals = parts.map(one).filter((n): n is number => n !== null);
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    };
+
+    const cellScore = (raw: any): number | null => {
+      const n = toNum(raw);
+      if (n !== null && n >= 1 && n <= 5) return n;
+      if (typeof raw === "string") return catScore(raw);
+      return null;
+    };
+
+    const monthKey = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+
+    // Per-row, per-metric question scores grouped by month
+    type Bucket = { satisfaction: number[]; alignment: number[]; culture: number[]; responses: number };
+    const byMonth = new Map<string, Bucket>();
+    const allTime: Bucket = { satisfaction: [], alignment: [], culture: [], responses: 0 };
+
+    for (const r of data) {
+      const d = tsIdx >= 0 ? parseTs(r[tsIdx]) : null;
+      const key = d ? monthKey(d) : "unknown";
+      const b = byMonth.get(key) ?? { satisfaction: [], alignment: [], culture: [], responses: 0 };
+      b.responses += 1;
+      allTime.responses += 1;
+      questionCols.forEach((c, qi) => {
+        const metric = MAP[qi + 1];
+        if (!metric) return;
+        const s = cellScore(r[c.i]);
+        if (s === null) return;
+        b[metric].push(s);
+        allTime[metric].push(s);
+      });
+      byMonth.set(key, b);
+    }
+
+    const avg = (a: number[]) => (a.length ? Math.round((a.reduce((x, y) => x + y, 0) / a.length) * 100) / 100 : null);
+    const bucketScores = (b: Bucket) => ({
+      satisfaction: avg(b.satisfaction),
+      alignment: avg(b.alignment),
+      culture: avg(b.culture),
+    });
+
+    const monthKeys = [...byMonth.keys()].filter((k) => k !== "unknown").sort();
+    const latestKey = monthKeys.length ? monthKeys[monthKeys.length - 1] : null;
+    const latestBucket = latestKey ? byMonth.get(latestKey)! : allTime;
+    const latest = bucketScores(latestBucket);
+
+    const trend = monthKeys.slice(-6).map((period) => ({ period, responses: byMonth.get(period)!.responses, ...bucketScores(byMonth.get(period)!) }));
+
+    const metricScores = METRIC_META.map((m) => ({
+      key: m.key,
+      label: m.label,
+      score: latest[m.key],
+      questions: Object.entries(MAP).filter(([, v]) => v === m.key).length,
+      trend: trend.map((t) => ({ period: t.period, score: (t as any)[m.key] as number | null })),
+    }));
+
+    const present = metricScores.map((m) => m.score).filter((s): s is number => s !== null);
+    const scoreboard = {
+      month: latestKey,
+      responses: latestBucket.responses,
+      overall: present.length ? Math.round((present.reduce((a, b) => a + b, 0) / present.length) * 100) / 100 : null,
+      metrics: metricScores,
+      trend,
+    };
+
 
     // Numeric (Likert / rating) questions
     const metrics: {

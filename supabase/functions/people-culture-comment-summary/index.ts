@@ -36,6 +36,8 @@ serve(async (req) => {
           content:
             "You are Duncan, an operational intelligence system. Summarise anonymous employee survey free-text answers for leadership. " +
             "Be factual, never invent data, never name individuals. Reflect the weight of opinion (how many people said something). " +
+            "For \"tags\", produce 5-10 short one-or-two word themes (e.g. Communication, Workload, Recognition) with the number of answers across ALL questions that mention that theme, and a tone. " +
+
             "Return STRICT JSON only with this shape: {\"headline\": string, \"sentiment\": \"positive\"|\"mixed\"|\"negative\", " +
             "\"themes\": [{\"title\": string, \"detail\": string, \"weight\": \"high\"|\"medium\"|\"low\", \"sentiment\": \"positive\"|\"mixed\"|\"negative\"}], " +
             "\"risks\": [string], \"actions\": [string], " +

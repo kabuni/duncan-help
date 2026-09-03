@@ -338,6 +338,8 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       ok: true,
       tab,
+      scoreboard,
+
       responses: data.length,
       lastResponse,
       overall,          // 0-100 sentiment index

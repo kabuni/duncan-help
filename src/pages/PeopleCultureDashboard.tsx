@@ -232,6 +232,119 @@ export default function PeopleCultureDashboard() {
                 </div>
               </TabsContent>
 
+              {/* AI summary of the free-text answers */}
+              <TabsContent value="summary" className="space-y-4 pt-4">
+                <div className="rounded-xl border border-border bg-card p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground">Summary of written answers</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Duncan reads all {totalComments} free-text answers across {data.comments.length} question
+                      {data.comments.length === 1 ? "" : "s"} and returns the themes, risks and suggested actions.
+                    </p>
+                  </div>
+                  <Button size="sm" className="gap-1.5 shrink-0" onClick={generateSummary} disabled={summarising || totalComments === 0}>
+                    <Sparkles className={cn("h-3.5 w-3.5", summarising && "animate-pulse")} />
+                    {summarising ? "Summarising…" : summary ? "Regenerate" : "Generate summary"}
+                  </Button>
+                </div>
+
+                {!summary && !summarising && (
+                  <p className="text-xs text-muted-foreground">
+                    {totalComments === 0
+                      ? "No free-text answers in the survey yet."
+                      : "No summary generated yet — click Generate summary."}
+                  </p>
+                )}
+
+                {summary && (
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm font-semibold text-foreground leading-6">{summary.headline}</p>
+                        {summary.sentiment && (
+                          <Badge variant="outline" className={cn("shrink-0 capitalize text-[10px]", sentimentTone(summary.sentiment))}>
+                            {summary.sentiment}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {!!summary.themes?.length && (
+                      <div className="grid gap-3 lg:grid-cols-2">
+                        {summary.themes.map((t, i) => (
+                          <div key={i} className="rounded-xl border border-border bg-card p-4 space-y-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-xs font-semibold text-foreground">{t.title}</p>
+                              <div className="flex items-center gap-1 shrink-0">
+                                {t.weight && (
+                                  <Badge variant="outline" className="text-[10px] capitalize">{t.weight}</Badge>
+                                )}
+                                {t.sentiment && (
+                                  <Badge variant="outline" className={cn("text-[10px] capitalize", sentimentTone(t.sentiment))}>
+                                    {t.sentiment}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-[12px] leading-6 text-muted-foreground">{t.detail}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      {!!summary.risks?.length && (
+                        <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+                          <p className="text-xs font-semibold text-foreground">Risks to watch</p>
+                          <ul className="space-y-1.5">
+                            {summary.risks.map((r, i) => (
+                              <li key={i} className="text-[12px] leading-6 text-muted-foreground flex gap-2">
+                                <span className="text-destructive">•</span><span>{r}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {!!summary.actions?.length && (
+                        <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+                          <p className="text-xs font-semibold text-foreground">Suggested actions</p>
+                          <ul className="space-y-1.5">
+                            {summary.actions.map((a, i) => (
+                              <li key={i} className="text-[12px] leading-6 text-muted-foreground flex gap-2">
+                                <span className="text-primary">•</span><span>{a}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    {!!summary.perQuestion?.length && (
+                      <div className="space-y-3">
+                        <p className="text-xs font-semibold text-foreground">By question</p>
+                        {summary.perQuestion.map((p, i) => (
+                          <div key={i} className="rounded-xl border border-border bg-card p-4 space-y-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-xs font-medium text-foreground leading-5">{p.question}</p>
+                              {p.sentiment && (
+                                <Badge variant="outline" className={cn("text-[10px] capitalize shrink-0", sentimentTone(p.sentiment))}>
+                                  {p.sentiment}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-[12px] leading-6 text-muted-foreground">{p.summary}</p>
+                            {!!p.responses && (
+                              <p className="text-[11px] text-muted-foreground/80">{p.responses} answers</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </TabsContent>
+
+
               {/* Verbatim free-text answers */}
               <TabsContent value="comments" className="space-y-4 pt-4">
                 {data.comments.length === 0 && (

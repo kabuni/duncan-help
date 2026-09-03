@@ -298,28 +298,28 @@ serve(async (req) => {
       }
     }
 
-    // Roll individual questions up into culture themes
-    const buckets = new Map<string, { key: string; label: string; description: string; values: number[]; questions: number }>();
-    for (const m of metrics) {
-      const t = classify(m.question);
-      const b = buckets.get(t.key) ?? { ...t, values: [], questions: 0 };
-      b.values.push(m.normalised);
-      b.questions += 1;
-      buckets.set(t.key, b);
-    }
-    const themes = [...buckets.values()].map((b) => ({
-      key: b.key,
-      label: b.label,
-      description: b.description,
-      score: Math.round((b.values.reduce((a, v) => a + v, 0) / b.values.length) * 10) / 10,
-      questions: b.questions,
+    // Roll individual questions up into culture themes using the corrected
+    // positional question → metric mapping (all-time, expressed 0-100).
+    const DESCRIPTIONS: Record<string, string> = {
+      satisfaction: "Engagement, wellbeing, recognition and overall happiness",
+      alignment: "Clarity of direction, enablement, learning and progression",
+      culture: "Belonging, inclusion, trust in leadership and team connection",
+    };
+    const allTimeScores = bucketScores(allTime);
+    const themes = METRIC_META.map((m) => ({
+      key: m.key,
+      label: m.label,
+      description: DESCRIPTIONS[m.key],
+      score: allTimeScores[m.key] !== null ? Math.round((allTimeScores[m.key]! / 5) * 1000) / 10 : 0,
+      questions: Object.entries(MAP).filter(([, v]) => v === m.key).length,
     })).sort((a, b) => a.score - b.score);
 
     const strength = themes.length ? themes[themes.length - 1] : null;
     const risk = themes.length ? themes[0] : null;
 
-    const overall = metrics.length
-      ? Math.round((metrics.reduce((a, m) => a + m.normalised, 0) / metrics.length) * 10) / 10
+    const overall = themes.length
+      ? Math.round((themes.reduce((a, t) => a + t.score, 0) / themes.length) * 10) / 10
+
       : null;
 
     // Submissions over time (month buckets) so leadership can see participation trend

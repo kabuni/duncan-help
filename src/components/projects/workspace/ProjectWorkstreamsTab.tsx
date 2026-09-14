@@ -11,9 +11,9 @@ import {
   useProjectTasks, RYG_META, type ProjectWorkstream,
 } from "@/hooks/useProjectWork";
 import type { ProjectMember } from "@/hooks/useProjects";
-import { StatusDot, formatDay, EmptyLine } from "./shared";
-import { WorkstreamProgressBar } from "./ProjectProgressRing";
+import { StatusDot, EmptyLine } from "./shared";
 import { type AreaOfWorkTarget } from "./AreaOfWorkDrawer";
+import { AreaOfWorkCard } from "./AreaOfWorkCard";
 
 export function ProjectWorkstreamsTab({
   projectId, members, areaTarget, onOpenArea,
@@ -28,7 +28,6 @@ export function ProjectWorkstreamsTab({
   const [open, setOpen] = useState(false);
 
   const looseTasks = allTasks.filter((t) => !t.card_id);
-  const looseDone = looseTasks.filter((t) => t.completed).length;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8 space-y-6">
@@ -50,43 +49,28 @@ export function ProjectWorkstreamsTab({
       ) : workstreams.length === 0 ? (
         <EmptyLine>No areas of work yet. Add one, or connect an area that already exists.</EmptyLine>
       ) : (
-        <ul className="divide-y divide-border rounded-xl border border-border bg-card">
+        <div className="space-y-4">
           {workstreams.map((ws) => (
-            <li key={ws.id} className="group">
-              <button
-                onClick={() => onOpenArea({ area: ws as ProjectWorkstream })}
-                className="w-full text-left px-5 py-4 hover:bg-secondary/40 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <StatusDot status={ws.status} />
-                  <span className="font-medium text-foreground truncate">{ws.title}</span>
-                  <span className="text-[10px] font-mono text-muted-foreground">{ws.task_code}</span>
-                </div>
-                {ws.description && (
-                  <p className="mt-1 ml-5 text-sm text-muted-foreground line-clamp-1">{ws.description}</p>
-                )}
-                <div className="mt-2 ml-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span>{ws.owner_name || "No owner"}</span>
-                  <span>{RYG_META[ws.status]?.label}</span>
-                  {ws.due_date && <span>Due {formatDay(ws.due_date)}</span>}
-                </div>
-                {ws.tasks_total > 0 && <WorkstreamProgressBar done={ws.tasks_done} total={ws.tasks_total} />}
-              </button>
-            </li>
+            <AreaOfWorkCard
+              key={ws.id}
+              projectId={projectId}
+              area={ws as ProjectWorkstream}
+              tasks={allTasks.filter((t) => t.card_id === ws.id)}
+              members={members}
+              onOpenDetail={() => onOpenArea({ area: ws as ProjectWorkstream })}
+            />
           ))}
-        </ul>
+        </div>
       )}
 
       {looseTasks.length > 0 && (
-        <button
-          onClick={() => onOpenArea({ area: null })}
-          className="w-full text-left rounded-xl border border-dashed border-border px-5 py-4 hover:bg-secondary/40 transition-colors"
-        >
-          <span className="text-sm font-medium text-foreground">Tasks not in an area</span>
-          <span className="ml-2 text-xs text-muted-foreground">
-            {looseDone} of {looseTasks.length} complete
-          </span>
-        </button>
+        <AreaOfWorkCard
+          projectId={projectId}
+          area={null}
+          tasks={looseTasks}
+          members={members}
+          onOpenDetail={() => onOpenArea({ area: null })}
+        />
       )}
 
       <AddWorkstreamDialog open={open} onOpenChange={setOpen} projectId={projectId} members={members} />

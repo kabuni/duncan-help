@@ -8,4 +8,4 @@
   - [x] Move connection, sync, reconnect, owner + category filters into an Advanced sheet
   - [x] Start Tour kept as secondary action; tour rewritten around talking to Duncan
 - [x] Fix /planner/decision-lab admin access (granted Arzoo global admin role; check = useIsAdmin/user_roles)
-- [ ] Verify main Duncan Chat (/home) uses the same planner orchestration engine as the Decision Lab; report findings, connect if not
+- [x] Verify main Duncan Chat (/home) uses the same planner orchestration engine as the Decision Lab; report findings, connect if not

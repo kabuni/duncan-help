@@ -37,6 +37,8 @@ export interface Decision {
   source_of_truth: Destination;
   requires_approval: boolean;
   reason: string;
+  /** Existing Planner category key stored on key_events.category. */
+  planner_category: string;
 }
 
 interface TypeRule {

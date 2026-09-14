@@ -134,6 +134,14 @@
   text-overflow: ellipsis;
 }
 
+/* Calm default event: neutral surface, colour only as a thin category edge */
+.rbc-event.evt-quiet {
+  background: hsl(var(--muted) / 0.7);
+  color: hsl(var(--foreground));
+  border-left-color: hsl(var(--cat-color, var(--border)));
+}
+.rbc-event.evt-quiet:hover { background: hsl(var(--accent)); }
+
 /* Risk level coloring */
 .rbc-event.evt-green   { background: hsl(142 70% 45% / 0.22); color: hsl(142 70% 28%); }
 .rbc-event.evt-amber   { background: hsl(38 95% 50% / 0.22);  color: hsl(38 95% 35%); }

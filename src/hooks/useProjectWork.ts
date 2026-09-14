@@ -414,6 +414,8 @@ export function useProjectActivity(projectId: string | null) {
 export interface ProjectSummary {
   workstreams: number;
   openTasks: number;
+  doneTasks: number;
+  totalTasks: number;
   ownerName: string | null;
 }
 
@@ -432,12 +434,14 @@ export function useProjectSummaries(projectIds: string[], ownerIds: string[]) {
       const cardRows = (cards || []) as any[];
       const cardProject = new Map(cardRows.map((c) => [c.id, c.project_id]));
       const out: Record<string, ProjectSummary> = {};
-      for (const pid of projectIds) out[pid] = { workstreams: 0, openTasks: 0, ownerName: null };
+      for (const pid of projectIds) out[pid] = { workstreams: 0, openTasks: 0, doneTasks: 0, totalTasks: 0, ownerName: null };
       for (const c of cardRows) if (out[c.project_id]) out[c.project_id].workstreams += 1;
       for (const t of (tasks || []) as any[]) {
-        if (t.completed) continue;
         const pid = t.project_id || (t.card_id ? cardProject.get(t.card_id) : null);
-        if (pid && out[pid]) out[pid].openTasks += 1;
+        if (!pid || !out[pid]) continue;
+        out[pid].totalTasks += 1;
+        if (t.completed) out[pid].doneTasks += 1;
+        else out[pid].openTasks += 1;
       }
       return Object.fromEntries(
         Object.entries(out).map(([pid, v]) => [pid, { ...v, ownerName: v.ownerName }]),

@@ -173,6 +173,9 @@ serve(async (req) => {
         current_start: interpretation.current_start,
         attendees,
         planner_category: interpretation.planner_category,
+        audience: interpretation.audience,
+        attendance_required:
+          typeof interpretation.attendance_required === "boolean" ? interpretation.attendance_required : undefined,
         force: body.force === true,
       };
     }

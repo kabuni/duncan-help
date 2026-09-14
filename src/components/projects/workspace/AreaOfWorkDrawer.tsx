@@ -30,7 +30,6 @@ export function AreaOfWorkDrawer({
   target: AreaOfWorkTarget | null;
   onOpenChange: (open: boolean) => void;
 }) {
-  const navigate = useNavigate();
   const area = target?.area ?? null;
   const { data: allTasks = [], isLoading } = useProjectTasks(projectId);
   const create = useCreateProjectTask(projectId);
@@ -50,10 +49,20 @@ export function AreaOfWorkDrawer({
     () => allTasks.filter((t) => (area ? t.card_id === area.id : !t.card_id)),
     [allTasks, area],
   );
-  const done = tasks.filter((t) => t.completed).length;
+  const activeTasks = useMemo(() => tasks.filter((t) => !t.completed), [tasks]);
+  const completedTasks = useMemo(
+    () =>
+      tasks
+        .filter((t) => t.completed)
+        .sort((a, b) => {
+          const aDate = a.completed_at || a.created_at;
+          const bDate = b.completed_at || b.created_at;
+          return bDate.localeCompare(aDate);
+        }),
+    [tasks],
+  );
+  const done = completedTasks.length;
   const pct = tasks.length === 0 ? 0 : Math.round((done / tasks.length) * 100);
-  // Active tasks show by default; completed work is kept and revealed on request.
-  const visibleTasks = showCompleted ? tasks : tasks.filter((t) => !t.completed);
 
   const submit = async () => {
     if (!newTitle.trim()) return;

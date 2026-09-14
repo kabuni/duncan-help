@@ -17,6 +17,7 @@ export type PlannerIntent =
   | "CREATE_EVENT"
   | "UPDATE_EVENT"
   | "CANCEL_EVENT"
+  | "FIND_EVENT"
   | "CHECK_AVAILABILITY";
 
 export type EventType =
@@ -337,6 +338,8 @@ export interface ActionResult {
   conflicts?: any[];
   suggestions?: { start: string; end: string }[];
   availability?: any;
+  /** Possible matches for a find/cancel/update request the user must choose from. */
+  candidates?: EventCandidate[];
   approval?: ApprovalRouting;
   message: string;
   error?: string;
@@ -441,6 +444,201 @@ async function suggestSlots(token: string, startISO: string, endISO: string) {
   return out;
 }
 
+// ── Event finding (shared by SEARCH, UPDATE and CANCEL) ─────────────────────
+//
+// One matcher for every "which existing event does the user mean?" question, so
+// find, change and remove all agree on what counts as a match. Deliberately
+// conservative: a vague request returns several candidates rather than acting.
+
+export interface EventCandidate {
+  link_group: string | null;
+  planner_event_id: string | null;
+  google_event_id: string | null;
+  title: string;
+  start: string | null;
+  all_day: boolean;
+  event_type: string | null;
+  category: string | null;
+  approval_state: string | null;
+  systems: Destination[];
+  score: number;
+}
+
+const dayOf = (v?: string | null) => (v ? String(v).slice(0, 10) : "");
+
+function titleOverlap(target: string, candidate: string): boolean {
+  if (!target) return false;
+  const a = normTitle(target);
+  const b = normTitle(candidate);
+  if (!a || !b) return false;
+  if (a === b || a.includes(b) || b.includes(a)) return true;
+  const words = a.split(" ").filter((w) => w.length > 3);
+  return words.length > 0 && words.every((w) => b.includes(w));
+}
+
+/**
+ * Finds the existing event(s) a request refers to, across Planner and Google
+ * Calendar, collapsing linked records into one logical event.
+ */
+async function findEventCandidates(
+  ctx: OrchestratorContext,
+  req: ActionRequest,
+  decision: Decision,
+  token: string | null,
+): Promise<EventCandidate[]> {
+  const day = dayOf(req.start || req.current_start);
+  const title = req.title || "";
+  const typeGiven = !!req.event_type;
+
+  // Search window: the named day (± 1) when we have one, otherwise a wide band
+  // around today so "cancel my holiday" can still find it.
+  const anchor = day ? new Date(`${day}T12:00:00Z`) : new Date();
+  const from = new Date(anchor.getTime() - (day ? 2 : 30) * 86_400_000).toISOString();
+  const to = new Date(anchor.getTime() + (day ? 2 : 365) * 86_400_000).toISOString();
+
+  const { data: rows } = await ctx.supabaseAdmin
+    .from("key_events")
+    .select("id, event_name, title, category, event_type, start_at, all_day, link_group, approval_state, google_event_id, created_by")
+    .eq("created_by", ctx.userId)
+    .eq("deleted_in_google", false)
+    .gte("start_at", from)
+    .lte("start_at", to)
+    .order("start_at", { ascending: true })
+    .limit(200);
+
+  const out: EventCandidate[] = [];
+  for (const r of rows || []) {
+    const name = r.event_name || r.title || "";
+    let score = 0;
+    if (day && dayOf(r.start_at) === day) score += 5;
+    if (titleOverlap(title, name)) score += 4;
+    if (typeGiven && r.event_type === decision.event_type) score += 2;
+    if (decision.planner_category && r.category === decision.planner_category) score += 1;
+    if (score === 0) continue;
+    out.push({
+      link_group: r.link_group ?? null,
+      planner_event_id: r.id,
+      google_event_id: r.google_event_id ?? null,
+      title: name,
+      start: r.start_at ?? null,
+      all_day: !!r.all_day,
+      event_type: r.event_type ?? null,
+      category: r.category ?? null,
+      approval_state: r.approval_state ?? null,
+      systems: ["PLANNER"],
+      score,
+    });
+  }
+
+  // Google Calendar side — meetings usually live there only.
+  if (token) {
+    const url = new URL(`${GOOGLE_CALENDAR_API}/calendars/primary/events`);
+    url.searchParams.set("timeMin", from);
+    url.searchParams.set("timeMax", to);
+    url.searchParams.set("singleEvents", "true");
+    url.searchParams.set("orderBy", "startTime");
+    url.searchParams.set("maxResults", "250");
+    if (title) url.searchParams.set("q", title);
+    const resp = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+    if (resp.ok) {
+      const items = ((await resp.json()).items || []).filter((e: any) => e.status !== "cancelled");
+      for (const e of items) {
+        const start = e.start?.dateTime || e.start?.date || null;
+        let score = 0;
+        if (day && dayOf(start) === day) score += 5;
+        if (titleOverlap(title, e.summary || "")) score += 4;
+        if (score === 0) continue;
+        const linked = out.find((c) => c.google_event_id && c.google_event_id === e.id);
+        if (linked) {
+          linked.systems = ["PLANNER", "GOOGLE_CALENDAR"];
+          linked.score = Math.max(linked.score, score);
+          continue;
+        }
+        out.push({
+          link_group: null,
+          planner_event_id: null,
+          google_event_id: e.id,
+          title: e.summary || "(untitled)",
+          start,
+          all_day: !e.start?.dateTime,
+          event_type: "MEETING",
+          category: null,
+          approval_state: null,
+          systems: ["GOOGLE_CALENDAR"],
+          score,
+        });
+      }
+    }
+  }
+
+  // Attach link groups so linked pairs are treated as one logical event.
+  for (const c of out) {
+    if (!c.link_group && !c.planner_event_id && !c.google_event_id) continue;
+    const q = ctx.supabaseAdmin.from("event_links").select("*");
+    if (c.link_group) q.eq("link_group", c.link_group);
+    else if (c.planner_event_id) q.eq("planner_event_id", c.planner_event_id);
+    else q.eq("google_event_id", c.google_event_id);
+    const { data: l } = await q.maybeSingle();
+    if (l) {
+      c.link_group = l.link_group;
+      c.planner_event_id = c.planner_event_id || l.planner_event_id || null;
+      c.google_event_id = c.google_event_id || l.google_event_id || null;
+      c.systems = [
+        ...(c.planner_event_id ? (["PLANNER"] as Destination[]) : []),
+        ...(c.google_event_id ? (["GOOGLE_CALENDAR"] as Destination[]) : []),
+      ];
+    }
+  }
+
+  // Collapse anything that ended up pointing at the same logical event.
+  const seen = new Map<string, EventCandidate>();
+  for (const c of out.sort((a, b) => b.score - a.score)) {
+    const key = c.link_group || c.planner_event_id || c.google_event_id || c.title;
+    const prev = seen.get(key);
+    if (!prev) seen.set(key, c);
+    else prev.score = Math.max(prev.score, c.score);
+  }
+  return [...seen.values()].sort((a, b) => b.score - a.score || String(a.start).localeCompare(String(b.start)));
+}
+
+/**
+ * Cancels any still-open approval requests for an event through the EXISTING
+ * Approval Manager, so removing a pending leave request never leaves an
+ * orphaned approval in someone's inbox (the inbox row is removed by the
+ * existing sync_event_approval_to_inbox trigger).
+ */
+async function cancelApprovalsForEvent(ctx: OrchestratorContext, plannerEventId: string) {
+  const { data: open } = await ctx.supabaseAdmin
+    .from("key_event_approvals")
+    .select("id, approver_profile_id, label")
+    .eq("event_id", plannerEventId)
+    .in("status", ["pending", "proposed"]);
+  if (!open?.length) return 0;
+
+  const { data: ev } = await ctx.supabaseAdmin
+    .from("key_events").select("title").eq("id", plannerEventId).maybeSingle();
+
+  for (const a of open) {
+    const { data: manager } = await ctx.supabaseAdmin
+      .from("profiles").select("user_id").eq("id", a.approver_profile_id).maybeSingle();
+    if (manager?.user_id) {
+      await ctx.supabaseAdmin.from("notifications").insert({
+        user_id: manager.user_id,
+        kind: "approval_cancelled",
+        title: "Approval request withdrawn",
+        body: `"${ev?.title || "An event"}" was cancelled, so the approval request no longer needs a decision.`,
+        link: "/approvals",
+        metadata: { approval_id: a.id, event_id: plannerEventId },
+      });
+    }
+  }
+  await ctx.supabaseAdmin
+    .from("key_event_approvals")
+    .delete()
+    .in("id", open.map((a: any) => a.id));
+  return open.length;
+}
+
 // ── Writers ──────────────────────────────────────────────────────────────────
 
 async function createPlannerEvent(ctx: OrchestratorContext, req: ActionRequest, decision: Decision) {
@@ -480,8 +678,9 @@ async function createPlannerEvent(ctx: OrchestratorContext, req: ActionRequest, 
 
 async function createGoogleEvent(token: string, req: ActionRequest, ctx: OrchestratorContext, decision: Decision) {
   const allDay = req.all_day ?? false;
+  const pending = decision.requires_approval === true;
   const body: any = {
-    summary: req.title,
+    summary: pending ? `[Pending approval] ${req.title}` : req.title,
     description: req.description,
     location: req.location,
     start: allDay
@@ -491,6 +690,9 @@ async function createGoogleEvent(token: string, req: ActionRequest, ctx: Orchest
       ? { date: (req.end || req.start || "").slice(0, 10) }
       : { dateTime: req.end, timeZone: ctx.timezone || "UTC" },
   };
+  // Not confirmed until the approval is granted.
+  if (pending) body.status = "tentative";
+
   if (decision.event_type === "ANNUAL_LEAVE" || decision.event_type === "SICK_LEAVE" || decision.event_type === "OUT_OF_OFFICE") {
     body.transparency = "opaque";
     body.eventType = "outOfOffice";
@@ -503,8 +705,9 @@ async function createGoogleEvent(token: string, req: ActionRequest, ctx: Orchest
   });
   if (!resp.ok) {
     // outOfOffice events reject some fields on non-Workspace accounts — retry plain.
-    if (body.eventType) {
+    if (body.eventType || body.status) {
       delete body.eventType;
+      delete body.status;
       const retry = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events?sendUpdates=all`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -516,6 +719,7 @@ async function createGoogleEvent(token: string, req: ActionRequest, ctx: Orchest
   }
   return await resp.json();
 }
+
 
 async function patchGoogleEvent(token: string, eventId: string, req: ActionRequest, ctx: OrchestratorContext) {
   const body: any = {};
@@ -655,6 +859,7 @@ export async function executePlannerAction(
   else if (result.ok && req.intent === "CREATE_EVENT") action_taken = "CREATE";
   else if (result.ok && req.intent === "UPDATE_EVENT") action_taken = "UPDATE";
   else if (result.ok && req.intent === "CANCEL_EVENT") action_taken = "DELETE";
+  else if (req.intent === "FIND_EVENT") action_taken = result.ok ? "READ" : "NO_ACTION";
 
   const trace: DecisionTrace = {
     intent: d.intent,
@@ -709,6 +914,20 @@ async function runPlannerAction(
     return { ...base, ok: true, verified: true, availability: { busy, free }, message: `${busy.length} busy block(s) found.` };
   }
 
+  // ── Find / search ─────────────────────────────────────────────────────────
+  if (req.intent === "FIND_EVENT") {
+    const found = await findEventCandidates(ctx, req, decision, token);
+    return {
+      ...base,
+      ok: true,
+      verified: true,
+      candidates: found,
+      message: found.length
+        ? `${found.length} matching event(s) found.`
+        : "No matching event found in Planner or Google Calendar.",
+    };
+  }
+
   // ── Existing link lookup ──────────────────────────────────────────────────
   let link: any = null;
   if (req.link_group || req.planner_event_id || req.google_event_id) {
@@ -729,34 +948,104 @@ async function runPlannerAction(
     return { ...base, ok: true, verified: true, link_group: link.link_group, message: "Already in sync — no action taken." };
   }
 
-  // ── Cancel ────────────────────────────────────────────────────────────────
+  // ── Cancel / delete / remove ──────────────────────────────────────────────
   if (req.intent === "CANCEL_EVENT") {
+    let plannerId = req.planner_event_id || link?.planner_event_id || null;
+    let googleId = req.google_event_id || link?.google_event_id || null;
+    let matched: EventCandidate | null = null;
+
+    // No explicit record supplied ("remove my annual leave next Friday") — find
+    // it. Never guess: nothing is removed on a vague or ambiguous match.
+    if (!plannerId && !googleId) {
+      if (!req.title && !req.start && !req.current_start && !req.event_type) {
+        return {
+          ...base,
+          message: "I need to know which event to remove — a name, a date, or both.",
+          error: "ambiguous",
+        };
+      }
+      const found = await findEventCandidates(ctx, req, decision, token);
+      if (found.length === 0) {
+        return { ...base, candidates: [], message: "I couldn't find a matching event in Planner or Google Calendar.", error: "not_found" };
+      }
+      // Ambiguous unless one candidate is clearly the strongest match.
+      const clear = found.length === 1 || (found[0].score >= 5 && found[0].score > found[1].score);
+      if (!clear && !req.force) {
+        return {
+          ...base,
+          candidates: found.slice(0, 5),
+          message: `I found ${found.length} events that could match. Which one do you mean?`,
+          error: "ambiguous",
+        };
+      }
+      matched = found[0];
+      plannerId = matched.planner_event_id;
+      googleId = matched.google_event_id;
+      if (matched.link_group && !link) {
+        const { data: l } = await ctx.supabaseAdmin
+          .from("event_links").select("*").eq("link_group", matched.link_group).maybeSingle();
+        if (l) link = l;
+      }
+    }
+
+    // Permission: a user can only remove their own Planner records here.
+    if (plannerId) {
+      const { data: owner } = await ctx.supabaseAdmin
+        .from("key_events").select("created_by, title, event_name").eq("id", plannerId).maybeSingle();
+      if (owner && owner.created_by && owner.created_by !== ctx.userId) {
+        const { data: isAdmin } = await ctx.supabaseAdmin
+          .rpc("has_role", { _user_id: ctx.userId, _role: "admin" });
+        if (!isAdmin) {
+          return { ...base, message: "That event belongs to someone else, so I can't remove it.", error: "not_permitted" };
+        }
+      }
+    }
+
     let plannerDone = false;
     let googleDone = false;
-    const plannerId = req.planner_event_id || link?.planner_event_id;
-    const googleId = req.google_event_id || link?.google_event_id;
+    let approvalsCancelled = 0;
+
     if (plannerId) {
+      // Withdraw any open approval first, so no orphaned request is left behind.
+      approvalsCancelled = await cancelApprovalsForEvent(ctx, plannerId);
       const { error } = await ctx.supabaseAdmin
         .from("key_events")
-        .update({ deleted_in_google: true, updated_at: new Date().toISOString() })
+        .update({
+          deleted_in_google: true,
+          status: "cancelled",
+          approval_state: null,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", plannerId);
       plannerDone = !error;
     }
     if (googleId && token) googleDone = await deleteGoogleEvent(token, googleId);
+
     if (link) {
       await ctx.supabaseAdmin
         .from("event_links")
-        .update({ last_sync_origin: req.origin ?? decision.source_of_truth, last_sync_hash: payloadHash, last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .update({
+          status: "cancelled",
+          last_sync_origin: req.origin ?? decision.source_of_truth,
+          last_sync_hash: payloadHash,
+          last_synced_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", link.id);
     }
+
     const ok = plannerDone || googleDone;
+    const where = [plannerDone ? "Planner" : null, googleDone ? "Google Calendar" : null].filter(Boolean).join(" and ");
     return {
       ...base,
       ok,
       verified: ok,
-      link_group: link?.link_group,
+      link_group: link?.link_group ?? matched?.link_group ?? undefined,
+      planner_event_id: plannerId ?? undefined,
+      google_event_id: googleId ?? undefined,
+      matched_event: matched ?? undefined,
       message: ok
-        ? `Cancelled${plannerDone ? " in Planner" : ""}${plannerDone && googleDone ? " and" : ""}${googleDone ? " in Google Calendar" : ""}.`
+        ? `Removed from ${where}.${approvalsCancelled ? " The pending approval request was withdrawn too." : ""}`
         : "Nothing was cancelled — no matching event found.",
       error: ok ? undefined : "not_found",
     };
@@ -897,9 +1186,30 @@ async function runPlannerAction(
     }
   }
 
+  // APPROVAL GATE (pre-check): if this event type requires approval, an approver
+  // must be resolvable BEFORE anything is written anywhere.
+  if (decision.requires_approval) {
+    const { data: requesterProfile } = await ctx.supabaseAdmin
+      .from("profiles")
+      .select("id, line_manager_profile_id")
+      .eq("user_id", ctx.userId)
+      .maybeSingle();
+    if (!requesterProfile?.line_manager_profile_id) {
+      return {
+        ...base,
+        ok: false,
+        verified: false,
+        error: "approval_unavailable",
+        message:
+          "This needs line manager approval, and no line manager is set on your Duncan profile — so I can't raise the approval request. Nothing was added to Planner or Google Calendar. Set your line manager in your profile (or ask an admin to), then ask me again.",
+      };
+    }
+  }
+
   let plannerId: string | undefined;
   let googleId: string | undefined;
   let googleCalendarId: string | undefined;
+
 
   if (decision.destination.includes("PLANNER")) {
     plannerId = await createPlannerEvent(ctx, req, decision);
@@ -938,20 +1248,41 @@ async function runPlannerAction(
   if (decision.requires_approval && plannerId) {
     approval = await routeApprovalToLineManager(ctx, plannerId, decision);
     if (!approval.routed) {
-      // Never show "Pending approval" when no approval request actually exists.
-      await ctx.supabaseAdmin
-        .from("key_events")
-        .update({ approval_state: null })
-        .eq("id", plannerId);
+      // APPROVAL GATE: an event that requires approval must never exist without a
+      // real approval request behind it. Roll the whole thing back rather than
+      // leaving a confirmed-looking entry in Planner and Google Calendar.
+      if (googleId) {
+        try {
+          const token = await ctx.getGoogleToken();
+          if (token) {
+            await fetch(
+              `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(googleCalendarId || "primary")}/events/${encodeURIComponent(googleId)}`,
+              { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+            );
+          }
+        } catch (_e) { /* best effort */ }
+      }
+      await ctx.supabaseAdmin.from("event_links").delete().eq("link_group", linkGroup);
+      await ctx.supabaseAdmin.from("key_events").delete().eq("id", plannerId);
+
+      return {
+        ...base,
+        ok: false,
+        verified: false,
+        link_group: null,
+        planner_event_id: null,
+        google_event_id: null,
+        approval,
+        error: "approval_unavailable",
+        message: `${decision.event_type === "ANNUAL_LEAVE" ? "Annual leave" : "This"} needs line manager approval, and I couldn't create the approval request — ${approval.reason || "no approver could be resolved."} Nothing was added to Planner or Google Calendar. Add your line manager in your profile, then ask me again.`,
+      };
     }
   }
 
   const where = [plannerId ? "Planner" : null, googleId ? "Google Calendar" : null].filter(Boolean).join(" and ");
   const approvalNote = !decision.requires_approval
     ? ""
-    : approval?.routed
-      ? ` Sent to ${approval.approver_name || "your line manager"} for approval.`
-      : ` It needs approval but I could not request it — ${approval?.reason || "no approver could be resolved"} Add your line manager in Settings, then ask me again.`;
+    : ` Pending approval — sent to ${approval?.approver_name || "your line manager"}. It isn't confirmed until they approve it.`;
 
   return {
     ...base,
@@ -963,4 +1294,5 @@ async function runPlannerAction(
     approval,
     message: `Added to ${where}.${approvalNote}`,
   };
+
 }

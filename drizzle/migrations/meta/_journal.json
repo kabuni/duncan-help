@@ -22,6 +22,13 @@
       "when": 1789379458517,
       "tag": "0002_add_line_manager_to_profiles",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789380662683,
+      "tag": "0003_event_links_status",
+      "breakpoints": true
     }
   ]
 }

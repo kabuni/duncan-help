@@ -16,3 +16,5 @@
 - [x] Admin can change a user's line manager (settings)
 - [x] Fix: planner event shows "Pending approval" with no approval row — orchestrator must create key_event_approvals routed to line manager, or not mark pending
 - [x] Duncan auto-selects the Planner category (existing category list) inside the orchestration decision; no category step in chat; works in chat, Decision Lab and updates
+- [x] Approval gate: leave cannot be created unless a real approval request is raised to the current line manager (pre-check + rollback; Google entry marked tentative/[Pending approval])
+- [x] Natural-language remove/cancel/find via the shared planner orchestrator

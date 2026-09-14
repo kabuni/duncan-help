@@ -58,6 +58,7 @@ export function ProjectWorkstreamsTab({
               tasks={allTasks.filter((t) => t.card_id === ws.id)}
               members={members}
               onOpenDetail={() => onOpenArea({ area: ws as ProjectWorkstream })}
+              onOpenComments={setCommentTask}
             />
           ))}
         </div>
@@ -70,8 +71,11 @@ export function ProjectWorkstreamsTab({
           tasks={looseTasks}
           members={members}
           onOpenDetail={() => onOpenArea({ area: null })}
+          onOpenComments={setCommentTask}
         />
       )}
+
+      <TaskCommentsPanel task={commentTask} onOpenChange={(o) => { if (!o) setCommentTask(null); }} />
 
       <AddWorkstreamDialog open={open} onOpenChange={setOpen} projectId={projectId} members={members} />
     </div>

@@ -31,6 +31,7 @@ export function AreaOfWorkCard({
   const create = useCreateProjectTask(projectId);
   const toggle = useToggleProjectTask(projectId);
   const remove = useDeleteProjectTask(projectId);
+  const { data: commentCounts = {} } = useTaskCommentCounts(tasks.map((t) => t.id));
 
   const [showCompleted, setShowCompleted] = useState(false);
   const [adding, setAdding] = useState(false);

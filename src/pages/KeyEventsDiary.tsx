@@ -503,22 +503,20 @@ export default function KeyEventsDiary() {
         </div>
       </div>
 
-      {/* 1 — Duncan */}
-      <div data-tour="planner-ask">
-        <PlannerAsk onChanged={refresh} />
-      </div>
-
-      <div className="mt-10 space-y-10">
-        {/* 2 — Needs attention */}
-        {attention.length > 0 && (
-          <Section title="Needs your attention">
+      <div className="mt-8 space-y-10">
+        {/* 1 — Needs attention */}
+        <Section title="Needs your attention" dataTour="planner-attention">
+          {attention.length === 0 ? (
+            <Empty>Nothing needs your attention.</Empty>
+          ) : (
             <div className="divide-y divide-border/50">
               {attention.map(({ ev, note }) => (
                 <EventRow key={`att-${ev.id}`} ev={ev} onOpen={openEvent} showDate note={note} />
               ))}
             </div>
-          </Section>
-        )}
+          )}
+        </Section>
+
 
         {/* 3 — Today */}
         <Section

@@ -4075,35 +4075,26 @@ export type Database = {
       projects: {
         Row: {
           created_at: string
-          description: string | null
           id: string
           name: string
           note_template: string | null
-          status: string
           system_prompt: string | null
-          target_date: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
-          description?: string | null
           id?: string
           name: string
           note_template?: string | null
-          status?: string
           system_prompt?: string | null
-          target_date?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
-          description?: string | null
           id?: string
           name?: string
           note_template?: string | null
-          status?: string
           system_prompt?: string | null
-          target_date?: string | null
           user_id?: string
         }
         Relationships: []
@@ -5319,7 +5310,6 @@ export type Database = {
           manual_status_set_at: string | null
           owner_id: string | null
           priority: string
-          project_id: string | null
           project_tag: string | null
           status: string
           status_source: string
@@ -5339,7 +5329,6 @@ export type Database = {
           manual_status_set_at?: string | null
           owner_id?: string | null
           priority?: string
-          project_id?: string | null
           project_tag?: string | null
           status?: string
           status_source?: string
@@ -5359,7 +5348,6 @@ export type Database = {
           manual_status_set_at?: string | null
           owner_id?: string | null
           priority?: string
-          project_id?: string | null
           project_tag?: string | null
           status?: string
           status_source?: string
@@ -5368,15 +5356,7 @@ export type Database = {
           updated_at?: string
           visibility?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "workstream_cards_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       workstream_comments: {
         Row: {
@@ -5524,14 +5504,13 @@ export type Database = {
       workstream_tasks: {
         Row: {
           assignee_id: string | null
-          card_id: string | null
+          card_id: string
           completed: boolean
           created_at: string
           description: string
           due_date: string | null
           id: string
           parent_task_id: string | null
-          project_id: string | null
           sort_order: number
           status: string
           title: string
@@ -5539,14 +5518,13 @@ export type Database = {
         }
         Insert: {
           assignee_id?: string | null
-          card_id?: string | null
+          card_id: string
           completed?: boolean
           created_at?: string
           description?: string
           due_date?: string | null
           id?: string
           parent_task_id?: string | null
-          project_id?: string | null
           sort_order?: number
           status?: string
           title: string
@@ -5554,14 +5532,13 @@ export type Database = {
         }
         Update: {
           assignee_id?: string | null
-          card_id?: string | null
+          card_id?: string
           completed?: boolean
           created_at?: string
           description?: string
           due_date?: string | null
           id?: string
           parent_task_id?: string | null
-          project_id?: string | null
           sort_order?: number
           status?: string
           title?: string
@@ -5580,13 +5557,6 @@ export type Database = {
             columns: ["parent_task_id"]
             isOneToOne: false
             referencedRelation: "workstream_tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workstream_tasks_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]

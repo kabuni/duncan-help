@@ -18,8 +18,3 @@
 - [x] Duncan auto-selects the Planner category (existing category list) inside the orchestration decision; no category step in chat; works in chat, Decision Lab and updates
 - [x] Approval gate: leave cannot be created unless a real approval request is raised to the current line manager (pre-check + rollback; Google entry marked tentative/[Pending approval])
 - [x] Natural-language remove/cancel/find via the shared planner orchestrator
-
-## Projects ↔ Workstream Cards
-- [x] Project → Workstreams → Tasks relationship (workstream_cards.project_id, workstream_tasks.project_id)
-- [x] Projects list + workspace tabs (Overview, Workstreams, Tasks, Team, Activity, Duncan)
-- [x] Decided: Projects are independent and link multiple Workstream Cards (Option B); "Promote to Project" on a card is a shortcut that creates the project shell and links the same card. Comparison screen removed.

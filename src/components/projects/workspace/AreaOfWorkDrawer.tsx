@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Plus, Trash2, ExternalLink, Loader2, Check, X } from "lucide-react";
+import { Plus, Trash2, ChevronDown, Loader2, Check, X } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,9 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { ProjectMember } from "@/hooks/useProjects";
 import {
   useProjectTasks, useCreateProjectTask, useToggleProjectTask, useDeleteProjectTask,
-  useUpdateProjectTask, RYG_META, type ProjectWorkstream,
+  useUpdateProjectTask, RYG_META, type ProjectWorkstream, type ProjectTask,
 } from "@/hooks/useProjectWork";
-import { taskCodeHref } from "@/components/TaskIdLink";
 import { StatusDot, formatDay, relativeDay, EmptyLine } from "./shared";
 
 export interface AreaOfWorkTarget {

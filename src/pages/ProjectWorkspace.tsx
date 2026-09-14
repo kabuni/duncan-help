@@ -117,6 +117,7 @@ export default function ProjectWorkspace() {
   const [input, setInput] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
+  const [showTeam, setShowTeam] = useState(false);
   const [showCollaborate, setShowCollaborate] = useState(false);
   const { isAdmin } = useIsAdmin();
   const teamChatUnread = useProjectTeamChatUnread(projectId || null);
@@ -374,6 +375,10 @@ export default function ProjectWorkspace() {
           <Button data-tour="pw-files" variant="ghost" size="sm" onClick={() => setShowFiles(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Files">
             <FileText className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Files{files.length > 0 && ` (${files.length})`}</span>
+          </Button>
+          <Button data-tour="pw-team" variant="ghost" size="sm" onClick={() => setShowTeam(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Team">
+            <Users className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Team{members.length > 0 && ` (${members.length})`}</span>
           </Button>
           <Button data-tour="pw-settings" variant="ghost" size="sm" onClick={openSettings} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Settings">
             <Settings2 className="h-3.5 w-3.5" />

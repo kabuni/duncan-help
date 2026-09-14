@@ -467,6 +467,8 @@ export default function ProjectWorkspace() {
                   projectName={project.name}
                   description={project.description}
                   members={members}
+                  status={project.status}
+                  targetDate={project.target_date}
                   onOpenTab={(next) => setTab(next as any)}
                 />
               )}

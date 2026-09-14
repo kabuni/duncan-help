@@ -17,6 +17,8 @@ import {
   localDateInTz,
   type ResolvedIdentity,
 } from "../_shared/identity.ts";
+import { executePlannerAction } from "../_shared/planner-orchestrator.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -124,7 +126,9 @@ Your capabilities:
    When the user asks anything analytics-related ("how are we doing", "performance", "traffic", "pipeline", "what's the status", "report"), call the relevant tools — combine multiple sources when the question spans domains. Default time window is **last 7 days** unless the user specifies otherwise. Always respond as an **executive summary**: 3–5 headline metrics first, RYG status indicator, one short narrative paragraph, then a brief "What to watch" line. Only expand into full tables if the user explicitly asks for a breakdown. Never dump raw JSON.
 - **Workstream Management (Agentic)**: You can CREATE, UPDATE, and manage workstream cards and tasks directly. When a user describes a workflow, project plan, or set of tasks, proactively break it down into a workstream card WITH its tasks. **ASSIGNEES (MANDATORY):** When the user names assignees for the card or any task (e.g. "assign to Ashish", "Sarah to draft the brief", "@Tom"), you MUST call \`list_team_members\` FIRST to resolve those names to user IDs, then pass them on the SAME \`create_workstream_card\` call: \`assignee_user_ids\` for the card, and \`assignee_user_ids\` per item in \`pending_tasks\` for task-level assignees. The creator is always added as an assignee automatically — never omit other named assignees and never defer them to a follow-up update. If the user does NOT mention assignees, just create the card assigned to the creator. Available project tags: 'Lightning Strike Event', 'Website', 'K10 App', 'School Integrations'. Default status is 'amber' (Yellow) for new cards. **Do not write your own text-only preview or ask for confirmation in prose.** Call \`create_workstream_card\` directly with the full card + \`pending_tasks\` + assignees; the write-confirmation interceptor will render the real Confirm/Cancel card in the chat UI. **ATOMIC CARD+TASKS RULE (MANDATORY):** When the user has described tasks/action items for a card, ALWAYS pass them via the pending_tasks parameter on create_workstream_card in the SAME call. The executor will create the card and all its tasks atomically when the user confirms — there is no follow-up turn after confirmation. NEVER preview a card without its tasks and then plan to call add_tasks_to_card afterwards; the model will not be invoked again. Only use add_tasks_to_card to ADD MORE tasks to a card that already exists from an earlier turn. DEDUPLICATION: create_workstream_card prevents duplicate cards by title+project_tag; if the card already exists, its pending_tasks are still added (with per-title dedup). NEVER call create_workstream_card more than once for the same card title in a single conversation. **POST-CREATE REPLY RULE:** After the tool returns successfully, confirm in PAST tense in one short message — e.g. "Created **Card Title** with 4 tasks. Assignees: Ashish, Sarah." NEVER say "I'll confirm once it's done", "I'll let you know", "creating now", or any future-tense promise — by the time you reply, the card already exists (or failed). If the tool returns \`pending_confirmation\`, say only that it is ready for the user's confirmation in the chat UI; do not claim it is created yet.
 - **Planner / Key Events Diary (Agentic)**: You can READ and UPDATE the Planner. Use list_planner_events to surface upcoming events (it returns calendar_id, google_event_id, start_tz and source_type so you can route correctly). Use update_planner_event_meta to set Duncan metadata. **For ANY date/time change — "move", "reschedule", "postpone", "push to tomorrow", "change time" — ALWAYS use reschedule_event. Do NOT use update_calendar_event for reschedules; it cannot mutate local Planner rows and does not verify success.** reschedule_event is routing-aware (planner vs Google) and returns the canonical envelope with \`before\` / \`after\` payload. The global Mutation Truth Rule at the top of this prompt applies — only claim a reschedule succeeded when \`ok === true && verified === true\`. Always show a brief preview ("I will move Lightning Strike to tomorrow 14:00–15:00 BST — confirm?") before any write.
+- **Destination decision (MANDATORY — plan_event)**: The user must NEVER be asked whether something belongs in Planner or Google Calendar. For ANY natural-language planning request — "I'm taking Friday off", "book a meeting with Sarah tomorrow at 2pm", "the project deadline is 30 September", "add the company Christmas party", "am I free tomorrow afternoon?", "move my meeting with Sarah to Thursday", "I'm off sick" — call \`plan_event\` with the interpreted intent (CREATE_EVENT / UPDATE_EVENT / CANCEL_EVENT / CHECK_AVAILABILITY), your best \`event_type\` guess, the parsed title/start/end/attendees AND the original \`utterance\`. You interpret intent ONLY; the orchestration layer decides which systems to write to (Planner, Google Calendar, or both), owns the source-of-truth rules, links the two records under one event group, detects duplicates and meeting conflicts, and prevents sync loops. NEVER ask "which calendar should I add this to?", never pick the destination yourself in prose, and never bypass plan_event by calling create_calendar_event / raw planner writes for these requests. After the tool returns, confirm plainly in past tense what happened — e.g. "Done. Added your annual leave to Planner and blocked it out in your Google Calendar." If it returns conflicts or suggestions, offer the suggested alternative times instead of forcing the booking. If it returns a duplicate, say the event already exists.
 - **Google Forms**: You can fill and submit pre-configured Google Forms on behalf of the user. You can also parse a Google Form URL to automatically extract its fields and save it as a new pre-configured form. When a user asks to fill a form, first list available forms, then ask each required field ONE AT A TIME as a conversational question. Wait for the user to answer each question before asking the next. After collecting all answers, confirm the details and submit. When a user provides a Google Form URL, use parse_google_form to extract the fields, show the parsed result to the user for confirmation, then save it with save_parsed_google_form.
+
 
 Your personality:
 - Direct, precise, and efficient. No fluff.
@@ -1985,6 +1989,40 @@ const PROJECT_TOOLS = [
 
 // ==================== PLANNER (KEY EVENTS DIARY) TOOLS ====================
 const PLANNER_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "plan_event",
+      description:
+        "CANONICAL tool for anything the user says is happening: leave/holiday, sick days, out-of-office, travel, company events, deadlines/milestones, meetings, and availability questions. You interpret the intent; the application's destination decision engine decides whether it belongs in Duncan Planner, Google Calendar, or BOTH, links the two records, checks for duplicates and checks meeting conflicts. NEVER ask the user which calendar/system to use — call this tool. Only use create_calendar_event directly when the user explicitly demands a raw Google Calendar invite with attendees and you already have attendee emails.",
+      parameters: {
+        type: "object",
+        properties: {
+          intent: { type: "string", enum: ["CREATE_EVENT", "UPDATE_EVENT", "CANCEL_EVENT", "CHECK_AVAILABILITY"], description: "What the user wants to do." },
+          event_type: {
+            type: "string",
+            enum: ["MEETING", "AVAILABILITY", "OUT_OF_OFFICE", "ANNUAL_LEAVE", "SICK_LEAVE", "COMPANY_EVENT", "PROJECT_MILESTONE", "TRAVEL", "OTHER"],
+            description: "Your best interpretation of what kind of thing this is. Omit if genuinely unclear — the engine will classify from the utterance.",
+          },
+          utterance: { type: "string", description: "The user's own words, verbatim. Used for classification." },
+          title: { type: "string", description: "Short event title, e.g. 'Annual leave — Arzoo' or 'Project deadline'." },
+          description: { type: "string" },
+          location: { type: "string" },
+          start: { type: "string", description: "ISO 8601 start datetime (or date for all-day)." },
+          end: { type: "string", description: "ISO 8601 end datetime. Defaults to start." },
+          all_day: { type: "boolean", description: "True for leave, milestones, whole-day events." },
+          attendees: { type: "array", items: { type: "string" }, description: "Attendee email addresses (meetings only)." },
+          owner: { type: "string", description: "Owner name or email. Defaults to the caller." },
+          link_group: { type: "string", description: "Existing linked-event group (EVT-XXXX) for updates/cancels." },
+          planner_event_id: { type: "string", description: "key_events.id for updates/cancels." },
+          google_event_id: { type: "string", description: "Google Calendar event id for updates/cancels." },
+          force: { type: "boolean", description: "Set true ONLY after the user has been told about a duplicate or conflict and asked to proceed anyway." },
+        },
+        required: ["intent"],
+      },
+    },
+  },
+
   {
     type: "function",
     function: {
@@ -6039,6 +6077,8 @@ const WRITE_TOOLS = new Set<string>([
   "update_workstream_card",
   "submit_google_form",
   "update_planner_event_meta",
+  "plan_event",
+
   "reschedule_event",
   "send_pdf_for_signature",
   // create_bug_report and create_feature_request intentionally NOT gated:
@@ -6058,6 +6098,8 @@ const WRITE_TOOL_LABELS: Record<string, string> = {
   submit_google_form: "Submit Google Form",
   update_planner_event_meta: "Update planner event",
   reschedule_event: "Reschedule event (planner or Google Calendar)",
+  plan_event: "Plan this (Duncan decides Planner / Google Calendar)",
+
   send_pdf_for_signature: "Send PDF for e-signature (DocuSign)",
   create_bug_report: "File a bug report",
   create_feature_request: "File a feature request",
@@ -6173,8 +6215,15 @@ function summarizeWriteAction(toolName: string, args: any): string {
         return `${label} ${args?.card_id || args?.id || "?"}`;
       case "submit_google_form":
         return `${label} ${args?.form_id || args?.id || "?"}`;
+      case "plan_event": {
+        const what = args?.title || args?.utterance || "(untitled)";
+        const when = args?.start ? ` on ${args.start}` : "";
+        const verb = args?.intent === "CANCEL_EVENT" ? "Cancel" : args?.intent === "UPDATE_EVENT" ? "Update" : "Add";
+        return `${verb} "${String(what).slice(0, 80)}"${when}`;
+      }
       case "update_planner_event_meta":
         return `${label} ${args?.event_id || args?.id || "?"}`;
+
       case "reschedule_event":
         return `${label}: ${args?.event_id || args?.google_event_id || "?"} → ${args?.startDateTime || "?"} – ${args?.endDateTime || "?"}`;
       case "send_pdf_for_signature":
@@ -7506,7 +7555,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
       { groups: [CALENDAR_TOOLS, TEAM_CALENDAR_AVAILABILITY_TOOLS], re: /\b(calendar|diary|schedule|scheduling|availability|free\/busy|free busy|book\b|booking|meeting|meetings|meeting room|reschedule|invite|invites|event|events|appointment|catch[- ]?up|1:1|one[- ]?on[- ]?one|set\s+(?:up\s+)?(?:a|an|the)?\s*(?:meeting|call|catch[- ]?up|sync|chat)|arrange\s+(?:a|an|the)?\s*(?:meeting|call|catch[- ]?up|sync)|put\s+.+?\s+on\s+(?:my|the|our)\s+calendar|block\s+(?:time|out)|find\s+time|google\s*meet|meet\s+link|zoom\s+link|teams\s+link)\b/i },
       { groups: [MEETING_TOOLS], re: /\b(meeting notes?|recap|action items?|transcript|plaud|gemini|recording|summary of (the|my|our)\b|minutes\b)\b/i },
       { groups: [WORKSTREAM_TOOLS], re: /\b(workstream|workstreams|kanban|card|cards|ryg|amber|red\/yellow|status update|owner of|pending action|pending actions|action items?|open tasks?|my tasks?|to[- ]?dos?|on my plate|overdue|csv|download|spreadsheet|excel|google sheet|export|WS-\d{3,})\b/i },
-      { groups: [PLANNER_TOOLS, CALENDAR_TOOLS], re: /\b(planner|plan\b|roadmap|milestone|sprint plan|backlog|to-do list|reschedule|postpone|move (it|this|the meeting|to tomorrow)|push (back|forward) (the|my)|change (the )?(date|time))\b/i },
+      { groups: [PLANNER_TOOLS, CALENDAR_TOOLS], re: /\b(planner|plan\b|roadmap|milestone|deadline|due (by|on)|annual leave|holiday|vacation|pto|day off|days off|taking .* off|i'?m off|sick|out of office|ooo|travel|all hands|company (event|party)|christmas party|sprint plan|backlog|to-do list|reschedule|postpone|move (it|this|the meeting|to tomorrow)|push (back|forward) (the|my)|change (the )?(date|time))\b/i },
       { groups: [ANALYTICS_TOOLS], re: /\b(analytic|analytics|metric|metrics|kpi|dashboard|trend|report|reporting|chart|graph)\b/i },
       { groups: [GOOGLE_DRIVE_TOOLS], re: /\b(drive|google drive|gdrive|folder|shared drive|doc\b|docs\b|sheet\b|sheets\b|slide|slides|file in)\b/i },
       { groups: [DOCUMENT_TOOLS], re: /\b(document|documents|file|files|attachment|policy|policies|contract|nda|sop|playbook|handbook|wiki|knowledge base)\b/i },
@@ -8195,7 +8244,11 @@ Format as a natural, readable summary with clear sections. If a section has no d
           // tool_pending event so the UI can render a Confirm/Cancel card, and
           // return a synthetic "awaiting confirmation" tool result to the model
           // so it stops further tool calls and produces a user-facing summary.
-          if (WRITE_TOOLS.has(toolNameForEvent) && !bypassWriteConfirm) {
+          if (
+            WRITE_TOOLS.has(toolNameForEvent) &&
+            !bypassWriteConfirm &&
+            !(toolNameForEvent === "plan_event" && args?.intent === "CHECK_AVAILABILITY")
+          ) {
             try {
               const summary = summarizeWriteAction(toolNameForEvent, args);
               const idemSource = `${userId}:${toolNameForEvent}:${JSON.stringify(args ?? {})}`;
@@ -8353,7 +8406,24 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = await withToolTimeout(tc.function.name, executeAnalyticsTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));
           } else if (workstreamMgmtToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeWorkstreamTool(tc.function.name, args, supabaseAdmin, userId || "", resolvedIdentity, identityCache));
+          } else if (tc.function.name === "plan_event") {
+              // Destination decision engine — the ONLY path allowed to decide
+              // between Planner, Google Calendar or both.
+              result = await withToolTimeout(
+                tc.function.name,
+                executePlannerAction(
+                  {
+                    supabaseAdmin,
+                    userId: userId || "",
+                    userEmail: resolvedIdentity?.email || null,
+                    timezone: resolvedIdentity?.timezone || "Europe/London",
+                    getGoogleToken: () => getCalendarAccessToken(userId || "", supabaseAdmin),
+                  },
+                  args,
+                ),
+              );
           } else if (plannerToolNames.includes(tc.function.name)) {
+
               result = await withToolTimeout(tc.function.name, executePlannerTool(tc.function.name, args, supabaseAdmin));
           } else if (registrationsToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeRegistrationsTool(tc.function.name, args, supabaseAdmin, userId || ""));

@@ -1127,6 +1127,65 @@ export type Database = {
         }
         Relationships: []
       }
+      event_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          destinations: string[]
+          event_type: string
+          google_calendar_id: string | null
+          google_event_id: string | null
+          id: string
+          last_sync_hash: string | null
+          last_sync_origin: string | null
+          last_synced_at: string | null
+          link_group: string
+          planner_event_id: string | null
+          source_of_truth: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          destinations?: string[]
+          event_type: string
+          google_calendar_id?: string | null
+          google_event_id?: string | null
+          id?: string
+          last_sync_hash?: string | null
+          last_sync_origin?: string | null
+          last_synced_at?: string | null
+          link_group: string
+          planner_event_id?: string | null
+          source_of_truth: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          destinations?: string[]
+          event_type?: string
+          google_calendar_id?: string | null
+          google_event_id?: string | null
+          id?: string
+          last_sync_hash?: string | null
+          last_sync_origin?: string | null
+          last_synced_at?: string | null
+          link_group?: string
+          planner_event_id?: string | null
+          source_of_truth?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_links_planner_event_id_fkey"
+            columns: ["planner_event_id"]
+            isOneToOne: false
+            referencedRelation: "key_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_rsvp_messages: {
         Row: {
           created_at: string
@@ -2728,12 +2787,14 @@ export type Database = {
           deleted_in_google: boolean
           end_at: string | null
           event_name: string | null
+          event_type: string | null
           google_event_id: string
           holiday_region: string | null
           html_link: string | null
           id: string
           is_complete: boolean
           last_classified_at: string | null
+          link_group: string | null
           linked_docs: Json
           linked_goal_ids: string[]
           location: string | null
@@ -2768,12 +2829,14 @@ export type Database = {
           deleted_in_google?: boolean
           end_at?: string | null
           event_name?: string | null
+          event_type?: string | null
           google_event_id: string
           holiday_region?: string | null
           html_link?: string | null
           id?: string
           is_complete?: boolean
           last_classified_at?: string | null
+          link_group?: string | null
           linked_docs?: Json
           linked_goal_ids?: string[]
           location?: string | null
@@ -2808,12 +2871,14 @@ export type Database = {
           deleted_in_google?: boolean
           end_at?: string | null
           event_name?: string | null
+          event_type?: string | null
           google_event_id?: string
           holiday_region?: string | null
           html_link?: string | null
           id?: string
           is_complete?: boolean
           last_classified_at?: string | null
+          link_group?: string | null
           linked_docs?: Json
           linked_goal_ids?: string[]
           location?: string | null

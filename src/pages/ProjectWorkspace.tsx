@@ -29,8 +29,7 @@ import { toast } from "sonner";
 import { TutorialButton } from "@/components/onboarding/TutorialButton";
 import { ProjectOverviewTab } from "@/components/projects/workspace/ProjectOverviewTab";
 import { ProjectWorkstreamsTab } from "@/components/projects/workspace/ProjectWorkstreamsTab";
-
-
+import { ProjectTeamTab } from "@/components/projects/workspace/ProjectTeamTab";
 import { ProjectActivityTab } from "@/components/projects/workspace/ProjectActivityTab";
 import { PROJECT_STATUS_META } from "@/hooks/useProjectWork";
 import { ProjectProgressRing, useProjectProgress } from "@/components/projects/workspace/ProjectProgressRing";

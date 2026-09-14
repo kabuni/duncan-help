@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TutorialButton } from "@/components/onboarding/TutorialButton";
 import { formatDay, initials } from "@/components/projects/workspace/shared";
+import { ProductionStructurePreview } from "@/components/projects/ProductionStructurePreview";
 
 export default function Projects() {
   const navigate = useNavigate();

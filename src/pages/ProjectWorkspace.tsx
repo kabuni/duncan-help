@@ -441,8 +441,51 @@ export default function ProjectWorkspace() {
           </Button>
         </header>
 
+        {/* Tabs */}
+        <nav className="flex items-center gap-1 border-b border-border px-2 sm:px-4 shrink-0 overflow-x-auto">
+          {PROJECT_TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`shrink-0 px-3 py-2.5 text-sm transition-colors border-b-2 -mb-px ${
+                tab === t.id
+                  ? "border-primary text-foreground font-medium"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
+
         {/* Workspace */}
         <div className="flex-1 flex min-h-0 overflow-hidden">
+          {tab !== "duncan" && (
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {tab === "overview" && (
+                <ProjectOverviewTab
+                  projectId={projectId}
+                  projectName={project.name}
+                  description={project.description}
+                  members={members}
+                  onOpenTab={(next) => setTab(next as any)}
+                />
+              )}
+              {tab === "workstreams" && <ProjectWorkstreamsTab projectId={projectId} members={members} />}
+              {tab === "tasks" && <ProjectTasksTab projectId={projectId} projectName={project.name} members={members} />}
+              {tab === "team" && (
+                <ProjectTeamTab
+                  members={members}
+                  availableProfiles={availableProfiles}
+                  onAdd={addMember}
+                  onRemove={removeMember}
+                  canManage={project.user_id === user?.id || isAdmin}
+                />
+              )}
+              {tab === "activity" && <ProjectActivityTab projectId={projectId} />}
+            </div>
+          )}
+          {tab === "duncan" && <>
           {/* LEFT: Chat list (desktop) */}
           <div data-tour="pw-chat-list" className="w-56 shrink-0 border-r border-border flex-col bg-sidebar/50 hidden md:flex">
             <div className="p-3 border-b border-border">

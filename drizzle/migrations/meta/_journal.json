@@ -15,6 +15,13 @@
       "when": 1789378920590,
       "tag": "0001_grant_arzoo_admin_role",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789379458517,
+      "tag": "0002_add_line_manager_to_profiles",
+      "breakpoints": true
     }
   ]
 }

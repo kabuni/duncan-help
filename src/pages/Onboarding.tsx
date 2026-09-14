@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Check, Loader2, Mail, Calendar, Sparkles, LogOut } from "lucide-react";
+import { ArrowRight, Check, Loader2, Mail, Calendar, Sparkles, LogOut, Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useGmailStatus, useGmailConnect } from "@/hooks/useGmailIntegration";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { supabase } from "@/integrations/supabase/client";
 import PersonalizationForm from "@/components/profile/PersonalizationForm";
+import LineManagerSelect from "@/components/profile/LineManagerSelect";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
 import { toast } from "sonner";
 
-type Step = "welcome" | "integrations" | "personalization" | "done";
-const STEPS: Step[] = ["welcome", "integrations", "personalization", "done"];
+type Step = "welcome" | "integrations" | "manager" | "personalization" | "done";
+const STEPS: Step[] = ["welcome", "integrations", "manager", "personalization", "done"];
 
 export default function Onboarding() {
   const { session, loading: authLoading, signOut } = useAuth();
@@ -75,7 +76,7 @@ export default function Onboarding() {
         </div>
         <div className="flex items-center gap-4">
           <div className="flex gap-1.5">
-            {STEPS.slice(0, 3).map((s, i) => (
+            {STEPS.slice(0, 4).map((s, i) => (
               <div
                 key={s}
                 className={`h-1 w-8 rounded-full transition-colors ${
@@ -105,13 +106,20 @@ export default function Onboarding() {
               <StepIntegrations
                 key="integrations"
                 onBack={() => persistStep("welcome")}
+                onNext={() => persistStep("manager")}
+              />
+            )}
+            {step === "manager" && (
+              <StepLineManager
+                key="manager"
+                onBack={() => persistStep("integrations")}
                 onNext={() => persistStep("personalization")}
               />
             )}
             {step === "personalization" && (
               <StepPersonalization
                 key="personalization"
-                onBack={() => persistStep("integrations")}
+                onBack={() => persistStep("manager")}
                 onNext={completeOnboarding}
                 completing={completing}
               />
@@ -287,6 +295,64 @@ function IntegrationRow({
     </div>
   );
 }
+
+function StepLineManager({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+  const { profile, updateProfile, isSaving } = useProfile();
+  const [managerId, setManagerId] = useState<string | null>(profile?.line_manager_profile_id ?? null);
+
+  useEffect(() => {
+    if (profile?.line_manager_profile_id) setManagerId(profile.line_manager_profile_id);
+  }, [profile?.line_manager_profile_id]);
+
+  const handleContinue = () => {
+    if (!managerId) {
+      toast.error("Please select your line manager");
+      return;
+    }
+    updateProfile(
+      { line_manager_profile_id: managerId },
+      { onSuccess: onNext } as any,
+    );
+  };
+
+  return (
+    <motion.div {...fade()}>
+      <div className="flex items-center gap-2 mb-2">
+        <Users className="h-5 w-5 text-primary" />
+        <h2 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+          Who is your line manager?
+        </h2>
+      </div>
+      <p className="text-sm text-muted-foreground mb-6">
+        Duncan sends anything that needs approval — annual leave, time off, requests — to your line
+        manager automatically, so you never have to ask who to send it to.
+      </p>
+
+      <div className="rounded-xl border border-border bg-card p-5 mb-6">
+        <LineManagerSelect
+          value={managerId}
+          onChange={setManagerId}
+          excludeProfileId={profile?.id ?? null}
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+          Back
+        </button>
+        <button
+          onClick={handleContinue}
+          disabled={isSaving || !managerId}
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Continue <ArrowRight className="h-4 w-4" />
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
 
 function StepPersonalization({
   onBack, onNext, completing,

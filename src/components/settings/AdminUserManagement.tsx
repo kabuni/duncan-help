@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import LineManagerSelect from "@/components/profile/LineManagerSelect";
 import {
   Select,
   SelectContent,
@@ -37,6 +38,8 @@ interface AdminUser {
   department: string | null;
   role_title: string | null;
   approval_status: string | null;
+  profile_id?: string | null;
+  line_manager_profile_id?: string | null;
 }
 
 export default function AdminUserManagement() {
@@ -53,7 +56,8 @@ export default function AdminUserManagement() {
     role_title: string;
     approval_status: string;
     bio: string;
-  }>({ display_name: "", department: "", role_title: "", approval_status: "pending", bio: "" });
+    line_manager_profile_id: string | null;
+  }>({ display_name: "", department: "", role_title: "", approval_status: "pending", bio: "", line_manager_profile_id: null });
 
   const openEdit = (u: AdminUser) => {
     setEditing(u);
@@ -63,6 +67,7 @@ export default function AdminUserManagement() {
       role_title: u.role_title ?? "",
       approval_status: u.approval_status ?? "pending",
       bio: "",
+      line_manager_profile_id: u.line_manager_profile_id ?? null,
     });
   };
 
@@ -471,6 +476,19 @@ export default function AdminUserManagement() {
                 </Select>
               </div>
               <div className="space-y-1.5">
+                <Label>Line manager</Label>
+                <LineManagerSelect
+                  value={editForm.line_manager_profile_id}
+                  onChange={(id) => setEditForm((f) => ({ ...f, line_manager_profile_id: id }))}
+                  excludeProfileId={editing.profile_id ?? null}
+                  allowNone
+                  placeholder="Select line manager"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  New approval requests go to this person. Requests already submitted keep their original approver.
+                </p>
+              </div>
+              <div className="space-y-1.5">
                 <Label htmlFor="edit-bio">Bio (optional)</Label>
                 <Textarea
                   id="edit-bio"
@@ -492,6 +510,7 @@ export default function AdminUserManagement() {
                     department: editForm.department.trim(),
                     role_title: editForm.role_title.trim(),
                     approval_status: editForm.approval_status,
+                    line_manager_profile_id: editForm.line_manager_profile_id,
                   };
                   if (editForm.bio.trim()) patch.bio = editForm.bio.trim();
                   updateMutation.mutate({ userId: editing.id, patch });

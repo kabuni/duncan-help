@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
 export interface ProfileData {
+  id?: string;
   display_name: string | null;
   department: string | null;
   avatar_url: string | null;
@@ -17,6 +18,8 @@ export interface ProfileData {
   onboarding_step: string;
   meet_duncan_tour_completed_at: string | null;
   dismissed_nudges: string[];
+  /** Profile id of this employee's current line manager. */
+  line_manager_profile_id: string | null;
   tutorial_progress?: Record<string, { status: string; step: number; total: number; updated_at?: string; completed_at?: string | null }>;
 }
 
@@ -30,7 +33,7 @@ export function useProfile() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("display_name, department, avatar_url, role_title, bio, norman_context, preferences, approval_status, requested_role_title, onboarding_completed_at, onboarding_step, meet_duncan_tour_completed_at, dismissed_nudges, tutorial_progress")
+        .select("id, display_name, department, avatar_url, role_title, bio, norman_context, preferences, approval_status, requested_role_title, onboarding_completed_at, onboarding_step, meet_duncan_tour_completed_at, dismissed_nudges, tutorial_progress, line_manager_profile_id")
         .eq("user_id", user!.id)
         .maybeSingle();
       if (error) throw error;

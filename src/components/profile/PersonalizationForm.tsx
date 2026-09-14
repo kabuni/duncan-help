@@ -7,8 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Save, User, Briefcase, Building2, Camera, Globe } from "lucide-react";
+import { Loader2, Save, User, Briefcase, Building2, Camera, Globe, Users } from "lucide-react";
 import duncanAvatar from "@/assets/duncan-avatar.jpeg";
+import LineManagerSelect from "@/components/profile/LineManagerSelect";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { USER_REGIONS } from "@/components/diary/holidayRegions";
@@ -48,6 +49,7 @@ export default function PersonalizationForm({
     bio: "",
     norman_context: "",
     region: "",
+    line_manager_profile_id: null,
   });
   const [dirty, setDirty] = useState(false);
 
@@ -63,6 +65,7 @@ export default function PersonalizationForm({
         bio: profile.bio ?? "",
         norman_context: profile.norman_context ?? "",
         region: typeof prefs.region === "string" ? prefs.region : "",
+        line_manager_profile_id: profile.line_manager_profile_id ?? null,
       });
       setDirty(false);
     }
@@ -93,6 +96,7 @@ export default function PersonalizationForm({
       bio: stripHtml(form.bio ?? "").slice(0, 1000),
       norman_context: stripHtml(form.norman_context ?? "").slice(0, 2000),
       preferences: mergedPrefs,
+      line_manager_profile_id: form.line_manager_profile_id ?? null,
     };
     updateProfile(sanitized, {
       onSuccess: () => {
@@ -114,6 +118,7 @@ export default function PersonalizationForm({
         bio: profile.bio ?? "",
         norman_context: profile.norman_context ?? "",
         region: typeof prefs.region === "string" ? prefs.region : "",
+        line_manager_profile_id: profile.line_manager_profile_id ?? null,
       });
       setDirty(false);
     }
@@ -225,6 +230,25 @@ export default function PersonalizationForm({
             </SelectContent>
           </Select>
         </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5" /> Line Manager
+          </Label>
+          <LineManagerSelect
+            value={form.line_manager_profile_id ?? null}
+            onChange={(id) => {
+              setForm((prev) => ({ ...prev, line_manager_profile_id: id }));
+              setDirty(true);
+            }}
+            excludeProfileId={profile?.id ?? null}
+            allowNone
+          />
+          <p className="text-[11px] text-muted-foreground/70">
+            Duncan routes your approvals — like annual leave — to your line manager automatically.
+          </p>
+        </div>
+
 
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground flex items-center gap-1.5">

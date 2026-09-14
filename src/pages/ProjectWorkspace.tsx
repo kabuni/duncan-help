@@ -125,6 +125,7 @@ export default function ProjectWorkspace() {
   const [editName, setEditName] = useState("");
   const [editPrompt, setEditPrompt] = useState("");
   const [editTemplate, setEditTemplate] = useState("");
+  const [editVisibility, setEditVisibility] = useState("private");
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [manualDeselect, setManualDeselect] = useState(false);
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
@@ -274,6 +275,7 @@ export default function ProjectWorkspace() {
     setEditName(project?.name || "");
     setEditPrompt(project?.system_prompt || "");
     setEditTemplate((project as any)?.note_template || "");
+    setEditVisibility(project?.visibility || "private");
     setShowSettings(true);
   };
 
@@ -283,6 +285,7 @@ export default function ProjectWorkspace() {
       name: editName.trim(),
       system_prompt: editPrompt.trim() || null,
       note_template: editTemplate.trim() || null,
+      visibility: editVisibility,
     });
     setShowSettings(false);
   };
@@ -366,6 +369,7 @@ export default function ProjectWorkspace() {
                 (PROJECT_STATUS_META[project.status] || PROJECT_STATUS_META.on_track).label,
                 members.find((m) => m.isOwner)?.display_name,
                 project.target_date ? `Due ${formatDay(project.target_date)}` : null,
+                project.visibility === "public" ? "Public" : "Private",
               ].filter(Boolean).join(" · ")}
             </p>
           </div>
@@ -581,6 +585,22 @@ export default function ProjectWorkspace() {
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Project Name</label>
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Visibility</label>
+              <select
+                value={editVisibility}
+                onChange={(e) => setEditVisibility(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+              >
+                <option value="private">Private — owner and invited members only</option>
+                <option value="public">Public — anyone in the company can view</option>
+              </select>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {editVisibility === "public"
+                  ? "Everyone in the company can see this project's areas of work, tasks, progress and activity."
+                  : "Only you and the members you invite can see this project."}
+              </p>
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">System Instructions</label>

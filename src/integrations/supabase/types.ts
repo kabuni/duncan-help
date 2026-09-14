@@ -4086,6 +4086,7 @@ export type Database = {
           system_prompt: string | null
           target_date: string | null
           user_id: string
+          visibility: string
         }
         Insert: {
           created_at?: string
@@ -4097,6 +4098,7 @@ export type Database = {
           system_prompt?: string | null
           target_date?: string | null
           user_id: string
+          visibility?: string
         }
         Update: {
           created_at?: string
@@ -4108,6 +4110,7 @@ export type Database = {
           system_prompt?: string | null
           target_date?: string | null
           user_id?: string
+          visibility?: string
         }
         Relationships: []
       }

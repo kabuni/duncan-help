@@ -26,6 +26,7 @@ export interface Project {
   description: string | null;
   status: string;
   target_date: string | null;
+  visibility: string;
   created_at: string;
 }
 
@@ -89,7 +90,7 @@ export function useProjects() {
 
   const createProject = useCallback(async (
     name: string,
-    options?: { system_prompt?: string | null; description?: string | null; status?: string; target_date?: string | null },
+    options?: { system_prompt?: string | null; description?: string | null; status?: string; target_date?: string | null; visibility?: string },
   ) => {
     if (!session) return null;
     const { data, error } = await supabase
@@ -101,6 +102,7 @@ export function useProjects() {
         description: options?.description || null,
         status: options?.status || "on_track",
         target_date: options?.target_date || null,
+        visibility: options?.visibility || "private",
       } as any)
       .select()
       .single();
@@ -114,7 +116,7 @@ export function useProjects() {
 
   const updateProject = useCallback(async (id: string, updates: {
     name?: string; system_prompt?: string | null; note_template?: string | null;
-    description?: string | null; status?: string; target_date?: string | null;
+    description?: string | null; status?: string; target_date?: string | null; visibility?: string;
   }) => {
     const { error } = await supabase.from("projects").update(updates as any).eq("id", id);
     if (error) {

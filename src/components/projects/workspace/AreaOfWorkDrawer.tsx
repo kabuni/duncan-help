@@ -46,6 +46,7 @@ export function AreaOfWorkDrawer({
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const tasks = useMemo(
     () => allTasks.filter((t) => (area ? t.card_id === area.id : !t.card_id)),
@@ -53,6 +54,8 @@ export function AreaOfWorkDrawer({
   );
   const done = tasks.filter((t) => t.completed).length;
   const pct = tasks.length === 0 ? 0 : Math.round((done / tasks.length) * 100);
+  // Active tasks show by default; completed work is kept and revealed on request.
+  const visibleTasks = showCompleted ? tasks : tasks.filter((t) => !t.completed);
 
   const submit = async () => {
     if (!newTitle.trim()) return;
@@ -159,11 +162,11 @@ export function AreaOfWorkDrawer({
 
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          ) : tasks.length === 0 ? (
-            <EmptyLine>No tasks here yet.</EmptyLine>
+          ) : visibleTasks.length === 0 ? (
+            <EmptyLine>{tasks.length === 0 ? "No tasks here yet." : "Nothing outstanding here."}</EmptyLine>
           ) : (
             <ul className="divide-y divide-border rounded-xl border border-border">
-              {tasks.map((t) => (
+              {visibleTasks.map((t) => (
                 <li key={t.id} className="group flex items-start gap-3 px-4 py-3">
                   <Checkbox
                     className="mt-0.5"
@@ -215,6 +218,15 @@ export function AreaOfWorkDrawer({
                 </li>
               ))}
             </ul>
+          )}
+
+          {done > 0 && (
+            <button
+              onClick={() => setShowCompleted((v) => !v)}
+              className="mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {showCompleted ? "Hide completed tasks" : `Show completed tasks (${done})`}
+            </button>
           )}
 
           {area && (

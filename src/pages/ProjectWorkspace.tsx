@@ -29,7 +29,6 @@ import { toast } from "sonner";
 import { TutorialButton } from "@/components/onboarding/TutorialButton";
 import { ProjectOverviewTab } from "@/components/projects/workspace/ProjectOverviewTab";
 import { ProjectWorkstreamsTab } from "@/components/projects/workspace/ProjectWorkstreamsTab";
-
 import { ProjectTeamTab } from "@/components/projects/workspace/ProjectTeamTab";
 import { ProjectActivityTab } from "@/components/projects/workspace/ProjectActivityTab";
 import { PROJECT_STATUS_META } from "@/hooks/useProjectWork";
@@ -40,7 +39,6 @@ const PROJECT_TABS = [
   { id: "overview", label: "Overview" },
   { id: "chat", label: "Team Chat" },
   { id: "workstreams", label: "Areas of Work" },
-  { id: "team", label: "Team" },
   { id: "activity", label: "Activity" },
 ] as const;
 
@@ -419,15 +417,6 @@ export default function ProjectWorkspace() {
                 />
               )}
               {tab === "workstreams" && <ProjectWorkstreamsTab projectId={projectId} members={members} />}
-              {tab === "team" && (
-                <ProjectTeamTab
-                  members={members}
-                  availableProfiles={availableProfiles}
-                  onAdd={addMember}
-                  onRemove={removeMember}
-                  canManage={project.user_id === user?.id || isAdmin}
-                />
-              )}
               {tab === "activity" && <ProjectActivityTab projectId={projectId} />}
             </div>
           )}

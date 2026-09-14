@@ -34,6 +34,10 @@ interface ReadRow {
   last_read_at: string;
 }
 
+export function mentionsDuncan(text: string) {
+  return /\bduncan\b/i.test(text) || /@duncan/i.test(text);
+}
+
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
 
 function safeName(name: string) {
@@ -321,6 +325,7 @@ export function useProjectTeamChat(projectId: string | null, memberIds: string[]
     messages,
     loading,
     sending,
+    duncanThinking,
     unreadCount,
     seenByAllCutoff,
     typingUsers,

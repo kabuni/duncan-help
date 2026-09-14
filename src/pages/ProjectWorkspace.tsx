@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, MessageSquare, MessagesSquare, Send, Loader2, Settings2, Users,
   Upload, FileText, Sparkles, Trash2, RefreshCw, PanelRightOpen, X, Menu,  Pencil, Check,
 } from "lucide-react";
-import { ProjectTeamChatDrawer } from "@/components/projects/ProjectTeamChatDrawer";
+import { ProjectTeamChatPanel } from "@/components/projects/ProjectTeamChatPanel";
 import { useProjectTeamChatUnread } from "@/hooks/useProjectTeamChatUnread";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import ReactMarkdown from "react-markdown";
@@ -39,12 +39,12 @@ import { formatDay } from "@/components/projects/workspace/shared";
 
 const PROJECT_TABS = [
   { id: "overview", label: "Overview" },
+  { id: "chat", label: "Team Chat" },
   { id: "workstreams", label: "Areas of Work" },
   
   { id: "tasks", label: "Tasks" },
   { id: "team", label: "Team" },
   { id: "activity", label: "Activity" },
-  { id: "duncan", label: "Duncan" },
 ] as const;
 
 const CHECKLIST_RE = /^\s*[-*]\s*\[\s*[ xX]?\s*\]\s+/;
@@ -379,15 +379,6 @@ export default function ProjectWorkspace() {
             <FileText className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Files{files.length > 0 && ` (${files.length})`}</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowTeamChat(true)} className="gap-1.5 text-xs px-2 sm:px-3 relative" aria-label="Team Chat">
-            <MessagesSquare className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Team Chat{teamChatUnread > 0 && ` (${teamChatUnread})`}</span>
-            {teamChatUnread > 0 && (
-              <span className="sm:hidden absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-medium px-1">
-                {teamChatUnread}
-              </span>
-            )}
-          </Button>
           <Button data-tour="pw-settings" variant="ghost" size="sm" onClick={openSettings} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Settings">
             <Settings2 className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Settings</span>
@@ -413,7 +404,7 @@ export default function ProjectWorkspace() {
 
         {/* Workspace */}
         <div className="flex-1 flex min-h-0 overflow-hidden">
-          {tab !== "duncan" && (
+          {tab !== "chat" && (
             <div className="flex-1 min-h-0 overflow-y-auto">
               {tab === "overview" && (
                 <ProjectOverviewTab
@@ -440,297 +431,14 @@ export default function ProjectWorkspace() {
               {tab === "activity" && <ProjectActivityTab projectId={projectId} />}
             </div>
           )}
-          {tab === "duncan" && <>
-          {/* LEFT: Chat list (desktop) */}
-          <div data-tour="pw-chat-list" className="w-56 shrink-0 border-r border-border flex-col bg-sidebar/50 hidden md:flex">
-            <div className="p-3 border-b border-border">
-              <Button data-tour="pw-new-chat" variant="outline" size="sm" onClick={handleNewChat} className="w-full gap-2 text-xs">
-                <Plus className="h-3.5 w-3.5" />
-                New Chat
-              </Button>
-            </div>
-            <ScrollArea className="flex-1">
-              <div className="p-2 space-y-0.5">
-                {chats.map(chat => {
-                  const isEditing = editingChatId === chat.id;
-                  return (
-                  <div
-                    key={chat.id}
-                    className={`group flex items-center gap-0.5 w-full min-w-0 rounded-md pr-1 text-xs font-medium transition-colors ${
-                      activeChatId === chat.id
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-                    }`}
-                  >
-                    {isEditing ? (
-                      <>
-                        <input
-                          ref={editChatInputRef}
-                          value={editingChatTitle}
-                          onChange={(e) => setEditingChatTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") { e.preventDefault(); void commitRenameChat(); }
-                            else if (e.key === "Escape") { e.preventDefault(); cancelRenameChat(); }
-                          }}
-                          maxLength={80}
-                          className="flex-1 min-w-0 mx-1 my-1 bg-background border border-border rounded px-2 py-1 text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
-                          aria-label="Rename chat"
-                        />
-                        <button type="button" onClick={(e) => { e.stopPropagation(); void commitRenameChat(); }} className="shrink-0 h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-primary" title="Save">
-                          <Check className="h-3.5 w-3.5" />
-                        </button>
-                        <button type="button" onClick={(e) => { e.stopPropagation(); cancelRenameChat(); }} className="shrink-0 h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground" title="Cancel">
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setActiveChatId(chat.id)}
-                          onDoubleClick={(e) => { e.stopPropagation(); startRenameChat(chat); }}
-                          className="flex items-center gap-2 flex-1 min-w-0 px-3 py-2 text-left"
-                          title={`${chat.title} (double-click to rename)`}
-                        >
-                          <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-                          <span className="min-w-0 truncate">{chat.title}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); startRenameChat(chat); }}
-                          className="shrink-0 h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-secondary opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                          title="Rename chat"
-                          aria-label="Rename chat"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm(`Delete chat "${chat.title}"? This cannot be undone.`)) {
-                              deleteChat(chat.id);
-                              if (activeChatId === chat.id) setActiveChatId(null);
-                            }
-                          }}
-                          className="shrink-0 h-7 w-7 flex items-center justify-center rounded text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                          title="Delete chat"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                  );
-                })}
-                {chats.length === 0 && !chatsLoading && (
-                  <p className="px-3 py-4 text-[11px] text-muted-foreground text-center">
-                    No chats yet
-                  </p>
-                )}
-              </div>
-            </ScrollArea>
-          </div>
-
-          {/* LEFT: Chat list (mobile drawer) */}
-          {chatListOpen && (
-            <div className="md:hidden fixed inset-0 z-50 flex">
-              <div className="absolute inset-0 bg-black/40" onClick={() => setChatListOpen(false)} />
-              <div className="relative w-64 max-w-[80%] bg-background border-r border-border flex flex-col shadow-xl animate-in slide-in-from-left duration-200">
-                <div className="flex items-center justify-between p-3 border-b border-border">
-                  <h3 className="text-sm font-semibold">Chats</h3>
-                  <button onClick={() => setChatListOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="p-3 border-b border-border">
-                  <Button variant="outline" size="sm" onClick={() => { handleNewChat(); setChatListOpen(false); }} className="w-full gap-2 text-xs">
-                    <Plus className="h-3.5 w-3.5" />
-                    New Chat
-                  </Button>
-                </div>
-                <ScrollArea className="flex-1">
-                  <div className="p-2 space-y-0.5">
-                    {chats.map(chat => {
-                      const isEditing = editingChatId === chat.id;
-                      return (
-                      <div
-                        key={chat.id}
-                        className={`group flex items-center gap-0.5 w-full min-w-0 rounded-md pr-1 text-xs font-medium transition-colors ${
-                          activeChatId === chat.id
-                            ? "bg-primary/10 text-primary"
-                            : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-                        }`}
-                      >
-                        {isEditing ? (
-                          <>
-                            <input
-                              value={editingChatTitle}
-                              onChange={(e) => setEditingChatTitle(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") { e.preventDefault(); void commitRenameChat(); }
-                                else if (e.key === "Escape") { e.preventDefault(); cancelRenameChat(); }
-                              }}
-                              maxLength={80}
-                              autoFocus
-                              className="flex-1 min-w-0 mx-1 my-1 bg-background border border-border rounded px-2 py-1 text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
-                              aria-label="Rename chat"
-                            />
-                            <button onClick={(e) => { e.stopPropagation(); void commitRenameChat(); }} className="shrink-0 h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-primary" title="Save">
-                              <Check className="h-3.5 w-3.5" />
-                            </button>
-                            <button onClick={(e) => { e.stopPropagation(); cancelRenameChat(); }} className="shrink-0 h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground" title="Cancel">
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => { setActiveChatId(chat.id); setChatListOpen(false); }}
-                              className="flex items-center gap-2 flex-1 min-w-0 px-3 py-2 text-left"
-                            >
-                              <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-                              <span className="truncate">{chat.title}</span>
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); startRenameChat(chat); }}
-                              className="shrink-0 h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
-                              title="Rename chat"
-                              aria-label="Rename chat"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (confirm(`Delete chat "${chat.title}"? This cannot be undone.`)) {
-                                  deleteChat(chat.id);
-                                  if (activeChatId === chat.id) setActiveChatId(null);
-                                }
-                              }}
-                              className="shrink-0 h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-destructive transition-colors"
-                              title="Delete chat"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                      );
-                    })}
-                    {chats.length === 0 && !chatsLoading && (
-                      <p className="px-3 py-4 text-[11px] text-muted-foreground text-center">
-                        No chats yet
-                      </p>
-                    )}
-                  </div>
-                </ScrollArea>
-              </div>
-            </div>
+          {tab === "chat" && projectId && (
+            <ProjectTeamChatPanel
+              projectId={projectId}
+              projectName={project?.name || "Project"}
+              isOwnerOrAdmin={isAdmin || project?.user_id === user?.id}
+              members={members.map((m) => ({ user_id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }))}
+            />
           )}
-
-          {/* CENTER: Chat */}
-          <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
-            {!activeChatId ? (
-              <div className="flex-1 flex flex-col">
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 mb-4">
-                    <MessageSquare className="h-7 w-7 text-primary" />
-                  </div>
-                  <h2 className="text-base font-semibold text-foreground mb-1">Start a conversation</h2>
-                  <p className="text-sm text-muted-foreground">Type a message below to begin working with Duncan in this project.</p>
-                </div>
-                {/* Input for new chat — same composer as the main dashboard */}
-                <ChatInput
-                  onSubmit={handleSend}
-                  isLoading={sending}
-                  placeholder="Message Duncan…"
-                  hideFooter
-                />
-              </div>
-            ) : (
-              <>
-                {/* Messages */}
-                <div ref={messagesScrollerRef} className="flex-1 overflow-y-auto p-4 overscroll-contain">
-                  <div className="max-w-3xl mx-auto space-y-4">
-                    {msgsLoading && (
-                      <div className="flex justify-center py-8">
-                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                      </div>
-                    )}
-                    {messages.map(msg => {
-                      const isUser = msg.role === "user";
-                      const userMember = isUser ? members.find((m) => m.user_id === msg.user_id) : null;
-                      const userName = isUser ? (msg.sender_name || userMember?.display_name || myDisplayName) : "Duncan";
-                      const userAvatar = isUser ? (userMember?.avatar_url || myAvatarUrl) : null;
-                      return (
-                        <div key={msg.id} className={`flex gap-2 sm:gap-3 ${isUser ? "justify-end" : ""}`}>
-                          {!isUser && (
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg overflow-hidden border border-primary/20">
-                              <img src={duncanAvatar} alt="Duncan" className="h-full w-full object-cover object-[50%_30%] scale-150" />
-                            </div>
-                          )}
-                          <div className={`max-w-[85%] sm:max-w-[80%] space-y-1 ${isUser ? "items-end" : "items-start"}`}>
-                            <p className={`text-[10px] font-medium uppercase tracking-wider text-muted-foreground ${isUser ? "text-right" : "text-left"}`}>
-                              {senderNameFor(msg)}
-                            </p>
-                            <div className={`rounded-xl px-4 py-3 text-sm ${
-                              isUser
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-card border border-border text-foreground"
-                            }`}>
-                              {!isUser ? (
-                                <div className="prose prose-sm dark:prose-invert max-w-none">
-                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                                </div>
-                              ) : (
-                                <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                              )}
-                            </div>
-                            {!isUser && activeChatId && projectId && hasChecklist(msg.content) && (
-                              <button
-                                onClick={() => captureChecklistToPlan(msg.content, projectId)}
-                                className="text-[10px] inline-flex items-center gap-1 text-primary hover:underline mt-1"
-                              >
-                                <Plus className="h-3 w-3" /> Add checklist to Tasks
-                              </button>
-                            )}
-                          </div>
-                          {isUser && (
-                            <Avatar className="h-7 w-7 shrink-0 border border-primary/20">
-                              {userAvatar ? <AvatarImage src={userAvatar} alt={userName} /> : null}
-                              <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
-                                {initialsFor(userName)}
-                              </AvatarFallback>
-                            </Avatar>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {sending && (
-                      <div className="flex gap-3">
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg overflow-hidden border border-primary/20">
-                          <img src={duncanAvatar} alt="Duncan" className="h-full w-full object-cover object-[50%_30%] scale-150" />
-                        </div>
-                        <div className="rounded-xl bg-card border border-border px-4 py-3">
-                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Input — same composer as the main dashboard (attachments, voice, streaming) */}
-                <ChatInput
-                  onSubmit={handleSend}
-                  isLoading={sending}
-                  placeholder="Message Duncan…"
-                  hideFooter
-                />
-              </>
-            )}
-          </div>
-          </>}
 
           {/* Files Slide-over */}
           {showFiles && (

@@ -1,15 +1,16 @@
 import { useMemo, useState } from "react";
-import { Plus, ChevronDown, Loader2, Trash2 } from "lucide-react";
+import { Plus, ChevronDown, Loader2, Trash2, Pencil, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ProjectMember } from "@/hooks/useProjects";
 import {
-  useCreateProjectTask, useToggleProjectTask, useDeleteProjectTask,
+  useCreateProjectTask, useToggleProjectTask, useDeleteProjectTask, useTaskCommentCounts,
   RYG_META, type ProjectWorkstream, type ProjectTask,
 } from "@/hooks/useProjectWork";
 import { StatusDot, formatDay, relativeDay } from "./shared";
+import { TaskEditPopover } from "./TaskEditPopover";
 
 /**
  * One Area of Work shown inline on the Areas of Work page.

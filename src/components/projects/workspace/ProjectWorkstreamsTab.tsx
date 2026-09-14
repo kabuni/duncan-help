@@ -28,7 +28,6 @@ export function ProjectWorkstreamsTab({
   const [open, setOpen] = useState(false);
 
   const looseTasks = allTasks.filter((t) => !t.card_id);
-  const looseDone = looseTasks.filter((t) => t.completed).length;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8 space-y-6">

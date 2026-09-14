@@ -38,6 +38,8 @@ import CEOBriefing from "./pages/CEOBriefing";
 import CompanyHealth from "./pages/CompanyHealth";
 import PeopleCultureDashboard from "./pages/PeopleCultureDashboard";
 import KeyEventsDiary from "./pages/KeyEventsDiary";
+import PlannerDecisionLab from "./pages/PlannerDecisionLab";
+
 import Approvals from "./pages/Approvals";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import EAInbox from "./pages/EAInbox";

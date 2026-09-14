@@ -43,6 +43,13 @@
       "when": 1789387731796,
       "tag": "0005_project_messages_duncan_author",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789390847126,
+      "tag": "0006_add_workstream_tasks_completed_at",
+      "breakpoints": true
     }
   ]
 }

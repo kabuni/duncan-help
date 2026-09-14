@@ -285,6 +285,8 @@ export interface ActionRequest {
   planner_event_id?: string;
   google_event_id?: string;
   /** Skip duplicate/conflict guards after the user has been told about them. */
+  /** Optional AI/manual category hint — validated against the existing list. */
+  planner_category?: string;
   force?: boolean;
   /** Set by sync jobs so we never bounce a change back to its origin. */
   origin?: Destination;
@@ -303,6 +305,7 @@ export interface DecisionTrace {
   action_taken: "CREATE" | "UPDATE" | "DELETE" | "READ" | "NO_ACTION";
   linked: boolean;
   link_group: string | null;
+  planner_category: string;
   planner_event_id: string | null;
   google_event_id: string | null;
   /** Resolved dynamically from the requester's line manager — never hardcoded. */

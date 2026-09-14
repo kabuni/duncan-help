@@ -159,20 +159,20 @@ serve(async (req) => {
     }
 
     const result = await executePlannerAction(
-
       {
         supabaseAdmin,
         userId: user.id,
         userEmail: user.email,
-        timezone: body.timezone || "Europe/London",
+        timezone,
         getGoogleToken: () => getCalendarAccessToken(user.id, supabaseAdmin),
       },
-      body as ActionRequest,
+      request,
     );
 
-    return new Response(JSON.stringify(result), {
+    return new Response(JSON.stringify({ ...result, interpretation, request }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   } catch (e) {
     console.error("planner-orchestrate failed:", e);
     return new Response(JSON.stringify({ ok: false, error: (e as Error).message }), {

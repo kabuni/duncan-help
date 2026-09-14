@@ -80,7 +80,7 @@ export function ProjectOverviewTab({
             {workstreams.map((ws) => (
               <li key={ws.id}>
                 <button
-                  onClick={() => onOpenArea({ area: ws as ProjectWorkstream })}
+                  onClick={() => onOpenArea(ws as ProjectWorkstream)}
                   className="flex flex-wrap items-center gap-x-3 text-sm hover:text-primary transition-colors"
                 >
                   <StatusDot status={ws.status} />

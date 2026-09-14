@@ -705,8 +705,9 @@ async function createGoogleEvent(token: string, req: ActionRequest, ctx: Orchest
   });
   if (!resp.ok) {
     // outOfOffice events reject some fields on non-Workspace accounts — retry plain.
-    if (body.eventType) {
+    if (body.eventType || body.status) {
       delete body.eventType;
+      delete body.status;
       const retry = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events?sendUpdates=all`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -718,6 +719,7 @@ async function createGoogleEvent(token: string, req: ActionRequest, ctx: Orchest
   }
   return await resp.json();
 }
+
 
 async function patchGoogleEvent(token: string, eventId: string, req: ActionRequest, ctx: OrchestratorContext) {
   const body: any = {};

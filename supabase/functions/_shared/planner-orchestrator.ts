@@ -440,10 +440,54 @@ async function deleteGoogleEvent(token: string, eventId: string) {
 
 // ── Main entry point ─────────────────────────────────────────────────────────
 
+/**
+ * Public entry point. Runs the action and attaches a DecisionTrace describing
+ * exactly what the decision engine concluded (used by the Decision Lab test
+ * view and by anything that needs to explain the routing).
+ */
 export async function executePlannerAction(
   ctx: OrchestratorContext,
   req: ActionRequest,
 ): Promise<ActionResult> {
+  const result = await runPlannerAction(ctx, req);
+  const d = result.decision;
+  const conflict_detected = !!(result.conflicts && result.conflicts.length);
+  const duplicate_detected = !!result.duplicate;
+  const existing_event_found =
+    duplicate_detected ||
+    !!result.matched_event ||
+    (req.intent !== "CREATE_EVENT" && !!(result.planner_event_id || result.google_event_id));
+
+  let action_taken: DecisionTrace["action_taken"] = "NO_ACTION";
+  if (req.intent === "CHECK_AVAILABILITY") action_taken = result.ok ? "READ" : "NO_ACTION";
+  else if (result.ok && req.intent === "CREATE_EVENT") action_taken = "CREATE";
+  else if (result.ok && req.intent === "UPDATE_EVENT") action_taken = "UPDATE";
+  else if (result.ok && req.intent === "CANCEL_EVENT") action_taken = "DELETE";
+
+  const trace: DecisionTrace = {
+    intent: d.intent,
+    event_type: d.event_type,
+    destination: d.destination,
+    source_of_truth: d.source_of_truth,
+    requires_approval: d.requires_approval,
+    reason: d.reason,
+    existing_event_found,
+    duplicate_detected,
+    conflict_detected,
+    action_taken,
+    linked: !!(result.link_group && result.planner_event_id && result.google_event_id),
+    link_group: result.link_group ?? null,
+    planner_event_id: result.planner_event_id ?? null,
+    google_event_id: result.google_event_id ?? null,
+  };
+  return { ...result, trace };
+}
+
+async function runPlannerAction(
+  ctx: OrchestratorContext,
+  req: ActionRequest,
+): Promise<ActionResult> {
+
   const overrides = await loadDestinationConfig(ctx.supabaseAdmin);
   const eventType =
     req.event_type ?? classifyEventType(`${req.utterance || ""} ${req.title || ""} ${req.description || ""}`);

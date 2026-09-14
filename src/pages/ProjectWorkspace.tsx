@@ -32,7 +32,7 @@ import { toast } from "sonner";
 import { TutorialButton } from "@/components/onboarding/TutorialButton";
 import { ProjectOverviewTab } from "@/components/projects/workspace/ProjectOverviewTab";
 import { ProjectWorkstreamsTab } from "@/components/projects/workspace/ProjectWorkstreamsTab";
-import { ProjectMapTab } from "@/components/projects/workspace/ProjectMapTab";
+
 import { ProjectTasksTab } from "@/components/projects/workspace/ProjectTasksTab";
 import { ProjectTeamTab } from "@/components/projects/workspace/ProjectTeamTab";
 import { ProjectActivityTab } from "@/components/projects/workspace/ProjectActivityTab";
@@ -42,7 +42,7 @@ import { formatDay } from "@/components/projects/workspace/shared";
 const PROJECT_TABS = [
   { id: "overview", label: "Overview" },
   { id: "workstreams", label: "Workstreams" },
-  { id: "map", label: "Map" },
+  
   { id: "tasks", label: "Tasks" },
   { id: "team", label: "Team" },
   { id: "activity", label: "Activity" },
@@ -471,9 +471,6 @@ export default function ProjectWorkspace() {
                 />
               )}
               {tab === "workstreams" && <ProjectWorkstreamsTab projectId={projectId} members={members} />}
-              {tab === "map" && (
-                <ProjectMapTab projectId={projectId} projectName={project.name} onOpenTab={(next) => setTab(next as any)} />
-              )}
               {tab === "tasks" && <ProjectTasksTab projectId={projectId} projectName={project.name} members={members} />}
               {tab === "team" && (
                 <ProjectTeamTab

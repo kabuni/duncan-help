@@ -24,14 +24,14 @@ export function ProjectWorkstreamsTab({ projectId, members }: { projectId: strin
     <div className="mx-auto max-w-3xl px-6 py-8 space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold text-foreground">Workstreams</h2>
+          <h2 className="text-base font-semibold text-foreground">Areas of work</h2>
           <p className="text-sm text-muted-foreground">
-            The company Workstream Cards tracking this project. Cards stay canonical — the project just points at them.
+            The parts of this project people are working on. Each area keeps its own tasks and status.
           </p>
         </div>
         <Button size="sm" className="gap-2 shrink-0" onClick={() => setOpen(true)}>
           <Plus className="h-4 w-4" />
-          Add Workstream
+          Add area of work
         </Button>
       </div>
 

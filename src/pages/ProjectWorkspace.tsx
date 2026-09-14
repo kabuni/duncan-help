@@ -470,6 +470,9 @@ export default function ProjectWorkspace() {
                 />
               )}
               {tab === "workstreams" && <ProjectWorkstreamsTab projectId={projectId} members={members} />}
+              {tab === "map" && (
+                <ProjectMapTab projectId={projectId} projectName={project.name} onOpenTab={(next) => setTab(next as any)} />
+              )}
               {tab === "tasks" && <ProjectTasksTab projectId={projectId} projectName={project.name} members={members} />}
               {tab === "team" && (
                 <ProjectTeamTab

@@ -353,7 +353,15 @@ export function resolvePlannerCategory(
   return EVENT_TYPE_RULES[eventType]?.planner_category ?? "Event";
 }
 
-/** THE decision engine. Pure — same inputs always give the same routing. */
+/**
+ * THE decision engine. Pure — same inputs always give the same routing.
+ *
+ * Hierarchy:
+ *   1. primarily a meeting / appointment / availability question → Google Calendar
+ *   2. primarily a company planning milestone                    → Planner
+ *   3. a significant company item people must attend             → Planner + Google Calendar
+ * The Planner category is resolved separately and never drives the destination.
+ */
 export function decideDestination(
   intent: PlannerIntent,
   eventType: EventType,
@@ -361,23 +369,67 @@ export function decideDestination(
     overrides?: Record<string, Destination[]>;
     text?: string | null;
     suggested_category?: string | null;
+    all_day?: boolean;
+    start?: string | null;
+    attendees?: string[];
+    audience?: Audience;
+    attendance_required?: boolean;
   } = {},
 ): Decision {
   const rule = EVENT_TYPE_RULES[eventType] ?? EVENT_TYPE_RULES.OTHER;
+  const signals = analyzeSignals(eventType, opts.text || "", {
+    all_day: opts.all_day,
+    start: opts.start,
+    attendees: opts.attendees,
+    audience: opts.audience,
+    attendance_required: opts.attendance_required,
+  });
+
   const override = opts.overrides?.[eventType];
-  const destination = (override && override.length > 0 ? override : rule.destination).slice();
-  // The source of truth must always be one of the destinations.
+  let destination = (override && override.length > 0 ? override : rule.destination).slice();
+  let reason = rule.reason;
+
+  // Company-level items: the destination depends on attendance, not on wording
+  // or on the category. A launch date is a Planner marker; a launch everyone
+  // joins at 10am is a Planner marker AND a calendar entry.
+  if (
+    !override &&
+    intent !== "CHECK_AVAILABILITY" &&
+    OPEN_TYPES.includes(eventType) &&
+    signals.audience !== "PERSONAL"
+  ) {
+    if (signals.attendance_required && signals.significant) {
+      destination = ["PLANNER", "GOOGLE_CALENDAR"];
+      reason =
+        "A company planning item that people also need to attend — recorded on the Planner and put on calendars so attendance is real.";
+    } else if (signals.attendance_required) {
+      destination = ["GOOGLE_CALENDAR"];
+      reason = "People need to attend this, and it isn't a company-wide planning marker — Google Calendar.";
+    } else {
+      destination = ["PLANNER"];
+      reason = "A company planning item / milestone with no attendance required — Planner only.";
+    }
+  }
+
+  // The source of truth follows the resulting event shape: Planner owns
+  // anything the company plans; Google Calendar owns anything only attended.
+  const preferred: Destination = destination.includes("PLANNER") ? "PLANNER" : "GOOGLE_CALENDAR";
   const source_of_truth = destination.includes(rule.source_of_truth)
-    ? rule.source_of_truth
-    : destination[0];
+    ? (OPEN_TYPES.includes(eventType) ? preferred : rule.source_of_truth)
+    : preferred;
+
   return {
     intent,
     event_type: eventType,
     destination: intent === "CHECK_AVAILABILITY" ? ["GOOGLE_CALENDAR"] : destination,
     source_of_truth,
     requires_approval: intent === "CREATE_EVENT" ? rule.requires_approval : false,
-    reason: rule.reason,
+    reason,
     planner_category: resolvePlannerCategory(eventType, opts.text, opts.suggested_category),
+    audience: signals.audience,
+    attendance_required: signals.attendance_required,
+    ambiguous: intent === "CREATE_EVENT" && signals.ambiguous,
+    clarifying_question: intent === "CREATE_EVENT" ? signals.clarifying_question : null,
   };
 }
 

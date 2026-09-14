@@ -138,20 +138,35 @@ export async function loadDestinationConfig(supabaseAdmin: any): Promise<Record<
   }
 }
 
+/** Wording that means "people are getting together" — this always wins over
+ *  company-wide wording, so "launch planning meeting" is a meeting, not a launch. */
+const EXPLICIT_MEETING =
+  /\b(meeting|call|sync|catch ?up|1:1|one[- ]to[- ]one|standup|stand[- ]up|huddle|workshop with|session with|review with|interview|book .* with|meet(ing)? with|invite)\b/i;
+
+/** Company-wide moments that belong on the shared Planner, never on a personal calendar. */
+const COMPANY_WIDE =
+  /\b(launch(es|ing)?|go[- ]live|release|ship(ping)? (date|version)|version \d|rollout|roll[- ]out|all[- ]hands|town ?hall|company[- ]wide|company (event|party|away ?day|update)|christmas party|away ?day|team social|socials?|conference|summit|showcase|exhibition|expo|open day|festival|campaign|webinar|announcement|press release|demo day|board meeting|investor (update|day)|graduation|awards?)\b/i;
+
 const TYPE_PATTERNS: [EventType, RegExp][] = [
+  ["PERSONAL_APPOINTMENT", /\b(dentist|doctor'?s? appointment|gp appointment|optician|hospital appointment|school run|personal appointment|physio|therapy)\b/i],
   ["ANNUAL_LEAVE", /\b(annual leave|holiday|vacation|taking .* off|day off|days off|time off|pto|book(ing)? leave|i'?m off)\b/i],
-  ["SICK_LEAVE", /\b(sick|unwell|ill|doctor'?s? appointment|medical leave)\b/i],
+  ["SICK_LEAVE", /\b(sick|unwell|ill|medical leave)\b/i],
   ["OUT_OF_OFFICE", /\b(out of office|ooo|away from desk|unavailable all day)\b/i],
   ["TRAVEL", /\b(flight|flying|travel(ling)?|trip to|train to|offsite travel)\b/i],
-  ["PROJECT_MILESTONE", /\b(deadline|milestone|due (by|on)|go[- ]live|launch date|ship(ping)? date|cut ?off)\b/i],
-  ["COMPANY_EVENT", /\b(all hands|company (event|party|away ?day)|christmas party|town hall|social|team social|conference|summit)\b/i],
+  ["COMPANY_EVENT", COMPANY_WIDE],
+  ["PROJECT_MILESTONE", /\b(deadline|milestone|due (by|on)|cut ?off|sprint end|end of sprint|target date)\b/i],
   ["AVAILABILITY", /\b(am i free|what am i free for|availability|free slots?|when (am|are) .* free|find (me )?time)\b/i],
-  ["MEETING", /\b(meeting|call|sync|catch ?up|1:1|one[- ]to[- ]one|interview|invite|standup|review with|book .* with)\b/i],
+  ["MEETING", EXPLICIT_MEETING],
 ];
 
 /** Heuristic fallback when the caller did not supply an explicit event_type. */
 export function classifyEventType(text: string): EventType {
   const t = text || "";
+  // A get-together is a meeting even when it is about a launch or release,
+  // unless the person is describing leave, sickness, travel or an appointment.
+  const personal = TYPE_PATTERNS.slice(0, 5).find(([, re]) => re.test(t));
+  if (personal) return personal[0];
+  if (EXPLICIT_MEETING.test(t)) return "MEETING";
   for (const [type, re] of TYPE_PATTERNS) if (re.test(t)) return type;
   return "OTHER";
 }

@@ -806,6 +806,21 @@ async function runPlannerAction(
       if (req.end) patch.end_at = req.end;
       if (req.title) patch.event_name = req.title;
       if (req.location) patch.location = req.location;
+      // Re-categorise only when the request actually carries category signal, so
+      // a simple date move never re-labels an event the user already corrected.
+      const explicitCategory = isPlannerCategory(req.planner_category)
+        ? (req.planner_category as string)
+        : req.event_type
+          ? decision.planner_category
+          : null;
+      const currentCategory = matched?.category
+        ?? (await ctx.supabaseAdmin.from("key_events").select("category").eq("id", plannerId).maybeSingle()).data?.category
+        ?? null;
+      const category = explicitCategory || currentCategory;
+      if (category) {
+        patch.category = category;
+        if (req.title) patch.title = `[${category}] ${req.title}`;
+      }
       const { error } = await ctx.supabaseAdmin.from("key_events").update(patch).eq("id", plannerId);
       plannerDone = !error;
     }

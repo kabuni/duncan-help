@@ -117,6 +117,7 @@ export default function ProjectWorkspace() {
   const [input, setInput] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
+  const [showTeam, setShowTeam] = useState(false);
   const [showCollaborate, setShowCollaborate] = useState(false);
   const { isAdmin } = useIsAdmin();
   const teamChatUnread = useProjectTeamChatUnread(projectId || null);
@@ -375,6 +376,10 @@ export default function ProjectWorkspace() {
             <FileText className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Files{files.length > 0 && ` (${files.length})`}</span>
           </Button>
+          <Button data-tour="pw-team" variant="ghost" size="sm" onClick={() => setShowTeam(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Team">
+            <Users className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Team{members.length > 0 && ` (${members.length})`}</span>
+          </Button>
           <Button data-tour="pw-settings" variant="ghost" size="sm" onClick={openSettings} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Settings">
             <Settings2 className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Settings</span>
@@ -529,6 +534,30 @@ export default function ProjectWorkspace() {
                       })
                     )}
                   </div>
+                </ScrollArea>
+              </div>
+            </div>
+          )}
+
+          {/* Team Slide-over */}
+          {showTeam && (
+            <div className="fixed inset-0 z-40 flex justify-end">
+              <div className="absolute inset-0 bg-black/30" onClick={() => setShowTeam(false)} />
+              <div className="relative w-96 max-w-full bg-background border-l border-border flex flex-col shadow-xl animate-in slide-in-from-right duration-200">
+                <div className="p-3 border-b border-border flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-foreground">Project Team</h3>
+                  <button onClick={() => setShowTeam(false)} className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <ScrollArea className="flex-1">
+                  <ProjectTeamTab
+                    members={members}
+                    availableProfiles={availableProfiles}
+                    onAdd={addMember}
+                    onRemove={removeMember}
+                    canManage={project.user_id === user?.id || isAdmin}
+                  />
                 </ScrollArea>
               </div>
             </div>

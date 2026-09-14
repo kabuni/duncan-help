@@ -80,33 +80,27 @@ export function JobRolesManager() {
     if (roleId) retryMap.set(roleId, entry);
   });
 
+  const enqueueHireflixRetry = async (
+    operation: "create_position" | "delete_position",
+    payload: Record<string, unknown>,
+    supersedeId?: string | null,
+  ) => {
+    const { data, error } = await supabase.functions.invoke("hireflix-enqueue-retry", {
+      body: { operation, payload, supersede_id: supersedeId ?? null },
+    });
+    if (error) throw error;
+    const result = data as { success?: boolean; error?: string };
+    if (!result?.success) throw new Error(result?.error || "Failed to queue retry");
+  };
+
   const handleRetryPosition = async (roleId: string, roleTitle: string) => {
     try {
-      const { data: roleData } = await supabase
-        .from("job_roles")
-        .select("competencies")
-        .eq("id", roleId)
-        .single();
-
-      // Mark existing failed entry as completed before re-queuing
       const existing = retryMap.get(roleId);
-      if (existing) {
-        await supabase
-          .from("hireflix_retry_queue")
-          .update({ status: "completed", completed_at: new Date().toISOString() })
-          .eq("id", existing.id);
-      }
-
-      await supabase.from("hireflix_retry_queue").insert({
-        operation: "create_position",
-        payload: JSON.parse(JSON.stringify({
-          job_role_id: roleId,
-          title: roleTitle,
-          competencies: roleData?.competencies || [],
-        })),
-        status: "pending",
-        next_retry_at: new Date().toISOString(),
-      });
+      await enqueueHireflixRetry(
+        "create_position",
+        { job_role_id: roleId, title: roleTitle },
+        existing?.id ?? null,
+      );
 
       toast.success("Retry queued — position will be created shortly");
       queryClient.invalidateQueries({ queryKey: ["hireflix-retry-queue-roles"] });
@@ -256,16 +250,13 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
           } else {
             const exactError = data?.error || "Unknown issue";
             // Always queue for retry on failure
-            const { error: queueError } = await supabase
-              .from("hireflix_retry_queue")
-              .insert({
-                operation: "create_position",
-                payload: JSON.parse(JSON.stringify({ job_role_id: newRole.id, title: title.trim(), competencies })),
-                status: "pending",
-                next_retry_at: new Date().toISOString(),
+            try {
+              await enqueueHireflixRetry("create_position", {
+                job_role_id: newRole.id,
+                title: title.trim(),
               });
-            if (queueError) {
-              console.error("Failed to queue Hireflix retry:", queueError);
+            } catch (queueError: any) {
+              console.error("Failed to queue Hireflix retry:", queueError?.message || queueError);
             }
             toast.warning(`Hireflix: ${exactError}. Queued for retry.`);
           }
@@ -273,17 +264,10 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
           // Non-blocking: role is already saved, just warn about Hireflix
           console.error("Hireflix position creation failed:", err.message);
           try {
-            const { error: queueError } = await supabase
-              .from("hireflix_retry_queue")
-              .insert({
-                operation: "create_position",
-                payload: JSON.parse(JSON.stringify({ job_role_id: newRole.id, title: title.trim(), competencies: [] })),
-                status: "pending",
-                next_retry_at: new Date().toISOString(),
-              });
-            if (queueError) {
-              console.error("Failed to queue Hireflix retry:", queueError);
-            }
+            await enqueueHireflixRetry("create_position", {
+              job_role_id: newRole.id,
+              title: title.trim(),
+            });
           } catch {
             // Silent — role is saved, Hireflix is best-effort
           }
@@ -320,9 +304,8 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
         } catch (err: any) {
           // Queue for retry silently
           try {
-            await supabase.from("hireflix_retry_queue").insert({
-              operation: "delete_position",
-              payload: JSON.parse(JSON.stringify({ hireflix_position_id: hireflixPositionId })),
+            await enqueueHireflixRetry("delete_position", {
+              hireflix_position_id: hireflixPositionId,
             });
           } catch {
             // Silent fallback

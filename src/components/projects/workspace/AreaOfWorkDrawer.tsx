@@ -46,6 +46,7 @@ export function AreaOfWorkDrawer({
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const tasks = useMemo(
     () => allTasks.filter((t) => (area ? t.card_id === area.id : !t.card_id)),
@@ -53,6 +54,8 @@ export function AreaOfWorkDrawer({
   );
   const done = tasks.filter((t) => t.completed).length;
   const pct = tasks.length === 0 ? 0 : Math.round((done / tasks.length) * 100);
+  // Active tasks show by default; completed work is kept and revealed on request.
+  const visibleTasks = showCompleted ? tasks : tasks.filter((t) => !t.completed);
 
   const submit = async () => {
     if (!newTitle.trim()) return;

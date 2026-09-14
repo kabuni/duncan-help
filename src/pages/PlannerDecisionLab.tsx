@@ -17,15 +17,21 @@ import { toast } from "sonner";
  * interpret=true and renders the decision the orchestration layer made.
  */
 
-const SCENARIOS = [
-  "I'm taking next Friday off.",
-  "Book a meeting with Sarah tomorrow at 2pm for 30 minutes.",
-  "Project Alpha needs to be finished by 30 September.",
-  "The company Christmas party is on 18 December.",
-  "I'm taking next Friday off.",
-  "Move my holiday from Friday to Monday.",
-  "Put a meeting in with Sarah.",
-  "I have a project launch on 30 September at 10am with the whole team.",
+type Scenario = { utterance: string; expected: string; note?: string };
+
+const SCENARIOS: Scenario[] = [
+  { utterance: "Product X launches on 30 September.", expected: "Planner · company planning item" },
+  { utterance: "Product X launch meeting with Sarah at 2pm.", expected: "Google Calendar · meeting" },
+  { utterance: "Company-wide product launch on 30 September at 10am.", expected: "Planner + Google Calendar · milestone people attend" },
+  { utterance: "The team is meeting to discuss the launch at 2pm.", expected: "Google Calendar · meeting" },
+  { utterance: "Company Christmas party on 18 December.", expected: "Planner + Google Calendar · company-wide event" },
+  { utterance: "Investor meeting with ABC on Thursday at 3pm.", expected: "Google Calendar · meeting" },
+  { utterance: "Investor event on 15 November.", expected: "Planner · company planning item" },
+  { utterance: "Product X launch on 30 September at 10am.", expected: "Clarifying question", note: "attendance genuinely unclear — Duncan should ask" },
+  { utterance: "I'm taking next Friday off.", expected: "Planner + Google Calendar · leave, needs approval" },
+  { utterance: "Book a meeting with Sarah tomorrow at 2pm for 30 minutes.", expected: "Google Calendar · meeting" },
+  { utterance: "Project Alpha needs to be finished by 30 September.", expected: "Planner · milestone" },
+  { utterance: "Flight to Dubai on 3 December.", expected: "Planner + Google Calendar · travel" },
 ];
 
 type Trace = {
@@ -35,6 +41,10 @@ type Trace = {
   source_of_truth: string;
   requires_approval: boolean;
   reason: string;
+  audience?: string;
+  attendance_required?: boolean;
+  ambiguous?: boolean;
+  clarifying_question?: string | null;
   existing_event_found: boolean;
   duplicate_detected: boolean;
   conflict_detected: boolean;

@@ -7,20 +7,38 @@ import { AskDuncanBar } from "./AskDuncanBar";
 import { StatusDot, Avatars, SectionTitle, EmptyLine, relativeDay, formatDay } from "./shared";
 
 export function ProjectOverviewTab({
-  projectId, projectName, description, members, onOpenTab,
+  projectId, projectName, description, members, status, targetDate, onOpenTab,
 }: {
   projectId: string; projectName: string; description: string | null;
-  members: ProjectMember[]; onOpenTab: (tab: string) => void;
+  members: ProjectMember[]; status?: string; targetDate?: string | null;
+  onOpenTab: (tab: string) => void;
 }) {
   const navigate = useNavigate();
   const { data: workstreams = [] } = useProjectWorkstreams(projectId);
   const { data: tasks = [] } = useProjectTasks(projectId);
   const { data: activity = [] } = useProjectActivity(projectId);
+  const { total, done, pct } = useProjectProgress(projectId);
 
   const upcoming = tasks.filter((t) => !t.completed).slice(0, 5);
+  const owner = members.find((m) => m.isOwner)?.display_name;
+  const statusLabel = status ? (PROJECT_STATUS_META[status] || PROJECT_STATUS_META.on_track).label : null;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8 space-y-10">
+      {/* Progress summary */}
+      <section className="flex items-center gap-6">
+        <ProjectProgressRing pct={pct} done={done} total={total} />
+        <div className="min-w-0 space-y-1">
+          <h2 className="text-lg font-semibold text-foreground truncate">{projectName}</h2>
+          <p className="text-sm text-muted-foreground">
+            {total === 0 ? "No tasks yet" : `${done} of ${total} tasks complete`}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {[statusLabel, owner, targetDate ? `Due ${formatDay(targetDate)}` : null].filter(Boolean).join(" · ")}
+          </p>
+        </div>
+      </section>
+
       {description && <p className="text-[15px] leading-7 text-foreground">{description}</p>}
 
       <AskDuncanBar projectId={projectId} projectName={projectName} members={members} workstreams={workstreams} />

@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import { useProjectWorkstreams, useProjectTasks, useProjectActivity, RYG_META } from "@/hooks/useProjectWork";
+import { useProjectWorkstreams, useProjectTasks, useProjectActivity, RYG_META, PROJECT_STATUS_META } from "@/hooks/useProjectWork";
+import { ProjectProgressRing, useProjectProgress } from "./ProjectProgressRing";
 import type { ProjectMember } from "@/hooks/useProjects";
 import { taskCodeHref } from "@/components/TaskIdLink";
 import { AskDuncanBar } from "./AskDuncanBar";

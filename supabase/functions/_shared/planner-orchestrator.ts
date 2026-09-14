@@ -563,8 +563,40 @@ async function runPlannerAction(
 
   // ── Update ────────────────────────────────────────────────────────────────
   if (req.intent === "UPDATE_EVENT") {
-    const plannerId = req.planner_event_id || link?.planner_event_id;
+    let matched: any = null;
+    // No explicit ids supplied ("move my holiday from Friday to Monday") —
+    // find the user's most likely existing record of this type.
+    if (!link && !req.planner_event_id && !req.google_event_id) {
+      const { data: rows } = await ctx.supabaseAdmin
+        .from("key_events")
+        .select("id, event_name, title, category, event_type, start_at, link_group")
+        .eq("created_by", ctx.userId)
+        .eq("deleted_in_google", false)
+        .order("start_at", { ascending: true })
+        .limit(200);
+      const target = normTitle(req.title || "");
+      const fromDay = (req.current_start || "").slice(0, 10);
+      const candidates = (rows || []).filter((r: any) => {
+        const typeMatch = r.event_type === decision.event_type ||
+          plannerCategoryFor(decision.event_type) === r.category;
+        const titleMatch = target && normTitle(r.event_name || r.title || "").includes(target);
+        const dayMatch = fromDay && String(r.start_at || "").slice(0, 10) === fromDay;
+        return dayMatch || titleMatch || typeMatch;
+      });
+      // Prefer a same-day match, then a title match, then the next one of this type.
+      matched = candidates.find((r: any) => fromDay && String(r.start_at || "").slice(0, 10) === fromDay)
+        ?? candidates.find((r: any) => target && normTitle(r.event_name || r.title || "").includes(target))
+        ?? candidates[0]
+        ?? null;
+      if (matched?.link_group) {
+        const { data: l } = await ctx.supabaseAdmin
+          .from("event_links").select("*").eq("link_group", matched.link_group).maybeSingle();
+        if (l) link = l;
+      }
+    }
+    const plannerId = req.planner_event_id || link?.planner_event_id || matched?.id;
     const googleId = req.google_event_id || link?.google_event_id;
+
     let plannerDone = false;
     let googleDone = false;
     if (plannerId && req.origin !== "PLANNER") {

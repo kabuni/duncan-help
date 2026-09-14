@@ -105,7 +105,14 @@ const Auth = () => {
 
   const withRetry = async <T,>(request: () => Promise<T>, retries = 2): Promise<T> => {
     try {
-      return await request();
+      const result = await request();
+      // Supabase returns { error } instead of throwing — retry those too.
+      const returnedError = (result as any)?.error;
+      if (retries > 0 && returnedError && isConnectionError(returnedError)) {
+        await new Promise((r) => setTimeout(r, 600));
+        return withRetry(request, retries - 1);
+      }
+      return result;
     } catch (error) {
       if (retries > 0 && isConnectionError(error)) {
         await new Promise((r) => setTimeout(r, 600));

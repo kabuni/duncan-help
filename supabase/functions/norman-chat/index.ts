@@ -6096,6 +6096,8 @@ const WRITE_TOOL_LABELS: Record<string, string> = {
   submit_google_form: "Submit Google Form",
   update_planner_event_meta: "Update planner event",
   reschedule_event: "Reschedule event (planner or Google Calendar)",
+  plan_event: "Plan this (Duncan decides Planner / Google Calendar)",
+
   send_pdf_for_signature: "Send PDF for e-signature (DocuSign)",
   create_bug_report: "File a bug report",
   create_feature_request: "File a feature request",

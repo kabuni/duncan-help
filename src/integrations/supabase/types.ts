@@ -1142,6 +1142,7 @@ export type Database = {
           link_group: string
           planner_event_id: string | null
           source_of_truth: string
+          status: string
           updated_at: string
         }
         Insert: {
@@ -1158,6 +1159,7 @@ export type Database = {
           link_group: string
           planner_event_id?: string | null
           source_of_truth: string
+          status?: string
           updated_at?: string
         }
         Update: {
@@ -1174,6 +1176,7 @@ export type Database = {
           link_group?: string
           planner_event_id?: string | null
           source_of_truth?: string
+          status?: string
           updated_at?: string
         }
         Relationships: [

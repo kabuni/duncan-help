@@ -199,13 +199,16 @@ export default function PlannerDecisionLab() {
           <Separator />
           <div className="space-y-2">
             {SCENARIOS.map((s, i) => (
-              <div key={`${s}-${i}`} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+              <div key={`${s.utterance}-${i}`} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
                 <span className="text-sm">
                   <span className="mr-2 text-muted-foreground">{i + 1}.</span>
-                  {s}
-                  {i === 4 && <span className="ml-2 text-xs text-muted-foreground">(repeat — expect duplicate detection)</span>}
+                  {s.utterance}
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Expected: {s.expected}
+                    {s.note ? ` — ${s.note}` : ""}
+                  </span>
                 </span>
-                <Button size="sm" variant="outline" disabled={!!running} onClick={() => run(s)}>
+                <Button size="sm" variant="outline" disabled={!!running} onClick={() => run(s.utterance)}>
                   Run
                 </Button>
               </div>
@@ -214,7 +217,7 @@ export default function PlannerDecisionLab() {
           <div className="flex gap-2">
             <Button variant="secondary" disabled={!!running} onClick={runAll}>
               {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Run all eight in order
+              Run all in order
             </Button>
             <Button variant="ghost" onClick={() => setResults([])}>
               <Trash2 className="mr-2 h-4 w-4" /> Clear results

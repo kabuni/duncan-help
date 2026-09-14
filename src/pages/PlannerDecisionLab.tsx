@@ -244,6 +244,7 @@ export default function PlannerDecisionLab() {
                 <>
                   <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     <Field label="Intent detected">{r.trace.intent}</Field>
+                    <Field label="Audience">{r.trace.audience || "—"}</Field>
                     <Field label="Event type">{r.trace.event_type}</Field>
                     <Field label="Destination">
                       {r.trace.destination.length === 2 ? "Both" : r.trace.destination[0] === "PLANNER" ? "Planner" : "Google Calendar"}
@@ -268,10 +269,12 @@ export default function PlannerDecisionLab() {
                     <Field label="Google record">{r.trace.google_event_id ? r.trace.google_event_id.slice(0, 12) : "—"}</Field>
                   </div>
                   <div className="flex flex-wrap gap-x-6 gap-y-2">
+                    <Flag on={!!r.trace.attendance_required} label="Attendance required" />
                     <Flag on={r.trace.existing_event_found} label="Existing event found" />
                     <Flag on={r.trace.duplicate_detected} label="Duplicate detected" />
                     <Flag on={r.trace.conflict_detected} label="Conflict" />
                     <Flag on={r.trace.requires_approval} label="Needs approval" />
+                    <Flag on={!!r.trace.ambiguous} label="Asked for clarification" />
                   </div>
                   <p className="text-xs text-muted-foreground">Rule: {r.trace.reason}</p>
                 </>

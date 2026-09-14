@@ -3868,6 +3868,7 @@ export type Database = {
       project_messages: {
         Row: {
           attachments: Json
+          author_type: string
           content: string
           created_at: string
           deleted_at: string | null
@@ -3878,10 +3879,11 @@ export type Database = {
           pinned_by: string | null
           project_id: string
           reply_to_id: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           attachments?: Json
+          author_type?: string
           content?: string
           created_at?: string
           deleted_at?: string | null
@@ -3892,10 +3894,11 @@ export type Database = {
           pinned_by?: string | null
           project_id: string
           reply_to_id?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           attachments?: Json
+          author_type?: string
           content?: string
           created_at?: string
           deleted_at?: string | null
@@ -3906,7 +3909,7 @@ export type Database = {
           pinned_by?: string | null
           project_id?: string
           reply_to_id?: string | null
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {

@@ -13,7 +13,8 @@ export interface TeamChatAttachment {
 export interface TeamChatMessage {
   id: string;
   project_id: string;
-  user_id: string;
+  user_id: string | null;
+  author_type?: "user" | "duncan";
   content: string;
   attachments: TeamChatAttachment[];
   reply_to_id: string | null;
@@ -33,6 +34,10 @@ interface ReadRow {
   last_read_at: string;
 }
 
+export function mentionsDuncan(text: string) {
+  return /\bduncan\b/i.test(text) || /@duncan/i.test(text);
+}
+
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
 
 function safeName(name: string) {
@@ -45,12 +50,15 @@ export function useProjectTeamChat(projectId: string | null, memberIds: string[]
   const [reads, setReads] = useState<ReadRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [duncanThinking, setDuncanThinking] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Record<string, { name: string; at: number }>>({});
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const authorCacheRef = useRef<Map<string, { name: string | null; avatar_url: string | null }>>(new Map());
 
   const hydrateAuthors = useCallback(async (rows: TeamChatMessage[]) => {
-    const missing = Array.from(new Set(rows.map((r) => r.user_id).filter((id) => !authorCacheRef.current.has(id))));
+    const missing = Array.from(
+      new Set(rows.map((r) => r.user_id).filter((id): id is string => !!id && !authorCacheRef.current.has(id))),
+    );
     if (missing.length > 0) {
       const { data } = await supabase
         .from("profiles")
@@ -61,7 +69,10 @@ export function useProjectTeamChat(projectId: string | null, memberIds: string[]
       }
     }
     return rows.map((r) => {
-      const p = authorCacheRef.current.get(r.user_id);
+      if (r.author_type === "duncan") {
+        return { ...r, author_name: "Duncan", author_avatar_url: null };
+      }
+      const p = r.user_id ? authorCacheRef.current.get(r.user_id) : undefined;
       return { ...r, author_name: p?.name ?? null, author_avatar_url: p?.avatar_url ?? null };
     });
   }, []);
@@ -207,15 +218,33 @@ export function useProjectTeamChat(projectId: string | null, memberIds: string[]
           }
           uploaded.push({ path, name: f.name, type: f.type || "application/octet-stream", size: f.size });
         }
-        const { error } = await supabase.from("project_messages").insert({
-          project_id: projectId,
-          user_id: user.id,
-          content: trimmed,
-          attachments: uploaded as any,
-          reply_to_id: replyToId ?? null,
-        });
+        const { data: inserted, error } = await supabase
+          .from("project_messages")
+          .insert({
+            project_id: projectId,
+            user_id: user.id,
+            author_type: "user",
+            content: trimmed,
+            attachments: uploaded as any,
+            reply_to_id: replyToId ?? null,
+          })
+          .select("id")
+          .maybeSingle();
         if (error) throw error;
         await markAllRead();
+
+        // Duncan is a participant in this same conversation: he answers when addressed.
+        if (mentionsDuncan(trimmed)) {
+          setDuncanThinking(true);
+          supabase.functions
+            .invoke("project-team-duncan", {
+              body: { projectId, message: trimmed, messageId: (inserted as any)?.id ?? null },
+            })
+            .then(({ error: fnErr }) => {
+              if (fnErr) toast.error("Duncan couldn't reply just now.");
+            })
+            .finally(() => setDuncanThinking(false));
+        }
       } catch (e: any) {
         toast.error(e?.message || "Failed to send");
       } finally {
@@ -296,6 +325,7 @@ export function useProjectTeamChat(projectId: string | null, memberIds: string[]
     messages,
     loading,
     sending,
+    duncanThinking,
     unreadCount,
     seenByAllCutoff,
     typingUsers,

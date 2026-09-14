@@ -15,7 +15,6 @@ import {
   Download,
   FileText,
 } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -28,11 +27,10 @@ import {
 import { format, isSameDay } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjectTeamChat, TeamChatMessage } from "@/hooks/useProjectTeamChat";
+import duncanAvatar from "@/assets/duncan-avatar.jpeg";
 import { cn } from "@/lib/utils";
 
 interface Props {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   projectId: string;
   projectName: string;
   isOwnerOrAdmin: boolean;
@@ -109,9 +107,7 @@ function useAttachmentUrlContext() {
   return useContext(AttachmentUrlCtx);
 }
 
-export function ProjectTeamChatDrawer({
-  open,
-  onOpenChange,
+export function ProjectTeamChatPanel({
   projectId,
   projectName,
   isOwnerOrAdmin,
@@ -132,7 +128,8 @@ export function ProjectTeamChatDrawer({
     markAllRead,
     broadcastTyping,
     attachmentUrl,
-  } = useProjectTeamChat(open ? projectId : null, memberIds);
+    duncanThinking,
+  } = useProjectTeamChat(projectId, memberIds);
 
   const [input, setInput] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -146,18 +143,17 @@ export function ProjectTeamChatDrawer({
 
   // Mark as read when opened and when new messages arrive while open
   useEffect(() => {
-    if (open) markAllRead();
-  }, [open, messages.length, markAllRead]);
+    markAllRead();
+  }, [messages.length, markAllRead]);
 
   // Auto-scroll to bottom
   useEffect(() => {
-    if (!open) return;
     const el = listRef.current;
     if (!el) return;
     requestAnimationFrame(() => {
       el.scrollTop = el.scrollHeight;
     });
-  }, [messages.length, open]);
+  }, [messages.length, duncanThinking]);
 
   const displayName = useMemo(() => {
     const me = members.find((m) => m.user_id === user?.id);
@@ -197,14 +193,18 @@ export function ProjectTeamChatDrawer({
   const typingList = Object.values(typingUsers);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-2xl lg:max-w-3xl p-0 flex flex-col">
-        <SheetHeader className="px-4 py-3 border-b border-border pr-12 space-y-2">
+    <div className="flex flex-col h-full min-h-0 w-full">
+        <div className="px-4 py-3 border-b border-border space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <SheetTitle className="text-sm font-semibold flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-primary" />
-              Team Chat — {projectName}
-            </SheetTitle>
+            <div className="flex items-center gap-2 min-w-0">
+              <MessageSquare className="h-4 w-4 text-primary shrink-0" />
+              <p className="text-sm font-semibold truncate">Team Chat</p>
+              <span className="hidden sm:flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span>·</span>
+                <img src={duncanAvatar} alt="" className="h-4 w-4 rounded-full object-cover object-[50%_30%] scale-125" />
+                Duncan is in this chat — mention him to ask
+              </span>
+            </div>
             <div className="flex items-center gap-1">
               <Button
                 variant={showPinnedOnly ? "secondary" : "ghost"}
@@ -226,7 +226,7 @@ export function ProjectTeamChatDrawer({
               className="h-8 pl-7 text-xs"
             />
           </div>
-        </SheetHeader>
+        </div>
 
         <AttachmentUrlCtx.Provider value={{ attachmentUrl }}>
           <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-background">
@@ -240,7 +240,8 @@ export function ProjectTeamChatDrawer({
               filtered.map((msg, i) => {
                 const prev = filtered[i - 1];
                 const showDay = !prev || !isSameDay(new Date(prev.created_at), new Date(msg.created_at));
-                const mine = msg.user_id === user?.id;
+                const isDuncan = msg.author_type === "duncan";
+                const mine = !isDuncan && msg.user_id === user?.id;
                 const replied = msg.reply_to_id
                   ? messages.find((m) => m.id === msg.reply_to_id)
                   : null;
@@ -256,10 +257,13 @@ export function ProjectTeamChatDrawer({
                       </div>
                     )}
                     <div className={cn("group flex gap-2", mine && "flex-row-reverse")}>
-                      <Avatar className="h-7 w-7 shrink-0">
-                        <AvatarImage src={msg.author_avatar_url || undefined} />
+                      <Avatar className={cn("h-7 w-7 shrink-0", isDuncan && "ring-2 ring-primary/30")}>
+                        <AvatarImage
+                          src={isDuncan ? duncanAvatar : msg.author_avatar_url || undefined}
+                          className={isDuncan ? "object-cover object-[50%_30%] scale-150" : undefined}
+                        />
                         <AvatarFallback className="text-[10px]">
-                          {initials(msg.author_name)}
+                          {isDuncan ? "D" : initials(msg.author_name)}
                         </AvatarFallback>
                       </Avatar>
                       <div className={cn("max-w-[75%] flex flex-col", mine && "items-end")}>
@@ -269,7 +273,12 @@ export function ProjectTeamChatDrawer({
                             mine && "flex-row-reverse",
                           )}
                         >
-                          <span className="font-medium">{mine ? "You" : msg.author_name || "Unknown"}</span>
+                          <span className="font-medium">{mine ? "You" : isDuncan ? "Duncan" : msg.author_name || "Unknown"}</span>
+                          {isDuncan && (
+                            <span className="rounded-full bg-primary/10 text-primary px-1.5 py-px text-[9px] font-medium">
+                              Duncan
+                            </span>
+                          )}
                           <span>·</span>
                           <span>{format(new Date(msg.created_at), "HH:mm")}</span>
                           {msg.edited_at && !msg.deleted_at && <span className="italic">(edited)</span>}
@@ -280,7 +289,9 @@ export function ProjectTeamChatDrawer({
                             "relative rounded-2xl px-3 py-2 text-sm break-words",
                             mine
                               ? "bg-primary text-primary-foreground rounded-tr-sm"
-                              : "bg-secondary text-foreground rounded-tl-sm",
+                              : isDuncan
+                                ? "bg-background text-foreground border border-primary/25 rounded-tl-sm"
+                                : "bg-secondary text-foreground rounded-tl-sm",
                             msg.deleted_at && "italic opacity-60",
                           )}
                         >
@@ -397,6 +408,7 @@ export function ProjectTeamChatDrawer({
         <div className="px-4 h-5 text-[11px] text-muted-foreground italic">
           {typingList.length === 1 && `${typingList[0].name} is typing…`}
           {typingList.length > 1 && `${typingList.length} people are typing…`}
+          {duncanThinking && (typingList.length === 0 ? "Duncan is thinking…" : " · Duncan is thinking…")}
         </div>
 
         {/* Reply preview */}
@@ -471,7 +483,7 @@ export function ProjectTeamChatDrawer({
                 handleSubmit();
               }
             }}
-            placeholder={editingId ? "Edit message…" : "Message team (Enter to send, Shift+Enter for newline)"}
+            placeholder={editingId ? "Edit message…" : "Message the team — mention Duncan to ask him something"}
             rows={1}
             className="flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm leading-6 focus:outline-none focus:border-primary/40 max-h-32"
           />
@@ -485,7 +497,6 @@ export function ProjectTeamChatDrawer({
             <Send className="h-4 w-4" />
           </Button>
         </div>
-      </SheetContent>
-    </Sheet>
+    </div>
   );
 }

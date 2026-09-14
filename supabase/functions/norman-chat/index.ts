@@ -6075,6 +6075,8 @@ const WRITE_TOOLS = new Set<string>([
   "update_workstream_card",
   "submit_google_form",
   "update_planner_event_meta",
+  "plan_event",
+
   "reschedule_event",
   "send_pdf_for_signature",
   // create_bug_report and create_feature_request intentionally NOT gated:

@@ -651,16 +651,6 @@ export default function ProjectWorkspace() {
       </Dialog>
 
 
-      {projectId && (
-        <ProjectTeamChatDrawer
-          open={showTeamChat}
-          onOpenChange={setShowTeamChat}
-          projectId={projectId}
-          projectName={project?.name || "Project"}
-          isOwnerOrAdmin={isAdmin || project?.user_id === user?.id}
-          members={members.map((m) => ({ user_id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }))}
-        />
-      )}
 
     </div>
   );

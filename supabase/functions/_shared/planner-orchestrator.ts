@@ -441,7 +441,7 @@ async function suggestSlots(token: string, startISO: string, endISO: string) {
 // ── Writers ──────────────────────────────────────────────────────────────────
 
 async function createPlannerEvent(ctx: OrchestratorContext, req: ActionRequest, decision: Decision) {
-  const category = plannerCategoryFor(decision.event_type);
+  const category = decision.planner_category || plannerCategoryFor(decision.event_type);
   const name = (req.title || "Untitled").trim();
   const { data, error } = await ctx.supabaseAdmin
     .from("key_events")

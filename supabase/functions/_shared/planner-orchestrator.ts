@@ -17,6 +17,7 @@ export type PlannerIntent =
   | "CREATE_EVENT"
   | "UPDATE_EVENT"
   | "CANCEL_EVENT"
+  | "FIND_EVENT"
   | "CHECK_AVAILABILITY";
 
 export type EventType =
@@ -337,6 +338,8 @@ export interface ActionResult {
   conflicts?: any[];
   suggestions?: { start: string; end: string }[];
   availability?: any;
+  /** Possible matches for a find/cancel/update request the user must choose from. */
+  candidates?: EventCandidate[];
   approval?: ApprovalRouting;
   message: string;
   error?: string;
@@ -850,6 +853,7 @@ export async function executePlannerAction(
   else if (result.ok && req.intent === "CREATE_EVENT") action_taken = "CREATE";
   else if (result.ok && req.intent === "UPDATE_EVENT") action_taken = "UPDATE";
   else if (result.ok && req.intent === "CANCEL_EVENT") action_taken = "DELETE";
+  else if (req.intent === "FIND_EVENT") action_taken = result.ok ? "READ" : "NO_ACTION";
 
   const trace: DecisionTrace = {
     intent: d.intent,

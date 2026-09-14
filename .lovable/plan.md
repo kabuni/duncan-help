@@ -1,90 +1,97 @@
-# Meeting-driven Project updates (design only)
+# Meetings into Projects — proposed schema
 
-Goal: meetings and Duncan Chat become two inputs into one task system. No Gemini integration, no database or production changes in this step — this is the proposed architecture for approval.
+Approved architecture, revised for the conservative rules: one task system, new tasks only as suggestions, meeting source always visible, lightweight review strip, meaning over attendee overlap, and the agreed build order. Nothing here touches production; Gemini stays disconnected.
 
-## 1. How a transcript enters Duncan
+## What already exists (verified)
 
-Transcripts land in the existing `meetings` store (same place Plaud and Google Meet notes already go), with the source recorded. A Gemini feed would simply be another source writing into that same store later.
+- `meetings` — title, `meeting_date`, transcript, summary, `action_items`, participants, `attendee_emails`, `host_user_id`, `source` (currently 'plaud').
+- `workstream_cards` — the Areas of Work, each with `task_code` (WS-xxxx) and optional `project_id`.
+- `workstream_tasks` — the single task system: title, description, `assignee_id`, `due_date`, `completed`, `completed_at`, `status`, `card_id`, `project_id`.
+- `workstream_activity` — per-card history (`action`, `details` JSON, `user_id`).
 
-Each stored meeting keeps: title, date, attendees, full transcript, and the existing AI analysis. Nothing is deleted or rewritten.
+No new task table is introduced. Everything below is additive.
 
-## 2. Understanding pass
+## New records
 
-When a meeting is stored, Duncan runs a single analysis that separates the transcript into two kinds of content:
+### 1. `meeting_extractions` — what Duncan understood from a meeting
 
-- **Commitments** — someone agreed to do something, a status changed, a date moved, an owner changed, something is blocked, or a decision was made that affects work.
-- **Context** — everything else: discussion, opinions, background, ideas without an owner.
+One row per suggestion or update Duncan derives from a transcript. This is a staging area, never a task list.
 
-Only commitments ever become task activity. Context is retained as meeting notes (see section 6).
-
-Each commitment is captured as a proposed change with one of these intents:
-
-| Intent | Example phrase |
+| Field | Purpose |
 | --- | --- |
-| New task | "Sarah will send the revised school proposal by Friday" |
-| Complete task | "the proposal went out yesterday" |
-| Owner change | "actually James is picking this up" |
-| Deadline change | "let's push that to the 20th" |
-| Blocked | "we can't start until legal replies" |
-| Decision affecting a task | "we're dropping the pilot school approach" |
+| `id` | identifier |
+| `meeting_id` | the meeting it came from (cascade delete) |
+| `kind` | `create_task`, `update_due_date`, `update_owner`, `complete_task`, `blocked`, `decision` |
+| `status` | `pending`, `accepted`, `dismissed`, `auto_applied`, `undone` |
+| `confidence` | `high`, `medium`, `low` |
+| `project_id` | resolved Project, null when unresolved |
+| `card_id` | resolved Area of Work, null when unresolved |
+| `task_id` | matched existing task, null for a proposed new task |
+| `proposed` | JSON: title, description, owner, due date, completion — the change being suggested |
+| `source_quote` | the transcript line it came from |
+| `reasoning` | short plain-English explanation of the match |
+| `resolved_by`, `resolved_at` | who accepted, edited or dismissed it |
+| `applied_task_id` | the task actually created or changed, for undo |
+| `created_at` |
 
-## 3. Finding the right Project and Area of Work
+Access follows the Project: visible to people who can see the Project (`can_access_project`), plus admins. Only the backend extraction process writes rows; people change only `status` through accept/edit/dismiss.
 
-Duncan resolves placement in this order, using records that already exist:
+### 2. `meeting_project_links` — which Project a meeting relates to
 
-1. **Explicit mention** — a project or area name said in the meeting.
-2. **Attendee overlap** — project members and area owners present in the meeting.
-3. **Meaning match** — the commitment's wording compared against project names, area names, area descriptions and recent tasks.
-4. **Recent activity** — projects the attendees have been working in lately.
-
-Each placement gets a confidence level. If nothing clears the bar, the commitment is held for a human to place rather than guessed at.
-
-Example: "Sarah will send the revised school proposal by Friday" → Project *Road to 400* → Area of Work *School Integration*.
-
-## 4. Matching against existing tasks (no duplicates)
-
-Within the chosen Area of Work, Duncan compares the commitment to existing tasks on wording, owner and subject. Three outcomes:
-
-- **Strong match** → update the existing task (status, owner, due date, or a note) — never a second copy.
-- **Possible match** → propose the update but ask which task is meant.
-- **No match** → propose a new task.
-
-Owners are resolved against the team directory (people, not free text). "Friday" is resolved to a real date relative to the meeting date.
-
-## 5. Automatic versus confirmation
-
-| Situation | Behaviour |
+| Field | Purpose |
 | --- | --- |
-| Confident update to an existing task (deadline, owner, blocked, completed) | Applied automatically, logged in Activity, notification to the task owner |
-| Confident new task with clear owner and date | Applied automatically, owner notified |
-| Uncertain project/area, uncertain task match, or ambiguous owner/date | Held as a suggestion for review |
-| Completion of someone else's task, or a decision that cancels/changes scope | Always asks — never auto-applies |
+| `meeting_id`, `project_id` | the link (unique pair) |
+| `card_id` | optional narrowing to one Area of Work |
+| `confidence`, `reasoning` | why Duncan linked it |
+| `link_source` | `duncan` or `manual` |
+| `created_at` |
 
-Everything auto-applied is reversible: the Activity entry names the meeting it came from, and one click undoes it.
+This is what keeps meeting context attached to a Project without turning discussion into tasks — the Project can show "3 meetings referenced this work" with the summary, while only genuine commitments reach the extraction table.
 
-A review surface (a "From meetings" list on the Project, plus a Duncan Chat prompt) shows pending suggestions with Accept / Edit / Dismiss. Dismissals teach Duncan not to re-raise the same line.
+A meeting is never linked on attendee overlap alone: the link requires a meaning-level match (the Project, its Areas of Work or its active tasks are actually discussed). Overlap only raises confidence on an already-meaningful match. Below the threshold, no link is written and the suggestion waits for review.
 
-## 6. Keeping meeting context without making tasks
+### 3. Source reference on tasks
 
-Each meeting is linked to the Project (and Area of Work where it's specific enough) and appears in Activity as a meeting entry with its summary, decisions and key points. Tasks that came from a meeting carry a reference back to it, so anyone can see where the commitment came from. Discussion that isn't a commitment stays as meeting context only.
+Two nullable columns on `workstream_tasks`:
 
-## 7. Same system as Duncan Chat
+- `source_meeting_id` — the meeting that created or last changed it
+- `source_type` — `manual`, `meeting`, `chat`
 
-Chat and meetings share one decision path: both produce the same kind of proposed change, both run through the same placement, matching and confirmation rules, and both write to the same task records. Duncan Chat can also answer "what changed in Road to 400 this week?" using meeting-sourced activity. There is no second task system and no separate meeting task list.
+Combined with the meeting's title and date, this gives every task row a readable origin: "From: Leadership Sync — 12 Sep". Duncan Chat uses the same columns with `source_type = 'chat'`, so both inputs land in one system.
 
-## 8. Technical outline
+### 4. Activity entries
 
-- Reuse the existing `meetings` records and analysis function; add a second stage that emits structured proposed changes rather than free-text actions.
-- A shared resolver module (alongside the existing planner orchestrator pattern) does project/area resolution, task matching and owner resolution, called by both the meeting pipeline and Duncan Chat.
-- New records needed when we build: proposed changes awaiting review, a link between meetings and projects/areas, and a source reference on tasks. These are additive only.
-- Tasks continue to live on `workstream_tasks`; areas remain the existing workstream cards linked to a project.
+Every auto-applied change writes a normal `workstream_activity` row on the card, with `details` carrying the meeting id, meeting title, date and the previous value — that previous value is what the one-click undo restores.
 
-## 9. Suggested build order
+## How it connects
 
-1. Structured extraction stage on existing stored meetings (read-only, produces suggestions).
-2. Shared resolver for project/area/task/owner matching.
-3. Review surface on the Project with Accept / Edit / Dismiss.
-4. Auto-apply for high-confidence updates, with Activity entries and undo.
-5. Gemini as a transcript source feeding the same pipeline.
+```text
+meetings ──< meeting_project_links >── projects
+    │                                     │
+    └──< meeting_extractions >────────────┘
+                 │  │
+                 │  └── card_id  →  workstream_cards (Areas of Work)
+                 └───── task_id  →  workstream_tasks (the one task system)
+                                        │
+                                        └── source_meeting_id → meetings
+                                            workstream_activity (undo history)
+```
 
-No production data is touched, and nothing is built until this approach is approved.
+## Behaviour rules baked into the data
+
+- `kind = create_task` never auto-applies in this version; it is always `pending` until someone accepts.
+- Auto-apply is limited to `update_due_date`, `update_owner` and `complete_task` at `high` confidence on a task the speaker owns.
+- Completing someone else's task, cancellations, scope-changing decisions and anything at `medium` or `low` confidence stay `pending`.
+- Dismissed rows are kept, so the same transcript line is not raised again.
+
+## Project UI
+
+One quiet strip on the Project — "From meetings — 3 updates" — listing each item in a line with Accept / Edit / Dismiss. No new navigation area, no second task list. Accepted items disappear into the existing task rows with their meeting reference attached.
+
+## Build order
+
+1. Read-only extraction over meetings already stored (nothing written to tasks).
+2. Shared resolver for Project / Area / Task / Owner, used by meetings and Duncan Chat alike.
+3. The review strip with Accept / Edit / Dismiss.
+4. High-confidence automatic updates, with Activity entries and undo.
+5. Gemini added as another transcript source — not now.

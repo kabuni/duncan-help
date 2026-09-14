@@ -283,7 +283,7 @@ const CALENDAR_TOOLS = [
           },
           addGoogleMeet: {
             type: "boolean",
-            description: "Set true to attach a Google Meet video link to the event. Default to true for meetings, calls, syncs, invites, or events with attendees. Set false only when the user explicitly asks for no Meet link or in-person only.",
+            description: "Attach a Google Meet video link. Set true ONLY for a real internal meeting/call/sync/1:1/interview with named attendees. Set false for webinars, launches, company events, parties, all-hands, deadlines, milestones, reminders, leave, travel, or any event with no attendees, and whenever the user asks for no Meet link or in-person only.",
           },
         },
         required: ["summary", "startDateTime", "endDateTime"],

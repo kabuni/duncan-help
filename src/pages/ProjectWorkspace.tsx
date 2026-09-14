@@ -30,6 +30,22 @@ import ChatInput from "@/components/chat/ChatInput";
 import type { ChatAttachment } from "@/hooks/useNormanChat";
 import { toast } from "sonner";
 import { TutorialButton } from "@/components/onboarding/TutorialButton";
+import { ProjectOverviewTab } from "@/components/projects/workspace/ProjectOverviewTab";
+import { ProjectWorkstreamsTab } from "@/components/projects/workspace/ProjectWorkstreamsTab";
+import { ProjectTasksTab } from "@/components/projects/workspace/ProjectTasksTab";
+import { ProjectTeamTab } from "@/components/projects/workspace/ProjectTeamTab";
+import { ProjectActivityTab } from "@/components/projects/workspace/ProjectActivityTab";
+import { PROJECT_STATUS_META } from "@/hooks/useProjectWork";
+import { formatDay } from "@/components/projects/workspace/shared";
+
+const PROJECT_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "workstreams", label: "Workstreams" },
+  { id: "tasks", label: "Tasks" },
+  { id: "team", label: "Team" },
+  { id: "activity", label: "Activity" },
+  { id: "duncan", label: "Duncan" },
+] as const;
 
 const CHECKLIST_RE = /^\s*[-*]\s*\[\s*[ xX]?\s*\]\s+/;
 const HEADING_RE = /^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/;
@@ -106,6 +122,7 @@ export default function ProjectWorkspace() {
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [chatListOpen, setChatListOpen] = useState(false);
+  const [tab, setTab] = useState<typeof PROJECT_TABS[number]["id"]>("overview");
   const [input, setInput] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
@@ -378,10 +395,12 @@ export default function ProjectWorkspace() {
           </button>
           <div data-tour="pw-title" className="flex-1 min-w-0">
             <h1 className="text-sm font-semibold text-foreground truncate">{project.name}</h1>
-            <p className="text-[10px] text-muted-foreground truncate hidden sm:block">
-              {extractedCount > 0
-                ? `${extractedCount} file${extractedCount !== 1 ? "s" : ""} indexed • Auto-retrieval active`
-                : project.system_prompt ? "Custom instructions active" : "Default instructions"}
+            <p className="text-[11px] text-muted-foreground truncate hidden sm:block">
+              {[
+                (PROJECT_STATUS_META[project.status] || PROJECT_STATUS_META.on_track).label,
+                members.find((m) => m.isOwner)?.display_name,
+                project.target_date ? `Due ${formatDay(project.target_date)}` : null,
+              ].filter(Boolean).join(" · ")}
             </p>
           </div>
           <div className="hidden lg:block">
@@ -395,9 +414,9 @@ export default function ProjectWorkspace() {
             <StickyNote className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Notes</span>
           </Button>
-          <Button data-tour="pw-tasks" variant="ghost" size="sm" onClick={() => setShowTasks(true)} className="gap-1.5 text-xs px-2 sm:px-3 relative" aria-label="Tasks">
+          <Button data-tour="pw-tasks" variant="ghost" size="sm" onClick={() => setShowTasks(true)} className="gap-1.5 text-xs px-2 sm:px-3 relative" aria-label="Planning checklist">
             <ListChecks className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Tasks{openTaskCount > 0 && ` (${openTaskCount})`}</span>
+            <span className="hidden sm:inline">Planning{openTaskCount > 0 && ` (${openTaskCount})`}</span>
             {openTaskCount > 0 && (
               <span className="sm:hidden absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-medium px-1">
                 {openTaskCount}
@@ -413,18 +432,57 @@ export default function ProjectWorkspace() {
               </span>
             )}
           </Button>
-          <Button data-tour="pw-collaborate" variant="ghost" size="sm" onClick={() => setShowCollaborate(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Collaborate">
-            <Users className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Collaborate</span>
-          </Button>
           <Button data-tour="pw-settings" variant="ghost" size="sm" onClick={openSettings} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Settings">
             <Settings2 className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Settings</span>
           </Button>
         </header>
 
+        {/* Tabs */}
+        <nav className="flex items-center gap-1 border-b border-border px-2 sm:px-4 shrink-0 overflow-x-auto">
+          {PROJECT_TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`shrink-0 px-3 py-2.5 text-sm transition-colors border-b-2 -mb-px ${
+                tab === t.id
+                  ? "border-primary text-foreground font-medium"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
+
         {/* Workspace */}
         <div className="flex-1 flex min-h-0 overflow-hidden">
+          {tab !== "duncan" && (
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {tab === "overview" && (
+                <ProjectOverviewTab
+                  projectId={projectId}
+                  projectName={project.name}
+                  description={project.description}
+                  members={members}
+                  onOpenTab={(next) => setTab(next as any)}
+                />
+              )}
+              {tab === "workstreams" && <ProjectWorkstreamsTab projectId={projectId} members={members} />}
+              {tab === "tasks" && <ProjectTasksTab projectId={projectId} projectName={project.name} members={members} />}
+              {tab === "team" && (
+                <ProjectTeamTab
+                  members={members}
+                  availableProfiles={availableProfiles}
+                  onAdd={addMember}
+                  onRemove={removeMember}
+                  canManage={project.user_id === user?.id || isAdmin}
+                />
+              )}
+              {tab === "activity" && <ProjectActivityTab projectId={projectId} />}
+            </div>
+          )}
+          {tab === "duncan" && <>
           {/* LEFT: Chat list (desktop) */}
           <div data-tour="pw-chat-list" className="w-56 shrink-0 border-r border-border flex-col bg-sidebar/50 hidden md:flex">
             <div className="p-3 border-b border-border">
@@ -724,6 +782,7 @@ export default function ProjectWorkspace() {
               </>
             )}
           </div>
+          </>}
 
           {/* Files Slide-over */}
           {showFiles && (

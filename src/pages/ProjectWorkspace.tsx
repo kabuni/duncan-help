@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { TutorialButton } from "@/components/onboarding/TutorialButton";
 import { ProjectOverviewTab } from "@/components/projects/workspace/ProjectOverviewTab";
 import { ProjectWorkstreamsTab } from "@/components/projects/workspace/ProjectWorkstreamsTab";
+import { ProjectMapTab } from "@/components/projects/workspace/ProjectMapTab";
 import { ProjectTasksTab } from "@/components/projects/workspace/ProjectTasksTab";
 import { ProjectTeamTab } from "@/components/projects/workspace/ProjectTeamTab";
 import { ProjectActivityTab } from "@/components/projects/workspace/ProjectActivityTab";

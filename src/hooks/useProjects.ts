@@ -23,6 +23,9 @@ export interface Project {
   name: string;
   system_prompt: string | null;
   note_template: string | null;
+  description: string | null;
+  status: string;
+  target_date: string | null;
   created_at: string;
 }
 
@@ -84,11 +87,21 @@ export function useProjects() {
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
-  const createProject = useCallback(async (name: string, systemPrompt?: string) => {
+  const createProject = useCallback(async (
+    name: string,
+    options?: { system_prompt?: string | null; description?: string | null; status?: string; target_date?: string | null },
+  ) => {
     if (!session) return null;
     const { data, error } = await supabase
       .from("projects")
-      .insert({ user_id: session.user.id, name, system_prompt: systemPrompt || null })
+      .insert({
+        user_id: session.user.id,
+        name,
+        system_prompt: options?.system_prompt || null,
+        description: options?.description || null,
+        status: options?.status || "on_track",
+        target_date: options?.target_date || null,
+      } as any)
       .select()
       .single();
     if (error) {
@@ -99,8 +112,11 @@ export function useProjects() {
     return data as Project;
   }, [session, toast]);
 
-  const updateProject = useCallback(async (id: string, updates: { name?: string; system_prompt?: string | null; note_template?: string | null }) => {
-    const { error } = await supabase.from("projects").update(updates).eq("id", id);
+  const updateProject = useCallback(async (id: string, updates: {
+    name?: string; system_prompt?: string | null; note_template?: string | null;
+    description?: string | null; status?: string; target_date?: string | null;
+  }) => {
+    const { error } = await supabase.from("projects").update(updates as any).eq("id", id);
     if (error) {
       toast({ title: "Error", description: "Failed to update project", variant: "destructive" });
       return false;

@@ -1988,6 +1988,40 @@ const PLANNER_TOOLS = [
   {
     type: "function",
     function: {
+      name: "plan_event",
+      description:
+        "CANONICAL tool for anything the user says is happening: leave/holiday, sick days, out-of-office, travel, company events, deadlines/milestones, meetings, and availability questions. You interpret the intent; the application's destination decision engine decides whether it belongs in Duncan Planner, Google Calendar, or BOTH, links the two records, checks for duplicates and checks meeting conflicts. NEVER ask the user which calendar/system to use — call this tool. Only use create_calendar_event directly when the user explicitly demands a raw Google Calendar invite with attendees and you already have attendee emails.",
+      parameters: {
+        type: "object",
+        properties: {
+          intent: { type: "string", enum: ["CREATE_EVENT", "UPDATE_EVENT", "CANCEL_EVENT", "CHECK_AVAILABILITY"], description: "What the user wants to do." },
+          event_type: {
+            type: "string",
+            enum: ["MEETING", "AVAILABILITY", "OUT_OF_OFFICE", "ANNUAL_LEAVE", "SICK_LEAVE", "COMPANY_EVENT", "PROJECT_MILESTONE", "TRAVEL", "OTHER"],
+            description: "Your best interpretation of what kind of thing this is. Omit if genuinely unclear — the engine will classify from the utterance.",
+          },
+          utterance: { type: "string", description: "The user's own words, verbatim. Used for classification." },
+          title: { type: "string", description: "Short event title, e.g. 'Annual leave — Arzoo' or 'Project deadline'." },
+          description: { type: "string" },
+          location: { type: "string" },
+          start: { type: "string", description: "ISO 8601 start datetime (or date for all-day)." },
+          end: { type: "string", description: "ISO 8601 end datetime. Defaults to start." },
+          all_day: { type: "boolean", description: "True for leave, milestones, whole-day events." },
+          attendees: { type: "array", items: { type: "string" }, description: "Attendee email addresses (meetings only)." },
+          owner: { type: "string", description: "Owner name or email. Defaults to the caller." },
+          link_group: { type: "string", description: "Existing linked-event group (EVT-XXXX) for updates/cancels." },
+          planner_event_id: { type: "string", description: "key_events.id for updates/cancels." },
+          google_event_id: { type: "string", description: "Google Calendar event id for updates/cancels." },
+          force: { type: "boolean", description: "Set true ONLY after the user has been told about a duplicate or conflict and asked to proceed anyway." },
+        },
+        required: ["intent"],
+      },
+    },
+  },
+
+  {
+    type: "function",
+    function: {
       name: "list_planner_events",
       description: "List Planner / Key Events Diary entries (synced from Google Calendar). Returns title, start/end, owner, category, risk level, missing fields, and Duncan metadata. Use when the user asks about the planner, upcoming events, key events, what's coming up, risks in the diary, or which events are incomplete.",
       parameters: {

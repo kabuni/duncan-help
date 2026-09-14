@@ -1994,7 +1994,7 @@ const PLANNER_TOOLS = [
     function: {
       name: "plan_event",
       description:
-        "CANONICAL tool for anything the user says is happening: leave/holiday, sick days, out-of-office, travel, company events, deadlines/milestones, meetings, and availability questions. You interpret the intent; the application's destination decision engine decides whether it belongs in Duncan Planner, Google Calendar, or BOTH, links the two records, checks for duplicates and checks meeting conflicts. NEVER ask the user which calendar/system to use — call this tool. Only use create_calendar_event directly when the user explicitly demands a raw Google Calendar invite with attendees and you already have attendee emails.",
+        "CANONICAL tool for anything the user says is happening: leave/holiday, sick days, out-of-office, travel, company events, deadlines/milestones, meetings, and availability questions. You interpret the intent and supply signals (event_type, audience, attendance_required); the application's destination decision engine decides whether it belongs in Duncan Planner, Google Calendar, or BOTH, links the two records, checks for duplicates and checks meeting conflicts. NEVER ask the user which calendar/system to use — call this tool. If the tool comes back with error 'needs_clarification', ask the user the short question in the message (it is about whether people need to attend), then call the tool again with attendance_required set from their answer. Only use create_calendar_event directly when the user explicitly demands a raw Google Calendar invite with attendees and you already have attendee emails.",
       parameters: {
         type: "object",
         properties: {

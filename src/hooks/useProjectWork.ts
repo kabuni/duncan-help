@@ -373,6 +373,68 @@ export function useDeleteProjectTask(projectId: string | null) {
   });
 }
 
+export interface TaskComment {
+  id: string;
+  content: string;
+  created_at: string;
+  user_id: string;
+  author_name: string | null;
+}
+
+/** Comments on a single task (workstream_task_comments — the existing table). */
+export function useTaskComments(taskId: string | null) {
+  return useQuery({
+    queryKey: ["task-comments", taskId],
+    enabled: !!taskId,
+    queryFn: async (): Promise<TaskComment[]> => {
+      const { data, error } = await supabase
+        .from("workstream_task_comments")
+        .select("id, content, created_at, user_id")
+        .eq("task_id", taskId!)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      const rows = (data || []) as any[];
+      const names = await profileMap(rows.map((r) => r.user_id));
+      return rows.map((r) => ({ ...r, author_name: names.get(r.user_id) ?? null })) as TaskComment[];
+    },
+  });
+}
+
+export function useAddTaskComment(taskId: string | null) {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (content: string) => {
+      if (!user) throw new Error("Not signed in");
+      const { error } = await supabase
+        .from("workstream_task_comments")
+        .insert({ task_id: taskId, user_id: user.id, content } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["task-comments", taskId] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/** Comment counts for a set of tasks, so rows can show whether a conversation exists. */
+export function useTaskCommentCounts(taskIds: string[]) {
+  const key = [...taskIds].sort().join(",");
+  return useQuery({
+    queryKey: ["task-comment-counts", key],
+    enabled: taskIds.length > 0,
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data, error } = await supabase
+        .from("workstream_task_comments")
+        .select("task_id")
+        .in("task_id", taskIds);
+      if (error) throw error;
+      const out: Record<string, number> = {};
+      for (const r of (data || []) as any[]) out[r.task_id] = (out[r.task_id] || 0) + 1;
+      return out;
+    },
+  });
+}
+
 const ACTION_LABELS: Record<string, string> = {
   card_created: "created workstream",
   linked_to_project: "linked workstream to the project",

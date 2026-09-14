@@ -8,12 +8,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   useProjectWorkstreams, useLinkableWorkstreams, useLinkWorkstream, useUnlinkWorkstream, useCreateProjectWorkstream,
-  useProjectTasks, RYG_META, type ProjectWorkstream,
+  useProjectTasks, type ProjectWorkstream, type ProjectTask,
 } from "@/hooks/useProjectWork";
 import type { ProjectMember } from "@/hooks/useProjects";
 import { StatusDot, EmptyLine } from "./shared";
 import { type AreaOfWorkTarget } from "./AreaOfWorkDrawer";
 import { AreaOfWorkCard } from "./AreaOfWorkCard";
+import { TaskCommentsPanel } from "./TaskCommentsPanel";
 
 export function ProjectWorkstreamsTab({
   projectId, members, areaTarget, onOpenArea,
@@ -26,6 +27,7 @@ export function ProjectWorkstreamsTab({
   const { data: workstreams = [], isLoading } = useProjectWorkstreams(projectId);
   const { data: allTasks = [] } = useProjectTasks(projectId);
   const [open, setOpen] = useState(false);
+  const [commentTask, setCommentTask] = useState<ProjectTask | null>(null);
 
   const looseTasks = allTasks.filter((t) => !t.card_id);
 
@@ -58,6 +60,7 @@ export function ProjectWorkstreamsTab({
               tasks={allTasks.filter((t) => t.card_id === ws.id)}
               members={members}
               onOpenDetail={() => onOpenArea({ area: ws as ProjectWorkstream })}
+              onOpenComments={setCommentTask}
             />
           ))}
         </div>
@@ -70,8 +73,11 @@ export function ProjectWorkstreamsTab({
           tasks={looseTasks}
           members={members}
           onOpenDetail={() => onOpenArea({ area: null })}
+          onOpenComments={setCommentTask}
         />
       )}
+
+      <TaskCommentsPanel task={commentTask} onOpenChange={(o) => { if (!o) setCommentTask(null); }} />
 
       <AddWorkstreamDialog open={open} onOpenChange={setOpen} projectId={projectId} members={members} />
     </div>

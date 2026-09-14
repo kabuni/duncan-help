@@ -1,15 +1,16 @@
 import { useMemo, useState } from "react";
-import { Plus, ChevronDown, Loader2, Trash2 } from "lucide-react";
+import { Plus, ChevronDown, Loader2, Trash2, Pencil, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ProjectMember } from "@/hooks/useProjects";
 import {
-  useCreateProjectTask, useToggleProjectTask, useDeleteProjectTask,
+  useCreateProjectTask, useToggleProjectTask, useDeleteProjectTask, useTaskCommentCounts,
   RYG_META, type ProjectWorkstream, type ProjectTask,
 } from "@/hooks/useProjectWork";
 import { StatusDot, formatDay, relativeDay } from "./shared";
+import { TaskEditPopover } from "./TaskEditPopover";
 
 /**
  * One Area of Work shown inline on the Areas of Work page.
@@ -17,7 +18,7 @@ import { StatusDot, formatDay, relativeDay } from "./shared";
  * for fuller detail/editing. Tasks are the same underlying records — nothing duplicated.
  */
 export function AreaOfWorkCard({
-  projectId, area, tasks, members, onOpenDetail,
+  projectId, area, tasks, members, onOpenDetail, onOpenComments,
 }: {
   projectId: string;
   /** null = tasks that don't sit in any area of work */
@@ -25,10 +26,12 @@ export function AreaOfWorkCard({
   tasks: ProjectTask[];
   members: ProjectMember[];
   onOpenDetail: () => void;
+  onOpenComments: (task: ProjectTask) => void;
 }) {
   const create = useCreateProjectTask(projectId);
   const toggle = useToggleProjectTask(projectId);
   const remove = useDeleteProjectTask(projectId);
+  const { data: commentCounts = {} } = useTaskCommentCounts(tasks.map((t) => t.id));
 
   const [showCompleted, setShowCompleted] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -109,18 +112,39 @@ export function AreaOfWorkCard({
                 <p className="text-sm text-foreground">{t.title}</p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
                   <span>{t.assignee_name || "Unassigned"}</span>
-                  {t.due_date && <span>{relativeDay(t.due_date)}</span>}
+                  <span>{t.due_date ? relativeDay(t.due_date) : "No due date"}</span>
                 </div>
               </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={() => remove.mutate(t.id)}
-                aria-label="Remove task"
-              >
-                <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-              </Button>
+              <div className="flex items-center gap-0.5">
+                <TaskEditPopover projectId={projectId} task={t} members={members}>
+                  <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={`Edit ${t.title}`}>
+                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Button>
+                </TaskEditPopover>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 relative"
+                  onClick={() => onOpenComments(t)}
+                  aria-label={`Comments on ${t.title}`}
+                >
+                  <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                  {(commentCounts[t.id] || 0) > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[14px] rounded-full bg-primary px-1 text-[9px] leading-[14px] text-primary-foreground">
+                      {commentCounts[t.id]}
+                    </span>
+                  )}
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => remove.mutate(t.id)}
+                  aria-label="Remove task"
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              </div>
             </li>
           ))}
           {activeTasks.length === 0 && (

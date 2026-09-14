@@ -1,19 +1,18 @@
-import { useNavigate } from "react-router-dom";
-import { useProjectWorkstreams, useProjectTasks, useProjectActivity, RYG_META, PROJECT_STATUS_META } from "@/hooks/useProjectWork";
+import { useProjectWorkstreams, useProjectTasks, useProjectActivity, RYG_META, PROJECT_STATUS_META, type ProjectWorkstream } from "@/hooks/useProjectWork";
 import { ProjectProgressRing, useProjectProgress } from "./ProjectProgressRing";
 import type { ProjectMember } from "@/hooks/useProjects";
-import { taskCodeHref } from "@/components/TaskIdLink";
+import { type AreaOfWorkTarget } from "./AreaOfWorkDrawer";
 import { AskDuncanBar } from "./AskDuncanBar";
 import { StatusDot, Avatars, SectionTitle, EmptyLine, relativeDay, formatDay } from "./shared";
 
 export function ProjectOverviewTab({
-  projectId, projectName, description, members, status, targetDate, onOpenTab,
+  projectId, projectName, description, members, status, targetDate, onOpenTab, onOpenArea,
 }: {
   projectId: string; projectName: string; description: string | null;
   members: ProjectMember[]; status?: string; targetDate?: string | null;
   onOpenTab: (tab: string) => void;
+  onOpenArea: (target: AreaOfWorkTarget) => void;
 }) {
-  const navigate = useNavigate();
   const { data: workstreams = [] } = useProjectWorkstreams(projectId);
   const { data: tasks = [] } = useProjectTasks(projectId);
   const { data: activity = [] } = useProjectActivity(projectId);
@@ -74,15 +73,15 @@ export function ProjectOverviewTab({
       </section>
 
       <section className="space-y-3">
-        <SectionTitle>Workstreams</SectionTitle>
+        <SectionTitle>Areas of work</SectionTitle>
         {workstreams.length === 0 ? (
-          <EmptyLine>No workstreams connected yet.</EmptyLine>
+          <EmptyLine>No areas of work connected yet.</EmptyLine>
         ) : (
           <ul className="space-y-2.5">
             {workstreams.map((ws) => (
               <li key={ws.id}>
                 <button
-                  onClick={() => navigate(taskCodeHref(ws.task_code))}
+                  onClick={() => onOpenArea({ area: ws as ProjectWorkstream })}
                   className="flex flex-wrap items-center gap-x-3 text-sm hover:text-primary transition-colors"
                 >
                   <StatusDot status={ws.status} />

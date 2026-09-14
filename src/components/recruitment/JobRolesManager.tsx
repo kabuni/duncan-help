@@ -80,33 +80,27 @@ export function JobRolesManager() {
     if (roleId) retryMap.set(roleId, entry);
   });
 
+  const enqueueHireflixRetry = async (
+    operation: "create_position" | "delete_position",
+    payload: Record<string, unknown>,
+    supersedeId?: string | null,
+  ) => {
+    const { data, error } = await supabase.functions.invoke("hireflix-enqueue-retry", {
+      body: { operation, payload, supersede_id: supersedeId ?? null },
+    });
+    if (error) throw error;
+    const result = data as { success?: boolean; error?: string };
+    if (!result?.success) throw new Error(result?.error || "Failed to queue retry");
+  };
+
   const handleRetryPosition = async (roleId: string, roleTitle: string) => {
     try {
-      const { data: roleData } = await supabase
-        .from("job_roles")
-        .select("competencies")
-        .eq("id", roleId)
-        .single();
-
-      // Mark existing failed entry as completed before re-queuing
       const existing = retryMap.get(roleId);
-      if (existing) {
-        await supabase
-          .from("hireflix_retry_queue")
-          .update({ status: "completed", completed_at: new Date().toISOString() })
-          .eq("id", existing.id);
-      }
-
-      await supabase.from("hireflix_retry_queue").insert({
-        operation: "create_position",
-        payload: JSON.parse(JSON.stringify({
-          job_role_id: roleId,
-          title: roleTitle,
-          competencies: roleData?.competencies || [],
-        })),
-        status: "pending",
-        next_retry_at: new Date().toISOString(),
-      });
+      await enqueueHireflixRetry(
+        "create_position",
+        { job_role_id: roleId, title: roleTitle },
+        existing?.id ?? null,
+      );
 
       toast.success("Retry queued — position will be created shortly");
       queryClient.invalidateQueries({ queryKey: ["hireflix-retry-queue-roles"] });

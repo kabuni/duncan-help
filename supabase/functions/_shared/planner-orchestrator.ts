@@ -180,6 +180,104 @@ export function classifyEventType(text: string): EventType {
   return "OTHER";
 }
 
+// ── Signal analysis ──────────────────────────────────────────────────────────
+// Destination is NEVER decided from the category name. It is decided from
+// intent + audience + whether people have to turn up + whether a real time was
+// given + organisational significance.
+
+/** Wording that means the whole company / a whole team is involved. */
+const COMPANY_AUDIENCE =
+  /\b(company[- ]wide|whole (company|team|business|school)|all staff|all employees|everyone|the entire (team|company)|all[- ]hands|town ?hall|company (event|party|social|away ?day|update|meeting)|with the (whole|entire) team|all of us|team[- ]wide)\b/i;
+
+/** Things that only exist because people gather for them — attendance is implied. */
+const ATTENDABLE =
+  /\b(party|all[- ]hands|town ?hall|away ?day|social|socials|celebration|dinner|drinks|night out|conference|summit|showcase|open day|graduation|awards?|demo day|webinar|festival|offsite|off[- ]site|expo|exhibition|ceremony|screening|training day|hackathon|kick[- ]?off)\b/i;
+
+/** Company markers that are a date in the plan, not a gathering. */
+const MILESTONE_WORDING =
+  /\b(launch(es|ing)?|go[- ]live|release|rollout|roll[- ]out|ship(ping)? (date|version)|version \d|deadline|milestone|due (by|on)|cut ?off|target date|announcement|press release|campaign)\b/i;
+
+/** Event types where the Planner-vs-Calendar question is actually open. */
+const OPEN_TYPES: EventType[] = ["COMPANY_EVENT", "PROJECT_MILESTONE", "OTHER"];
+
+export interface EventSignals {
+  audience: Audience;
+  attendance_required: boolean;
+  significant: boolean;
+  has_specific_time: boolean;
+  ambiguous: boolean;
+  clarifying_question: string | null;
+}
+
+function hasClockTime(start?: string | null, allDay?: boolean): boolean {
+  if (allDay) return false;
+  if (!start) return false;
+  if (!/\d{2}:\d{2}/.test(start)) return false;
+  return !/T00:00(:00)?/.test(start);
+}
+
+/**
+ * Works out who an item is for and whether anyone has to attend it.
+ * Explicit values supplied by the caller always win over the wording.
+ */
+export function analyzeSignals(
+  eventType: EventType,
+  text: string,
+  opts: {
+    all_day?: boolean;
+    start?: string | null;
+    attendees?: string[];
+    audience?: Audience;
+    attendance_required?: boolean;
+  } = {},
+): EventSignals {
+  const t = text || "";
+  const timed = hasClockTime(opts.start, opts.all_day);
+  const companyWords = COMPANY_AUDIENCE.test(t);
+  const attendable = ATTENDABLE.test(t);
+  const milestone = MILESTONE_WORDING.test(t);
+  const hasAttendees = !!(opts.attendees && opts.attendees.length);
+
+  const personalType = eventType === "PERSONAL_APPOINTMENT" || eventType === "ANNUAL_LEAVE" ||
+    eventType === "SICK_LEAVE" || eventType === "OUT_OF_OFFICE" || eventType === "TRAVEL";
+
+  let audience: Audience =
+    opts.audience ??
+    (personalType ? "PERSONAL" : companyWords ? "COMPANY" : hasAttendees || eventType === "MEETING" ? "TEAM" : OPEN_TYPES.includes(eventType) ? "COMPANY" : "PERSONAL");
+
+  const significant = audience === "COMPANY" && (companyWords || attendable || milestone || OPEN_TYPES.includes(eventType));
+
+  const attendance_required =
+    opts.attendance_required ??
+    (eventType === "MEETING" || personalType
+      ? true
+      : attendable || hasAttendees || (companyWords && timed));
+
+  // Only ask when a company-level item genuinely could be either: a milestone
+  // phrased with a real clock time, but nothing saying people must turn up.
+  const ambiguous =
+    opts.attendance_required === undefined &&
+    OPEN_TYPES.includes(eventType) &&
+    milestone &&
+    timed &&
+    !companyWords &&
+    !attendable &&
+    !hasAttendees;
+
+  return {
+    audience,
+    attendance_required,
+    significant,
+    has_specific_time: timed,
+    ambiguous,
+    clarifying_question: ambiguous
+      ? "Is this something people need to attend at that time, or just a date to mark on the Planner?"
+      : null,
+  };
+}
+
+
+
 // ── Planner categories ───────────────────────────────────────────────────────
 // These are the EXISTING Planner categories (mirrors src/components/diary/
 // categoryMeta.ts). No new category system — the engine only ever picks one of

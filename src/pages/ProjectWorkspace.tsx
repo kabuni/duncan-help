@@ -30,7 +30,6 @@ import { TutorialButton } from "@/components/onboarding/TutorialButton";
 import { ProjectOverviewTab } from "@/components/projects/workspace/ProjectOverviewTab";
 import { ProjectWorkstreamsTab } from "@/components/projects/workspace/ProjectWorkstreamsTab";
 
-import { ProjectTasksTab } from "@/components/projects/workspace/ProjectTasksTab";
 import { ProjectTeamTab } from "@/components/projects/workspace/ProjectTeamTab";
 import { ProjectActivityTab } from "@/components/projects/workspace/ProjectActivityTab";
 import { PROJECT_STATUS_META } from "@/hooks/useProjectWork";
@@ -41,8 +40,6 @@ const PROJECT_TABS = [
   { id: "overview", label: "Overview" },
   { id: "chat", label: "Team Chat" },
   { id: "workstreams", label: "Areas of Work" },
-  
-  { id: "tasks", label: "Tasks" },
   { id: "team", label: "Team" },
   { id: "activity", label: "Activity" },
 ] as const;
@@ -417,7 +414,6 @@ export default function ProjectWorkspace() {
                 />
               )}
               {tab === "workstreams" && <ProjectWorkstreamsTab projectId={projectId} members={members} />}
-              {tab === "tasks" && <ProjectTasksTab projectId={projectId} projectName={project.name} members={members} />}
               {tab === "team" && (
                 <ProjectTeamTab
                   members={members}

@@ -30,6 +30,22 @@ import ChatInput from "@/components/chat/ChatInput";
 import type { ChatAttachment } from "@/hooks/useNormanChat";
 import { toast } from "sonner";
 import { TutorialButton } from "@/components/onboarding/TutorialButton";
+import { ProjectOverviewTab } from "@/components/projects/workspace/ProjectOverviewTab";
+import { ProjectWorkstreamsTab } from "@/components/projects/workspace/ProjectWorkstreamsTab";
+import { ProjectTasksTab } from "@/components/projects/workspace/ProjectTasksTab";
+import { ProjectTeamTab } from "@/components/projects/workspace/ProjectTeamTab";
+import { ProjectActivityTab } from "@/components/projects/workspace/ProjectActivityTab";
+import { PROJECT_STATUS_META } from "@/hooks/useProjectWork";
+import { formatDay } from "@/components/projects/workspace/shared";
+
+const PROJECT_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "workstreams", label: "Workstreams" },
+  { id: "tasks", label: "Tasks" },
+  { id: "team", label: "Team" },
+  { id: "activity", label: "Activity" },
+  { id: "duncan", label: "Duncan" },
+] as const;
 
 const CHECKLIST_RE = /^\s*[-*]\s*\[\s*[ xX]?\s*\]\s+/;
 const HEADING_RE = /^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/;
@@ -378,10 +394,12 @@ export default function ProjectWorkspace() {
           </button>
           <div data-tour="pw-title" className="flex-1 min-w-0">
             <h1 className="text-sm font-semibold text-foreground truncate">{project.name}</h1>
-            <p className="text-[10px] text-muted-foreground truncate hidden sm:block">
-              {extractedCount > 0
-                ? `${extractedCount} file${extractedCount !== 1 ? "s" : ""} indexed • Auto-retrieval active`
-                : project.system_prompt ? "Custom instructions active" : "Default instructions"}
+            <p className="text-[11px] text-muted-foreground truncate hidden sm:block">
+              {[
+                (PROJECT_STATUS_META[project.status] || PROJECT_STATUS_META.on_track).label,
+                members.find((m) => m.isOwner)?.display_name,
+                project.target_date ? `Due ${formatDay(project.target_date)}` : null,
+              ].filter(Boolean).join(" · ")}
             </p>
           </div>
           <div className="hidden lg:block">

@@ -29,7 +29,6 @@ import { cn } from "@/lib/utils";
 
 import { DetailDrawer } from "@/components/diary/DetailDrawer";
 import { AddEventDialog } from "@/components/diary/AddEventDialog";
-import { PlannerAsk } from "@/components/diary/PlannerAsk";
 import { useTour } from "@/components/onboarding/tour/TourProvider";
 import { formatTimeInTz } from "@/components/diary/TimezonePicker";
 import { CATEGORY_META, CATEGORY_GROUPS, getCategoryMeta } from "@/components/diary/categoryMeta";
@@ -183,7 +182,7 @@ export default function KeyEventsDiary() {
 
   const [view, setView] = useState<View>("month");
   const [date, setDate] = useState<Date>(new Date());
-  const [calendarOpen, setCalendarOpen] = useState(!isMobile);
+  const [calendarOpen, setCalendarOpen] = useState(true);
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedEvent, setSelectedEvent] = useState<KeyEvent | null>(null);

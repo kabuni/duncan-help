@@ -52,7 +52,6 @@ Deno.serve(async (req) => {
       { data: project },
       { data: cards },
       { data: tasks },
-      { data: activity },
       { data: recentMsgs },
       { data: memberRows },
     ] = await Promise.all([
@@ -65,11 +64,6 @@ Deno.serve(async (req) => {
         .from("workstream_tasks")
         .select("id, title, status, completed, due_date, assignee_id, project_id, card_id")
         .or(`project_id.eq.${projectId}`),
-      admin
-        .from("workstream_activity")
-        .select("action, detail, created_at")
-        .order("created_at", { ascending: false })
-        .limit(20),
       admin
         .from("project_messages")
         .select("content, author_type, user_id, created_at")
@@ -91,6 +85,17 @@ Deno.serve(async (req) => {
         .in("card_id", cardIds);
       const seen = new Set(allTasks.map((t) => t.id));
       for (const t of (cardTasks || []) as any[]) if (!seen.has(t.id)) allTasks.push(t);
+    }
+
+    let activity: any[] = [];
+    if (cardIds.length) {
+      const { data: act } = await admin
+        .from("workstream_activity")
+        .select("action, details, created_at, card_id")
+        .in("card_id", cardIds)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      activity = (act || []) as any[];
     }
 
     // People: project members + card owners + task assignees, so Duncan can name and assign.
@@ -146,7 +151,7 @@ TASKS (${total}):
 ${allTasks.map(taskLine).join("\n") || "- none yet"}
 
 RECENT ACTIVITY:
-${((activity || []) as any[]).map((a) => `- ${a.action}: ${a.detail || ""}`).join("\n") || "- none"}
+${activity.map((a) => `- ${a.action}: ${typeof a.details === "string" ? a.details : JSON.stringify(a.details)}`).join("\n") || "- none"}
 
 PLANNER (upcoming company/calendar items, read-only):
 ${((plannerEvents || []) as any[]).map((e) => `- ${e.start_date}: ${e.title} [${e.category || "Event"}]`).join("\n") || "- none"}
@@ -244,6 +249,14 @@ ${context}`;
               status: "not_started",
               completed: false,
             });
+            if (!error && card?.id) {
+              await admin.from("workstream_activity").insert({
+                card_id: card.id,
+                user_id: user.id,
+                action: "task_added",
+                details: { title: args.title, via: "Duncan in Team Chat" },
+              });
+            }
             result = error
               ? `failed: ${error.message}`
               : `created task "${args.title}"${assignee ? ` for ${assignee.display_name}` : " (unassigned)"}${args.due_date ? ` due ${args.due_date}` : ""}`;

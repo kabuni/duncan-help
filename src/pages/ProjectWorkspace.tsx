@@ -416,9 +416,17 @@ export default function ProjectWorkspace() {
                   status={project.status}
                   targetDate={project.target_date}
                   onOpenTab={(next) => setTab(next as any)}
+                  onOpenArea={(area) => setAreaTarget({ area })}
                 />
               )}
-              {tab === "workstreams" && <ProjectWorkstreamsTab projectId={projectId} members={members} />}
+              {tab === "workstreams" && (
+                <ProjectWorkstreamsTab
+                  projectId={projectId}
+                  members={members}
+                  areaTarget={areaTarget}
+                  onOpenArea={setAreaTarget}
+                />
+              )}
               {tab === "activity" && <ProjectActivityTab projectId={projectId} />}
             </div>
           )}

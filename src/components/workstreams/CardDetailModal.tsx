@@ -208,7 +208,7 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                 <span className="text-[10px] text-muted-foreground">
                   Created by <span className="text-foreground">{card.created_by_name || "Unknown"}</span>
                 </span>
-                <span className="ml-auto">
+                <span className="ml-auto mr-7">
                   <PromoteToProjectAction
                     cardId={card.id}
                     projectId={(card as any).project_id ?? null}

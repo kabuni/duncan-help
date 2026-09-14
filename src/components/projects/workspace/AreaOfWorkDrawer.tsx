@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Plus, Trash2, ExternalLink, Loader2, Check, X } from "lucide-react";
+import { Plus, Trash2, ChevronDown, Loader2, Check, X } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,9 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { ProjectMember } from "@/hooks/useProjects";
 import {
   useProjectTasks, useCreateProjectTask, useToggleProjectTask, useDeleteProjectTask,
-  useUpdateProjectTask, RYG_META, type ProjectWorkstream,
+  useUpdateProjectTask, RYG_META, type ProjectWorkstream, type ProjectTask,
 } from "@/hooks/useProjectWork";
-import { taskCodeHref } from "@/components/TaskIdLink";
 import { StatusDot, formatDay, relativeDay, EmptyLine } from "./shared";
 
 export interface AreaOfWorkTarget {
@@ -32,7 +30,6 @@ export function AreaOfWorkDrawer({
   target: AreaOfWorkTarget | null;
   onOpenChange: (open: boolean) => void;
 }) {
-  const navigate = useNavigate();
   const area = target?.area ?? null;
   const { data: allTasks = [], isLoading } = useProjectTasks(projectId);
   const create = useCreateProjectTask(projectId);
@@ -52,10 +49,20 @@ export function AreaOfWorkDrawer({
     () => allTasks.filter((t) => (area ? t.card_id === area.id : !t.card_id)),
     [allTasks, area],
   );
-  const done = tasks.filter((t) => t.completed).length;
+  const activeTasks = useMemo(() => tasks.filter((t) => !t.completed), [tasks]);
+  const completedTasks = useMemo(
+    () =>
+      tasks
+        .filter((t) => t.completed)
+        .sort((a, b) => {
+          const aDate = a.completed_at || a.created_at;
+          const bDate = b.completed_at || b.created_at;
+          return bDate.localeCompare(aDate);
+        }),
+    [tasks],
+  );
+  const done = completedTasks.length;
   const pct = tasks.length === 0 ? 0 : Math.round((done / tasks.length) * 100);
-  // Active tasks show by default; completed work is kept and revealed on request.
-  const visibleTasks = showCompleted ? tasks : tasks.filter((t) => !t.completed);
 
   const submit = async () => {
     if (!newTitle.trim()) return;
@@ -162,84 +169,129 @@ export function AreaOfWorkDrawer({
 
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          ) : visibleTasks.length === 0 ? (
-            <EmptyLine>{tasks.length === 0 ? "No tasks here yet." : "Nothing outstanding here."}</EmptyLine>
           ) : (
-            <ul className="divide-y divide-border rounded-xl border border-border">
-              {visibleTasks.map((t) => (
-                <li key={t.id} className="group flex items-start gap-3 px-4 py-3">
-                  <Checkbox
-                    className="mt-0.5"
-                    checked={t.completed}
-                    onCheckedChange={(v) => toggle.mutate({ id: t.id, completed: !!v })}
-                  />
-                  <div className="min-w-0 flex-1">
-                    {editing === t.id ? (
-                      <div className="flex items-center gap-1.5">
-                        <Input
-                          autoFocus
-                          className="h-8"
-                          value={editTitle}
-                          onChange={(e) => setEditTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") saveEdit(t.id);
-                            if (e.key === "Escape") setEditing(null);
-                          }}
-                        />
-                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => saveEdit(t.id)}>
-                          <Check className="h-4 w-4" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditing(null)}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <button
-                        className="text-left text-sm text-foreground hover:underline"
-                        onClick={() => { setEditing(t.id); setEditTitle(t.title); }}
-                      >
-                        <span className={t.completed ? "line-through text-muted-foreground" : ""}>{t.title}</span>
-                      </button>
-                    )}
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
-                      <span>{t.assignee_name || "Unassigned"}</span>
-                      {t.due_date && <span>{relativeDay(t.due_date)}</span>}
-                    </div>
-                  </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => remove.mutate(t.id)}
-                    aria-label="Remove task"
+            <div className="space-y-3">
+              {activeTasks.length === 0 ? (
+                <EmptyLine>{tasks.length === 0 ? "No tasks here yet." : "Nothing outstanding here."}</EmptyLine>
+              ) : (
+                <ul className="divide-y divide-border rounded-xl border border-border">
+                  {activeTasks.map((t) => (
+                    <TaskRow
+                      key={t.id}
+                      t={t}
+                      editing={editing}
+                      editTitle={editTitle}
+                      setEditTitle={setEditTitle}
+                      setEditing={setEditing}
+                      saveEdit={saveEdit}
+                      toggle={toggle}
+                      remove={remove}
+                    />
+                  ))}
+                </ul>
+              )}
+
+              {done > 0 && (
+                <div className="rounded-xl border border-border overflow-hidden">
+                  <button
+                    onClick={() => setShowCompleted((v) => !v)}
+                    className="flex w-full items-center justify-between px-4 py-2.5 text-xs text-muted-foreground hover:bg-secondary/50 transition-colors"
+                    aria-expanded={showCompleted}
                   >
-                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {done > 0 && (
-            <button
-              onClick={() => setShowCompleted((v) => !v)}
-              className="mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {showCompleted ? "Hide completed tasks" : `Show completed tasks (${done})`}
-            </button>
-          )}
-
-          {area && (
-            <button
-              onClick={() => navigate(taskCodeHref(area.task_code))}
-              className="mt-4 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Open the full card
-            </button>
+                    <span>Show completed tasks ({done})</span>
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showCompleted ? "rotate-180" : ""}`} />
+                  </button>
+                  {showCompleted && (
+                    <ul className="divide-y divide-border border-t border-border bg-muted/20">
+                      {completedTasks.map((t) => (
+                        <li key={t.id} className="flex items-start gap-3 px-4 py-2.5">
+                          <Checkbox
+                            className="mt-0.5"
+                            checked={t.completed}
+                            onCheckedChange={(v) => toggle.mutate({ id: t.id, completed: !!v })}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm text-muted-foreground line-through">{t.title}</p>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground/80">
+                              <span>{t.assignee_name || "Unassigned"}</span>
+                              {t.completed_at && <span>Completed {formatDay(t.completed_at)}</span>}
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function TaskRow({
+  t, editing, editTitle, setEditTitle, setEditing, saveEdit, toggle, remove,
+}: {
+  t: ProjectTask;
+  editing: string | null;
+  editTitle: string;
+  setEditTitle: (v: string) => void;
+  setEditing: (v: string | null) => void;
+  saveEdit: (id: string) => Promise<void>;
+  toggle: ReturnType<typeof useToggleProjectTask>;
+  remove: ReturnType<typeof useDeleteProjectTask>;
+}) {
+  return (
+    <li className="group flex items-start gap-3 px-4 py-3">
+      <Checkbox
+        className="mt-0.5"
+        checked={t.completed}
+        onCheckedChange={(v) => toggle.mutate({ id: t.id, completed: !!v })}
+      />
+      <div className="min-w-0 flex-1">
+        {editing === t.id ? (
+          <div className="flex items-center gap-1.5">
+            <Input
+              autoFocus
+              className="h-8"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveEdit(t.id);
+                if (e.key === "Escape") setEditing(null);
+              }}
+            />
+            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => saveEdit(t.id)}>
+              <Check className="h-4 w-4" />
+            </Button>
+            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditing(null)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <button
+            className="text-left text-sm text-foreground hover:underline"
+            onClick={() => { setEditing(t.id); setEditTitle(t.title); }}
+          >
+            {t.title}
+          </button>
+        )}
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+          <span>{t.assignee_name || "Unassigned"}</span>
+          {t.due_date && <span>{relativeDay(t.due_date)}</span>}
+        </div>
+      </div>
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+        onClick={() => remove.mutate(t.id)}
+        aria-label="Remove task"
+      >
+        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+      </Button>
+    </li>
   );
 }

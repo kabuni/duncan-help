@@ -31,9 +31,10 @@ import { ProjectOverviewTab } from "@/components/projects/workspace/ProjectOverv
 import { ProjectWorkstreamsTab } from "@/components/projects/workspace/ProjectWorkstreamsTab";
 import { ProjectTeamTab } from "@/components/projects/workspace/ProjectTeamTab";
 import { ProjectActivityTab } from "@/components/projects/workspace/ProjectActivityTab";
-import { PROJECT_STATUS_META } from "@/hooks/useProjectWork";
+import { PROJECT_STATUS_META, type ProjectWorkstream } from "@/hooks/useProjectWork";
 import { ProjectProgressRing, useProjectProgress } from "@/components/projects/workspace/ProjectProgressRing";
 import { formatDay } from "@/components/projects/workspace/shared";
+import { AreaOfWorkDrawer, type AreaOfWorkTarget } from "@/components/projects/workspace/AreaOfWorkDrawer";
 
 const PROJECT_TABS = [
   { id: "overview", label: "Overview" },
@@ -117,6 +118,7 @@ export default function ProjectWorkspace() {
   const [showFiles, setShowFiles] = useState(false);
   const [showTeam, setShowTeam] = useState(false);
   const [showCollaborate, setShowCollaborate] = useState(false);
+  const [areaTarget, setAreaTarget] = useState<AreaOfWorkTarget | null>(null);
   const { isAdmin } = useIsAdmin();
   const teamChatUnread = useProjectTeamChatUnread(projectId || null);
   const { pct: projectProgress } = useProjectProgress(projectId || null);
@@ -414,9 +416,17 @@ export default function ProjectWorkspace() {
                   status={project.status}
                   targetDate={project.target_date}
                   onOpenTab={(next) => setTab(next as any)}
+                  onOpenArea={(area) => setAreaTarget({ area })}
                 />
               )}
-              {tab === "workstreams" && <ProjectWorkstreamsTab projectId={projectId} members={members} />}
+              {tab === "workstreams" && (
+                <ProjectWorkstreamsTab
+                  projectId={projectId}
+                  members={members}
+                  areaTarget={areaTarget}
+                  onOpenArea={setAreaTarget}
+                />
+              )}
               {tab === "activity" && <ProjectActivityTab projectId={projectId} />}
             </div>
           )}
@@ -428,6 +438,13 @@ export default function ProjectWorkspace() {
               members={members.map((m) => ({ user_id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }))}
             />
           )}
+
+          <AreaOfWorkDrawer
+            projectId={projectId}
+            members={members}
+            target={areaTarget}
+            onOpenChange={(o) => { if (!o) setAreaTarget(null); }}
+          />
 
           {/* Files Slide-over */}
           {showFiles && (

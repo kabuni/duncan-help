@@ -5529,6 +5529,7 @@ export type Database = {
           assignee_id: string | null
           card_id: string | null
           completed: boolean
+          completed_at: string | null
           created_at: string
           description: string
           due_date: string | null
@@ -5544,6 +5545,7 @@ export type Database = {
           assignee_id?: string | null
           card_id?: string | null
           completed?: boolean
+          completed_at?: string | null
           created_at?: string
           description?: string
           due_date?: string | null
@@ -5559,6 +5561,7 @@ export type Database = {
           assignee_id?: string | null
           card_id?: string | null
           completed?: boolean
+          completed_at?: string | null
           created_at?: string
           description?: string
           due_date?: string | null

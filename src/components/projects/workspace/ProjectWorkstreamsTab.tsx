@@ -13,13 +13,19 @@ import {
 import type { ProjectMember } from "@/hooks/useProjects";
 import { StatusDot, formatDay, EmptyLine } from "./shared";
 import { WorkstreamProgressBar } from "./ProjectProgressRing";
-import { AreaOfWorkDrawer, type AreaOfWorkTarget } from "./AreaOfWorkDrawer";
+import { type AreaOfWorkTarget } from "./AreaOfWorkDrawer";
 
-export function ProjectWorkstreamsTab({ projectId, members }: { projectId: string; members: ProjectMember[] }) {
+export function ProjectWorkstreamsTab({
+  projectId, members, areaTarget, onOpenArea,
+}: {
+  projectId: string;
+  members: ProjectMember[];
+  areaTarget: AreaOfWorkTarget | null;
+  onOpenArea: (target: AreaOfWorkTarget | null) => void;
+}) {
   const { data: workstreams = [], isLoading } = useProjectWorkstreams(projectId);
   const { data: allTasks = [] } = useProjectTasks(projectId);
   const [open, setOpen] = useState(false);
-  const [target, setTarget] = useState<AreaOfWorkTarget | null>(null);
 
   const looseTasks = allTasks.filter((t) => !t.card_id);
   const looseDone = looseTasks.filter((t) => t.completed).length;
@@ -48,7 +54,7 @@ export function ProjectWorkstreamsTab({ projectId, members }: { projectId: strin
           {workstreams.map((ws) => (
             <li key={ws.id} className="group">
               <button
-                onClick={() => setTarget({ area: ws as ProjectWorkstream })}
+                onClick={() => onOpenArea({ area: ws as ProjectWorkstream })}
                 className="w-full text-left px-5 py-4 hover:bg-secondary/40 transition-colors"
               >
                 <div className="flex items-center gap-3">
@@ -73,7 +79,7 @@ export function ProjectWorkstreamsTab({ projectId, members }: { projectId: strin
 
       {looseTasks.length > 0 && (
         <button
-          onClick={() => setTarget({ area: null })}
+          onClick={() => onOpenArea({ area: null })}
           className="w-full text-left rounded-xl border border-dashed border-border px-5 py-4 hover:bg-secondary/40 transition-colors"
         >
           <span className="text-sm font-medium text-foreground">Tasks not in an area</span>
@@ -82,13 +88,6 @@ export function ProjectWorkstreamsTab({ projectId, members }: { projectId: strin
           </span>
         </button>
       )}
-
-      <AreaOfWorkDrawer
-        projectId={projectId}
-        members={members}
-        target={target}
-        onOpenChange={(o) => { if (!o) setTarget(null); }}
-      />
 
       <AddWorkstreamDialog open={open} onOpenChange={setOpen} projectId={projectId} members={members} />
     </div>

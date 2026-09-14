@@ -35,6 +35,7 @@ export interface ProjectTask {
   assignee_name: string | null;
   due_date: string | null;
   completed: boolean;
+  completed_at: string | null;
   status: CardStatus;
   project_id: string | null;
   card_id: string | null;
@@ -137,6 +138,7 @@ export function useProjectTasks(projectId: string | null) {
             assignee_name: r.assignee_id ? names.get(r.assignee_id) ?? null : null,
             due_date: r.due_date,
             completed: r.completed,
+            completed_at: r.completed_at || null,
             status: r.status,
             project_id: r.project_id,
             card_id: r.card_id,
@@ -146,7 +148,6 @@ export function useProjectTasks(projectId: string | null) {
           } as ProjectTask;
         })
         .sort((a, b) => {
-          if (a.completed !== b.completed) return a.completed ? 1 : -1;
           if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date);
           if (a.due_date) return -1;
           if (b.due_date) return 1;
@@ -335,7 +336,11 @@ export function useToggleProjectTask(projectId: string | null) {
     mutationFn: async ({ id, completed }: { id: string; completed: boolean }) => {
       const { error } = await supabase
         .from("workstream_tasks")
-        .update({ completed, status: completed ? "done" : "not_started" })
+        .update({
+          completed,
+          status: completed ? "done" : "not_started",
+          completed_at: completed ? new Date().toISOString() : null,
+        })
         .eq("id", id);
       if (error) throw error;
     },

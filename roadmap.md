@@ -55,3 +55,12 @@ Rules:
    WS-0274 → K10 App; WS-0292 → Cricket MVP App; WS-0252 → Road to 400; WS-0104 → Duncan AI.
    WS-0297 (Done) left unmapped and preserved. Unclear cards left unmapped.
 6. Reversible: clearing project_id detaches a card with zero data loss.
+
+### Prototype data in this Lovable environment (NOT production)
+Seeded here only, so the experience can be clicked through before production deploy:
+7 projects (Kabuni School Premier League, Founder Story + Social, K10 App, Cricket MVP App,
+Road to 400, Duncan AI, Partner School Webinars w Super Coaches) each with one area of work
+carrying the matching WS code (WS-0299/0290/0274/0292/0252/0104/0293) + 25 tasks.
+WS-0297 seeded as a Done, unmapped historical card. All cards private, descriptions prefixed
+"Prototype". Partner School Webinars is its own project, NOT under Road to 400.
+On production deploy these prototype rows are discarded — the real cards are linked instead.

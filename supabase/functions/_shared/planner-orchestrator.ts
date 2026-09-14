@@ -28,6 +28,7 @@ export type EventType =
   | "SICK_LEAVE"
   | "COMPANY_EVENT"
   | "PROJECT_MILESTONE"
+  | "PERSONAL_APPOINTMENT"
   | "TRAVEL"
   | "OTHER";
 

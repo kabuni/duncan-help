@@ -33,7 +33,6 @@ import { PlannerAsk } from "@/components/diary/PlannerAsk";
 import { useTour } from "@/components/onboarding/tour/TourProvider";
 import { formatTimeInTz } from "@/components/diary/TimezonePicker";
 import { CATEGORY_META, CATEGORY_GROUPS, getCategoryMeta } from "@/components/diary/categoryMeta";
-import { getRegionFlag } from "@/components/diary/holidayRegions";
 
 const VIEW_TZ = "Europe/London";
 
@@ -134,7 +133,7 @@ function EventRow({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium text-foreground">
-          {ev.category === "PublicHoliday" ? `${getRegionFlag(ev.holiday_region)} ${eventName(ev)}` : eventName(ev)}
+          {eventName(ev)}
         </span>
         {(note || ev.owner) && (
           <span className="mt-0.5 block truncate text-xs text-muted-foreground">{note || ev.owner}</span>

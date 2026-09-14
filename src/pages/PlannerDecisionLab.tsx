@@ -17,15 +17,21 @@ import { toast } from "sonner";
  * interpret=true and renders the decision the orchestration layer made.
  */
 
-const SCENARIOS = [
-  "I'm taking next Friday off.",
-  "Book a meeting with Sarah tomorrow at 2pm for 30 minutes.",
-  "Project Alpha needs to be finished by 30 September.",
-  "The company Christmas party is on 18 December.",
-  "I'm taking next Friday off.",
-  "Move my holiday from Friday to Monday.",
-  "Put a meeting in with Sarah.",
-  "I have a project launch on 30 September at 10am with the whole team.",
+type Scenario = { utterance: string; expected: string; note?: string };
+
+const SCENARIOS: Scenario[] = [
+  { utterance: "Product X launches on 30 September.", expected: "Planner · company planning item" },
+  { utterance: "Product X launch meeting with Sarah at 2pm.", expected: "Google Calendar · meeting" },
+  { utterance: "Company-wide product launch on 30 September at 10am.", expected: "Planner + Google Calendar · milestone people attend" },
+  { utterance: "The team is meeting to discuss the launch at 2pm.", expected: "Google Calendar · meeting" },
+  { utterance: "Company Christmas party on 18 December.", expected: "Planner + Google Calendar · company-wide event" },
+  { utterance: "Investor meeting with ABC on Thursday at 3pm.", expected: "Google Calendar · meeting" },
+  { utterance: "Investor event on 15 November.", expected: "Planner · company planning item" },
+  { utterance: "Product X launch on 30 September at 10am.", expected: "Clarifying question", note: "attendance genuinely unclear — Duncan should ask" },
+  { utterance: "I'm taking next Friday off.", expected: "Planner + Google Calendar · leave, needs approval" },
+  { utterance: "Book a meeting with Sarah tomorrow at 2pm for 30 minutes.", expected: "Google Calendar · meeting" },
+  { utterance: "Project Alpha needs to be finished by 30 September.", expected: "Planner · milestone" },
+  { utterance: "Flight to Dubai on 3 December.", expected: "Planner + Google Calendar · travel" },
 ];
 
 type Trace = {
@@ -35,6 +41,10 @@ type Trace = {
   source_of_truth: string;
   requires_approval: boolean;
   reason: string;
+  audience?: string;
+  attendance_required?: boolean;
+  ambiguous?: boolean;
+  clarifying_question?: string | null;
   existing_event_found: boolean;
   duplicate_detected: boolean;
   conflict_detected: boolean;
@@ -137,7 +147,7 @@ export default function PlannerDecisionLab() {
   const runAll = async () => {
     for (const s of SCENARIOS) {
       // eslint-disable-next-line no-await-in-loop
-      await run(s);
+      await run(s.utterance);
     }
   };
 
@@ -189,13 +199,16 @@ export default function PlannerDecisionLab() {
           <Separator />
           <div className="space-y-2">
             {SCENARIOS.map((s, i) => (
-              <div key={`${s}-${i}`} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+              <div key={`${s.utterance}-${i}`} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
                 <span className="text-sm">
                   <span className="mr-2 text-muted-foreground">{i + 1}.</span>
-                  {s}
-                  {i === 4 && <span className="ml-2 text-xs text-muted-foreground">(repeat — expect duplicate detection)</span>}
+                  {s.utterance}
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Expected: {s.expected}
+                    {s.note ? ` — ${s.note}` : ""}
+                  </span>
                 </span>
-                <Button size="sm" variant="outline" disabled={!!running} onClick={() => run(s)}>
+                <Button size="sm" variant="outline" disabled={!!running} onClick={() => run(s.utterance)}>
                   Run
                 </Button>
               </div>
@@ -204,7 +217,7 @@ export default function PlannerDecisionLab() {
           <div className="flex gap-2">
             <Button variant="secondary" disabled={!!running} onClick={runAll}>
               {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Run all eight in order
+              Run all in order
             </Button>
             <Button variant="ghost" onClick={() => setResults([])}>
               <Trash2 className="mr-2 h-4 w-4" /> Clear results
@@ -231,6 +244,7 @@ export default function PlannerDecisionLab() {
                 <>
                   <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     <Field label="Intent detected">{r.trace.intent}</Field>
+                    <Field label="Audience">{r.trace.audience || "—"}</Field>
                     <Field label="Event type">{r.trace.event_type}</Field>
                     <Field label="Destination">
                       {r.trace.destination.length === 2 ? "Both" : r.trace.destination[0] === "PLANNER" ? "Planner" : "Google Calendar"}
@@ -255,10 +269,12 @@ export default function PlannerDecisionLab() {
                     <Field label="Google record">{r.trace.google_event_id ? r.trace.google_event_id.slice(0, 12) : "—"}</Field>
                   </div>
                   <div className="flex flex-wrap gap-x-6 gap-y-2">
+                    <Flag on={!!r.trace.attendance_required} label="Attendance required" />
                     <Flag on={r.trace.existing_event_found} label="Existing event found" />
                     <Flag on={r.trace.duplicate_detected} label="Duplicate detected" />
                     <Flag on={r.trace.conflict_detected} label="Conflict" />
                     <Flag on={r.trace.requires_approval} label="Needs approval" />
+                    <Flag on={!!r.trace.ambiguous} label="Asked for clarification" />
                   </div>
                   <p className="text-xs text-muted-foreground">Rule: {r.trace.reason}</p>
                 </>

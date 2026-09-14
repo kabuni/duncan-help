@@ -32,6 +32,9 @@ export type EventType =
   | "TRAVEL"
   | "OTHER";
 
+/** Who the thing is for. Drives destination alongside the event type. */
+export type Audience = "PERSONAL" | "TEAM" | "COMPANY";
+
 export interface Decision {
   intent: PlannerIntent;
   event_type: EventType;
@@ -41,6 +44,12 @@ export interface Decision {
   reason: string;
   /** Existing Planner category key stored on key_events.category. */
   planner_category: string;
+  /** Signals the engine evaluated before choosing the destination. */
+  audience: Audience;
+  attendance_required: boolean;
+  /** True when intent is genuinely unclear — Duncan should ask, not guess. */
+  ambiguous: boolean;
+  clarifying_question: string | null;
 }
 
 interface TypeRule {
@@ -171,6 +180,104 @@ export function classifyEventType(text: string): EventType {
   return "OTHER";
 }
 
+// ── Signal analysis ──────────────────────────────────────────────────────────
+// Destination is NEVER decided from the category name. It is decided from
+// intent + audience + whether people have to turn up + whether a real time was
+// given + organisational significance.
+
+/** Wording that means the whole company / a whole team is involved. */
+const COMPANY_AUDIENCE =
+  /\b(company[- ]wide|whole (company|team|business|school)|all staff|all employees|everyone|the entire (team|company)|all[- ]hands|town ?hall|company (event|party|social|away ?day|update|meeting)|with the (whole|entire) team|all of us|team[- ]wide)\b/i;
+
+/** Things that only exist because people gather for them — attendance is implied. */
+const ATTENDABLE =
+  /\b(party|all[- ]hands|town ?hall|away ?day|social|socials|celebration|dinner|drinks|night out|conference|summit|showcase|open day|graduation|awards?|demo day|webinar|festival|offsite|off[- ]site|expo|exhibition|ceremony|screening|training day|hackathon|kick[- ]?off)\b/i;
+
+/** Company markers that are a date in the plan, not a gathering. */
+const MILESTONE_WORDING =
+  /\b(launch(es|ing)?|go[- ]live|release|rollout|roll[- ]out|ship(ping)? (date|version)|version \d|deadline|milestone|due (by|on)|cut ?off|target date|announcement|press release|campaign)\b/i;
+
+/** Event types where the Planner-vs-Calendar question is actually open. */
+const OPEN_TYPES: EventType[] = ["COMPANY_EVENT", "PROJECT_MILESTONE", "OTHER"];
+
+export interface EventSignals {
+  audience: Audience;
+  attendance_required: boolean;
+  significant: boolean;
+  has_specific_time: boolean;
+  ambiguous: boolean;
+  clarifying_question: string | null;
+}
+
+function hasClockTime(start?: string | null, allDay?: boolean): boolean {
+  if (allDay) return false;
+  if (!start) return false;
+  if (!/\d{2}:\d{2}/.test(start)) return false;
+  return !/T00:00(:00)?/.test(start);
+}
+
+/**
+ * Works out who an item is for and whether anyone has to attend it.
+ * Explicit values supplied by the caller always win over the wording.
+ */
+export function analyzeSignals(
+  eventType: EventType,
+  text: string,
+  opts: {
+    all_day?: boolean;
+    start?: string | null;
+    attendees?: string[];
+    audience?: Audience;
+    attendance_required?: boolean;
+  } = {},
+): EventSignals {
+  const t = text || "";
+  const timed = hasClockTime(opts.start, opts.all_day);
+  const companyWords = COMPANY_AUDIENCE.test(t);
+  const attendable = ATTENDABLE.test(t);
+  const milestone = MILESTONE_WORDING.test(t);
+  const hasAttendees = !!(opts.attendees && opts.attendees.length);
+
+  const personalType = eventType === "PERSONAL_APPOINTMENT" || eventType === "ANNUAL_LEAVE" ||
+    eventType === "SICK_LEAVE" || eventType === "OUT_OF_OFFICE" || eventType === "TRAVEL";
+
+  let audience: Audience =
+    opts.audience ??
+    (personalType ? "PERSONAL" : companyWords ? "COMPANY" : hasAttendees || eventType === "MEETING" ? "TEAM" : OPEN_TYPES.includes(eventType) ? "COMPANY" : "PERSONAL");
+
+  const significant = audience === "COMPANY" && (companyWords || attendable || milestone || OPEN_TYPES.includes(eventType));
+
+  const attendance_required =
+    opts.attendance_required ??
+    (eventType === "MEETING" || personalType
+      ? true
+      : attendable || hasAttendees || (companyWords && timed));
+
+  // Only ask when a company-level item genuinely could be either: a milestone
+  // phrased with a real clock time, but nothing saying people must turn up.
+  const ambiguous =
+    opts.attendance_required === undefined &&
+    OPEN_TYPES.includes(eventType) &&
+    milestone &&
+    timed &&
+    !companyWords &&
+    !attendable &&
+    !hasAttendees;
+
+  return {
+    audience,
+    attendance_required,
+    significant,
+    has_specific_time: timed,
+    ambiguous,
+    clarifying_question: ambiguous
+      ? "Is this something people need to attend at that time, or just a date to mark on the Planner?"
+      : null,
+  };
+}
+
+
+
 // ── Planner categories ───────────────────────────────────────────────────────
 // These are the EXISTING Planner categories (mirrors src/components/diary/
 // categoryMeta.ts). No new category system — the engine only ever picks one of
@@ -246,7 +353,15 @@ export function resolvePlannerCategory(
   return EVENT_TYPE_RULES[eventType]?.planner_category ?? "Event";
 }
 
-/** THE decision engine. Pure — same inputs always give the same routing. */
+/**
+ * THE decision engine. Pure — same inputs always give the same routing.
+ *
+ * Hierarchy:
+ *   1. primarily a meeting / appointment / availability question → Google Calendar
+ *   2. primarily a company planning milestone                    → Planner
+ *   3. a significant company item people must attend             → Planner + Google Calendar
+ * The Planner category is resolved separately and never drives the destination.
+ */
 export function decideDestination(
   intent: PlannerIntent,
   eventType: EventType,
@@ -254,23 +369,67 @@ export function decideDestination(
     overrides?: Record<string, Destination[]>;
     text?: string | null;
     suggested_category?: string | null;
+    all_day?: boolean;
+    start?: string | null;
+    attendees?: string[];
+    audience?: Audience;
+    attendance_required?: boolean;
   } = {},
 ): Decision {
   const rule = EVENT_TYPE_RULES[eventType] ?? EVENT_TYPE_RULES.OTHER;
+  const signals = analyzeSignals(eventType, opts.text || "", {
+    all_day: opts.all_day,
+    start: opts.start,
+    attendees: opts.attendees,
+    audience: opts.audience,
+    attendance_required: opts.attendance_required,
+  });
+
   const override = opts.overrides?.[eventType];
-  const destination = (override && override.length > 0 ? override : rule.destination).slice();
-  // The source of truth must always be one of the destinations.
+  let destination = (override && override.length > 0 ? override : rule.destination).slice();
+  let reason = rule.reason;
+
+  // Company-level items: the destination depends on attendance, not on wording
+  // or on the category. A launch date is a Planner marker; a launch everyone
+  // joins at 10am is a Planner marker AND a calendar entry.
+  if (
+    !override &&
+    intent !== "CHECK_AVAILABILITY" &&
+    OPEN_TYPES.includes(eventType) &&
+    signals.audience !== "PERSONAL"
+  ) {
+    if (signals.attendance_required && signals.significant) {
+      destination = ["PLANNER", "GOOGLE_CALENDAR"];
+      reason =
+        "A company planning item that people also need to attend — recorded on the Planner and put on calendars so attendance is real.";
+    } else if (signals.attendance_required) {
+      destination = ["GOOGLE_CALENDAR"];
+      reason = "People need to attend this, and it isn't a company-wide planning marker — Google Calendar.";
+    } else {
+      destination = ["PLANNER"];
+      reason = "A company planning item / milestone with no attendance required — Planner only.";
+    }
+  }
+
+  // The source of truth follows the resulting event shape: Planner owns
+  // anything the company plans; Google Calendar owns anything only attended.
+  const preferred: Destination = destination.includes("PLANNER") ? "PLANNER" : "GOOGLE_CALENDAR";
   const source_of_truth = destination.includes(rule.source_of_truth)
-    ? rule.source_of_truth
-    : destination[0];
+    ? (OPEN_TYPES.includes(eventType) ? preferred : rule.source_of_truth)
+    : preferred;
+
   return {
     intent,
     event_type: eventType,
     destination: intent === "CHECK_AVAILABILITY" ? ["GOOGLE_CALENDAR"] : destination,
     source_of_truth,
     requires_approval: intent === "CREATE_EVENT" ? rule.requires_approval : false,
-    reason: rule.reason,
+    reason,
     planner_category: resolvePlannerCategory(eventType, opts.text, opts.suggested_category),
+    audience: signals.audience,
+    attendance_required: signals.attendance_required,
+    ambiguous: intent === "CREATE_EVENT" && signals.ambiguous,
+    clarifying_question: intent === "CREATE_EVENT" ? signals.clarifying_question : null,
   };
 }
 
@@ -313,6 +472,9 @@ export interface ActionRequest {
   force?: boolean;
   /** Set by sync jobs so we never bounce a change back to its origin. */
   origin?: Destination;
+  /** Optional explicit signals — override the wording-based analysis. */
+  audience?: Audience;
+  attendance_required?: boolean;
 }
 
 export interface DecisionTrace {
@@ -322,6 +484,10 @@ export interface DecisionTrace {
   source_of_truth: Destination;
   requires_approval: boolean;
   reason: string;
+  audience: Audience;
+  attendance_required: boolean;
+  ambiguous: boolean;
+  clarifying_question: string | null;
   existing_event_found: boolean;
   duplicate_detected: boolean;
   conflict_detected: boolean;
@@ -891,6 +1057,10 @@ export async function executePlannerAction(
     requires_approval: d.requires_approval,
     reason: d.reason,
     planner_category: d.planner_category,
+    audience: d.audience,
+    attendance_required: d.attendance_required,
+    ambiguous: d.ambiguous,
+    clarifying_question: d.clarifying_question,
     existing_event_found,
     duplicate_detected,
     conflict_detected,
@@ -919,8 +1089,22 @@ async function runPlannerAction(
     overrides,
     text: `${req.utterance || ""} ${req.title || ""} ${req.description || ""}`,
     suggested_category: req.planner_category,
+    all_day: req.all_day,
+    start: req.start,
+    attendees: req.attendees,
+    audience: req.audience,
+    attendance_required: req.attendance_required,
   });
   const base = { ok: false, verified: false, source: "planner_orchestrator" as const, decision };
+
+  // Genuinely unclear whether people must attend — ask instead of guessing.
+  if (decision.ambiguous && !req.force) {
+    return {
+      ...base,
+      message: decision.clarifying_question || "Should people attend this, or is it just a date to mark?",
+      error: "needs_clarification",
+    };
+  }
 
   const token = decision.destination.includes("GOOGLE_CALENDAR") || req.intent !== "CREATE_EVENT"
     ? await ctx.getGoogleToken()

@@ -74,10 +74,12 @@ end: ISO 8601 datetime (for all-day, the same day end; for meetings, start + dur
 all_day: boolean
 current_start: ISO date of where the event sits TODAY, only for UPDATE_EVENT
 planner_category: one of Travel | Holiday | PublicHoliday | GlobalAllHands | TeamSocials | Product | Releases | Event | Super Coaches | Investor | Social | PR | Launch | Marketing | Operations | Communication | Creative | BusinessDevelopment — the best matching EXISTING Planner category. Never invent a new one; use Event if genuinely unclear.
+audience: PERSONAL | TEAM | COMPANY — who this is for. Omit if unclear.
+attendance_required: true only when people actually have to turn up at a time (meeting, party, all-hands, ceremony). Omit entirely if the person did not make it clear — do NOT guess.
 attendee_names: array of first names mentioned
 missing: array of names of details the person did not give (e.g. "start", "attendee_email")
 Use ANNUAL_LEAVE (not OUT_OF_OFFICE) whenever a person says they are off, taking leave, on holiday or not working — OUT_OF_OFFICE is only for an explicit "out of office"/"away from my desk" block that is not leave.
-Resolve relative dates ("next Friday", "tomorrow", "30 September") against today. Never invent an exact time for a request with no time — set all_day true instead. Do NOT decide which calendar/system to use.`;
+Resolve relative dates ("next Friday", "tomorrow", "30 September") against today. Never invent an exact time for a request with no time — set all_day true instead. Do NOT decide which calendar/system to use — audience and attendance are signals only.`;
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -130,6 +132,11 @@ serve(async (req) => {
         overrides,
         text: `${body.utterance ?? ""} ${body.title ?? ""}`,
         suggested_category: body.planner_category,
+        all_day: body.all_day,
+        start: body.start,
+        attendees: body.attendees,
+        audience: body.audience,
+        attendance_required: body.attendance_required,
       });
       return new Response(JSON.stringify({ decision }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -166,6 +173,9 @@ serve(async (req) => {
         current_start: interpretation.current_start,
         attendees,
         planner_category: interpretation.planner_category,
+        audience: interpretation.audience,
+        attendance_required:
+          typeof interpretation.attendance_required === "boolean" ? interpretation.attendance_required : undefined,
         force: body.force === true,
       };
     }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Loader2, Trash2 } from "lucide-react";
+import { Plus, Loader2, Trash2, Globe, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useProjects } from "@/hooks/useProjects";
 import { useProjectSummaries, PROJECT_STATUS_META } from "@/hooks/useProjectWork";
@@ -31,6 +31,7 @@ export default function Projects() {
   const [newDescription, setNewDescription] = useState("");
   const [newTargetDate, setNewTargetDate] = useState("");
   const [newMembers, setNewMembers] = useState<string[]>([]);
+  const [newVisibility, setNewVisibility] = useState("private");
   const [creating, setCreating] = useState(false);
 
   const nameFor = (userId: string) => profiles.find((p) => p.user_id === userId)?.display_name || "—";
@@ -41,6 +42,7 @@ export default function Projects() {
     const project = await createProject(newName.trim(), {
       description: newDescription.trim() || null,
       target_date: newTargetDate || null,
+      visibility: newVisibility,
     });
     if (project && newMembers.length > 0 && user) {
       await supabase.from("project_members").insert(
@@ -50,7 +52,7 @@ export default function Projects() {
     setCreating(false);
     if (project) {
       setShowCreate(false);
-      setNewName(""); setNewDescription(""); setNewTargetDate(""); setNewMembers([]);
+      setNewName(""); setNewDescription(""); setNewTargetDate(""); setNewMembers([]); setNewVisibility("private");
       navigate(`/projects/${project.id}`);
     }
   };
@@ -120,6 +122,11 @@ export default function Projects() {
                           )}
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                             <span className={status.text}>{status.label}</span>
+                            <span className="inline-flex items-center gap-1">
+                              {project.visibility === "public"
+                                ? <><Globe className="h-3 w-3" /> Public</>
+                                : <><Lock className="h-3 w-3" /> Private</>}
+                            </span>
                             <span className="inline-flex items-center gap-1.5">
                               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-secondary text-[9px] font-medium">
                                 {initials(nameFor(project.user_id))}
@@ -170,6 +177,20 @@ export default function Projects() {
                 Owner: {nameFor(user?.id || "")}
               </div>
               <Input type="date" value={newTargetDate} onChange={(e) => setNewTargetDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Select value={newVisibility} onValueChange={setNewVisibility}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="private">Private — owner and invited members only</SelectItem>
+                  <SelectItem value="public">Public — anyone in the company can view</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {newVisibility === "public"
+                  ? "Everyone in the company can see this project's areas of work, tasks and progress."
+                  : "Only you and the members you invite can see this project."}
+              </p>
             </div>
             <Select
               value=""

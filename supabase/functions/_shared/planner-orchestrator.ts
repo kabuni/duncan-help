@@ -1083,8 +1083,15 @@ async function runPlannerAction(
 ): Promise<ActionResult> {
 
   const overrides = await loadDestinationConfig(ctx.supabaseAdmin);
-  const eventType =
-    req.event_type ?? classifyEventType(`${req.utterance || ""} ${req.title || ""} ${req.description || ""}`);
+  const combinedText = `${req.utterance || ""} ${req.title || ""} ${req.description || ""}`;
+  let eventType = req.event_type ?? classifyEventType(combinedText);
+  // Safety net: a caller's MEETING guess never sticks when the wording is a
+  // company-wide moment (webinar, launch, conference, party…) and there is no
+  // actual get-together wording ("meeting", "call", "catch up"…). Webinars and
+  // launches are company planning items, not meetings.
+  if (eventType === "MEETING" && COMPANY_WIDE.test(combinedText) && !EXPLICIT_MEETING.test(combinedText)) {
+    eventType = "COMPANY_EVENT";
+  }
   const decision = decideDestination(req.intent, eventType, {
     overrides,
     text: `${req.utterance || ""} ${req.title || ""} ${req.description || ""}`,

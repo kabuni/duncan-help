@@ -908,6 +908,20 @@ async function runPlannerAction(
     return { ...base, ok: true, verified: true, availability: { busy, free }, message: `${busy.length} busy block(s) found.` };
   }
 
+  // ── Find / search ─────────────────────────────────────────────────────────
+  if (req.intent === "FIND_EVENT") {
+    const found = await findEventCandidates(ctx, req, decision, token);
+    return {
+      ...base,
+      ok: true,
+      verified: true,
+      candidates: found,
+      message: found.length
+        ? `${found.length} matching event(s) found.`
+        : "No matching event found in Planner or Google Calendar.",
+    };
+  }
+
   // ── Existing link lookup ──────────────────────────────────────────────────
   let link: any = null;
   if (req.link_group || req.planner_event_id || req.google_event_id) {
@@ -928,34 +942,104 @@ async function runPlannerAction(
     return { ...base, ok: true, verified: true, link_group: link.link_group, message: "Already in sync — no action taken." };
   }
 
-  // ── Cancel ────────────────────────────────────────────────────────────────
+  // ── Cancel / delete / remove ──────────────────────────────────────────────
   if (req.intent === "CANCEL_EVENT") {
+    let plannerId = req.planner_event_id || link?.planner_event_id || null;
+    let googleId = req.google_event_id || link?.google_event_id || null;
+    let matched: EventCandidate | null = null;
+
+    // No explicit record supplied ("remove my annual leave next Friday") — find
+    // it. Never guess: nothing is removed on a vague or ambiguous match.
+    if (!plannerId && !googleId) {
+      if (!req.title && !req.start && !req.current_start && !req.event_type) {
+        return {
+          ...base,
+          message: "I need to know which event to remove — a name, a date, or both.",
+          error: "ambiguous",
+        };
+      }
+      const found = await findEventCandidates(ctx, req, decision, token);
+      if (found.length === 0) {
+        return { ...base, candidates: [], message: "I couldn't find a matching event in Planner or Google Calendar.", error: "not_found" };
+      }
+      // Ambiguous unless one candidate is clearly the strongest match.
+      const clear = found.length === 1 || (found[0].score >= 5 && found[0].score > found[1].score);
+      if (!clear && !req.force) {
+        return {
+          ...base,
+          candidates: found.slice(0, 5),
+          message: `I found ${found.length} events that could match. Which one do you mean?`,
+          error: "ambiguous",
+        };
+      }
+      matched = found[0];
+      plannerId = matched.planner_event_id;
+      googleId = matched.google_event_id;
+      if (matched.link_group && !link) {
+        const { data: l } = await ctx.supabaseAdmin
+          .from("event_links").select("*").eq("link_group", matched.link_group).maybeSingle();
+        if (l) link = l;
+      }
+    }
+
+    // Permission: a user can only remove their own Planner records here.
+    if (plannerId) {
+      const { data: owner } = await ctx.supabaseAdmin
+        .from("key_events").select("created_by, title, event_name").eq("id", plannerId).maybeSingle();
+      if (owner && owner.created_by && owner.created_by !== ctx.userId) {
+        const { data: isAdmin } = await ctx.supabaseAdmin
+          .rpc("has_role", { _user_id: ctx.userId, _role: "admin" });
+        if (!isAdmin) {
+          return { ...base, message: "That event belongs to someone else, so I can't remove it.", error: "not_permitted" };
+        }
+      }
+    }
+
     let plannerDone = false;
     let googleDone = false;
-    const plannerId = req.planner_event_id || link?.planner_event_id;
-    const googleId = req.google_event_id || link?.google_event_id;
+    let approvalsCancelled = 0;
+
     if (plannerId) {
+      // Withdraw any open approval first, so no orphaned request is left behind.
+      approvalsCancelled = await cancelApprovalsForEvent(ctx, plannerId);
       const { error } = await ctx.supabaseAdmin
         .from("key_events")
-        .update({ deleted_in_google: true, updated_at: new Date().toISOString() })
+        .update({
+          deleted_in_google: true,
+          status: "cancelled",
+          approval_state: null,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", plannerId);
       plannerDone = !error;
     }
     if (googleId && token) googleDone = await deleteGoogleEvent(token, googleId);
+
     if (link) {
       await ctx.supabaseAdmin
         .from("event_links")
-        .update({ last_sync_origin: req.origin ?? decision.source_of_truth, last_sync_hash: payloadHash, last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .update({
+          status: "cancelled",
+          last_sync_origin: req.origin ?? decision.source_of_truth,
+          last_sync_hash: payloadHash,
+          last_synced_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", link.id);
     }
+
     const ok = plannerDone || googleDone;
+    const where = [plannerDone ? "Planner" : null, googleDone ? "Google Calendar" : null].filter(Boolean).join(" and ");
     return {
       ...base,
       ok,
       verified: ok,
-      link_group: link?.link_group,
+      link_group: link?.link_group ?? matched?.link_group ?? undefined,
+      planner_event_id: plannerId ?? undefined,
+      google_event_id: googleId ?? undefined,
+      matched_event: matched ?? undefined,
       message: ok
-        ? `Cancelled${plannerDone ? " in Planner" : ""}${plannerDone && googleDone ? " and" : ""}${googleDone ? " in Google Calendar" : ""}.`
+        ? `Removed from ${where}.${approvalsCancelled ? " The pending approval request was withdrawn too." : ""}`
         : "Nothing was cancelled — no matching event found.",
       error: ok ? undefined : "not_found",
     };

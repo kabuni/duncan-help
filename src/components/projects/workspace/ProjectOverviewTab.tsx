@@ -11,7 +11,7 @@ export function ProjectOverviewTab({
   projectId: string; projectName: string; description: string | null;
   members: ProjectMember[]; status?: string; targetDate?: string | null;
   onOpenTab: (tab: string) => void;
-  onOpenArea: (target: AreaOfWorkTarget) => void;
+  onOpenArea: (area: ProjectWorkstream | null) => void;
 }) {
   const { data: workstreams = [] } = useProjectWorkstreams(projectId);
   const { data: tasks = [] } = useProjectTasks(projectId);

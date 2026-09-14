@@ -472,6 +472,9 @@ export interface ActionRequest {
   force?: boolean;
   /** Set by sync jobs so we never bounce a change back to its origin. */
   origin?: Destination;
+  /** Optional explicit signals — override the wording-based analysis. */
+  audience?: Audience;
+  attendance_required?: boolean;
 }
 
 export interface DecisionTrace {
@@ -481,6 +484,10 @@ export interface DecisionTrace {
   source_of_truth: Destination;
   requires_approval: boolean;
   reason: string;
+  audience: Audience;
+  attendance_required: boolean;
+  ambiguous: boolean;
+  clarifying_question: string | null;
   existing_event_found: boolean;
   duplicate_detected: boolean;
   conflict_detected: boolean;

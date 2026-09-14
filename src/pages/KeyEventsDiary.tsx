@@ -8,73 +8,37 @@ const startOfWeek = (date: Date) => dateFnsStartOfWeek(date, { weekStartsOn: 1 }
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "@/components/diary/calendar.css";
 
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { useKeyEvents, type KeyEvent, type WorkstreamCard } from "@/hooks/useKeyEvents";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useKeyEvents, type KeyEvent } from "@/hooks/useKeyEvents";
 import { useIsAdmin } from "@/hooks/useUserRoles";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { RefreshCw, Plus, ChevronLeft, ChevronRight, Mail, CalendarDays, ChevronDown, Check } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  RefreshCw,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  Settings2,
+  PlayCircle,
+  CalendarDays,
+  ChevronDown,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { DetailDrawer } from "@/components/diary/DetailDrawer";
 import { AddEventDialog } from "@/components/diary/AddEventDialog";
-import { TutorialButton } from "@/components/onboarding/TutorialButton";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { PlannerAsk } from "@/components/diary/PlannerAsk";
+import { useTour } from "@/components/onboarding/tour/TourProvider";
 import { formatTimeInTz } from "@/components/diary/TimezonePicker";
 import { CATEGORY_META, CATEGORY_GROUPS, getCategoryMeta } from "@/components/diary/categoryMeta";
-import { getRegionFlag, formatHolidayTitle } from "@/components/diary/holidayRegions";
+import { getRegionFlag } from "@/components/diary/holidayRegions";
 
-type ViewTz = "Europe/London" | "Asia/Kolkata" | "both";
-const VIEW_TZ_KEY = "planner_view_tz";
-
-function detectDefaultViewTz(): ViewTz {
-  try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (tz === "Asia/Kolkata") return "Asia/Kolkata";
-  } catch {}
-  return "Europe/London";
-}
+const VIEW_TZ = "Europe/London";
 
 const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
-
-function PlannerToolbar(props: any) {
-  const { label, onNavigate, onView, view, views } = props;
-  return (
-    <div className="rbc-toolbar">
-      <div className="planner-toolbar-nav flex items-center gap-1 min-w-0">
-        <Button variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={() => onNavigate("PREV")} aria-label="Previous">
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span className="rbc-toolbar-label px-1 sm:px-2 w-[8.75rem] sm:w-auto sm:min-w-[140px] text-center truncate">{label}</span>
-        <Button variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={() => onNavigate("NEXT")} aria-label="Next">
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="sm" className="h-7 ml-1 text-xs shrink-0" onClick={() => onNavigate("TODAY")}>
-          Today
-        </Button>
-      </div>
-      <div className="planner-toolbar-views flex items-center gap-1 flex-wrap">
-        {(views as string[]).map((v) => (
-          <Button
-            key={v}
-            variant={view === v ? "default" : "outline"}
-            size="sm"
-            className="h-7 text-xs capitalize px-2"
-            onClick={() => onView(v)}
-          >
-            {v}
-          </Button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 type CalItem = {
   id: string;
@@ -84,11 +48,6 @@ type CalItem = {
   allDay: boolean;
   resource: { kind: "event"; data: KeyEvent };
 };
-
-function fmtDateTime(iso: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
 
 function startOfDayLocal(date: Date) {
   const next = new Date(date);
@@ -102,182 +61,158 @@ function addDaysLocal(date: Date, days: number) {
   return next;
 }
 
-function formatMobileTime(item: CalItem, viewTz: ViewTz) {
-  const ev = item.resource.data;
-  if (ev.all_day) return "All day";
-  if (viewTz === "both") {
-    return `UK ${formatTimeInTz(ev.start_at, "Europe/London")} · IN ${formatTimeInTz(ev.start_at, "Asia/Kolkata")}`;
-  }
-  return formatTimeInTz(ev.start_at, viewTz);
+function fmtDateTime(iso: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function MobileAgenda({
-  items,
-  date,
-  onNavigate,
-  onSelectItem,
-  viewTz,
-}: {
-  items: CalItem[];
-  date: Date;
-  onNavigate: (date: Date) => void;
-  onSelectItem: (item: CalItem) => void;
-  viewTz: ViewTz;
-}) {
-  const rangeStart = startOfDayLocal(date);
-  const rangeEnd = addDaysLocal(rangeStart, 30);
-  const visibleItems = items
-    .filter((item) => item.end >= rangeStart && item.start < rangeEnd)
-    .sort((a, b) => a.start.getTime() - b.start.getTime());
-  const groupedItems = visibleItems.reduce<Record<string, CalItem[]>>((acc, item) => {
-    const key = format(item.start, "yyyy-MM-dd");
-    acc[key] = acc[key] || [];
-    acc[key].push(item);
-    return acc;
-  }, {});
+function eventTime(ev: KeyEvent) {
+  if (ev.all_day) return "All day";
+  return formatTimeInTz(ev.start_at, VIEW_TZ);
+}
 
+function eventName(ev: KeyEvent) {
+  return ev.event_name || ev.title;
+}
+
+/** Minimal calendar toolbar — navigation only. */
+function PlannerToolbar(props: any) {
+  const { label, onNavigate, onView, view, views } = props;
   return (
-    <div className="flex h-full min-h-[58vh] flex-col overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-border pb-3">
-        <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => onNavigate(addDaysLocal(date, -30))} aria-label="Previous 30 days">
+    <div className="rbc-toolbar">
+      <div className="planner-toolbar-nav flex items-center gap-1 min-w-0">
+        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => onNavigate("PREV")} aria-label="Previous">
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <div className="min-w-0 flex-1 text-center">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Events</div>
-          <div className="truncate text-sm font-semibold"><span className="sm:hidden">{format(rangeStart, "MMM d")} – {format(addDaysLocal(rangeStart, 29), "MMM d")}</span><span className="hidden sm:inline">{format(rangeStart, "MMM d")} – {format(addDaysLocal(rangeStart, 29), "MMM d, yyyy")}</span></div>
-        </div>
-        <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => onNavigate(addDaysLocal(date, 30))} aria-label="Next 30 days">
+        <span className="rbc-toolbar-label px-1 sm:px-2 w-[8.75rem] sm:w-auto sm:min-w-[140px] text-center truncate">{label}</span>
+        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => onNavigate("NEXT")} aria-label="Next">
           <ChevronRight className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="sm" className="h-10 shrink-0 px-2 sm:px-3 text-xs sm:text-sm" onClick={() => onNavigate(new Date())}>
+        <Button variant="ghost" size="sm" className="h-7 ml-1 text-xs shrink-0" onClick={() => onNavigate("TODAY")}>
           Today
         </Button>
       </div>
-
-      <div className="flex-1 overflow-y-auto pt-3">
-        {visibleItems.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No events in this window.</div>
-        ) : (
-          <div className="space-y-3">
-            {Object.entries(groupedItems).map(([day, dayItems]) => (
-              <section key={day} className="overflow-hidden rounded-md border border-border bg-card">
-                <div className="border-b border-border bg-muted/40 px-3 py-2 text-sm font-semibold text-muted-foreground">
-                  {format(dayItems[0].start, "EEE MMM dd")}
-                </div>
-                <div className="divide-y divide-border">
-                  {dayItems.map((item) => {
-                    const ev = item.resource.data;
-                    const meta = getCategoryMeta(ev.category);
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => onSelectItem(item)}
-                        className="flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: `hsl(${meta.hsl})` }} aria-hidden />
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-semibold leading-snug text-foreground break-words">
-                            {ev.category === "PublicHoliday"
-                              ? `${getRegionFlag(ev.holiday_region)} ${ev.event_name || ev.title} [${ev.holiday_region || "Global"}]`
-                              : `${meta.icon} ${ev.event_name || ev.title}`}
-                          </span>
-                          <span className="mt-1 block text-xs leading-snug text-muted-foreground break-words">{formatMobileTime(item, viewTz)}</span>
-                          {ev.owner && <span className="mt-1 block text-xs leading-snug text-muted-foreground break-words">{ev.owner}</span>}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
-          </div>
-        )}
+      <div className="planner-toolbar-views flex items-center gap-1 flex-wrap">
+        {(views as string[]).map((v) => (
+          <Button
+            key={v}
+            variant="ghost"
+            size="sm"
+            className={cn("h-7 text-xs capitalize px-2", view === v && "bg-accent text-foreground")}
+            onClick={() => onView(v)}
+          >
+            {v}
+          </Button>
+        ))}
       </div>
     </div>
   );
+}
+
+/** A single, quiet event row. */
+function EventRow({
+  ev,
+  onOpen,
+  showDate,
+  note,
+}: {
+  ev: KeyEvent;
+  onOpen: (ev: KeyEvent) => void;
+  showDate?: boolean;
+  note?: string;
+}) {
+  const meta = getCategoryMeta(ev.category);
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(ev)}
+      className="group flex w-full items-baseline gap-4 rounded-lg px-3 py-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
+      <span className="w-[104px] shrink-0 text-xs tabular-nums text-muted-foreground">
+        {showDate && ev.start_at ? `${format(new Date(ev.start_at), "EEE d MMM")} · ` : ""}
+        {eventTime(ev)}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium text-foreground">
+          {ev.category === "PublicHoliday" ? `${getRegionFlag(ev.holiday_region)} ${eventName(ev)}` : eventName(ev)}
+        </span>
+        {(note || ev.owner) && (
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground">{note || ev.owner}</span>
+        )}
+      </span>
+      <span
+        aria-hidden
+        className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full opacity-60"
+        style={{ background: `hsl(${meta.hsl})` }}
+      />
+    </button>
+  );
+}
+
+function Section({
+  title,
+  action,
+  children,
+  dataTour,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  dataTour?: string;
+}) {
+  return (
+    <section data-tour={dataTour} className="space-y-3">
+      <div className="flex items-center justify-between gap-3 px-1">
+        <h2 className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{title}</h2>
+        {action}
+      </div>
+      <div className="rounded-2xl border border-border/60 bg-card p-1.5">{children}</div>
+    </section>
+  );
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return <p className="px-3 py-6 text-center text-sm text-muted-foreground">{children}</p>;
 }
 
 export default function KeyEventsDiary() {
   const { events, cards, status, lastSync, loading, syncing, refresh, connect, sync } = useKeyEvents();
   const { isAdmin } = useIsAdmin();
   const isMobile = useIsMobile();
+  const { start: startTour, progress } = useTour();
   const [params, setParams] = useSearchParams();
-  const [view, setView] = useState<View>(() => (typeof window !== "undefined" && window.innerWidth < 768) ? "agenda" : "month");
+
+  const [view, setView] = useState<View>("month");
   const [date, setDate] = useState<Date>(new Date());
-  const [riskFilter, setRiskFilter] = useState<"all" | "atrisk">("all");
+  const [calendarOpen, setCalendarOpen] = useState(!isMobile);
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
-    () => new Set(["Holiday", "Travel", "Releases", "Launch"]),
-  );
-  const toggleCategory = (key: string) => {
-    setSelectedCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
-  };
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedEvent, setSelectedEvent] = useState<KeyEvent | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<Date | null>(null);
-  
-  const viewTz = "Europe/London" as ViewTz;
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  // ----- Planner diagnostic mode -----
-  // Enable via ?plannerDebug=1 (sticky in localStorage) or ?plannerDebug=0 to clear.
-  const plannerDebug = useMemo(() => {
-    if (typeof window === "undefined") return false;
-    const q = params.get("plannerDebug");
-    if (q === "1") { try { localStorage.setItem("plannerDebug", "1"); } catch {} return true; }
-    if (q === "0") { try { localStorage.removeItem("plannerDebug"); } catch {} return false; }
-    try { return localStorage.getItem("plannerDebug") === "1"; } catch { return false; }
-  }, [params]);
-
-  const BUILD_HASH = useMemo(() => {
-    if (typeof document === "undefined") return "unknown";
-    const scripts = Array.from(document.querySelectorAll('script[src]')) as HTMLScriptElement[];
-    const m = scripts.map((s) => s.src).find((s) => /index-[A-Za-z0-9_-]+\.js/.test(s));
-    return m ? (m.match(/index-([A-Za-z0-9_-]+)\.js/)?.[1] || "unknown") : "unknown";
-  }, []);
-
-  useEffect(() => {
-    if (!plannerDebug) return;
-    (window as any).__plannerDiagnostics = [];
-    // eslint-disable-next-line no-console
-    console.log("[PlannerDiag] enabled · build", BUILD_HASH);
-    const t = window.setTimeout(() => {
-      const nodes = Array.from(document.querySelectorAll<HTMLElement>(".rbc-event"));
-      const dom = nodes.map((n) => {
-        const cs = getComputedStyle(n);
-        return {
-          text: (n.textContent || "").trim().slice(0, 60),
-          className: n.className,
-          backgroundColor: cs.backgroundColor,
-          color: cs.color,
-        };
-      });
-      // eslint-disable-next-line no-console
-      console.table(dom);
-      (window as any).__plannerDiagnosticsDOM = dom;
-    }, 800);
-    return () => window.clearTimeout(t);
-  }, [plannerDebug, events, BUILD_HASH]);
-
-
+  const tourState = progress["planner"];
+  const tourLabel =
+    tourState?.status === "completed" || tourState?.status === "skipped"
+      ? "Replay tour"
+      : tourState?.status === "in_progress"
+      ? "Resume tour"
+      : "Start tour";
 
   useEffect(() => {
     const flag = params.get("duncan_calendar");
     if (!flag) return;
-    if (flag === "connected") toast.success("Duncan calendar connected");
-    else if (flag === "connected_no_calendar") toast.warning("Connected, but 'Duncan | Planner' calendar not found in this Google account");
+    if (flag === "connected") toast.success("Calendar connected");
+    else if (flag === "connected_no_calendar") toast.warning("Connected, but the Duncan | Planner calendar wasn't found in this account");
     else toast.error(`Calendar connection failed: ${params.get("reason") || "unknown"}`);
     params.delete("duncan_calendar");
     params.delete("reason");
     setParams(params, { replace: true });
   }, [params, setParams]);
 
-  // Deep-link: /diary?event=<id> opens the detail drawer for that event.
+  // Deep-link: /diary?event=<id>
   useEffect(() => {
     const eventId = params.get("event");
     if (!eventId || !events.length) return;
@@ -307,303 +242,346 @@ export default function KeyEventsDiary() {
     return Array.from(set).sort();
   }, [events]);
 
-  const calItems = useMemo<CalItem[]>(() => {
-    // Public holidays bypass all user filters — they are always visible.
+  const visibleEvents = useMemo(() => {
     const isHoliday = (e: KeyEvent) => e.category === "PublicHoliday";
-    let filteredEvents = riskFilter === "atrisk"
-      ? events.filter((e) => isHoliday(e) || e.risk_level !== "green")
-      : events;
-    if (ownerFilter !== "all") {
-      filteredEvents = filteredEvents.filter((e) => isHoliday(e) || (e.owner || "") === ownerFilter);
-    }
+    let list = events.filter((e) => e.start_at);
+    if (ownerFilter !== "all") list = list.filter((e) => isHoliday(e) || (e.owner || "") === ownerFilter);
     if (selectedCategories.size > 0) {
-      filteredEvents = filteredEvents.filter((e) => isHoliday(e) || (e.category && selectedCategories.has(e.category)));
+      list = list.filter((e) => isHoliday(e) || (e.category && selectedCategories.has(e.category)));
+    }
+    return list;
+  }, [events, ownerFilter, selectedCategories]);
+
+  const todayEvents = useMemo(() => {
+    const dayStart = startOfDayLocal(new Date());
+    const dayEnd = addDaysLocal(dayStart, 1);
+    return visibleEvents
+      .filter((e) => {
+        const s = new Date(e.start_at!);
+        const en = e.end_at ? new Date(e.end_at) : s;
+        return s < dayEnd && en >= dayStart;
+      })
+      .sort((a, b) => new Date(a.start_at!).getTime() - new Date(b.start_at!).getTime());
+  }, [visibleEvents]);
+
+  const upcomingEvents = useMemo(() => {
+    const from = addDaysLocal(startOfDayLocal(new Date()), 1);
+    const to = addDaysLocal(from, 21);
+    return visibleEvents
+      .filter((e) => {
+        const s = new Date(e.start_at!);
+        return s >= from && s < to;
+      })
+      .sort((a, b) => new Date(a.start_at!).getTime() - new Date(b.start_at!).getTime())
+      .slice(0, 6);
+  }, [visibleEvents]);
+
+  /** Things Duncan thinks need a human: awaiting approval, off-track, or overlapping. */
+  const attention = useMemo(() => {
+    const now = new Date();
+    const horizon = addDaysLocal(now, 14);
+    const window = visibleEvents
+      .filter((e) => e.category !== "PublicHoliday")
+      .filter((e) => {
+        const s = new Date(e.start_at!);
+        return s >= startOfDayLocal(now) && s < horizon;
+      })
+      .sort((a, b) => new Date(a.start_at!).getTime() - new Date(b.start_at!).getTime());
+
+    const items: { ev: KeyEvent; note: string }[] = [];
+    const seen = new Set<string>();
+    const add = (ev: KeyEvent, note: string) => {
+      if (seen.has(ev.id)) return;
+      seen.add(ev.id);
+      items.push({ ev, note });
+    };
+
+    // Overlaps
+    for (let i = 0; i < window.length; i++) {
+      for (let j = i + 1; j < window.length; j++) {
+        const a = window[i];
+        const b = window[j];
+        if (a.all_day || b.all_day) continue;
+        const aS = new Date(a.start_at!).getTime();
+        const aE = a.end_at ? new Date(a.end_at).getTime() : aS + 3600000;
+        const bS = new Date(b.start_at!).getTime();
+        if (bS >= aE) break;
+        const bE = b.end_at ? new Date(b.end_at).getTime() : bS + 3600000;
+        if (bS < aE && aS < bE) {
+          add(a, `Overlaps with ${eventName(b)}`);
+          add(b, `Overlaps with ${eventName(a)}`);
+        }
+      }
     }
 
-    const evItems: CalItem[] = filteredEvents
-      .filter((e) => e.start_at)
-      .map((e) => {
+    window.forEach((e) => {
+      if (e.approval_state === "pending") add(e, "Waiting for approval");
+      else if (e.risk_level === "red") add(e, e.risk_reason || "Off track");
+      else if (e.risk_level === "amber") add(e, e.risk_reason || "At risk");
+    });
+
+    return items.slice(0, 5);
+  }, [visibleEvents]);
+
+  const calItems = useMemo<CalItem[]>(
+    () =>
+      visibleEvents.map((e) => {
         const start = new Date(e.start_at!);
         const end = e.end_at ? new Date(e.end_at) : new Date(start.getTime() + 60 * 60 * 1000);
-        const name = e.event_name || e.title;
-        const meta = getCategoryMeta(e.category);
-        const isPublicHoliday = e.category === "PublicHoliday";
-        let title: string;
-        if (isPublicHoliday) {
-          title = formatHolidayTitle(name, e.holiday_region);
-        } else {
-          const cat = e.category ? ` [${e.category}]` : "";
-          const owner = e.owner ? ` · ${e.owner}` : "";
-          const tz = e.start_tz && e.start_tz !== "Europe/London" ? ` · ${e.start_tz.split("/").pop()?.replace(/_/g, " ")}` : "";
-          title = `${meta.icon} ${name}${cat}${owner}${tz}`;
-        }
         return {
           id: `event:${e.id}`,
-          title,
+          title: eventName(e),
           start,
           end,
           allDay: e.all_day,
-          resource: { kind: "event", data: e },
+          resource: { kind: "event" as const, data: e },
         };
-      });
+      }),
+    [visibleEvents],
+  );
 
-    return evItems;
-  }, [events, riskFilter, ownerFilter, selectedCategories]);
-
-
-  function handleSelectItem(item: CalItem) {
-    setSelectedEvent(item.resource.data);
+  const openEvent = (ev: KeyEvent) => {
+    setSelectedEvent(ev);
     setDrawerOpen(true);
-  }
-
+  };
 
   const eventPropGetter = (item: CalItem) => {
     const ev = item.resource.data;
-    const isPublicHoliday = ev.category === "PublicHoliday";
-    const colorKey = isPublicHoliday
-      ? "holiday"
-      : ev.approval_state === "pending"
-      ? "amber"
-      : ev.approval_state === "approved"
-      ? "green"
-      : ev.risk_level;
     const meta = getCategoryMeta(ev.category);
-    const className = `evt-${colorKey}`;
-
-    if (plannerDebug) {
-      const rec = {
-        id: ev.id,
-        title: ev.event_name || ev.title,
-        approval_state: ev.approval_state,
-        risk_level: ev.risk_level,
-        colorKey,
-        className,
-        buildHash: BUILD_HASH,
-      };
-      // eslint-disable-next-line no-console
-      console.log("[PlannerDiag]", rec);
-      (window as any).__plannerDiagnostics = (window as any).__plannerDiagnostics || [];
-      (window as any).__plannerDiagnostics.push(rec);
-    }
-
     return {
-      className,
+      className: "evt-quiet",
       style: { ["--cat-color" as any]: meta.hsl } as React.CSSProperties,
     };
   };
 
   const EventChip = ({ event }: { event: CalItem }) => {
     const ev = event.resource.data;
-    const name = ev.event_name || ev.title;
-    const isAllDay = ev.all_day;
-    const isPublicHoliday = ev.category === "PublicHoliday";
     const meta = getCategoryMeta(ev.category);
-    const Header = isPublicHoliday ? (
-      <div className="flex items-center gap-1 min-w-0">
-        <span aria-hidden className="text-[10px] leading-none">{getRegionFlag(ev.holiday_region)}</span>
-        <span className="truncate font-medium">{name}</span>
-        <span className="ml-1 text-[10px] opacity-75 shrink-0">[{ev.holiday_region || "Global"}]</span>
-      </div>
-    ) : (
-      <div className="flex items-center gap-1 min-w-0">
-        <span
-          aria-hidden
-          className="inline-block h-1.5 w-1.5 rounded-full shrink-0"
-          style={{ background: `hsl(${meta.hsl})` }}
-        />
-        <span aria-hidden className="text-[10px] leading-none">{meta.icon}</span>
-        <span className="truncate font-medium">{name}</span>
-      </div>
-    );
-    if (viewTz === "both") {
-      return (
-        <div className="leading-tight">
-          {Header}
-          {!isAllDay && (
-            <div className="flex flex-col text-[10px] opacity-90 mt-0.5">
-              <span>🇬🇧 {formatTimeInTz(ev.start_at, "Europe/London")}</span>
-              <span>🇮🇳 {formatTimeInTz(ev.start_at, "Asia/Kolkata")}</span>
-            </div>
-          )}
-        </div>
-      );
-    }
     return (
-      <div className="leading-tight">
-        {Header}
-        {!isAllDay && (
-          <div className="text-[10px] opacity-90">
-            {formatTimeInTz(ev.start_at, viewTz)}
-          </div>
-        )}
+      <div className="flex min-w-0 items-center gap-1.5 leading-tight">
+        <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: `hsl(${meta.hsl})` }} />
+        <span className="truncate">{eventName(ev)}</span>
+        {!ev.all_day && <span className="shrink-0 text-[10px] opacity-70">{formatTimeInTz(ev.start_at, VIEW_TZ)}</span>}
       </div>
     );
   };
 
+  const toggleCategory = (key: string) => {
+    setSelectedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
   return (
-    <>
-      {plannerDebug && (
-        <div className="fixed top-2 right-2 z-[9999] rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-mono text-amber-700 dark:text-amber-300 shadow">
-          PlannerDiag · build {BUILD_HASH} · {(window as any).__plannerDiagnostics?.length ?? 0} events · console: <code>__plannerDiagnostics</code>
-        </div>
-      )}
-      <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-8 py-3 md:py-6 flex flex-col gap-3 md:gap-4 h-[calc(100dvh-3.5rem)] md:h-[100dvh] min-h-0 overflow-y-auto overflow-x-hidden">
-        <header className="shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary glow-primary-sm shrink-0">
-              <CalendarDays className="h-5 w-5" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl md:text-2xl font-bold tracking-tight">Duncan Planner</h1>
-                <Badge variant="outline" className="hidden sm:inline-flex font-mono text-[10px] uppercase">execution system</Badge>
-              </div>
-              <p className="text-xs md:text-sm text-muted-foreground break-words mt-1">
-                Strategic events synced from <span className="font-semibold">Duncan | Planner</span>. Goal target dates appear as pinned markers.
-              </p>
-            </div>
-            <TutorialButton tourId="planner" />
-          </div>
-        </header>
-
-        <Card className="p-3 shrink-0 overflow-hidden">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className={cn("h-2 w-2 rounded-full shrink-0", status?.connected ? "bg-emerald-500" : "bg-muted-foreground/40")} />
-              <div className="min-w-0">
-                <div className="text-sm font-semibold truncate">
-                  {status?.connected ? `Connected as ${status.google_account_email || "Duncan"}` : "Not connected"}
-                </div>
-                <div className="text-[11px] text-muted-foreground break-words [overflow-wrap:anywhere]">
-                  {status?.calendar_id
-                    ? <>Calendar: <span className="font-mono">{status.calendar_name}</span></>
-                    : status?.connected
-                      ? <span className="text-amber-500">'Duncan | Planner' calendar not found in this account.</span>
-                      : "Admin must connect Duncan's Google account"}
-                  {lastSync && <> · Last sync: {fmtDateTime(lastSync.finished_at || lastSync.started_at)} ({lastSync.status})</>}
-                </div>
-              </div>
-            </div>
-              <div className="flex items-stretch gap-2 flex-wrap w-full min-w-0 lg:w-auto lg:justify-end">
-
-              <div className="w-full sm:w-[160px]">
-                <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-                  <SelectTrigger className="h-8 w-full text-xs">
-                    <SelectValue placeholder="Filter by owner" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All owners</SelectItem>
-                    {owners.map((o) => (
-                      <SelectItem key={o} value={o}>{o}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {isAdmin && status?.connected && (
-                <Button className="flex-1 sm:flex-none whitespace-nowrap" variant="outline" size="sm" onClick={sync} disabled={syncing}>
-                  <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", syncing && "animate-spin")} />
-                  {syncing ? "Syncing…" : "Sync"}
-                </Button>
-              )}
-              <Button data-tour="planner-add-event" className="flex-1 sm:flex-none whitespace-nowrap" size="sm" variant="outline" onClick={() => { setAddDate(new Date()); setAddOpen(true); }}>
-                <Plus className="h-3.5 w-3.5 mr-1.5" /> Add event
-              </Button>
-              {isAdmin && (
-                <Button className="flex-1 sm:flex-none whitespace-nowrap" size="sm" onClick={connect}>
-                  {status?.connected ? "Reconnect" : "Connect Duncan calendar"}
-                </Button>
-              )}
-            </div>
-          </div>
-        </Card>
-
-        <div className="shrink-0 min-w-0">
-          <div className="flex items-center flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-            <span className="font-mono uppercase tracking-wider text-[10px] mr-1">Filter</span>
-            {CATEGORY_GROUPS.map((group) => {
-              const activeInGroup = group.keys.filter((k) => selectedCategories.has(k));
-              const count = activeInGroup.length;
-              return (
-                <Popover key={group.label}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        count > 0
-                          ? "border-primary/50 bg-primary/10 text-foreground font-medium"
-                          : "border-border/60 hover:border-border hover:bg-accent/40",
-                        group.label === "Other" && "opacity-70",
-                      )}
-                    >
-                      <span>{group.label}</span>
-                      {count > 0 && (
-                        <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary/20 text-primary px-1 text-[10px] font-semibold">
-                          {count}
-                        </span>
-                      )}
-                      <ChevronDown className="h-3 w-3 opacity-60" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent align="start" className="w-56 p-1.5">
-                    <div className="space-y-0.5">
-                      {group.keys.map((key) => {
-                        const meta = CATEGORY_META[key];
-                        if (!meta) return null;
-                        const active = selectedCategories.has(key);
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => toggleCategory(key)}
-                            className={cn(
-                              "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left transition-colors",
-                              active ? "bg-accent text-foreground font-medium" : "hover:bg-accent/60",
-                            )}
-                          >
-                            <span
-                              aria-hidden
-                              className="inline-block h-2.5 w-2.5 rounded-sm shrink-0"
-                              style={{ background: `hsl(${meta.hsl})` }}
-                            />
-                            <span aria-hidden>{meta.icon}</span>
-                            <span className="flex-1 truncate">{meta.label}</span>
-                            {active && <Check className="h-3 w-3 text-primary" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              );
-            })}
-            {selectedCategories.size > 0 && (
-              <button
-                type="button"
-                onClick={() => setSelectedCategories(new Set())}
-                className="ml-1 rounded-full border border-border/60 px-2 py-0.5 text-[10px] uppercase tracking-wider hover:bg-accent"
+    <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-6 sm:px-6 md:pt-10">
+      {/* Quiet header: brand line + secondary actions */}
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Planner</span>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => startTour("planner", { restart: tourState?.status === "completed" || tourState?.status === "skipped" })}
+          >
+            <PlayCircle className="h-3.5 w-3.5" /> {tourLabel}
+          </Button>
+          <Sheet open={advancedOpen} onOpenChange={setAdvancedOpen}>
+            <SheetTrigger asChild>
+              <Button
+                data-tour="planner-advanced"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
               >
-                Clear
-              </button>
-            )}
-          </div>
+                <Settings2 className="h-3.5 w-3.5" /> Settings
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
+              <SheetHeader>
+                <SheetTitle>Planner settings</SheetTitle>
+                <SheetDescription>Connection, syncing and filters. You rarely need these.</SheetDescription>
+              </SheetHeader>
+
+              <div className="mt-6 space-y-6">
+                <div className="rounded-xl border border-border/60 p-4">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("h-2 w-2 rounded-full", status?.connected ? "bg-emerald-500" : "bg-muted-foreground/40")} />
+                    <span className="text-sm font-medium">
+                      {status?.connected ? `Connected as ${status.google_account_email || "Duncan"}` : "Not connected"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                    {status?.calendar_id
+                      ? `Calendar: ${status.calendar_name}`
+                      : status?.connected
+                      ? "The 'Duncan | Planner' calendar wasn't found in this account."
+                      : "An admin needs to connect Duncan's Google account."}
+                  </p>
+                  {lastSync && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Last sync: {fmtDateTime(lastSync.finished_at || lastSync.started_at)} ({lastSync.status})
+                    </p>
+                  )}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {isAdmin && status?.connected && (
+                      <Button variant="outline" size="sm" onClick={sync} disabled={syncing}>
+                        <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", syncing && "animate-spin")} />
+                        {syncing ? "Syncing…" : "Sync now"}
+                      </Button>
+                    )}
+                    {isAdmin && (
+                      <Button variant="outline" size="sm" onClick={connect}>
+                        {status?.connected ? "Reconnect" : "Connect calendar"}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Owner</h3>
+                  <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="All owners" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All owners</SelectItem>
+                      {owners.map((o) => (
+                        <SelectItem key={o} value={o}>{o}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Categories</h3>
+                    {selectedCategories.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCategories(new Set())}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Show all
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    {CATEGORY_GROUPS.map((group) => (
+                      <div key={group.label}>
+                        <div className="mb-1.5 text-[11px] text-muted-foreground">{group.label}</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {group.keys.map((key) => {
+                            const meta = CATEGORY_META[key];
+                            if (!meta) return null;
+                            const active = selectedCategories.has(key);
+                            return (
+                              <button
+                                key={key}
+                                type="button"
+                                onClick={() => toggleCategory(key)}
+                                className={cn(
+                                  "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                                  active
+                                    ? "border-primary/50 bg-primary/10 text-foreground"
+                                    : "border-border/60 text-muted-foreground hover:bg-accent/40",
+                                )}
+                              >
+                                {meta.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
+      </div>
 
+      {/* 1 — Duncan */}
+      <div data-tour="planner-ask">
+        <PlannerAsk onChanged={refresh} />
+      </div>
 
-        <Card data-tour="planner-calendar" className="p-2 sm:p-3 shrink-0 min-w-0 flex flex-col overflow-visible">
+      <div className="mt-10 space-y-10">
+        {/* 2 — Needs attention */}
+        {attention.length > 0 && (
+          <Section title="Needs your attention">
+            <div className="divide-y divide-border/50">
+              {attention.map(({ ev, note }) => (
+                <EventRow key={`att-${ev.id}`} ev={ev} onOpen={openEvent} showDate note={note} />
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* 3 — Today */}
+        <Section
+          title="Today"
+          dataTour="planner-plan"
+          action={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => { setAddDate(new Date()); setAddOpen(true); }}
+            >
+              <Plus className="h-3.5 w-3.5" /> Add manually
+            </Button>
+          }
+        >
           {loading ? (
-            <p className="text-sm text-muted-foreground p-8 text-center">Loading…</p>
+            <Empty>Loading your plan…</Empty>
+          ) : todayEvents.length === 0 ? (
+            <Empty>Nothing scheduled today.</Empty>
           ) : (
-            <div className="h-[900px] md:h-[820px] min-w-0 overflow-visible">
-              {isMobile ? (
-                <MobileAgenda
-                  items={calItems}
-                  date={date}
-                  onNavigate={setDate}
-                  onSelectItem={handleSelectItem}
-                  viewTz={viewTz}
-                />
-              ) : (
+            <div className="divide-y divide-border/50">
+              {todayEvents.map((ev) => (
+                <EventRow key={ev.id} ev={ev} onOpen={openEvent} />
+              ))}
+            </div>
+          )}
+        </Section>
+
+        {/* 4 — Upcoming */}
+        <Section title="Coming up">
+          {loading ? (
+            <Empty>Loading…</Empty>
+          ) : upcomingEvents.length === 0 ? (
+            <Empty>Nothing in the next three weeks.</Empty>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {upcomingEvents.map((ev) => (
+                <EventRow key={ev.id} ev={ev} onOpen={openEvent} showDate />
+              ))}
+            </div>
+          )}
+        </Section>
+
+        {/* 5 — Calendar */}
+        <section data-tour="planner-calendar" className="space-y-3">
+          <div className="flex items-center justify-between gap-3 px-1">
+            <h2 className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Calendar</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setCalendarOpen((o) => !o)}
+            >
+              <CalendarDays className="h-3.5 w-3.5" />
+              {calendarOpen ? "Hide" : "Show"}
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", calendarOpen && "rotate-180")} />
+            </Button>
+          </div>
+          {calendarOpen && (
+            <div className="rounded-2xl border border-border/60 bg-card p-2 sm:p-3">
+              <div className="h-[620px] min-w-0">
                 <RBCalendar
                   localizer={localizer}
                   events={calItems}
@@ -614,8 +592,8 @@ export default function KeyEventsDiary() {
                   onView={setView}
                   date={date}
                   onNavigate={setDate}
-                  views={["month", "week", "day", "agenda"]}
-                  messages={{ agenda: "Events" }}
+                  views={isMobile ? ["agenda", "day"] : ["month", "week", "agenda"]}
+                  messages={{ agenda: "List" }}
                   components={{ toolbar: PlannerToolbar, event: EventChip as any }}
                   popup
                   selectable={isAdmin}
@@ -625,44 +603,29 @@ export default function KeyEventsDiary() {
                     setAddOpen(true);
                   }}
                   eventPropGetter={eventPropGetter as any}
-                  onSelectEvent={handleSelectItem as any}
+                  onSelectEvent={(item: any) => openEvent(item.resource.data)}
                   tooltipAccessor={(item: any) => {
-                    if (item.resource?.kind === "goal") return `Goal target: ${item.resource.data.name}`;
                     const ev = item.resource?.data as KeyEvent;
-                    const uk = formatTimeInTz(ev.start_at, "Europe/London");
-                    const ind = formatTimeInTz(ev.start_at, "Asia/Kolkata");
-                    const times = ev.all_day ? "All day" : `UK ${uk} · IN ${ind}`;
-                    const ownerStr = ev.owner ? ` · ${ev.owner}` : "";
-                    const collabs = (ev.collaborators || []).slice(0, 3)
-                      .map((c) => `${c.display_name}${c.role ? ` (${c.role})` : ""}`)
-                      .join(", ");
-                    const more = (ev.collaborators?.length || 0) > 3 ? ` +${(ev.collaborators?.length || 0) - 3} more` : "";
-                    const collabStr = collabs ? `\n+ ${ev.collaborators!.length} collaborator${ev.collaborators!.length === 1 ? "" : "s"}: ${collabs}${more}` : "";
-                    return `${ev.event_name || ev.title} · ${times}${ownerStr}${collabStr}`;
+                    return `${eventName(ev)} · ${eventTime(ev)}${ev.owner ? ` · ${ev.owner}` : ""}`;
                   }}
                 />
-              )}
+              </div>
             </div>
           )}
-        </Card>
-
-        <DetailDrawer
-          open={drawerOpen}
-          onOpenChange={setDrawerOpen}
-          event={selectedEvent}
-          cards={cards}
-          isAdmin={isAdmin}
-          onChanged={refresh}
-          viewTz={viewTz}
-        />
-
-        <AddEventDialog
-          open={addOpen}
-          onOpenChange={setAddOpen}
-          defaultDate={addDate}
-          onCreated={refresh}
-        />
+        </section>
       </div>
-    </>
+
+      <DetailDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        event={selectedEvent}
+        cards={cards}
+        isAdmin={isAdmin}
+        onChanged={refresh}
+        viewTz={VIEW_TZ as any}
+      />
+
+      <AddEventDialog open={addOpen} onOpenChange={setAddOpen} defaultDate={addDate} onCreated={refresh} />
+    </div>
   );
 }

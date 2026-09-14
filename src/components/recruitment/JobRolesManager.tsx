@@ -250,16 +250,13 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
           } else {
             const exactError = data?.error || "Unknown issue";
             // Always queue for retry on failure
-            const { error: queueError } = await supabase
-              .from("hireflix_retry_queue")
-              .insert({
-                operation: "create_position",
-                payload: JSON.parse(JSON.stringify({ job_role_id: newRole.id, title: title.trim(), competencies })),
-                status: "pending",
-                next_retry_at: new Date().toISOString(),
+            try {
+              await enqueueHireflixRetry("create_position", {
+                job_role_id: newRole.id,
+                title: title.trim(),
               });
-            if (queueError) {
-              console.error("Failed to queue Hireflix retry:", queueError);
+            } catch (queueError: any) {
+              console.error("Failed to queue Hireflix retry:", queueError?.message || queueError);
             }
             toast.warning(`Hireflix: ${exactError}. Queued for retry.`);
           }

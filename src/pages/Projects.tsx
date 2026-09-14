@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TutorialButton } from "@/components/onboarding/TutorialButton";
 import { formatDay, initials } from "@/components/projects/workspace/shared";
+import { ProjectProgressRing } from "@/components/projects/workspace/ProjectProgressRing";
 
 
 export default function Projects() {
@@ -102,6 +103,13 @@ export default function Projects() {
                         onKeyDown={(e) => { if (e.key === "Enter") navigate(`/projects/${project.id}`); }}
                         className="flex items-start gap-4 px-6 py-5 hover:bg-secondary/40 transition-colors cursor-pointer"
                       >
+                        <ProjectProgressRing
+                          pct={s && s.totalTasks ? Math.round((s.doneTasks / s.totalTasks) * 100) : 0}
+                          done={s?.doneTasks ?? 0}
+                          total={s?.totalTasks ?? 0}
+                          size={44}
+                          stroke={4}
+                        />
                         <div className="flex-1 min-w-0 space-y-1.5">
                           <div className="flex items-center gap-2.5">
                             <span className={`inline-block h-2 w-2 rounded-full ${status.dot}`} />
@@ -118,8 +126,8 @@ export default function Projects() {
                               </span>
                               {nameFor(project.user_id)}
                             </span>
-                            <span>{s?.workstreams ?? 0} workstream{(s?.workstreams ?? 0) === 1 ? "" : "s"}</span>
-                            <span>{s?.openTasks ?? 0} open task{(s?.openTasks ?? 0) === 1 ? "" : "s"}</span>
+                            <span>{s?.workstreams ?? 0} area{(s?.workstreams ?? 0) === 1 ? "" : "s"} of work</span>
+                            <span>{s?.doneTasks ?? 0}/{s?.totalTasks ?? 0} tasks complete</span>
                             {project.target_date && <span>Due {formatDay(project.target_date)}</span>}
                           </div>
                         </div>

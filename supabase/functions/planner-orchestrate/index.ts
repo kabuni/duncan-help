@@ -62,7 +62,12 @@ async function interpretUtterance(utterance: string, timezone: string, nowISO: s
   const system = `You convert a person's planning request into structured JSON. Today is ${nowISO} (timezone ${timezone}).
 Return ONLY JSON with keys:
 intent: CREATE_EVENT | UPDATE_EVENT | CANCEL_EVENT | FIND_EVENT | CHECK_AVAILABILITY — use CANCEL_EVENT for remove/delete/cancel/"take it out" wording, FIND_EVENT for pure look-ups
-event_type: MEETING | AVAILABILITY | OUT_OF_OFFICE | ANNUAL_LEAVE | SICK_LEAVE | COMPANY_EVENT | PROJECT_MILESTONE | TRAVEL | OTHER
+event_type: MEETING | AVAILABILITY | OUT_OF_OFFICE | ANNUAL_LEAVE | SICK_LEAVE | COMPANY_EVENT | PROJECT_MILESTONE | PERSONAL_APPOINTMENT | TRAVEL | OTHER
+Choosing event_type correctly matters more than anything else:
+- COMPANY_EVENT = anything the whole company would want to see: launches, releases, go-lives, rollouts, all-hands, town halls, conferences, showcases, campaigns, webinars, company socials, awaydays, board/investor days, announcements. These are Planner records only and must NOT be put on a personal calendar.
+- PROJECT_MILESTONE = a company deadline, milestone, cut-off or target date with no gathering.
+- MEETING = people actually getting together (meeting, call, sync, 1:1, interview, workshop with someone). A "launch planning meeting" is a MEETING, a "product launch" is a COMPANY_EVENT.
+- PERSONAL_APPOINTMENT = dentist, doctor, optician, physio, school run and similar private commitments — personal calendar only.
 title: short human title
 start: ISO 8601 datetime (or date at 00:00 for all-day)
 end: ISO 8601 datetime (for all-day, the same day end; for meetings, start + duration; default meeting duration 30 minutes)

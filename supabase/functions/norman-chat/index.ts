@@ -2001,8 +2001,8 @@ const PLANNER_TOOLS = [
           intent: { type: "string", enum: ["CREATE_EVENT", "UPDATE_EVENT", "CANCEL_EVENT", "FIND_EVENT", "CHECK_AVAILABILITY"], description: "What the user wants to do. CANCEL_EVENT covers remove/delete/cancel/take out. FIND_EVENT just looks an event up without changing anything." },
           event_type: {
             type: "string",
-            enum: ["MEETING", "AVAILABILITY", "OUT_OF_OFFICE", "ANNUAL_LEAVE", "SICK_LEAVE", "COMPANY_EVENT", "PROJECT_MILESTONE", "TRAVEL", "OTHER"],
-            description: "Your best interpretation of what kind of thing this is. Omit if genuinely unclear — the engine will classify from the utterance.",
+            enum: ["MEETING", "AVAILABILITY", "OUT_OF_OFFICE", "ANNUAL_LEAVE", "SICK_LEAVE", "COMPANY_EVENT", "PROJECT_MILESTONE", "PERSONAL_APPOINTMENT", "TRAVEL", "OTHER"],
+            description: "What kind of thing this is. COMPANY_EVENT = anything company-wide: launches, releases, go-lives, rollouts, all-hands, town halls, conferences, showcases, campaigns, webinars, company socials, awaydays, investor/board days, announcements (Planner only — never a personal calendar). PROJECT_MILESTONE = a company deadline, milestone or cut-off with no gathering. MEETING = people actually getting together, so a 'launch planning meeting' is a MEETING while a 'product launch' is a COMPANY_EVENT. PERSONAL_APPOINTMENT = dentist, doctor, optician, physio, school run (personal calendar only). Omit if genuinely unclear — the engine will classify from the utterance.",
           },
           utterance: { type: "string", description: "The user's own words, verbatim. Used for classification." },
           title: { type: "string", description: "Short event title, e.g. 'Annual leave — Arzoo' or 'Project deadline'." },

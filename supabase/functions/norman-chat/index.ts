@@ -6213,8 +6213,15 @@ function summarizeWriteAction(toolName: string, args: any): string {
         return `${label} ${args?.card_id || args?.id || "?"}`;
       case "submit_google_form":
         return `${label} ${args?.form_id || args?.id || "?"}`;
+      case "plan_event": {
+        const what = args?.title || args?.utterance || "(untitled)";
+        const when = args?.start ? ` on ${args.start}` : "";
+        const verb = args?.intent === "CANCEL_EVENT" ? "Cancel" : args?.intent === "UPDATE_EVENT" ? "Update" : "Add";
+        return `${verb} "${String(what).slice(0, 80)}"${when}`;
+      }
       case "update_planner_event_meta":
         return `${label} ${args?.event_id || args?.id || "?"}`;
+
       case "reschedule_event":
         return `${label}: ${args?.event_id || args?.google_event_id || "?"} → ${args?.startDateTime || "?"} – ${args?.endDateTime || "?"}`;
       case "send_pdf_for_signature":

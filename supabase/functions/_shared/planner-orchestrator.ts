@@ -663,6 +663,7 @@ export async function executePlannerAction(
     source_of_truth: d.source_of_truth,
     requires_approval: d.requires_approval,
     reason: d.reason,
+    planner_category: d.planner_category,
     existing_event_found,
     duplicate_detected,
     conflict_detected,

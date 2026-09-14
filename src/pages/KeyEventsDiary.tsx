@@ -29,7 +29,6 @@ import { cn } from "@/lib/utils";
 
 import { DetailDrawer } from "@/components/diary/DetailDrawer";
 import { AddEventDialog } from "@/components/diary/AddEventDialog";
-import { PlannerAsk } from "@/components/diary/PlannerAsk";
 import { useTour } from "@/components/onboarding/tour/TourProvider";
 import { formatTimeInTz } from "@/components/diary/TimezonePicker";
 import { CATEGORY_META, CATEGORY_GROUPS, getCategoryMeta } from "@/components/diary/categoryMeta";
@@ -183,7 +182,7 @@ export default function KeyEventsDiary() {
 
   const [view, setView] = useState<View>("month");
   const [date, setDate] = useState<Date>(new Date());
-  const [calendarOpen, setCalendarOpen] = useState(!isMobile);
+  const [calendarOpen, setCalendarOpen] = useState(true);
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedEvent, setSelectedEvent] = useState<KeyEvent | null>(null);
@@ -503,22 +502,20 @@ export default function KeyEventsDiary() {
         </div>
       </div>
 
-      {/* 1 — Duncan */}
-      <div data-tour="planner-ask">
-        <PlannerAsk onChanged={refresh} />
-      </div>
-
-      <div className="mt-10 space-y-10">
-        {/* 2 — Needs attention */}
-        {attention.length > 0 && (
-          <Section title="Needs your attention">
+      <div className="mt-8 space-y-10">
+        {/* 1 — Needs attention */}
+        <Section title="Needs your attention" dataTour="planner-attention">
+          {attention.length === 0 ? (
+            <Empty>Nothing needs your attention.</Empty>
+          ) : (
             <div className="divide-y divide-border/50">
               {attention.map(({ ev, note }) => (
                 <EventRow key={`att-${ev.id}`} ev={ev} onOpen={openEvent} showDate note={note} />
               ))}
             </div>
-          </Section>
-        )}
+          )}
+        </Section>
+
 
         {/* 3 — Today */}
         <Section

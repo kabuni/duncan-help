@@ -72,17 +72,18 @@ export const TOURS: Record<string, TourDefinition> = {
   planner: {
     id: "planner",
     name: "Planner tour",
-    description: "Tell Duncan what's happening and he takes care of the planning.",
+    description: "See today, what's coming up and anything that needs attention.",
     eta: "~1 min",
     route: "/diary",
     steps: [
       {
-        target: "planner-ask",
-        title: "Ask Duncan",
-        body: "Tell Duncan what you need. You don't need to know whether it belongs in Planner or Google Calendar.",
+        target: "planner-attention",
+        title: "What needs attention",
+        body: "Clashes, approvals and anything Duncan thinks you should look at appear here first.",
         route: "/diary",
         placement: "bottom",
       },
+
       {
         target: "planner-plan",
         title: "Your plan",

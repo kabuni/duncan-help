@@ -1,7 +1,6 @@
 import { useProjectWorkstreams, useProjectTasks, useProjectActivity, RYG_META, PROJECT_STATUS_META, type ProjectWorkstream } from "@/hooks/useProjectWork";
 import { ProjectProgressRing, useProjectProgress } from "./ProjectProgressRing";
 import type { ProjectMember } from "@/hooks/useProjects";
-import { type AreaOfWorkTarget } from "./AreaOfWorkDrawer";
 import { AskDuncanBar } from "./AskDuncanBar";
 import { StatusDot, Avatars, SectionTitle, EmptyLine, relativeDay, formatDay } from "./shared";
 

@@ -13,6 +13,7 @@ import {
 import type { ProjectMember } from "@/hooks/useProjects";
 import { taskCodeHref } from "@/components/TaskIdLink";
 import { StatusDot, formatDay, EmptyLine } from "./shared";
+import { WorkstreamProgressBar } from "./ProjectProgressRing";
 
 export function ProjectWorkstreamsTab({ projectId, members }: { projectId: string; members: ProjectMember[] }) {
   const navigate = useNavigate();
@@ -58,8 +59,8 @@ export function ProjectWorkstreamsTab({ projectId, members }: { projectId: strin
                   <span>{ws.owner_name || "No owner"}</span>
                   <span>{RYG_META[ws.status]?.label}</span>
                   {ws.due_date && <span>Due {formatDay(ws.due_date)}</span>}
-                  {ws.tasks_total > 0 && <span>{ws.tasks_done}/{ws.tasks_total} tasks done</span>}
                 </div>
+                {ws.tasks_total > 0 && <WorkstreamProgressBar done={ws.tasks_done} total={ws.tasks_total} />}
               </button>
             </li>
           ))}

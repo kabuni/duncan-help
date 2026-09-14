@@ -33,7 +33,11 @@ export function ProjectProgressRing({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-xl font-semibold text-foreground leading-none">{pct}%</span>
+        <span
+          className={`font-semibold text-foreground leading-none ${size < 60 ? "text-[9px]" : "text-xl"}`}
+        >
+          {pct}%
+        </span>
       </div>
     </div>
   );

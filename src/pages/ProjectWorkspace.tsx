@@ -990,18 +990,6 @@ export default function ProjectWorkspace() {
         </DialogContent>
       </Dialog>
 
-      {/* Project-wide Tasks drawer */}
-      {projectId && (
-        <ProjectTasksDrawer
-          open={showTasks}
-          onOpenChange={setShowTasks}
-          projectId={projectId}
-          projectName={project?.name || "Project"}
-          members={members}
-          chats={chats.map((c) => ({ id: c.id, title: c.title }))}
-          onJumpToChat={(id) => setActiveChatId(id)}
-        />
-      )}
 
       {projectId && (
         <ProjectTeamChatDrawer

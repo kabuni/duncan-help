@@ -414,9 +414,9 @@ export default function ProjectWorkspace() {
             <StickyNote className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Notes</span>
           </Button>
-          <Button data-tour="pw-tasks" variant="ghost" size="sm" onClick={() => setShowTasks(true)} className="gap-1.5 text-xs px-2 sm:px-3 relative" aria-label="Tasks">
+          <Button data-tour="pw-tasks" variant="ghost" size="sm" onClick={() => setShowTasks(true)} className="gap-1.5 text-xs px-2 sm:px-3 relative" aria-label="Planning checklist">
             <ListChecks className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Tasks{openTaskCount > 0 && ` (${openTaskCount})`}</span>
+            <span className="hidden sm:inline">Planning{openTaskCount > 0 && ` (${openTaskCount})`}</span>
             {openTaskCount > 0 && (
               <span className="sm:hidden absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-medium px-1">
                 {openTaskCount}
@@ -431,10 +431,6 @@ export default function ProjectWorkspace() {
                 {teamChatUnread}
               </span>
             )}
-          </Button>
-          <Button data-tour="pw-collaborate" variant="ghost" size="sm" onClick={() => setShowCollaborate(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Collaborate">
-            <Users className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Collaborate</span>
           </Button>
           <Button data-tour="pw-settings" variant="ghost" size="sm" onClick={openSettings} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Settings">
             <Settings2 className="h-3.5 w-3.5" />

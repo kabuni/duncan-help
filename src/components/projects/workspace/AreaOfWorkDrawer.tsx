@@ -220,6 +220,15 @@ export function AreaOfWorkDrawer({
             </ul>
           )}
 
+          {done > 0 && (
+            <button
+              onClick={() => setShowCompleted((v) => !v)}
+              className="mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {showCompleted ? "Hide completed tasks" : `Show completed tasks (${done})`}
+            </button>
+          )}
+
           {area && (
             <button
               onClick={() => navigate(taskCodeHref(area.task_code))}

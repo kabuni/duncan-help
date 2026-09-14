@@ -31,9 +31,10 @@ import { ProjectOverviewTab } from "@/components/projects/workspace/ProjectOverv
 import { ProjectWorkstreamsTab } from "@/components/projects/workspace/ProjectWorkstreamsTab";
 import { ProjectTeamTab } from "@/components/projects/workspace/ProjectTeamTab";
 import { ProjectActivityTab } from "@/components/projects/workspace/ProjectActivityTab";
-import { PROJECT_STATUS_META } from "@/hooks/useProjectWork";
+import { PROJECT_STATUS_META, type ProjectWorkstream } from "@/hooks/useProjectWork";
 import { ProjectProgressRing, useProjectProgress } from "@/components/projects/workspace/ProjectProgressRing";
 import { formatDay } from "@/components/projects/workspace/shared";
+import { AreaOfWorkDrawer, type AreaOfWorkTarget } from "@/components/projects/workspace/AreaOfWorkDrawer";
 
 const PROJECT_TABS = [
   { id: "overview", label: "Overview" },

@@ -13,6 +13,6 @@
 ## Line manager + approvals
 - [x] profiles.line_manager_profile_id + get_line_manager_profile_id()
 - [x] Onboarding "Who is your line manager?" step + profile field
-- [ ] Admin can change a user's line manager (settings)
-- [ ] Fix: planner event shows "Pending approval" with no approval row — orchestrator must create key_event_approvals routed to line manager, or not mark pending
+- [x] Admin can change a user's line manager (settings)
+- [x] Fix: planner event shows "Pending approval" with no approval row — orchestrator must create key_event_approvals routed to line manager, or not mark pending
 - [x] Duncan auto-selects the Planner category (existing category list) inside the orchestration decision; no category step in chat; works in chat, Decision Lab and updates

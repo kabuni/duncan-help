@@ -538,6 +538,30 @@ export default function ProjectWorkspace() {
               </div>
             </div>
           )}
+
+          {/* Team Slide-over */}
+          {showTeam && (
+            <div className="fixed inset-0 z-40 flex justify-end">
+              <div className="absolute inset-0 bg-black/30" onClick={() => setShowTeam(false)} />
+              <div className="relative w-96 max-w-full bg-background border-l border-border flex flex-col shadow-xl animate-in slide-in-from-right duration-200">
+                <div className="p-3 border-b border-border flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-foreground">Project Team</h3>
+                  <button onClick={() => setShowTeam(false)} className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <ScrollArea className="flex-1">
+                  <ProjectTeamTab
+                    members={members}
+                    availableProfiles={availableProfiles}
+                    onAdd={addMember}
+                    onRemove={removeMember}
+                    canManage={project.user_id === user?.id || isAdmin}
+                  />
+                </ScrollArea>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 

@@ -304,9 +304,8 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
         } catch (err: any) {
           // Queue for retry silently
           try {
-            await supabase.from("hireflix_retry_queue").insert({
-              operation: "delete_position",
-              payload: JSON.parse(JSON.stringify({ hireflix_position_id: hireflixPositionId })),
+            await enqueueHireflixRetry("delete_position", {
+              hireflix_position_id: hireflixPositionId,
             });
           } catch {
             // Silent fallback

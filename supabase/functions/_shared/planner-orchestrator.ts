@@ -195,6 +195,9 @@ export interface ActionRequest {
   end?: string; // ISO
   all_day?: boolean;
   attendees?: string[];
+  /** For UPDATE without ids — the date the event currently sits on. */
+  current_start?: string;
+
   owner?: string;
   link_group?: string;
   planner_event_id?: string;
@@ -205,14 +208,33 @@ export interface ActionRequest {
   origin?: Destination;
 }
 
+export interface DecisionTrace {
+  intent: PlannerIntent;
+  event_type: EventType;
+  destination: Destination[];
+  source_of_truth: Destination;
+  requires_approval: boolean;
+  reason: string;
+  existing_event_found: boolean;
+  duplicate_detected: boolean;
+  conflict_detected: boolean;
+  action_taken: "CREATE" | "UPDATE" | "DELETE" | "READ" | "NO_ACTION";
+  linked: boolean;
+  link_group: string | null;
+  planner_event_id: string | null;
+  google_event_id: string | null;
+}
+
 export interface ActionResult {
   ok: boolean;
   verified: boolean;
   source: "planner_orchestrator";
   decision: Decision;
+  trace?: DecisionTrace;
   link_group?: string;
   planner_event_id?: string;
   google_event_id?: string;
+  matched_event?: any;
   duplicate?: any;
   conflicts?: any[];
   suggestions?: { start: string; end: string }[];
@@ -220,6 +242,7 @@ export interface ActionResult {
   message: string;
   error?: string;
 }
+
 
 const hash = async (s: string) => {
   const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(s));
@@ -420,10 +443,54 @@ async function deleteGoogleEvent(token: string, eventId: string) {
 
 // ── Main entry point ─────────────────────────────────────────────────────────
 
+/**
+ * Public entry point. Runs the action and attaches a DecisionTrace describing
+ * exactly what the decision engine concluded (used by the Decision Lab test
+ * view and by anything that needs to explain the routing).
+ */
 export async function executePlannerAction(
   ctx: OrchestratorContext,
   req: ActionRequest,
 ): Promise<ActionResult> {
+  const result = await runPlannerAction(ctx, req);
+  const d = result.decision;
+  const conflict_detected = !!(result.conflicts && result.conflicts.length);
+  const duplicate_detected = !!result.duplicate;
+  const existing_event_found =
+    duplicate_detected ||
+    !!result.matched_event ||
+    (req.intent !== "CREATE_EVENT" && !!(result.planner_event_id || result.google_event_id));
+
+  let action_taken: DecisionTrace["action_taken"] = "NO_ACTION";
+  if (req.intent === "CHECK_AVAILABILITY") action_taken = result.ok ? "READ" : "NO_ACTION";
+  else if (result.ok && req.intent === "CREATE_EVENT") action_taken = "CREATE";
+  else if (result.ok && req.intent === "UPDATE_EVENT") action_taken = "UPDATE";
+  else if (result.ok && req.intent === "CANCEL_EVENT") action_taken = "DELETE";
+
+  const trace: DecisionTrace = {
+    intent: d.intent,
+    event_type: d.event_type,
+    destination: d.destination,
+    source_of_truth: d.source_of_truth,
+    requires_approval: d.requires_approval,
+    reason: d.reason,
+    existing_event_found,
+    duplicate_detected,
+    conflict_detected,
+    action_taken,
+    linked: !!(result.link_group && result.planner_event_id && result.google_event_id),
+    link_group: result.link_group ?? null,
+    planner_event_id: result.planner_event_id ?? null,
+    google_event_id: result.google_event_id ?? null,
+  };
+  return { ...result, trace };
+}
+
+async function runPlannerAction(
+  ctx: OrchestratorContext,
+  req: ActionRequest,
+): Promise<ActionResult> {
+
   const overrides = await loadDestinationConfig(ctx.supabaseAdmin);
   const eventType =
     req.event_type ?? classifyEventType(`${req.utterance || ""} ${req.title || ""} ${req.description || ""}`);
@@ -499,8 +566,40 @@ export async function executePlannerAction(
 
   // ── Update ────────────────────────────────────────────────────────────────
   if (req.intent === "UPDATE_EVENT") {
-    const plannerId = req.planner_event_id || link?.planner_event_id;
+    let matched: any = null;
+    // No explicit ids supplied ("move my holiday from Friday to Monday") —
+    // find the user's most likely existing record of this type.
+    if (!link && !req.planner_event_id && !req.google_event_id) {
+      const { data: rows } = await ctx.supabaseAdmin
+        .from("key_events")
+        .select("id, event_name, title, category, event_type, start_at, link_group")
+        .eq("created_by", ctx.userId)
+        .eq("deleted_in_google", false)
+        .order("start_at", { ascending: true })
+        .limit(200);
+      const target = normTitle(req.title || "");
+      const fromDay = (req.current_start || "").slice(0, 10);
+      const candidates = (rows || []).filter((r: any) => {
+        const typeMatch = r.event_type === decision.event_type ||
+          plannerCategoryFor(decision.event_type) === r.category;
+        const titleMatch = target && normTitle(r.event_name || r.title || "").includes(target);
+        const dayMatch = fromDay && String(r.start_at || "").slice(0, 10) === fromDay;
+        return dayMatch || titleMatch || typeMatch;
+      });
+      // Prefer a same-day match, then a title match, then the next one of this type.
+      matched = candidates.find((r: any) => fromDay && String(r.start_at || "").slice(0, 10) === fromDay)
+        ?? candidates.find((r: any) => target && normTitle(r.event_name || r.title || "").includes(target))
+        ?? candidates[0]
+        ?? null;
+      if (matched?.link_group) {
+        const { data: l } = await ctx.supabaseAdmin
+          .from("event_links").select("*").eq("link_group", matched.link_group).maybeSingle();
+        if (l) link = l;
+      }
+    }
+    const plannerId = req.planner_event_id || link?.planner_event_id || matched?.id;
     const googleId = req.google_event_id || link?.google_event_id;
+
     let plannerDone = false;
     let googleDone = false;
     if (plannerId && req.origin !== "PLANNER") {
@@ -532,11 +631,13 @@ export async function executePlannerAction(
       ok,
       verified: ok,
       link_group: link?.link_group,
+      matched_event: matched ?? undefined,
       planner_event_id: plannerId ?? undefined,
       google_event_id: googleId ?? undefined,
       message: ok ? "Updated across the linked systems." : "No linked record could be updated.",
       error: ok ? undefined : "not_found",
     };
+
   }
 
   // ── Create ────────────────────────────────────────────────────────────────

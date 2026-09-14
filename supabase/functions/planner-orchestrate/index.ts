@@ -51,7 +51,43 @@ async function getCalendarAccessToken(userId: string, supabaseAdmin: any): Promi
   return tokenData.access_token;
 }
 
+/**
+ * Turns a raw natural-language utterance into a structured ActionRequest.
+ * The model interprets intent ONLY — it never decides the destination; that is
+ * the orchestration layer's job.
+ */
+async function interpretUtterance(utterance: string, timezone: string, nowISO: string) {
+  const key = Deno.env.get("OPENAI_API_KEY");
+  if (!key) throw new Error("OPENAI_API_KEY is not configured");
+  const system = `You convert a person's planning request into structured JSON. Today is ${nowISO} (timezone ${timezone}).
+Return ONLY JSON with keys:
+intent: CREATE_EVENT | UPDATE_EVENT | CANCEL_EVENT | CHECK_AVAILABILITY
+event_type: MEETING | AVAILABILITY | OUT_OF_OFFICE | ANNUAL_LEAVE | SICK_LEAVE | COMPANY_EVENT | PROJECT_MILESTONE | TRAVEL | OTHER
+title: short human title
+start: ISO 8601 datetime (or date at 00:00 for all-day)
+end: ISO 8601 datetime (for all-day, the same day end; for meetings, start + duration; default meeting duration 30 minutes)
+all_day: boolean
+current_start: ISO date of where the event sits TODAY, only for UPDATE_EVENT
+attendee_names: array of first names mentioned
+missing: array of names of details the person did not give (e.g. "start", "attendee_email")
+Resolve relative dates ("next Friday", "tomorrow", "30 September") against today. Never invent an exact time for a request with no time — set all_day true instead. Do NOT decide which calendar/system to use.`;
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gpt-4o",
+      temperature: 0,
+      response_format: { type: "json_object" },
+      messages: [{ role: "system", content: system }, { role: "user", content: utterance }],
+    }),
+  });
+  if (!resp.ok) throw new Error(`Interpretation failed [${resp.status}]: ${await resp.text()}`);
+  const json = await resp.json();
+  return JSON.parse(json.choices?.[0]?.message?.content || "{}");
+}
+
 serve(async (req) => {
+
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -89,20 +125,54 @@ serve(async (req) => {
       });
     }
 
+    const timezone = body.timezone || "Europe/London";
+
+    // Natural-language mode: interpret first, then run the same decision engine.
+    let request: ActionRequest = body as ActionRequest;
+    let interpretation: any = null;
+    if (body.interpret && body.utterance) {
+      interpretation = await interpretUtterance(body.utterance, timezone, new Date().toISOString());
+      const names: string[] = Array.isArray(interpretation.attendee_names) ? interpretation.attendee_names : [];
+      let attendees: string[] = [];
+      if (names.length) {
+        const { data: people } = await supabaseAdmin
+          .from("profiles")
+          .select("email, display_name")
+          .limit(500);
+        attendees = names
+          .map((n) => (people || []).find((p: any) =>
+            String(p.display_name || "").toLowerCase().includes(String(n).toLowerCase()))?.email)
+          .filter(Boolean) as string[];
+      }
+      request = {
+        intent: interpretation.intent || "CREATE_EVENT",
+        event_type: interpretation.event_type,
+        utterance: body.utterance,
+        title: interpretation.title,
+        start: interpretation.start,
+        end: interpretation.end,
+        all_day: interpretation.all_day,
+        current_start: interpretation.current_start,
+        attendees,
+        force: body.force === true,
+      };
+    }
+
     const result = await executePlannerAction(
       {
         supabaseAdmin,
         userId: user.id,
         userEmail: user.email,
-        timezone: body.timezone || "Europe/London",
+        timezone,
         getGoogleToken: () => getCalendarAccessToken(user.id, supabaseAdmin),
       },
-      body as ActionRequest,
+      request,
     );
 
-    return new Response(JSON.stringify(result), {
+    return new Response(JSON.stringify({ ...result, interpretation, request }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   } catch (e) {
     console.error("planner-orchestrate failed:", e);
     return new Response(JSON.stringify({ ok: false, error: (e as Error).message }), {

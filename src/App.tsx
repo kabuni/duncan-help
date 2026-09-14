@@ -38,6 +38,8 @@ import CEOBriefing from "./pages/CEOBriefing";
 import CompanyHealth from "./pages/CompanyHealth";
 import PeopleCultureDashboard from "./pages/PeopleCultureDashboard";
 import KeyEventsDiary from "./pages/KeyEventsDiary";
+import PlannerDecisionLab from "./pages/PlannerDecisionLab";
+
 import Approvals from "./pages/Approvals";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import EAInbox from "./pages/EAInbox";
@@ -123,6 +125,8 @@ const AppContent = () => {
             <Route path="/company-health/people" element={<PeopleCultureDashboard />} />
 
             <Route path="/diary" element={<KeyEventsDiary />} />
+            <Route path="/planner/decision-lab" element={<PlannerDecisionLab />} />
+
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/purchase-orders" element={<PurchaseOrders />} />
             <Route path="/ea-inbox" element={<EAInbox />} />

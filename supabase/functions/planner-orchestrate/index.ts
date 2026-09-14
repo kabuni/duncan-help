@@ -132,6 +132,11 @@ serve(async (req) => {
         overrides,
         text: `${body.utterance ?? ""} ${body.title ?? ""}`,
         suggested_category: body.planner_category,
+        all_day: body.all_day,
+        start: body.start,
+        attendees: body.attendees,
+        audience: body.audience,
+        attendance_required: body.attendance_required,
       });
       return new Response(JSON.stringify({ decision }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

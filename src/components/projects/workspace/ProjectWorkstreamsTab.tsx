@@ -38,7 +38,7 @@ export function ProjectWorkstreamsTab({ projectId, members }: { projectId: strin
       {isLoading ? (
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       ) : workstreams.length === 0 ? (
-        <EmptyLine>No workstreams connected yet. Link an existing card or create a new one for this project.</EmptyLine>
+        <EmptyLine>No areas of work yet. Add one, or connect an area that already exists.</EmptyLine>
       ) : (
         <ul className="divide-y divide-border rounded-xl border border-border bg-card">
           {workstreams.map((ws) => (

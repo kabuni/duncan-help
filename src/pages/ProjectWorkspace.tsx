@@ -82,29 +82,23 @@ async function captureChecklistToPlan(text: string, chatId: string, projectId: s
     toast("No checklist items detected");
     return;
   }
-  // Get current max position
-  const { data: existing } = await supabase
-    .from("project_chat_plan_items" as any)
-    .select("position")
-    .eq("chat_id", chatId)
-    .order("position", { ascending: false })
-    .limit(1);
-  const startPos = ((existing as any[])?.[0]?.position ?? 0) + 1;
-  const rows = items.map((it, i) => ({
-    chat_id: chatId,
-    project_id: projectId,
-    created_by: user.id,
+  // One task system: checklist items become real project tasks.
+  const rows = items.map((it) => ({
     title: it.title,
-    group_title: it.group,
-    status: "accepted" as const,
-    position: startPos + i,
+    description: it.group ? it.group : "",
+    project_id: projectId,
+    card_id: null,
+    assignee_id: null,
+    due_date: null,
+    status: "not_started",
+    completed: false,
   }));
-  const { error } = await supabase.from("project_chat_plan_items" as any).insert(rows);
+  const { error } = await supabase.from("workstream_tasks").insert(rows as any);
   if (error) {
     toast.error(`Couldn't add: ${error.message}`);
     return;
   }
-  toast.success(`Added ${items.length} item${items.length === 1 ? "" : "s"} to Planning checklist`);
+  toast.success(`Added ${items.length} task${items.length === 1 ? "" : "s"} to the project`);
 }
 
 export default function ProjectWorkspace() {

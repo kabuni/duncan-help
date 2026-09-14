@@ -439,6 +439,13 @@ export default function ProjectWorkspace() {
             />
           )}
 
+          <AreaOfWorkDrawer
+            projectId={projectId}
+            members={members}
+            target={areaTarget}
+            onOpenChange={(o) => { if (!o) setAreaTarget(null); }}
+          />
+
           {/* Files Slide-over */}
           {showFiles && (
             <div className="fixed inset-0 z-40 flex justify-end">

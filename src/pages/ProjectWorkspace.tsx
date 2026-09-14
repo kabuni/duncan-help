@@ -688,16 +688,6 @@ export default function ProjectWorkspace() {
               </div>
             ) : (
               <>
-                {projectId && activeChatId && (
-                  <PlanningChecklist
-                    chatId={activeChatId}
-                    projectId={projectId}
-                    chatTitle={chats.find((c) => c.id === activeChatId)?.title}
-                    projectName={project?.name}
-                    members={members}
-                    currentUserId={user?.id || null}
-                  />
-                )}
                 {/* Messages */}
                 <div ref={messagesScrollerRef} className="flex-1 overflow-y-auto p-4 overscroll-contain">
                   <div className="max-w-3xl mx-auto space-y-4">

@@ -37,6 +37,8 @@ export interface Decision {
   source_of_truth: Destination;
   requires_approval: boolean;
   reason: string;
+  /** Existing Planner category key stored on key_events.category. */
+  planner_category: string;
 }
 
 interface TypeRule {
@@ -146,11 +148,90 @@ export function classifyEventType(text: string): EventType {
   return "OTHER";
 }
 
+// ── Planner categories ───────────────────────────────────────────────────────
+// These are the EXISTING Planner categories (mirrors src/components/diary/
+// categoryMeta.ts). No new category system — the engine only ever picks one of
+// these keys, falling back to "Event".
+
+export const PLANNER_CATEGORIES = [
+  "Travel",
+  "Holiday",
+  "PublicHoliday",
+  "GlobalAllHands",
+  "TeamSocials",
+  "Product",
+  "Releases",
+  "Event",
+  "Super Coaches",
+  "Investor",
+  "Social",
+  "PR",
+  "Launch",
+  "Marketing",
+  "Operations",
+  "Communication",
+  "Creative",
+  "BusinessDevelopment",
+] as const;
+
+export type PlannerCategory = (typeof PLANNER_CATEGORIES)[number];
+
+// Ordered: the first pattern that matches wins. More specific before generic.
+const CATEGORY_PATTERNS: [string, RegExp][] = [
+  ["PublicHoliday", /\b(public holiday|bank holiday|national holiday)\b/i],
+  ["Holiday", /\b(annual leave|holiday|vacation|taking .*\boff\b|day off|days off|time off|pto|sick|unwell|out of office|ooo)\b/i],
+  ["Travel", /\b(travel(l?ing)?|flight|flying|trip to|train to|visiting|offsite|on[- ]site visit)\b/i],
+  ["GlobalAllHands", /\b(all[- ]hands|town ?hall|company[- ]wide (meeting|call)|global (meeting|call|update))\b/i],
+  ["TeamSocials", /\b(team social|socials?|dinner|drinks|night out|christmas party|team lunch|away ?day|celebration)\b/i],
+  ["Releases", /\b(release|patch|deploy(ment)?|version \d|ship(ping)? (date|version)|go[- ]live)\b/i],
+  ["Launch", /\b(launch(es|ing)?|unveil|public debut|market launch|product launch)\b/i],
+  ["Investor", /\b(investor|board (meeting|update)|fundrais(e|ing)|due diligence|vc\b|term sheet)\b/i],
+  ["PR", /\b(press|pr\b|media|journalist|interview with .*(magazine|paper)|announcement to press)\b/i],
+  ["Social", /\b(social media|instagram|linkedin|tiktok|twitter|x post|content calendar|post going out)\b/i],
+  ["Marketing", /\b(marketing|campaign|newsletter|webinar|promo(tion)?|advert)\b/i],
+  ["Super Coaches", /\b(super coach(es)?|coaching (session|programme|program))\b/i],
+  ["Creative", /\b(creative|design review|shoot|photo ?shoot|brand (work|review)|artwork)\b/i],
+  ["BusinessDevelopment", /\b(business development|bd\b|partnership|client pitch|prospect|sales meeting|school signing)\b/i],
+  ["Communication", /\b(comms|communication|announcement|internal update|briefing)\b/i],
+  ["Operations", /\b(operations|ops\b|logistics|process review|supplier|procurement)\b/i],
+  ["Product", /\b(product|roadmap|feature|sprint|milestone|deadline|due (by|on)|spec review)\b/i],
+  ["Event", /\b(event|conference|summit|showcase|exhibition|workshop)\b/i],
+];
+
+export function isPlannerCategory(value?: string | null): boolean {
+  return !!value && (PLANNER_CATEGORIES as readonly string[]).includes(value);
+}
+
+/**
+ * Picks the Planner category as part of the SAME orchestration decision as
+ * intent, destination and approval. Priority:
+ *   1. an explicitly supplied valid category (AI suggestion or manual correction)
+ *   2. wording in the user's own request
+ *   3. the event type's default category
+ *   4. "Event" as the safe existing fallback — never a new category.
+ */
+export function resolvePlannerCategory(
+  eventType: EventType,
+  text?: string | null,
+  suggested?: string | null,
+): string {
+  if (isPlannerCategory(suggested)) return suggested as string;
+  const t = text || "";
+  if (t.trim()) {
+    for (const [category, re] of CATEGORY_PATTERNS) if (re.test(t)) return category;
+  }
+  return EVENT_TYPE_RULES[eventType]?.planner_category ?? "Event";
+}
+
 /** THE decision engine. Pure — same inputs always give the same routing. */
 export function decideDestination(
   intent: PlannerIntent,
   eventType: EventType,
-  opts: { overrides?: Record<string, Destination[]> } = {},
+  opts: {
+    overrides?: Record<string, Destination[]>;
+    text?: string | null;
+    suggested_category?: string | null;
+  } = {},
 ): Decision {
   const rule = EVENT_TYPE_RULES[eventType] ?? EVENT_TYPE_RULES.OTHER;
   const override = opts.overrides?.[eventType];
@@ -166,6 +247,7 @@ export function decideDestination(
     source_of_truth,
     requires_approval: intent === "CREATE_EVENT" ? rule.requires_approval : false,
     reason: rule.reason,
+    planner_category: resolvePlannerCategory(eventType, opts.text, opts.suggested_category),
   };
 }
 
@@ -203,6 +285,8 @@ export interface ActionRequest {
   planner_event_id?: string;
   google_event_id?: string;
   /** Skip duplicate/conflict guards after the user has been told about them. */
+  /** Optional AI/manual category hint — validated against the existing list. */
+  planner_category?: string;
   force?: boolean;
   /** Set by sync jobs so we never bounce a change back to its origin. */
   origin?: Destination;
@@ -221,8 +305,22 @@ export interface DecisionTrace {
   action_taken: "CREATE" | "UPDATE" | "DELETE" | "READ" | "NO_ACTION";
   linked: boolean;
   link_group: string | null;
+  planner_category: string;
   planner_event_id: string | null;
   google_event_id: string | null;
+  /** Resolved dynamically from the requester's line manager — never hardcoded. */
+  approver_profile_id: string | null;
+  approver_name: string | null;
+  approval_routed: boolean;
+  approval_id: string | null;
+}
+
+export interface ApprovalRouting {
+  approval_id: string | null;
+  approver_profile_id: string | null;
+  approver_name: string | null;
+  routed: boolean;
+  reason: string;
 }
 
 export interface ActionResult {
@@ -239,6 +337,7 @@ export interface ActionResult {
   conflicts?: any[];
   suggestions?: { start: string; end: string }[];
   availability?: any;
+  approval?: ApprovalRouting;
   message: string;
   error?: string;
 }
@@ -345,7 +444,7 @@ async function suggestSlots(token: string, startISO: string, endISO: string) {
 // ── Writers ──────────────────────────────────────────────────────────────────
 
 async function createPlannerEvent(ctx: OrchestratorContext, req: ActionRequest, decision: Decision) {
-  const category = plannerCategoryFor(decision.event_type);
+  const category = decision.planner_category || plannerCategoryFor(decision.event_type);
   const name = (req.title || "Untitled").trim();
   const { data, error } = await ctx.supabaseAdmin
     .from("key_events")
@@ -441,6 +540,96 @@ async function deleteGoogleEvent(token: string, eventId: string) {
   return resp.ok || resp.status === 410 || resp.status === 404;
 }
 
+// ── Approval routing ─────────────────────────────────────────────────────────
+
+/**
+ * Routes an approval through the EXISTING Approval Manager (key_event_approvals
+ * → approvals inbox). The approver is always resolved dynamically from the
+ * requester's current line manager on their Duncan profile. No manager is ever
+ * hardcoded. Once written, the row keeps its approver even if the reporting
+ * line later changes.
+ */
+async function routeApprovalToLineManager(
+  ctx: OrchestratorContext,
+  plannerEventId: string,
+  decision: Decision,
+): Promise<ApprovalRouting> {
+  const none = (reason: string): ApprovalRouting => ({
+    approval_id: null,
+    approver_profile_id: null,
+    approver_name: null,
+    routed: false,
+    reason,
+  });
+
+  const { data: requester } = await ctx.supabaseAdmin
+    .from("profiles")
+    .select("id, display_name, line_manager_profile_id")
+    .eq("user_id", ctx.userId)
+    .maybeSingle();
+
+  if (!requester) return none("No Duncan profile found for the requester.");
+  if (!requester.line_manager_profile_id) {
+    return none("No line manager is set on the requester's Duncan profile.");
+  }
+
+  const { data: manager } = await ctx.supabaseAdmin
+    .from("profiles")
+    .select("id, user_id, display_name")
+    .eq("id", requester.line_manager_profile_id)
+    .maybeSingle();
+  if (!manager) return none("The line manager on the profile no longer exists.");
+
+  const label = decision.event_type
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/^\w/, (c) => c.toUpperCase());
+
+  // requested_by stores the requester's AUTH user id (same convention as the
+  // Planner UI and the approvals inbox trigger).
+  const { data: approval, error } = await ctx.supabaseAdmin
+    .from("key_event_approvals")
+    .insert({
+      event_id: plannerEventId,
+      approval_type: "line_manager",
+      label: `${label} — line manager approval`,
+      approver_profile_id: manager.id,
+      requested_by: ctx.userId,
+      status: "pending",
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (error) return none(`Could not create the approval request: ${error.message}`);
+  if (!approval?.id) return none("The approval request could not be created.");
+
+  // Notify the approver in their Duncan notification bell (the approvals inbox
+  // row itself is written by the existing sync_event_approval_to_inbox trigger).
+  if (manager.user_id) {
+    const { data: ev } = await ctx.supabaseAdmin
+      .from("key_events")
+      .select("title")
+      .eq("id", plannerEventId)
+      .maybeSingle();
+    await ctx.supabaseAdmin.from("notifications").insert({
+      user_id: manager.user_id,
+      kind: "approval_requested",
+      title: `Approval requested: ${label}`,
+      body: `${requester.display_name || "A teammate"} asked you to approve "${ev?.title || "an event"}".`,
+      link: `/diary?event=${plannerEventId}`,
+      metadata: { approval_id: approval.id, event_id: plannerEventId },
+    });
+  }
+
+  return {
+    approval_id: approval.id,
+    approver_profile_id: manager.id,
+    approver_name: manager.display_name ?? null,
+    routed: true,
+    reason: "Routed to the requester's current line manager.",
+  };
+}
+
 // ── Main entry point ─────────────────────────────────────────────────────────
 
 /**
@@ -474,6 +663,7 @@ export async function executePlannerAction(
     source_of_truth: d.source_of_truth,
     requires_approval: d.requires_approval,
     reason: d.reason,
+    planner_category: d.planner_category,
     existing_event_found,
     duplicate_detected,
     conflict_detected,
@@ -482,6 +672,10 @@ export async function executePlannerAction(
     link_group: result.link_group ?? null,
     planner_event_id: result.planner_event_id ?? null,
     google_event_id: result.google_event_id ?? null,
+    approver_profile_id: result.approval?.approver_profile_id ?? null,
+    approver_name: result.approval?.approver_name ?? null,
+    approval_routed: !!result.approval?.routed,
+    approval_id: result.approval?.approval_id ?? null,
   };
   return { ...result, trace };
 }
@@ -494,7 +688,11 @@ async function runPlannerAction(
   const overrides = await loadDestinationConfig(ctx.supabaseAdmin);
   const eventType =
     req.event_type ?? classifyEventType(`${req.utterance || ""} ${req.title || ""} ${req.description || ""}`);
-  const decision = decideDestination(req.intent, eventType, { overrides });
+  const decision = decideDestination(req.intent, eventType, {
+    overrides,
+    text: `${req.utterance || ""} ${req.title || ""} ${req.description || ""}`,
+    suggested_category: req.planner_category,
+  });
   const base = { ok: false, verified: false, source: "planner_orchestrator" as const, decision };
 
   const token = decision.destination.includes("GOOGLE_CALENDAR") || req.intent !== "CREATE_EVENT"
@@ -608,6 +806,21 @@ async function runPlannerAction(
       if (req.end) patch.end_at = req.end;
       if (req.title) patch.event_name = req.title;
       if (req.location) patch.location = req.location;
+      // Re-categorise only when the request actually carries category signal, so
+      // a simple date move never re-labels an event the user already corrected.
+      const explicitCategory = isPlannerCategory(req.planner_category)
+        ? (req.planner_category as string)
+        : req.event_type
+          ? decision.planner_category
+          : null;
+      const currentCategory = matched?.category
+        ?? (await ctx.supabaseAdmin.from("key_events").select("category").eq("id", plannerId).maybeSingle()).data?.category
+        ?? null;
+      const category = explicitCategory || currentCategory;
+      if (category) {
+        patch.category = category;
+        if (req.title) patch.title = `[${category}] ${req.title}`;
+      }
       const { error } = await ctx.supabaseAdmin.from("key_events").update(patch).eq("id", plannerId);
       plannerDone = !error;
     }
@@ -719,7 +932,27 @@ async function runPlannerAction(
     await ctx.supabaseAdmin.from("key_events").update({ link_group: linkGroup }).eq("id", plannerId);
   }
 
+  // Approval is routed through the EXISTING Approval Manager, to whoever is the
+  // requester's current line manager at this moment.
+  let approval: ApprovalRouting | undefined;
+  if (decision.requires_approval && plannerId) {
+    approval = await routeApprovalToLineManager(ctx, plannerId, decision);
+    if (!approval.routed) {
+      // Never show "Pending approval" when no approval request actually exists.
+      await ctx.supabaseAdmin
+        .from("key_events")
+        .update({ approval_state: null })
+        .eq("id", plannerId);
+    }
+  }
+
   const where = [plannerId ? "Planner" : null, googleId ? "Google Calendar" : null].filter(Boolean).join(" and ");
+  const approvalNote = !decision.requires_approval
+    ? ""
+    : approval?.routed
+      ? ` Sent to ${approval.approver_name || "your line manager"} for approval.`
+      : ` It needs approval but I could not request it — ${approval?.reason || "no approver could be resolved"} Add your line manager in Settings, then ask me again.`;
+
   return {
     ...base,
     ok: !!(plannerId || googleId),
@@ -727,6 +960,7 @@ async function runPlannerAction(
     link_group: linkGroup,
     planner_event_id: plannerId,
     google_event_id: googleId,
-    message: `Added to ${where}.${decision.requires_approval ? " Awaiting approval in Planner." : ""}`,
+    approval,
+    message: `Added to ${where}.${approvalNote}`,
   };
 }

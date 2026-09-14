@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
       const ids = usersList.users.map((u) => u.id);
       const { data: profiles } = await admin
         .from("profiles")
-        .select("user_id, display_name, department, role_title, approval_status")
+        .select("id, user_id, display_name, department, role_title, approval_status, line_manager_profile_id")
         .in("user_id", ids);
 
       const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
@@ -64,6 +64,8 @@ Deno.serve(async (req) => {
           department: p.department ?? null,
           role_title: p.role_title ?? null,
           approval_status: p.approval_status ?? null,
+          profile_id: p.id ?? null,
+          line_manager_profile_id: p.line_manager_profile_id ?? null,
         };
       });
       rows.sort((a, b) => (b.days_inactive ?? 0) - (a.days_inactive ?? 0));
@@ -92,7 +94,7 @@ Deno.serve(async (req) => {
       const targetId: string | undefined = body.userId;
       const patch = body.patch ?? {};
       if (!targetId || typeof targetId !== "string") return json({ error: "userId required" }, 400);
-      const allowed = ["display_name", "department", "role_title", "approval_status", "bio"] as const;
+      const allowed = ["display_name", "department", "role_title", "approval_status", "bio", "line_manager_profile_id"] as const;
       const clean: Record<string, unknown> = {};
       for (const k of allowed) {
         if (k in patch) {
@@ -109,7 +111,7 @@ Deno.serve(async (req) => {
         .from("profiles")
         .update({ ...clean, updated_at: new Date().toISOString() })
         .eq("user_id", targetId)
-        .select("user_id, display_name, department, role_title, approval_status, bio")
+        .select("user_id, display_name, department, role_title, approval_status, bio, line_manager_profile_id")
         .maybeSingle();
       if (upErr) return json({ error: upErr.message }, 500);
       return json({ profile: updated });

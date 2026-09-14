@@ -3551,6 +3551,7 @@ export type Database = {
           display_name: string | null
           ea_mode_enabled: boolean
           id: string
+          line_manager_profile_id: string | null
           location_auto: boolean
           meet_duncan_tour_completed_at: string | null
           norman_context: string | null
@@ -3575,6 +3576,7 @@ export type Database = {
           display_name?: string | null
           ea_mode_enabled?: boolean
           id?: string
+          line_manager_profile_id?: string | null
           location_auto?: boolean
           meet_duncan_tour_completed_at?: string | null
           norman_context?: string | null
@@ -3599,6 +3601,7 @@ export type Database = {
           display_name?: string | null
           ea_mode_enabled?: boolean
           id?: string
+          line_manager_profile_id?: string | null
           location_auto?: boolean
           meet_duncan_tour_completed_at?: string | null
           norman_context?: string | null
@@ -3611,7 +3614,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_line_manager_profile_id_fkey"
+            columns: ["line_manager_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       project_chat_plan_items: {
         Row: {
@@ -5871,6 +5882,10 @@ export type Database = {
           last_updated: string
           scopes: string
         }[]
+      }
+      get_line_manager_profile_id: {
+        Args: { _user_id: string }
+        Returns: string
       }
       get_my_meetings: {
         Args: { _limit?: number; _scope?: string }

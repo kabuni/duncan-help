@@ -37,6 +37,7 @@ import { ProjectTasksTab } from "@/components/projects/workspace/ProjectTasksTab
 import { ProjectTeamTab } from "@/components/projects/workspace/ProjectTeamTab";
 import { ProjectActivityTab } from "@/components/projects/workspace/ProjectActivityTab";
 import { PROJECT_STATUS_META } from "@/hooks/useProjectWork";
+import { ProjectProgressRing, useProjectProgress } from "@/components/projects/workspace/ProjectProgressRing";
 import { formatDay } from "@/components/projects/workspace/shared";
 
 const PROJECT_TABS = [

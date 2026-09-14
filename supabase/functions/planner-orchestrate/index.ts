@@ -68,8 +68,10 @@ start: ISO 8601 datetime (or date at 00:00 for all-day)
 end: ISO 8601 datetime (for all-day, the same day end; for meetings, start + duration; default meeting duration 30 minutes)
 all_day: boolean
 current_start: ISO date of where the event sits TODAY, only for UPDATE_EVENT
+planner_category: one of Travel | Holiday | PublicHoliday | GlobalAllHands | TeamSocials | Product | Releases | Event | Super Coaches | Investor | Social | PR | Launch | Marketing | Operations | Communication | Creative | BusinessDevelopment — the best matching EXISTING Planner category. Never invent a new one; use Event if genuinely unclear.
 attendee_names: array of first names mentioned
 missing: array of names of details the person did not give (e.g. "start", "attendee_email")
+Use ANNUAL_LEAVE (not OUT_OF_OFFICE) whenever a person says they are off, taking leave, on holiday or not working — OUT_OF_OFFICE is only for an explicit "out of office"/"away from my desk" block that is not leave.
 Resolve relative dates ("next Friday", "tomorrow", "30 September") against today. Never invent an exact time for a request with no time — set all_day true instead. Do NOT decide which calendar/system to use.`;
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -119,7 +121,11 @@ serve(async (req) => {
     if (body.dry_run) {
       const overrides = await loadDestinationConfig(supabaseAdmin);
       const eventType: EventType = body.event_type ?? classifyEventType(`${body.utterance ?? ""} ${body.title ?? ""}`);
-      const decision = decideDestination((body.intent ?? "CREATE_EVENT") as PlannerIntent, eventType, { overrides });
+      const decision = decideDestination((body.intent ?? "CREATE_EVENT") as PlannerIntent, eventType, {
+        overrides,
+        text: `${body.utterance ?? ""} ${body.title ?? ""}`,
+        suggested_category: body.planner_category,
+      });
       return new Response(JSON.stringify({ decision }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -154,6 +160,7 @@ serve(async (req) => {
         all_day: interpretation.all_day,
         current_start: interpretation.current_start,
         attendees,
+        planner_category: interpretation.planner_category,
         force: body.force === true,
       };
     }

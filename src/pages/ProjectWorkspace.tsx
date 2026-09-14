@@ -121,7 +121,6 @@ export default function ProjectWorkspace() {
   const [showSettings, setShowSettings] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
   const [showCollaborate, setShowCollaborate] = useState(false);
-  const [showTeamChat, setShowTeamChat] = useState(false);
   const { isAdmin } = useIsAdmin();
   const teamChatUnread = useProjectTeamChatUnread(projectId || null);
   const { pct: projectProgress } = useProjectProgress(projectId || null);

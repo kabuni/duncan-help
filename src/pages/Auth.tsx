@@ -79,19 +79,36 @@ const Auth = () => {
     });
   }, []);
 
+  const isConnectionError = (error: unknown) => {
+    const err = error as any;
+    const message = String(err?.message ?? error ?? "").toLowerCase();
+    const status = typeof err?.status === "number" ? err.status : undefined;
+    return (
+      err?.name === "AuthRetryableFetchError" ||
+      status === 0 ||
+      (typeof status === "number" && status >= 500) ||
+      message.includes("failed to fetch") ||
+      message.includes("networkerror") ||
+      message.includes("load failed") ||
+      !navigator.onLine
+    );
+  };
+
+  const UNAVAILABLE_MESSAGE =
+    "The sign-in service is temporarily unavailable. Please try again in a moment.";
+
   const getAuthErrorMessage = (error: unknown) => {
+    if (isConnectionError(error)) return UNAVAILABLE_MESSAGE;
     const message = error instanceof Error ? error.message : String((error as any)?.message ?? error ?? "");
-    if (message.toLowerCase().includes("failed to fetch")) {
-      return "Can't reach authentication service from this browser. Check VPN/firewall/ad-blockers or try another network.";
-    }
     return message || "Authentication failed";
   };
 
-  const withRetry = async <T,>(request: () => Promise<T>, retries = 1): Promise<T> => {
+  const withRetry = async <T,>(request: () => Promise<T>, retries = 2): Promise<T> => {
     try {
       return await request();
     } catch (error) {
-      if (retries > 0 && String((error as any)?.message ?? error).toLowerCase().includes("failed to fetch")) {
+      if (retries > 0 && isConnectionError(error)) {
+        await new Promise((r) => setTimeout(r, 600));
         return withRetry(request, retries - 1);
       }
       throw error;

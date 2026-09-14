@@ -92,67 +92,76 @@ export default function Projects() {
                 </Button>
               </div>
             ) : (
-              <ul data-tour="projects-list" className="divide-y divide-border rounded-xl border border-border bg-card">
+              <div data-tour="projects-list" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                 {projects.map((project) => {
                   const s = summaries[project.id];
                   const status = PROJECT_STATUS_META[project.status] || PROJECT_STATUS_META.on_track;
                   return (
-                    <li key={project.id} className="group">
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => navigate(`/projects/${project.id}`)}
-                        onKeyDown={(e) => { if (e.key === "Enter") navigate(`/projects/${project.id}`); }}
-                        className="flex items-start gap-4 px-6 py-5 hover:bg-secondary/40 transition-colors cursor-pointer"
-                      >
-                        <ProjectProgressRing
-                          pct={s && s.totalTasks ? Math.round((s.doneTasks / s.totalTasks) * 100) : 0}
-                          done={s?.doneTasks ?? 0}
-                          total={s?.totalTasks ?? 0}
-                          size={44}
-                          stroke={4}
-                        />
-                        <div className="flex-1 min-w-0 space-y-1.5">
-                          <div className="flex items-center gap-2.5">
+                    <div
+                      key={project.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(`/projects/${project.id}`)}
+                      onKeyDown={(e) => { if (e.key === "Enter") navigate(`/projects/${project.id}`); }}
+                      className="group relative flex flex-col rounded-xl border border-border bg-card p-5 hover:bg-secondary/40 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
                             <span className={`inline-block h-2 w-2 rounded-full ${status.dot}`} />
                             <h3 className="font-medium text-foreground truncate">{project.name}</h3>
                           </div>
                           {project.description && (
-                            <p className="text-sm text-muted-foreground line-clamp-1">{project.description}</p>
+                            <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2">{project.description}</p>
                           )}
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                            <span className={status.text}>{status.label}</span>
-                            <span className="inline-flex items-center gap-1">
-                              {project.visibility === "public"
-                                ? <><Globe className="h-3 w-3" /> Public</>
-                                : <><Lock className="h-3 w-3" /> Private</>}
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-secondary text-[9px] font-medium">
-                                {initials(nameFor(project.user_id))}
-                              </span>
-                              {nameFor(project.user_id)}
-                            </span>
-                            <span>{s?.workstreams ?? 0} area{(s?.workstreams ?? 0) === 1 ? "" : "s"} of work</span>
-                            <span>{s?.doneTasks ?? 0}/{s?.totalTasks ?? 0} tasks complete</span>
-                            {project.target_date && <span>Due {formatDay(project.target_date)}</span>}
-                          </div>
                         </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm("Delete this project? This cannot be undone.")) deleteProject(project.id);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition"
-                          aria-label="Delete project"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="shrink-0">
+                          <ProjectProgressRing
+                            pct={s && s.totalTasks ? Math.round((s.doneTasks / s.totalTasks) * 100) : 0}
+                            done={s?.doneTasks ?? 0}
+                            total={s?.totalTasks ?? 0}
+                            size={44}
+                            stroke={4}
+                          />
+                        </div>
                       </div>
-                    </li>
+
+                      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <span className={status.text}>{status.label}</span>
+                        <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5">
+                          {project.visibility === "public" ? <Globe className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+                          {project.visibility === "public" ? "Public" : "Private"}
+                        </span>
+                        {project.target_date && <span>Due {formatDay(project.target_date)}</span>}
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-secondary text-[9px] font-medium">
+                            {initials(nameFor(project.user_id))}
+                          </span>
+                          {nameFor(project.user_id)}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <span>{s?.workstreams ?? 0} area{(s?.workstreams ?? 0) === 1 ? "" : "s"}</span>
+                          <span>{s?.doneTasks ?? 0}/{s?.totalTasks ?? 0} tasks</span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm("Delete this project? This cannot be undone.")) deleteProject(project.id);
+                        }}
+                        className="absolute right-4 top-4 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition"
+                        aria-label="Delete project"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   );
                 })}
-              </ul>
+              </div>
             )}
           </div>
         </div>

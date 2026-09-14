@@ -175,7 +175,15 @@ const Auth = () => {
       }
     } catch (error: unknown) {
       console.error("Auth submit failed", { error, online: navigator.onLine, origin: window.location.origin });
-      if (isLogin) {
+      if (isConnectionError(error)) {
+        // A service outage is not a bad password — never count it toward the lockout,
+        // and clear any lock that earlier outages may have caused.
+        setFailedAttempts(0);
+        setLockoutUntil(0);
+        localStorage.removeItem("auth_failed_attempts");
+        localStorage.removeItem("auth_lockout_until");
+        toast.error(UNAVAILABLE_MESSAGE);
+      } else if (isLogin) {
         const next = failedAttempts + 1;
         setFailedAttempts(next);
         localStorage.setItem("auth_failed_attempts", String(next));

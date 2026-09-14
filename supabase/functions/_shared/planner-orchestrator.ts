@@ -441,6 +441,201 @@ async function suggestSlots(token: string, startISO: string, endISO: string) {
   return out;
 }
 
+// ── Event finding (shared by SEARCH, UPDATE and CANCEL) ─────────────────────
+//
+// One matcher for every "which existing event does the user mean?" question, so
+// find, change and remove all agree on what counts as a match. Deliberately
+// conservative: a vague request returns several candidates rather than acting.
+
+export interface EventCandidate {
+  link_group: string | null;
+  planner_event_id: string | null;
+  google_event_id: string | null;
+  title: string;
+  start: string | null;
+  all_day: boolean;
+  event_type: string | null;
+  category: string | null;
+  approval_state: string | null;
+  systems: Destination[];
+  score: number;
+}
+
+const dayOf = (v?: string | null) => (v ? String(v).slice(0, 10) : "");
+
+function titleOverlap(target: string, candidate: string): boolean {
+  if (!target) return false;
+  const a = normTitle(target);
+  const b = normTitle(candidate);
+  if (!a || !b) return false;
+  if (a === b || a.includes(b) || b.includes(a)) return true;
+  const words = a.split(" ").filter((w) => w.length > 3);
+  return words.length > 0 && words.every((w) => b.includes(w));
+}
+
+/**
+ * Finds the existing event(s) a request refers to, across Planner and Google
+ * Calendar, collapsing linked records into one logical event.
+ */
+async function findEventCandidates(
+  ctx: OrchestratorContext,
+  req: ActionRequest,
+  decision: Decision,
+  token: string | null,
+): Promise<EventCandidate[]> {
+  const day = dayOf(req.start || req.current_start);
+  const title = req.title || "";
+  const typeGiven = !!req.event_type;
+
+  // Search window: the named day (± 1) when we have one, otherwise a wide band
+  // around today so "cancel my holiday" can still find it.
+  const anchor = day ? new Date(`${day}T12:00:00Z`) : new Date();
+  const from = new Date(anchor.getTime() - (day ? 2 : 30) * 86_400_000).toISOString();
+  const to = new Date(anchor.getTime() + (day ? 2 : 365) * 86_400_000).toISOString();
+
+  const { data: rows } = await ctx.supabaseAdmin
+    .from("key_events")
+    .select("id, event_name, title, category, event_type, start_at, all_day, link_group, approval_state, google_event_id, created_by")
+    .eq("created_by", ctx.userId)
+    .eq("deleted_in_google", false)
+    .gte("start_at", from)
+    .lte("start_at", to)
+    .order("start_at", { ascending: true })
+    .limit(200);
+
+  const out: EventCandidate[] = [];
+  for (const r of rows || []) {
+    const name = r.event_name || r.title || "";
+    let score = 0;
+    if (day && dayOf(r.start_at) === day) score += 5;
+    if (titleOverlap(title, name)) score += 4;
+    if (typeGiven && r.event_type === decision.event_type) score += 2;
+    if (decision.planner_category && r.category === decision.planner_category) score += 1;
+    if (score === 0) continue;
+    out.push({
+      link_group: r.link_group ?? null,
+      planner_event_id: r.id,
+      google_event_id: r.google_event_id ?? null,
+      title: name,
+      start: r.start_at ?? null,
+      all_day: !!r.all_day,
+      event_type: r.event_type ?? null,
+      category: r.category ?? null,
+      approval_state: r.approval_state ?? null,
+      systems: ["PLANNER"],
+      score,
+    });
+  }
+
+  // Google Calendar side — meetings usually live there only.
+  if (token) {
+    const url = new URL(`${GOOGLE_CALENDAR_API}/calendars/primary/events`);
+    url.searchParams.set("timeMin", from);
+    url.searchParams.set("timeMax", to);
+    url.searchParams.set("singleEvents", "true");
+    url.searchParams.set("orderBy", "startTime");
+    url.searchParams.set("maxResults", "250");
+    if (title) url.searchParams.set("q", title);
+    const resp = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+    if (resp.ok) {
+      const items = ((await resp.json()).items || []).filter((e: any) => e.status !== "cancelled");
+      for (const e of items) {
+        const start = e.start?.dateTime || e.start?.date || null;
+        let score = 0;
+        if (day && dayOf(start) === day) score += 5;
+        if (titleOverlap(title, e.summary || "")) score += 4;
+        if (score === 0) continue;
+        const linked = out.find((c) => c.google_event_id && c.google_event_id === e.id);
+        if (linked) {
+          linked.systems = ["PLANNER", "GOOGLE_CALENDAR"];
+          linked.score = Math.max(linked.score, score);
+          continue;
+        }
+        out.push({
+          link_group: null,
+          planner_event_id: null,
+          google_event_id: e.id,
+          title: e.summary || "(untitled)",
+          start,
+          all_day: !e.start?.dateTime,
+          event_type: "MEETING",
+          category: null,
+          approval_state: null,
+          systems: ["GOOGLE_CALENDAR"],
+          score,
+        });
+      }
+    }
+  }
+
+  // Attach link groups so linked pairs are treated as one logical event.
+  for (const c of out) {
+    if (!c.link_group && !c.planner_event_id && !c.google_event_id) continue;
+    const q = ctx.supabaseAdmin.from("event_links").select("*");
+    if (c.link_group) q.eq("link_group", c.link_group);
+    else if (c.planner_event_id) q.eq("planner_event_id", c.planner_event_id);
+    else q.eq("google_event_id", c.google_event_id);
+    const { data: l } = await q.maybeSingle();
+    if (l) {
+      c.link_group = l.link_group;
+      c.planner_event_id = c.planner_event_id || l.planner_event_id || null;
+      c.google_event_id = c.google_event_id || l.google_event_id || null;
+      c.systems = [
+        ...(c.planner_event_id ? (["PLANNER"] as Destination[]) : []),
+        ...(c.google_event_id ? (["GOOGLE_CALENDAR"] as Destination[]) : []),
+      ];
+    }
+  }
+
+  // Collapse anything that ended up pointing at the same logical event.
+  const seen = new Map<string, EventCandidate>();
+  for (const c of out.sort((a, b) => b.score - a.score)) {
+    const key = c.link_group || c.planner_event_id || c.google_event_id || c.title;
+    const prev = seen.get(key);
+    if (!prev) seen.set(key, c);
+    else prev.score = Math.max(prev.score, c.score);
+  }
+  return [...seen.values()].sort((a, b) => b.score - a.score || String(a.start).localeCompare(String(b.start)));
+}
+
+/**
+ * Cancels any still-open approval requests for an event through the EXISTING
+ * Approval Manager, so removing a pending leave request never leaves an
+ * orphaned approval in someone's inbox (the inbox row is removed by the
+ * existing sync_event_approval_to_inbox trigger).
+ */
+async function cancelApprovalsForEvent(ctx: OrchestratorContext, plannerEventId: string) {
+  const { data: open } = await ctx.supabaseAdmin
+    .from("key_event_approvals")
+    .select("id, approver_profile_id, label")
+    .eq("event_id", plannerEventId)
+    .in("status", ["pending", "proposed"]);
+  if (!open?.length) return 0;
+
+  const { data: ev } = await ctx.supabaseAdmin
+    .from("key_events").select("title").eq("id", plannerEventId).maybeSingle();
+
+  for (const a of open) {
+    const { data: manager } = await ctx.supabaseAdmin
+      .from("profiles").select("user_id").eq("id", a.approver_profile_id).maybeSingle();
+    if (manager?.user_id) {
+      await ctx.supabaseAdmin.from("notifications").insert({
+        user_id: manager.user_id,
+        kind: "approval_cancelled",
+        title: "Approval request withdrawn",
+        body: `"${ev?.title || "An event"}" was cancelled, so the approval request no longer needs a decision.`,
+        link: "/approvals",
+        metadata: { approval_id: a.id, event_id: plannerEventId },
+      });
+    }
+  }
+  await ctx.supabaseAdmin
+    .from("key_event_approvals")
+    .delete()
+    .in("id", open.map((a: any) => a.id));
+  return open.length;
+}
+
 // ── Writers ──────────────────────────────────────────────────────────────────
 
 async function createPlannerEvent(ctx: OrchestratorContext, req: ActionRequest, decision: Decision) {

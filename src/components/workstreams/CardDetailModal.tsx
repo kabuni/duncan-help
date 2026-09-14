@@ -28,6 +28,7 @@ import { StatusBadge, priorityConfig } from "./StatusBadge";
 import MultiAssigneeSelect from "./MultiAssigneeSelect";
 import { TaskAttachments } from "./TaskAttachments";
 import { useAuth } from "@/hooks/useAuth";
+import PromoteToProjectAction from "./PromoteToProjectAction";
 
 interface CardDetailModalProps {
   cardId: string | null;

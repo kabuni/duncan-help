@@ -2012,6 +2012,8 @@ const PLANNER_TOOLS = [
           end: { type: "string", description: "ISO 8601 end datetime. Defaults to start." },
           all_day: { type: "boolean", description: "True for leave, milestones, whole-day events." },
           attendees: { type: "array", items: { type: "string" }, description: "Attendee email addresses (meetings only)." },
+          audience: { type: "string", enum: ["PERSONAL", "TEAM", "COMPANY"], description: "Who the item is for. COMPANY = the whole company/business. TEAM = a specific group of people. PERSONAL = just the caller. Omit if unclear." },
+          attendance_required: { type: "boolean", description: "True ONLY when people actually have to turn up at a time (meeting, party, all-hands, ceremony, webinar). False when it is a date marker with nobody attending (a launch date, a release, a deadline). OMIT entirely when the user has not made it clear — the engine will ask a short clarifying question rather than guess." },
           planner_category: {
             type: "string",
             enum: ["Travel","Holiday","PublicHoliday","GlobalAllHands","TeamSocials","Product","Releases","Event","Super Coaches","Investor","Social","PR","Launch","Marketing","Operations","Communication","Creative","BusinessDevelopment"],

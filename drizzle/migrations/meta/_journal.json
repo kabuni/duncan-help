@@ -8,6 +8,13 @@
       "when": 1789377718056,
       "tag": "0000_event_links_orchestration",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789378920590,
+      "tag": "0001_grant_arzoo_admin_role",
+      "breakpoints": true
     }
   ]
 }

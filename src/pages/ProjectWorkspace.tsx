@@ -379,6 +379,7 @@ export default function ProjectWorkspace() {
 
   // Count extracted files for status indicator
   const extractedCount = files.filter(f => f.extracted_text).length;
+  const { pct: projectProgress } = useProjectProgress(projectId ?? null);
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-background">

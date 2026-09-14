@@ -139,8 +139,6 @@ export default function Projects() {
                 })}
               </ul>
             )}
-
-            <ProductionStructurePreview />
           </div>
         </div>
       </main>

@@ -142,7 +142,6 @@ export default function Projects() {
 
             <ProductionStructurePreview />
           </div>
-          </div>
         </div>
       </main>
 

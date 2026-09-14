@@ -264,17 +264,10 @@ ${jdText.replace(/^## (.+)$/gm, '<h2>$1</h2>')
           // Non-blocking: role is already saved, just warn about Hireflix
           console.error("Hireflix position creation failed:", err.message);
           try {
-            const { error: queueError } = await supabase
-              .from("hireflix_retry_queue")
-              .insert({
-                operation: "create_position",
-                payload: JSON.parse(JSON.stringify({ job_role_id: newRole.id, title: title.trim(), competencies: [] })),
-                status: "pending",
-                next_retry_at: new Date().toISOString(),
-              });
-            if (queueError) {
-              console.error("Failed to queue Hireflix retry:", queueError);
-            }
+            await enqueueHireflixRetry("create_position", {
+              job_role_id: newRole.id,
+              title: title.trim(),
+            });
           } catch {
             // Silent — role is saved, Hireflix is best-effort
           }

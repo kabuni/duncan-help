@@ -79,19 +79,43 @@ const Auth = () => {
     });
   }, []);
 
+  const isConnectionError = (error: unknown) => {
+    const err = error as any;
+    const message = String(err?.message ?? error ?? "").toLowerCase();
+    const status = typeof err?.status === "number" ? err.status : undefined;
+    return (
+      err?.name === "AuthRetryableFetchError" ||
+      status === 0 ||
+      (typeof status === "number" && status >= 500) ||
+      message.includes("failed to fetch") ||
+      message.includes("networkerror") ||
+      message.includes("load failed") ||
+      !navigator.onLine
+    );
+  };
+
+  const UNAVAILABLE_MESSAGE =
+    "The sign-in service is temporarily unavailable. Please try again in a moment.";
+
   const getAuthErrorMessage = (error: unknown) => {
+    if (isConnectionError(error)) return UNAVAILABLE_MESSAGE;
     const message = error instanceof Error ? error.message : String((error as any)?.message ?? error ?? "");
-    if (message.toLowerCase().includes("failed to fetch")) {
-      return "Can't reach authentication service from this browser. Check VPN/firewall/ad-blockers or try another network.";
-    }
     return message || "Authentication failed";
   };
 
-  const withRetry = async <T,>(request: () => Promise<T>, retries = 1): Promise<T> => {
+  const withRetry = async <T,>(request: () => Promise<T>, retries = 2): Promise<T> => {
     try {
-      return await request();
+      const result = await request();
+      // Supabase returns { error } instead of throwing — retry those too.
+      const returnedError = (result as any)?.error;
+      if (retries > 0 && returnedError && isConnectionError(returnedError)) {
+        await new Promise((r) => setTimeout(r, 600));
+        return withRetry(request, retries - 1);
+      }
+      return result;
     } catch (error) {
-      if (retries > 0 && String((error as any)?.message ?? error).toLowerCase().includes("failed to fetch")) {
+      if (retries > 0 && isConnectionError(error)) {
+        await new Promise((r) => setTimeout(r, 600));
         return withRetry(request, retries - 1);
       }
       throw error;
@@ -151,7 +175,15 @@ const Auth = () => {
       }
     } catch (error: unknown) {
       console.error("Auth submit failed", { error, online: navigator.onLine, origin: window.location.origin });
-      if (isLogin) {
+      if (isConnectionError(error)) {
+        // A service outage is not a bad password — never count it toward the lockout,
+        // and clear any lock that earlier outages may have caused.
+        setFailedAttempts(0);
+        setLockoutUntil(0);
+        localStorage.removeItem("auth_failed_attempts");
+        localStorage.removeItem("auth_lockout_until");
+        toast.error(UNAVAILABLE_MESSAGE);
+      } else if (isLogin) {
         const next = failedAttempts + 1;
         setFailedAttempts(next);
         localStorage.setItem("auth_failed_attempts", String(next));

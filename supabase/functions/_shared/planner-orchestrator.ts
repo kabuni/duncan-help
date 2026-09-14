@@ -91,14 +91,20 @@ export const EVENT_TYPE_RULES: Record<EventType, TypeRule> = {
     source_of_truth: "PLANNER",
     requires_approval: false,
     planner_category: "Event",
-    reason: "Company events are Planner records.",
+    reason: "Company-wide things (launches, releases, all-hands, big events) belong on the Planner so everyone sees them — they are not put on anyone's personal Google Calendar.",
   },
   PROJECT_MILESTONE: {
     destination: ["PLANNER"],
     source_of_truth: "PLANNER",
     requires_approval: false,
     planner_category: "Product",
-    reason: "Milestones and deadlines are Planner records.",
+    reason: "Deadlines and milestones are company markers — Planner only, not a personal calendar entry.",
+  },
+  PERSONAL_APPOINTMENT: {
+    destination: ["GOOGLE_CALENDAR"],
+    source_of_truth: "GOOGLE_CALENDAR",
+    requires_approval: false,
+    reason: "Personal appointments stay on the person's own Google Calendar and off the company Planner.",
   },
   TRAVEL: {
     destination: ["PLANNER", "GOOGLE_CALENDAR"],

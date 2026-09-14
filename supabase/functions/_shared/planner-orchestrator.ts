@@ -32,6 +32,9 @@ export type EventType =
   | "TRAVEL"
   | "OTHER";
 
+/** Who the thing is for. Drives destination alongside the event type. */
+export type Audience = "PERSONAL" | "TEAM" | "COMPANY";
+
 export interface Decision {
   intent: PlannerIntent;
   event_type: EventType;
@@ -41,6 +44,12 @@ export interface Decision {
   reason: string;
   /** Existing Planner category key stored on key_events.category. */
   planner_category: string;
+  /** Signals the engine evaluated before choosing the destination. */
+  audience: Audience;
+  attendance_required: boolean;
+  /** True when intent is genuinely unclear — Duncan should ask, not guess. */
+  ambiguous: boolean;
+  clarifying_question: string | null;
 }
 
 interface TypeRule {

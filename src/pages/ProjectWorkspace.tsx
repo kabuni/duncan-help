@@ -122,6 +122,7 @@ export default function ProjectWorkspace() {
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [chatListOpen, setChatListOpen] = useState(false);
+  const [tab, setTab] = useState<typeof PROJECT_TABS[number]["id"]>("overview");
   const [input, setInput] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
@@ -785,6 +786,7 @@ export default function ProjectWorkspace() {
               </>
             )}
           </div>
+          </>}
 
           {/* Files Slide-over */}
           {showFiles && (

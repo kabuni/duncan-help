@@ -148,11 +148,90 @@ export function classifyEventType(text: string): EventType {
   return "OTHER";
 }
 
+// ── Planner categories ───────────────────────────────────────────────────────
+// These are the EXISTING Planner categories (mirrors src/components/diary/
+// categoryMeta.ts). No new category system — the engine only ever picks one of
+// these keys, falling back to "Event".
+
+export const PLANNER_CATEGORIES = [
+  "Travel",
+  "Holiday",
+  "PublicHoliday",
+  "GlobalAllHands",
+  "TeamSocials",
+  "Product",
+  "Releases",
+  "Event",
+  "Super Coaches",
+  "Investor",
+  "Social",
+  "PR",
+  "Launch",
+  "Marketing",
+  "Operations",
+  "Communication",
+  "Creative",
+  "BusinessDevelopment",
+] as const;
+
+export type PlannerCategory = (typeof PLANNER_CATEGORIES)[number];
+
+// Ordered: the first pattern that matches wins. More specific before generic.
+const CATEGORY_PATTERNS: [string, RegExp][] = [
+  ["PublicHoliday", /\b(public holiday|bank holiday|national holiday)\b/i],
+  ["Holiday", /\b(annual leave|holiday|vacation|taking .*\boff\b|day off|days off|time off|pto|sick|unwell|out of office|ooo)\b/i],
+  ["Travel", /\b(travel(l?ing)?|flight|flying|trip to|train to|visiting|offsite|on[- ]site visit)\b/i],
+  ["GlobalAllHands", /\b(all[- ]hands|town ?hall|company[- ]wide (meeting|call)|global (meeting|call|update))\b/i],
+  ["TeamSocials", /\b(team social|socials?|dinner|drinks|night out|christmas party|team lunch|away ?day|celebration)\b/i],
+  ["Releases", /\b(release|patch|deploy(ment)?|version \d|ship(ping)? (date|version)|go[- ]live)\b/i],
+  ["Launch", /\b(launch(es|ing)?|unveil|public debut|market launch|product launch)\b/i],
+  ["Investor", /\b(investor|board (meeting|update)|fundrais(e|ing)|due diligence|vc\b|term sheet)\b/i],
+  ["PR", /\b(press|pr\b|media|journalist|interview with .*(magazine|paper)|announcement to press)\b/i],
+  ["Social", /\b(social media|instagram|linkedin|tiktok|twitter|x post|content calendar|post going out)\b/i],
+  ["Marketing", /\b(marketing|campaign|newsletter|webinar|promo(tion)?|advert)\b/i],
+  ["Super Coaches", /\b(super coach(es)?|coaching (session|programme|program))\b/i],
+  ["Creative", /\b(creative|design review|shoot|photo ?shoot|brand (work|review)|artwork)\b/i],
+  ["BusinessDevelopment", /\b(business development|bd\b|partnership|client pitch|prospect|sales meeting|school signing)\b/i],
+  ["Communication", /\b(comms|communication|announcement|internal update|briefing)\b/i],
+  ["Operations", /\b(operations|ops\b|logistics|process review|supplier|procurement)\b/i],
+  ["Product", /\b(product|roadmap|feature|sprint|milestone|deadline|due (by|on)|spec review)\b/i],
+  ["Event", /\b(event|conference|summit|showcase|exhibition|workshop)\b/i],
+];
+
+export function isPlannerCategory(value?: string | null): boolean {
+  return !!value && (PLANNER_CATEGORIES as readonly string[]).includes(value);
+}
+
+/**
+ * Picks the Planner category as part of the SAME orchestration decision as
+ * intent, destination and approval. Priority:
+ *   1. an explicitly supplied valid category (AI suggestion or manual correction)
+ *   2. wording in the user's own request
+ *   3. the event type's default category
+ *   4. "Event" as the safe existing fallback — never a new category.
+ */
+export function resolvePlannerCategory(
+  eventType: EventType,
+  text?: string | null,
+  suggested?: string | null,
+): string {
+  if (isPlannerCategory(suggested)) return suggested as string;
+  const t = text || "";
+  if (t.trim()) {
+    for (const [category, re] of CATEGORY_PATTERNS) if (re.test(t)) return category;
+  }
+  return EVENT_TYPE_RULES[eventType]?.planner_category ?? "Event";
+}
+
 /** THE decision engine. Pure — same inputs always give the same routing. */
 export function decideDestination(
   intent: PlannerIntent,
   eventType: EventType,
-  opts: { overrides?: Record<string, Destination[]> } = {},
+  opts: {
+    overrides?: Record<string, Destination[]>;
+    text?: string | null;
+    suggested_category?: string | null;
+  } = {},
 ): Decision {
   const rule = EVENT_TYPE_RULES[eventType] ?? EVENT_TYPE_RULES.OTHER;
   const override = opts.overrides?.[eventType];
@@ -168,6 +247,7 @@ export function decideDestination(
     source_of_truth,
     requires_approval: intent === "CREATE_EVENT" ? rule.requires_approval : false,
     reason: rule.reason,
+    planner_category: resolvePlannerCategory(eventType, opts.text, opts.suggested_category),
   };
 }
 

@@ -684,7 +684,11 @@ async function runPlannerAction(
   const overrides = await loadDestinationConfig(ctx.supabaseAdmin);
   const eventType =
     req.event_type ?? classifyEventType(`${req.utterance || ""} ${req.title || ""} ${req.description || ""}`);
-  const decision = decideDestination(req.intent, eventType, { overrides });
+  const decision = decideDestination(req.intent, eventType, {
+    overrides,
+    text: `${req.utterance || ""} ${req.title || ""} ${req.description || ""}`,
+    suggested_category: req.planner_category,
+  });
   const base = { ok: false, verified: false, source: "planner_orchestrator" as const, decision };
 
   const token = decision.destination.includes("GOOGLE_CALENDAR") || req.intent !== "CREATE_EVENT"

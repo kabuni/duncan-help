@@ -43,6 +43,10 @@ type Trace = {
   link_group: string | null;
   planner_event_id: string | null;
   google_event_id: string | null;
+  planner_category?: string;
+  approver_name?: string | null;
+  approval_routed?: boolean;
+  approval_id?: string | null;
 };
 
 type RunResult = {
@@ -238,6 +242,14 @@ export default function PlannerDecisionLab() {
                     <Field label="Action taken">{r.trace.action_taken}</Field>
                     <Field label="Records linked">
                       {r.trace.linked ? `Yes — ${r.trace.link_group}` : r.trace.link_group ? `Single system (${r.trace.link_group})` : "No"}
+                    </Field>
+                    <Field label="Planner category">{r.trace.planner_category || "—"}</Field>
+                    <Field label="Approver">
+                      {r.trace.approval_routed
+                        ? r.trace.approver_name || "Line manager"
+                        : r.trace.requires_approval
+                          ? "Not routed"
+                          : "—"}
                     </Field>
                     <Field label="Planner record">{r.trace.planner_event_id ? r.trace.planner_event_id.slice(0, 8) : "—"}</Field>
                     <Field label="Google record">{r.trace.google_event_id ? r.trace.google_event_id.slice(0, 12) : "—"}</Field>

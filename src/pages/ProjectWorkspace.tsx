@@ -417,19 +417,6 @@ export default function ProjectWorkspace() {
             <FileText className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Files{files.length > 0 && ` (${files.length})`}</span>
           </Button>
-          <Button data-tour="pw-notes" variant="ghost" size="sm" onClick={() => setShowNotes(true)} className="gap-1.5 text-xs px-2 sm:px-3" aria-label="Notes">
-            <StickyNote className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Notes</span>
-          </Button>
-          <Button data-tour="pw-tasks" variant="ghost" size="sm" onClick={() => setShowTasks(true)} className="gap-1.5 text-xs px-2 sm:px-3 relative" aria-label="Planning checklist">
-            <ListChecks className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Planning{openTaskCount > 0 && ` (${openTaskCount})`}</span>
-            {openTaskCount > 0 && (
-              <span className="sm:hidden absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-medium px-1">
-                {openTaskCount}
-              </span>
-            )}
-          </Button>
           <Button variant="ghost" size="sm" onClick={() => setShowTeamChat(true)} className="gap-1.5 text-xs px-2 sm:px-3 relative" aria-label="Team Chat">
             <MessagesSquare className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Team Chat{teamChatUnread > 0 && ` (${teamChatUnread})`}</span>

@@ -32,17 +32,18 @@ import { toast } from "sonner";
 import { TutorialButton } from "@/components/onboarding/TutorialButton";
 import { ProjectOverviewTab } from "@/components/projects/workspace/ProjectOverviewTab";
 import { ProjectWorkstreamsTab } from "@/components/projects/workspace/ProjectWorkstreamsTab";
-import { ProjectMapTab } from "@/components/projects/workspace/ProjectMapTab";
+
 import { ProjectTasksTab } from "@/components/projects/workspace/ProjectTasksTab";
 import { ProjectTeamTab } from "@/components/projects/workspace/ProjectTeamTab";
 import { ProjectActivityTab } from "@/components/projects/workspace/ProjectActivityTab";
 import { PROJECT_STATUS_META } from "@/hooks/useProjectWork";
+import { ProjectProgressRing, useProjectProgress } from "@/components/projects/workspace/ProjectProgressRing";
 import { formatDay } from "@/components/projects/workspace/shared";
 
 const PROJECT_TABS = [
   { id: "overview", label: "Overview" },
   { id: "workstreams", label: "Workstreams" },
-  { id: "map", label: "Map" },
+  
   { id: "tasks", label: "Tasks" },
   { id: "team", label: "Team" },
   { id: "activity", label: "Activity" },
@@ -134,6 +135,7 @@ export default function ProjectWorkspace() {
   const [showTeamChat, setShowTeamChat] = useState(false);
   const { isAdmin } = useIsAdmin();
   const teamChatUnread = useProjectTeamChatUnread(projectId || null);
+  const { pct: projectProgress } = useProjectProgress(projectId || null);
   const [openTaskCount, setOpenTaskCount] = useState(0);
   const [editName, setEditName] = useState("");
   const [editPrompt, setEditPrompt] = useState("");
@@ -395,6 +397,9 @@ export default function ProjectWorkspace() {
           >
             <Menu className="h-4 w-4" />
           </button>
+          <div className="shrink-0 hidden sm:block" title="Project progress">
+            <ProjectProgressRing pct={projectProgress} done={0} total={0} size={34} stroke={3.5} />
+          </div>
           <div data-tour="pw-title" className="flex-1 min-w-0">
             <h1 className="text-sm font-semibold text-foreground truncate">{project.name}</h1>
             <p className="text-[11px] text-muted-foreground truncate hidden sm:block">
@@ -467,13 +472,12 @@ export default function ProjectWorkspace() {
                   projectName={project.name}
                   description={project.description}
                   members={members}
+                  status={project.status}
+                  targetDate={project.target_date}
                   onOpenTab={(next) => setTab(next as any)}
                 />
               )}
               {tab === "workstreams" && <ProjectWorkstreamsTab projectId={projectId} members={members} />}
-              {tab === "map" && (
-                <ProjectMapTab projectId={projectId} projectName={project.name} onOpenTab={(next) => setTab(next as any)} />
-              )}
               {tab === "tasks" && <ProjectTasksTab projectId={projectId} projectName={project.name} members={members} />}
               {tab === "team" && (
                 <ProjectTeamTab

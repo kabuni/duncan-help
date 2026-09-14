@@ -219,7 +219,14 @@ const Auth = () => {
       setShowForgotPassword(false);
     } catch (error: unknown) {
       console.error("Password reset request failed", { error, online: navigator.onLine, origin: window.location.origin });
-      toast.error(getAuthErrorMessage(error));
+      const status = (error as { status?: number })?.status;
+      if (status === 429) {
+        toast.error("Too many reset requests. Please wait a minute and try again.");
+      } else if (isConnectionError(error)) {
+        toast.error("The sign-in service is temporarily unavailable. Please try again in a moment.");
+      } else {
+        toast.error(getAuthErrorMessage(error));
+      }
     } finally {
       setSubmitting(false);
     }

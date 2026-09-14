@@ -92,10 +92,11 @@ export const TOURS: Record<string, TourDefinition> = {
       },
       {
         target: "planner-calendar",
-        title: "Duncan organises it",
-        body: "Duncan can create, move and update the relevant events for you — they appear here automatically.",
+        title: "Your calendar",
+        body: "Everything you and Duncan schedule shows up here — ask Duncan in the main chat to create or move events.",
         placement: "top",
       },
+
       {
         target: "planner-advanced",
         title: "You're in control",

@@ -1221,20 +1221,41 @@ async function runPlannerAction(
   if (decision.requires_approval && plannerId) {
     approval = await routeApprovalToLineManager(ctx, plannerId, decision);
     if (!approval.routed) {
-      // Never show "Pending approval" when no approval request actually exists.
-      await ctx.supabaseAdmin
-        .from("key_events")
-        .update({ approval_state: null })
-        .eq("id", plannerId);
+      // APPROVAL GATE: an event that requires approval must never exist without a
+      // real approval request behind it. Roll the whole thing back rather than
+      // leaving a confirmed-looking entry in Planner and Google Calendar.
+      if (googleId) {
+        try {
+          const token = await ctx.getGoogleToken();
+          if (token) {
+            await fetch(
+              `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(googleCalendarId || "primary")}/events/${encodeURIComponent(googleId)}`,
+              { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+            );
+          }
+        } catch (_e) { /* best effort */ }
+      }
+      await ctx.supabaseAdmin.from("event_links").delete().eq("link_group", linkGroup);
+      await ctx.supabaseAdmin.from("key_events").delete().eq("id", plannerId);
+
+      return {
+        ...base,
+        ok: false,
+        verified: false,
+        link_group: null,
+        planner_event_id: null,
+        google_event_id: null,
+        approval,
+        error: "approval_unavailable",
+        message: `${decision.event_type === "ANNUAL_LEAVE" ? "Annual leave" : "This"} needs line manager approval, and I couldn't create the approval request — ${approval.reason || "no approver could be resolved."} Nothing was added to Planner or Google Calendar. Add your line manager in your profile, then ask me again.`,
+      };
     }
   }
 
   const where = [plannerId ? "Planner" : null, googleId ? "Google Calendar" : null].filter(Boolean).join(" and ");
   const approvalNote = !decision.requires_approval
     ? ""
-    : approval?.routed
-      ? ` Sent to ${approval.approver_name || "your line manager"} for approval.`
-      : ` It needs approval but I could not request it — ${approval?.reason || "no approver could be resolved"} Add your line manager in Settings, then ask me again.`;
+    : ` Pending approval — sent to ${approval?.approver_name || "your line manager"}. It isn't confirmed until they approve it.`;
 
   return {
     ...base,
@@ -1246,4 +1267,5 @@ async function runPlannerAction(
     approval,
     message: `Added to ${where}.${approvalNote}`,
   };
+
 }

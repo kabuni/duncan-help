@@ -8415,7 +8415,7 @@ Format as a natural, readable summary with clear sections. If a section has no d
                   {
                     supabaseAdmin,
                     userId: userId || "",
-                    userEmail: userEmail || resolvedIdentity?.email || null,
+                    userEmail: resolvedIdentity?.email || null,
                     timezone: resolvedIdentity?.timezone || "Europe/London",
                     getGoogleToken: () => getCalendarAccessToken(userId || "", supabaseAdmin),
                   },

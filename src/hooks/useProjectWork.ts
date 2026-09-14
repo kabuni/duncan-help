@@ -344,6 +344,18 @@ export function useToggleProjectTask(projectId: string | null) {
   });
 }
 
+export function useUpdateProjectTask(projectId: string | null) {
+  const invalidate = useInvalidateProject(projectId);
+  return useMutation({
+    mutationFn: async ({ id, ...patch }: { id: string; title?: string; description?: string; assignee_id?: string | null; due_date?: string | null }) => {
+      const { error } = await supabase.from("workstream_tasks").update(patch as any).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidate(),
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
 export function useDeleteProjectTask(projectId: string | null) {
   const invalidate = useInvalidateProject(projectId);
   return useMutation({

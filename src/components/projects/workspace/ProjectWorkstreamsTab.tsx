@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Plus, Link2, Loader2, Unlink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,17 +7,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  useProjectWorkstreams, useLinkableWorkstreams, useLinkWorkstream, useUnlinkWorkstream, useCreateProjectWorkstream, RYG_META,
+  useProjectWorkstreams, useLinkableWorkstreams, useLinkWorkstream, useUnlinkWorkstream, useCreateProjectWorkstream,
+  useProjectTasks, RYG_META, type ProjectWorkstream,
 } from "@/hooks/useProjectWork";
 import type { ProjectMember } from "@/hooks/useProjects";
-import { taskCodeHref } from "@/components/TaskIdLink";
 import { StatusDot, formatDay, EmptyLine } from "./shared";
 import { WorkstreamProgressBar } from "./ProjectProgressRing";
+import { AreaOfWorkDrawer, type AreaOfWorkTarget } from "./AreaOfWorkDrawer";
 
 export function ProjectWorkstreamsTab({ projectId, members }: { projectId: string; members: ProjectMember[] }) {
-  const navigate = useNavigate();
   const { data: workstreams = [], isLoading } = useProjectWorkstreams(projectId);
+  const { data: allTasks = [] } = useProjectTasks(projectId);
   const [open, setOpen] = useState(false);
+  const [target, setTarget] = useState<AreaOfWorkTarget | null>(null);
+
+  const looseTasks = allTasks.filter((t) => !t.card_id);
+  const looseDone = looseTasks.filter((t) => t.completed).length;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8 space-y-6">
@@ -44,7 +48,7 @@ export function ProjectWorkstreamsTab({ projectId, members }: { projectId: strin
           {workstreams.map((ws) => (
             <li key={ws.id} className="group">
               <button
-                onClick={() => navigate(taskCodeHref(ws.task_code))}
+                onClick={() => setTarget({ area: ws as ProjectWorkstream })}
                 className="w-full text-left px-5 py-4 hover:bg-secondary/40 transition-colors"
               >
                 <div className="flex items-center gap-3">
@@ -66,6 +70,25 @@ export function ProjectWorkstreamsTab({ projectId, members }: { projectId: strin
           ))}
         </ul>
       )}
+
+      {looseTasks.length > 0 && (
+        <button
+          onClick={() => setTarget({ area: null })}
+          className="w-full text-left rounded-xl border border-dashed border-border px-5 py-4 hover:bg-secondary/40 transition-colors"
+        >
+          <span className="text-sm font-medium text-foreground">Tasks not in an area</span>
+          <span className="ml-2 text-xs text-muted-foreground">
+            {looseDone} of {looseTasks.length} complete
+          </span>
+        </button>
+      )}
+
+      <AreaOfWorkDrawer
+        projectId={projectId}
+        members={members}
+        target={target}
+        onOpenChange={(o) => { if (!o) setTarget(null); }}
+      />
 
       <AddWorkstreamDialog open={open} onOpenChange={setOpen} projectId={projectId} members={members} />
     </div>

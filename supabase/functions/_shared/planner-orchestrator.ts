@@ -628,11 +628,13 @@ async function runPlannerAction(
       ok,
       verified: ok,
       link_group: link?.link_group,
+      matched_event: matched ?? undefined,
       planner_event_id: plannerId ?? undefined,
       google_event_id: googleId ?? undefined,
       message: ok ? "Updated across the linked systems." : "No linked record could be updated.",
       error: ok ? undefined : "not_found",
     };
+
   }
 
   // ── Create ────────────────────────────────────────────────────────────────

@@ -207,6 +207,16 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                 <span className="text-[10px] text-muted-foreground">
                   Created by <span className="text-foreground">{card.created_by_name || "Unknown"}</span>
                 </span>
+                <span className="ml-auto">
+                  <PromoteToProjectAction
+                    cardId={card.id}
+                    projectId={(card as any).project_id ?? null}
+                    title={card.title}
+                    description={card.description}
+                    dueDate={card.due_date}
+                    status={card.status}
+                  />
+                </span>
               </div>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">

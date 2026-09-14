@@ -135,6 +135,7 @@ export default function ProjectWorkspace() {
   const [showTeamChat, setShowTeamChat] = useState(false);
   const { isAdmin } = useIsAdmin();
   const teamChatUnread = useProjectTeamChatUnread(projectId || null);
+  const { pct: projectProgress } = useProjectProgress(projectId || null);
   const [openTaskCount, setOpenTaskCount] = useState(0);
   const [editName, setEditName] = useState("");
   const [editPrompt, setEditPrompt] = useState("");
@@ -379,7 +380,6 @@ export default function ProjectWorkspace() {
 
   // Count extracted files for status indicator
   const extractedCount = files.filter(f => f.extracted_text).length;
-  const { pct: projectProgress } = useProjectProgress(projectId ?? null);
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-background">

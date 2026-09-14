@@ -147,7 +147,7 @@ export default function PlannerDecisionLab() {
   const runAll = async () => {
     for (const s of SCENARIOS) {
       // eslint-disable-next-line no-await-in-loop
-      await run(s);
+      await run(s.utterance);
     }
   };
 

@@ -8395,7 +8395,24 @@ Format as a natural, readable summary with clear sections. If a section has no d
               result = await withToolTimeout(tc.function.name, executeAnalyticsTool(tc.function.name, args, supabaseAdmin, supabaseUrl, authHeader || ""));
           } else if (workstreamMgmtToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeWorkstreamTool(tc.function.name, args, supabaseAdmin, userId || "", resolvedIdentity, identityCache));
+          } else if (tc.function.name === "plan_event") {
+              // Destination decision engine — the ONLY path allowed to decide
+              // between Planner, Google Calendar or both.
+              result = await withToolTimeout(
+                tc.function.name,
+                executePlannerAction(
+                  {
+                    supabaseAdmin,
+                    userId: userId || "",
+                    userEmail: userEmail || resolvedIdentity?.email || null,
+                    timezone: resolvedIdentity?.timezone || "Europe/London",
+                    getGoogleToken: () => getCalendarAccessToken(userId || "", supabaseAdmin),
+                  },
+                  args,
+                ),
+              );
           } else if (plannerToolNames.includes(tc.function.name)) {
+
               result = await withToolTimeout(tc.function.name, executePlannerTool(tc.function.name, args, supabaseAdmin));
           } else if (registrationsToolNames.includes(tc.function.name)) {
               result = await withToolTimeout(tc.function.name, executeRegistrationsTool(tc.function.name, args, supabaseAdmin, userId || ""));

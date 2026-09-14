@@ -397,6 +397,9 @@ export default function ProjectWorkspace() {
           >
             <Menu className="h-4 w-4" />
           </button>
+          <div className="shrink-0 hidden sm:block" title="Project progress">
+            <ProjectProgressRing pct={projectProgress} done={0} total={0} size={34} stroke={3.5} />
+          </div>
           <div data-tour="pw-title" className="flex-1 min-w-0">
             <h1 className="text-sm font-semibold text-foreground truncate">{project.name}</h1>
             <p className="text-[11px] text-muted-foreground truncate hidden sm:block">

@@ -61,7 +61,7 @@ async function interpretUtterance(utterance: string, timezone: string, nowISO: s
   if (!key) throw new Error("OPENAI_API_KEY is not configured");
   const system = `You convert a person's planning request into structured JSON. Today is ${nowISO} (timezone ${timezone}).
 Return ONLY JSON with keys:
-intent: CREATE_EVENT | UPDATE_EVENT | CANCEL_EVENT | CHECK_AVAILABILITY
+intent: CREATE_EVENT | UPDATE_EVENT | CANCEL_EVENT | FIND_EVENT | CHECK_AVAILABILITY — use CANCEL_EVENT for remove/delete/cancel/"take it out" wording, FIND_EVENT for pure look-ups
 event_type: MEETING | AVAILABILITY | OUT_OF_OFFICE | ANNUAL_LEAVE | SICK_LEAVE | COMPANY_EVENT | PROJECT_MILESTONE | TRAVEL | OTHER
 title: short human title
 start: ISO 8601 datetime (or date at 00:00 for all-day)

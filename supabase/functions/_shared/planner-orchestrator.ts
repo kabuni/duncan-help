@@ -678,8 +678,9 @@ async function createPlannerEvent(ctx: OrchestratorContext, req: ActionRequest, 
 
 async function createGoogleEvent(token: string, req: ActionRequest, ctx: OrchestratorContext, decision: Decision) {
   const allDay = req.all_day ?? false;
+  const pending = decision.requires_approval === true;
   const body: any = {
-    summary: req.title,
+    summary: pending ? `[Pending approval] ${req.title}` : req.title,
     description: req.description,
     location: req.location,
     start: allDay
@@ -689,6 +690,9 @@ async function createGoogleEvent(token: string, req: ActionRequest, ctx: Orchest
       ? { date: (req.end || req.start || "").slice(0, 10) }
       : { dateTime: req.end, timeZone: ctx.timezone || "UTC" },
   };
+  // Not confirmed until the approval is granted.
+  if (pending) body.status = "tentative";
+
   if (decision.event_type === "ANNUAL_LEAVE" || decision.event_type === "SICK_LEAVE" || decision.event_type === "OUT_OF_OFFICE") {
     body.transparency = "opaque";
     body.eventType = "outOfOffice";

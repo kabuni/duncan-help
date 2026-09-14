@@ -42,7 +42,7 @@ import { formatDay } from "@/components/projects/workspace/shared";
 
 const PROJECT_TABS = [
   { id: "overview", label: "Overview" },
-  { id: "workstreams", label: "Workstreams" },
+  { id: "workstreams", label: "Areas of Work" },
   
   { id: "tasks", label: "Tasks" },
   { id: "team", label: "Team" },

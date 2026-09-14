@@ -118,6 +118,7 @@ export default function ProjectWorkspace() {
   const [showFiles, setShowFiles] = useState(false);
   const [showTeam, setShowTeam] = useState(false);
   const [showCollaborate, setShowCollaborate] = useState(false);
+  const [areaTarget, setAreaTarget] = useState<AreaOfWorkTarget | null>(null);
   const { isAdmin } = useIsAdmin();
   const teamChatUnread = useProjectTeamChatUnread(projectId || null);
   const { pct: projectProgress } = useProjectProgress(projectId || null);

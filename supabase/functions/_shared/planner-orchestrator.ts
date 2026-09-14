@@ -1089,8 +1089,22 @@ async function runPlannerAction(
     overrides,
     text: `${req.utterance || ""} ${req.title || ""} ${req.description || ""}`,
     suggested_category: req.planner_category,
+    all_day: req.all_day,
+    start: req.start,
+    attendees: req.attendees,
+    audience: req.audience,
+    attendance_required: req.attendance_required,
   });
   const base = { ok: false, verified: false, source: "planner_orchestrator" as const, decision };
+
+  // Genuinely unclear whether people must attend — ask instead of guessing.
+  if (decision.ambiguous && !req.force) {
+    return {
+      ...base,
+      message: decision.clarifying_question || "Should people attend this, or is it just a date to mark?",
+      error: "needs_clarification",
+    };
+  }
 
   const token = decision.destination.includes("GOOGLE_CALENDAR") || req.intent !== "CREATE_EVENT"
     ? await ctx.getGoogleToken()

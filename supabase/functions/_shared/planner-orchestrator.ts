@@ -1180,9 +1180,30 @@ async function runPlannerAction(
     }
   }
 
+  // APPROVAL GATE (pre-check): if this event type requires approval, an approver
+  // must be resolvable BEFORE anything is written anywhere.
+  if (decision.requires_approval) {
+    const { data: requesterProfile } = await ctx.supabaseAdmin
+      .from("profiles")
+      .select("id, line_manager_profile_id")
+      .eq("user_id", ctx.userId)
+      .maybeSingle();
+    if (!requesterProfile?.line_manager_profile_id) {
+      return {
+        ...base,
+        ok: false,
+        verified: false,
+        error: "approval_unavailable",
+        message:
+          "This needs line manager approval, and no line manager is set on your Duncan profile — so I can't raise the approval request. Nothing was added to Planner or Google Calendar. Set your line manager in your profile (or ask an admin to), then ask me again.",
+      };
+    }
+  }
+
   let plannerId: string | undefined;
   let googleId: string | undefined;
   let googleCalendarId: string | undefined;
+
 
   if (decision.destination.includes("PLANNER")) {
     plannerId = await createPlannerEvent(ctx, req, decision);

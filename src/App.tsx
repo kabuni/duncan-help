@@ -25,6 +25,7 @@ import Operations from "./pages/Operations";
 import FeedbackIssues from "./pages/FeedbackIssues";
 import Projects from "./pages/Projects";
 import ProjectWorkspace from "./pages/ProjectWorkspace";
+import ProjectConcepts from "./pages/ProjectConcepts";
 import Workstreams from "./pages/Workstreams";
 import WorkstreamsPresentation from "./pages/WorkstreamsPresentation";
 import Plan90 from "./pages/Plan90";
@@ -109,6 +110,7 @@ const AppContent = () => {
              <Route path="/integrations" element={<Integrations />} />
             <Route path="/feedback" element={<FeedbackIssues />} />
             <Route path="/projects" element={<Projects />} />
+            <Route path="/projects/concepts" element={<ProjectConcepts />} />
             <Route path="/projects/:projectId" element={<ProjectWorkspace />} />
             <Route path="/workstreams" element={<Workstreams />} />
             <Route path="/workstreams/raid" element={<Workstreams raidOnly />} />

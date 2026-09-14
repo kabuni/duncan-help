@@ -22,4 +22,4 @@
 ## Projects ↔ Workstream Cards
 - [x] Project → Workstreams → Tasks relationship (workstream_cards.project_id, workstream_tasks.project_id)
 - [x] Projects list + workspace tabs (Overview, Workstreams, Tasks, Team, Activity, Duncan)
-- [ ] Decide: promote an existing Workstream Card into a Project vs create a separate Project and link the card (mockup at /projects/concepts for comparison; no data migrated)
+- [x] Decided: Projects are independent and link multiple Workstream Cards (Option B); "Promote to Project" on a card is a shortcut that creates the project shell and links the same card. Comparison screen removed.

@@ -28,6 +28,7 @@ import { StatusBadge, priorityConfig } from "./StatusBadge";
 import MultiAssigneeSelect from "./MultiAssigneeSelect";
 import { TaskAttachments } from "./TaskAttachments";
 import { useAuth } from "@/hooks/useAuth";
+import PromoteToProjectAction from "./PromoteToProjectAction";
 
 interface CardDetailModalProps {
   cardId: string | null;
@@ -206,6 +207,16 @@ export default function CardDetailModal({ cardId, onClose, assigneeFilter }: Car
                 </button>
                 <span className="text-[10px] text-muted-foreground">
                   Created by <span className="text-foreground">{card.created_by_name || "Unknown"}</span>
+                </span>
+                <span className="ml-auto mr-7">
+                  <PromoteToProjectAction
+                    cardId={card.id}
+                    projectId={(card as any).project_id ?? null}
+                    title={card.title}
+                    description={card.description}
+                    dueDate={card.due_date}
+                    status={card.status}
+                  />
                 </span>
               </div>
               <div className="flex items-start justify-between gap-4">

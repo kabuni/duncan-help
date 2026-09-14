@@ -218,6 +218,64 @@ export function useUnlinkWorkstream(projectId: string | null) {
   });
 }
 
+const CARD_TO_PROJECT_STATUS: Record<string, string> = {
+  green: "on_track",
+  amber: "at_risk",
+  red: "off_track",
+  done: "done",
+};
+
+/**
+ * Shortcut: turn an existing Workstream Card into a Project.
+ * Creates the project shell and points the same card at it — no data is copied,
+ * the card keeps its WS ID, owner, due date, status and tasks.
+ */
+export function usePromoteCardToProject() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (input: {
+      cardId: string; title: string; description?: string; dueDate?: string | null; status?: string | null;
+    }) => {
+      if (!user) throw new Error("Not signed in");
+      const { data: project, error } = await supabase
+        .from("projects")
+        .insert({
+          user_id: user.id,
+          name: input.title,
+          description: input.description || null,
+          target_date: input.dueDate || null,
+          status: CARD_TO_PROJECT_STATUS[input.status || ""] || "on_track",
+        } as any)
+        .select("id, name")
+        .single();
+      if (error) throw error;
+
+      const { error: linkError } = await supabase
+        .from("workstream_cards")
+        .update({ project_id: project.id })
+        .eq("id", input.cardId);
+      if (linkError) {
+        await supabase.from("projects").delete().eq("id", project.id);
+        throw linkError;
+      }
+
+      await supabase.from("workstream_activity").insert({
+        card_id: input.cardId, user_id: user.id, action: "linked_to_project", details: { project_id: project.id },
+      });
+      return project;
+    },
+    onSuccess: (project: any) => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["workstream-cards"] });
+      qc.invalidateQueries({ queryKey: ["linkable-workstreams"] });
+      qc.invalidateQueries({ queryKey: ["card-project"] });
+      toast.success(`Project "${project.name}" created — this workstream is its first workstream`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
 export function useCreateProjectWorkstream(projectId: string | null) {
   const invalidate = useInvalidateProject(projectId);
   const { user } = useAuth();

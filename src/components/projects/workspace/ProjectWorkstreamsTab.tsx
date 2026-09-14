@@ -13,7 +13,7 @@ import {
 import type { ProjectMember } from "@/hooks/useProjects";
 import { StatusDot, formatDay, EmptyLine } from "./shared";
 import { WorkstreamProgressBar } from "./ProjectProgressRing";
-import { AreaOfWorkDrawer, type AreaOfWorkTarget } from "../AreaOfWorkDrawer";
+import { AreaOfWorkDrawer, type AreaOfWorkTarget } from "./AreaOfWorkDrawer";
 
 export function ProjectWorkstreamsTab({ projectId, members }: { projectId: string; members: ProjectMember[] }) {
   const { data: workstreams = [], isLoading } = useProjectWorkstreams(projectId);

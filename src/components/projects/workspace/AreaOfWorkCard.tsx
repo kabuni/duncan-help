@@ -18,7 +18,7 @@ import { TaskEditPopover } from "./TaskEditPopover";
  * for fuller detail/editing. Tasks are the same underlying records — nothing duplicated.
  */
 export function AreaOfWorkCard({
-  projectId, area, tasks, members, onOpenDetail,
+  projectId, area, tasks, members, onOpenDetail, onOpenComments,
 }: {
   projectId: string;
   /** null = tasks that don't sit in any area of work */
@@ -26,6 +26,7 @@ export function AreaOfWorkCard({
   tasks: ProjectTask[];
   members: ProjectMember[];
   onOpenDetail: () => void;
+  onOpenComments: (task: ProjectTask) => void;
 }) {
   const create = useCreateProjectTask(projectId);
   const toggle = useToggleProjectTask(projectId);

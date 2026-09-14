@@ -195,6 +195,9 @@ export interface ActionRequest {
   end?: string; // ISO
   all_day?: boolean;
   attendees?: string[];
+  /** For UPDATE without ids — the date the event currently sits on. */
+  current_start?: string;
+
   owner?: string;
   link_group?: string;
   planner_event_id?: string;

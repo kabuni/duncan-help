@@ -162,11 +162,11 @@ export function AreaOfWorkDrawer({
 
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          ) : tasks.length === 0 ? (
-            <EmptyLine>No tasks here yet.</EmptyLine>
+          ) : visibleTasks.length === 0 ? (
+            <EmptyLine>{tasks.length === 0 ? "No tasks here yet." : "Nothing outstanding here."}</EmptyLine>
           ) : (
             <ul className="divide-y divide-border rounded-xl border border-border">
-              {tasks.map((t) => (
+              {visibleTasks.map((t) => (
                 <li key={t.id} className="group flex items-start gap-3 px-4 py-3">
                   <Checkbox
                     className="mt-0.5"

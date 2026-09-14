@@ -205,14 +205,33 @@ export interface ActionRequest {
   origin?: Destination;
 }
 
+export interface DecisionTrace {
+  intent: PlannerIntent;
+  event_type: EventType;
+  destination: Destination[];
+  source_of_truth: Destination;
+  requires_approval: boolean;
+  reason: string;
+  existing_event_found: boolean;
+  duplicate_detected: boolean;
+  conflict_detected: boolean;
+  action_taken: "CREATE" | "UPDATE" | "DELETE" | "READ" | "NO_ACTION";
+  linked: boolean;
+  link_group: string | null;
+  planner_event_id: string | null;
+  google_event_id: string | null;
+}
+
 export interface ActionResult {
   ok: boolean;
   verified: boolean;
   source: "planner_orchestrator";
   decision: Decision;
+  trace?: DecisionTrace;
   link_group?: string;
   planner_event_id?: string;
   google_event_id?: string;
+  matched_event?: any;
   duplicate?: any;
   conflicts?: any[];
   suggestions?: { start: string; end: string }[];
@@ -220,6 +239,7 @@ export interface ActionResult {
   message: string;
   error?: string;
 }
+
 
 const hash = async (s: string) => {
   const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(s));

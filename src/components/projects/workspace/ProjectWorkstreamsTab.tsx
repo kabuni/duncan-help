@@ -11,9 +11,9 @@ import {
   useProjectTasks, RYG_META, type ProjectWorkstream,
 } from "@/hooks/useProjectWork";
 import type { ProjectMember } from "@/hooks/useProjects";
-import { StatusDot, formatDay, EmptyLine } from "./shared";
-import { WorkstreamProgressBar } from "./ProjectProgressRing";
+import { StatusDot, EmptyLine } from "./shared";
 import { type AreaOfWorkTarget } from "./AreaOfWorkDrawer";
+import { AreaOfWorkCard } from "./AreaOfWorkCard";
 
 export function ProjectWorkstreamsTab({
   projectId, members, areaTarget, onOpenArea,

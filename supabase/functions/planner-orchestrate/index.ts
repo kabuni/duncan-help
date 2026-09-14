@@ -125,7 +125,41 @@ serve(async (req) => {
       });
     }
 
+    const timezone = body.timezone || "Europe/London";
+
+    // Natural-language mode: interpret first, then run the same decision engine.
+    let request: ActionRequest = body as ActionRequest;
+    let interpretation: any = null;
+    if (body.interpret && body.utterance) {
+      interpretation = await interpretUtterance(body.utterance, timezone, new Date().toISOString());
+      const names: string[] = Array.isArray(interpretation.attendee_names) ? interpretation.attendee_names : [];
+      let attendees: string[] = [];
+      if (names.length) {
+        const { data: people } = await supabaseAdmin
+          .from("profiles")
+          .select("email, display_name")
+          .limit(500);
+        attendees = names
+          .map((n) => (people || []).find((p: any) =>
+            String(p.display_name || "").toLowerCase().includes(String(n).toLowerCase()))?.email)
+          .filter(Boolean) as string[];
+      }
+      request = {
+        intent: interpretation.intent || "CREATE_EVENT",
+        event_type: interpretation.event_type,
+        utterance: body.utterance,
+        title: interpretation.title,
+        start: interpretation.start,
+        end: interpretation.end,
+        all_day: interpretation.all_day,
+        current_start: interpretation.current_start,
+        attendees,
+        force: body.force === true,
+      };
+    }
+
     const result = await executePlannerAction(
+
       {
         supabaseAdmin,
         userId: user.id,

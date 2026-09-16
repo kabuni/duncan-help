@@ -64,3 +64,13 @@ carrying the matching WS code (WS-0299/0290/0274/0292/0252/0104/0293) + 25 tasks
 WS-0297 seeded as a Done, unmapped historical card. All cards private, descriptions prefixed
 "Prototype". Partner School Webinars is its own project, NOT under Road to 400.
 On production deploy these prototype rows are discarded — the real cards are linked instead.
+
+## Weekly web analytics email
+- [x] Weekly analytics email: Mon 14 Sep cron run failed (job startup timeout); resent manually, added Mon 10:00 + Tue 07:00 catch-up runs, added nimesh@kabuni.com to recipients
+
+## Meetings into Projects
+- [x] Phase 1: meeting_extractions + meeting_project_links + task source columns; read-only extract-meeting-updates
+- [ ] Phase 2: shared Project/Area/Task/Owner resolver (shared with Duncan Chat)
+- [ ] Phase 3: review strip (Accept/Edit/Dismiss)
+- [ ] Phase 4: high-confidence auto-apply + Activity + undo
+- [ ] Phase 5: Gemini transcript source

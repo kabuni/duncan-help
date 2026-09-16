@@ -2943,6 +2943,103 @@ export type Database = {
         }
         Relationships: []
       }
+      meeting_extractions: {
+        Row: {
+          applied_task_id: string | null
+          card_id: string | null
+          confidence: string
+          created_at: string
+          id: string
+          kind: string
+          meeting_id: string
+          project_id: string | null
+          proposed: Json
+          reasoning: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          source_quote: string | null
+          status: string
+          task_id: string | null
+        }
+        Insert: {
+          applied_task_id?: string | null
+          card_id?: string | null
+          confidence: string
+          created_at?: string
+          id?: string
+          kind: string
+          meeting_id: string
+          project_id?: string | null
+          proposed?: Json
+          reasoning?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_quote?: string | null
+          status?: string
+          task_id?: string | null
+        }
+        Update: {
+          applied_task_id?: string | null
+          card_id?: string | null
+          confidence?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          meeting_id?: string
+          project_id?: string | null
+          proposed?: Json
+          reasoning?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_quote?: string | null
+          status?: string
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_extractions_applied_task_id_fkey"
+            columns: ["applied_task_id"]
+            isOneToOne: false
+            referencedRelation: "workstream_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_extractions_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "workstream_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_extractions_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_extractions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_extractions_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_extractions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "workstream_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meeting_participants: {
         Row: {
           created_at: string
@@ -2977,6 +3074,61 @@ export type Database = {
             columns: ["meeting_id"]
             isOneToOne: false
             referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_project_links: {
+        Row: {
+          card_id: string | null
+          confidence: string
+          created_at: string
+          id: string
+          link_source: string
+          meeting_id: string
+          project_id: string
+          reasoning: string | null
+        }
+        Insert: {
+          card_id?: string | null
+          confidence: string
+          created_at?: string
+          id?: string
+          link_source?: string
+          meeting_id: string
+          project_id: string
+          reasoning?: string | null
+        }
+        Update: {
+          card_id?: string | null
+          confidence?: string
+          created_at?: string
+          id?: string
+          link_source?: string
+          meeting_id?: string
+          project_id?: string
+          reasoning?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_project_links_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "workstream_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_project_links_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_project_links_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -5540,6 +5692,8 @@ export type Database = {
           parent_task_id: string | null
           project_id: string | null
           sort_order: number
+          source_meeting_id: string | null
+          source_type: string
           status: string
           title: string
           updated_at: string
@@ -5556,6 +5710,8 @@ export type Database = {
           parent_task_id?: string | null
           project_id?: string | null
           sort_order?: number
+          source_meeting_id?: string | null
+          source_type?: string
           status?: string
           title: string
           updated_at?: string
@@ -5572,6 +5728,8 @@ export type Database = {
           parent_task_id?: string | null
           project_id?: string | null
           sort_order?: number
+          source_meeting_id?: string | null
+          source_type?: string
           status?: string
           title?: string
           updated_at?: string
@@ -5596,6 +5754,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workstream_tasks_source_meeting_id_fkey"
+            columns: ["source_meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
             referencedColumns: ["id"]
           },
         ]

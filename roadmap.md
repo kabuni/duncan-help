@@ -66,4 +66,11 @@ WS-0297 seeded as a Done, unmapped historical card. All cards private, descripti
 On production deploy these prototype rows are discarded — the real cards are linked instead.
 
 ## Weekly web analytics email
-- [ ] Investigate why the weekly web analytics email was not received this week
+- [x] Weekly analytics email: Mon 14 Sep cron run failed (job startup timeout); resent manually + added Mon 10:00 and Tue 07:00 catch-up runs
+
+## Meetings into Projects
+- [x] Phase 1: meeting_extractions + meeting_project_links + task source columns; read-only extract-meeting-updates
+- [ ] Phase 2: shared Project/Area/Task/Owner resolver (shared with Duncan Chat)
+- [ ] Phase 3: review strip (Accept/Edit/Dismiss)
+- [ ] Phase 4: high-confidence auto-apply + Activity + undo
+- [ ] Phase 5: Gemini transcript source

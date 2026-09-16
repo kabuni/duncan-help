@@ -64,3 +64,6 @@ carrying the matching WS code (WS-0299/0290/0274/0292/0252/0104/0293) + 25 tasks
 WS-0297 seeded as a Done, unmapped historical card. All cards private, descriptions prefixed
 "Prototype". Partner School Webinars is its own project, NOT under Road to 400.
 On production deploy these prototype rows are discarded — the real cards are linked instead.
+
+## Weekly web analytics email
+- [ ] Investigate why the weekly web analytics email was not received this week

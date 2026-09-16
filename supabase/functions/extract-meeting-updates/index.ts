@@ -154,7 +154,7 @@ serve(async (req) => {
       const content = [
         meeting.summary ? `SUMMARY:\n${meeting.summary}` : "",
         meeting.action_items ? `ACTION ITEMS:\n${JSON.stringify(meeting.action_items)}` : "",
-        meeting.transcript ? `TRANSCRIPT:\n${String(meeting.transcript).slice(0, 60000)}` : "",
+        meeting.transcript ? `TRANSCRIPT:\n${String(meeting.transcript).slice(0, 30000)}` : "",
       ].filter(Boolean).join("\n\n");
 
       if (!content) {
@@ -237,7 +237,7 @@ ${cardList || "(none)"}`;
             },
           }],
           tool_choice: { type: "function", function: { name: "submit_extractions" } },
-          max_tokens: 4096,
+          max_tokens: 8192,
         });
       } catch (err: any) {
         console.error("AI error for meeting", id, err?.status, err?.message);
